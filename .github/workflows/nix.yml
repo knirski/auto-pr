@@ -1,0 +1,77 @@
+# Reusable workflow: Nix build with npmDepsHash auto-update.
+# Called by ci-nix.yml and update-nix-hash.yml.
+#
+# Uses GitHub App token when push_allowed so the push triggers CI on the new commit
+# (GITHUB_TOKEN pushes do not trigger workflows). Same App as auto-pr (APP_ID, APP_PRIVATE_KEY).
+
+name: Nix
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Checkout ref (PR head for ci, omit for default)"
+        required: false
+        type: string
+        default: ""
+      push_allowed:
+        description: "Whether to commit and push npmDepsHash updates (false for fork PRs)"
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Push uses App token; job needs contents: write for git push (exit 128 fix)
+    permissions:
+      contents: write
+    steps:
+      - name: Generate GitHub App token
+        if: inputs.push_allowed
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ inputs.push_allowed && steps.app-token.outputs.token || github.token }}
+      - uses: ./.github/actions/nix-setup
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
+        with:
+          check-outdated: false
+
+      - uses: ./.github/actions/nix-npm-deps-hash
+        id: hash
+
+      - uses: ./.github/actions/nix-commit-npm-deps-hash
+        if: steps.hash.outputs.hash != '' && inputs.push_allowed
+
+      - name: Trigger check on new commit
+        if: steps.hash.outputs.hash != '' && inputs.push_allowed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REF: ${{ inputs.ref || github.ref }}
+        run: |
+          # gh expects branch name; strip refs/heads/ if present
+          BRANCH="${REF#refs/heads/}"
+          if ! gh workflow run ci.yml --ref "$BRANCH"; then
+            echo "::error::Failed to trigger ci.yml. Ensure App has Actions: Read and write permission."
+            exit 1
+          fi
+
+      - uses: ./.github/actions/nix-fail-npm-deps-hash-fork
+        if: steps.hash.outputs.hash != '' && !inputs.push_allowed
+        with:
+          hash: ${{ steps.hash.outputs.hash }}
+
+      - run: nix build .#default

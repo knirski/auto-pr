@@ -1,0 +1,13 @@
+---
+description: Effect-style FP, FC/IS, Tagless Final. Config as service. Pipelines yield* Config.
+globs: ["**/*.ts"]
+---
+
+# auto-pr conventions
+
+- **FC/IS:** `scripts/fill-pr-template-core.ts` and `scripts/auto-pr/core.ts` are pure (no Effect, no I/O). Shell in `scripts/*.ts` and `scripts/auto-pr/shell.ts`. Bridge with `Effect.fromResult`.
+- **Config as service:** Pipelines `yield* GetCommitsConfig` / `yield* GeneratePrContentConfig` / `yield* CreateOrUpdatePrConfig`. No config params.
+- **Tagless Final:** Services via Tag + Layer. Programs declare `R`; shell provides. Tests swap with mocks.
+- **Effect first:** Prefer `effect` and `@effect/*`. No `any`, `!`, `enum`, `console.log`. Use `Option<T>` for optional.
+- **Domain errors:** `Schema.TaggedErrorClass` in `scripts/auto-pr/errors.ts`. Exhaustive handling with `Match.exhaustive`.
+- **Verification:** Run `npm run check` before finishing. See AGENTS.md for full rules.

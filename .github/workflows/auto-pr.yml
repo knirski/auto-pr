@@ -1,0 +1,19 @@
+# Auto-PR for this repo — uses the reusable workflow (same as consumers).
+# Push to ai/* branch to auto-create a PR.
+
+name: Auto-PR
+
+on:
+  push:
+    branches:
+      - "ai/**"
+
+concurrency:
+  group: auto-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auto-pr:
+    if: github.event.repository.fork != true
+    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@main
+    secrets: inherit

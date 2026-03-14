@@ -1,0 +1,153 @@
+# auto-pr
+
+[![CI](https://github.com/knirski/auto-pr/actions/workflows/ci.yml/badge.svg)](https://github.com/knirski/auto-pr/actions)
+[![Version](https://img.shields.io/github/package-json/v/knirski/auto-pr)](https://github.com/knirski/auto-pr/blob/main/package.json)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
+
+Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses [Ollama](https://ollama.com/) to generate descriptions for multi-commit PRs.
+
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflow](.github/workflows/auto-pr-reusable.yml). **No Nix required** — consumers use Node/npx only.
+
+**Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, Ollama summarizes the changes into a coherent description.
+
+**Origin:** Extracted from [paperless-ingestion-bot](https://github.com/knirski/paperless-ingestion-bot), where it powered the auto-PR workflow for AI-generated branches. See [docs/ORIGIN.md](docs/ORIGIN.md).
+
+## Features
+
+- **Conventional commits** — Parses `feat:`, `fix:`, `docs:`, etc. for PR title and type
+- **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
+- **Ollama integration** — For 2+ commits, summarizes commit bodies into a PR description (default: `llama3.1:8b`)
+- **gh CLI** — Thin wrapper around `gh pr create` / `gh pr edit`
+- **CI-agnostic** — Outputs to `GITHUB_OUTPUT`; works with GitHub Actions or any orchestrator
+
+## How it works
+
+1. **Get commits** — `auto-pr-get-commits` runs `git log` and `git diff` to produce `commits.txt`, `files.txt`, and outputs paths to `GITHUB_OUTPUT`
+2. **Generate content** — `auto-pr-generate-content` parses commits, counts semantic commits. For 1 commit: fills template from body. For 2+: calls Ollama to summarize, then fills template. Outputs `title` and `body_file` to `GITHUB_OUTPUT`
+3. **Create or update PR** — `auto-pr-create-or-update-pr` runs `gh pr view` → `gh pr edit` or `gh pr create` with the title and body file
+
+Merge commits are filtered out. Non-conventional commits are included; type falls back to "Chore".
+
+## Quick start (consumer)
+
+Add auto-pr to any repo:
+
+```bash
+npx auto-pr-init
+```
+
+Then set up the GitHub App and secrets (required for the workflow to create PRs):
+
+1. Create a [GitHub App](https://github.com/settings/apps/new) with **Contents** and **Pull requests** (Read and write)
+2. Generate a private key, install the app on your repo
+3. Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
+
+Test:
+
+```bash
+git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push
+```
+
+No `package.json` required. Full setup: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+
+## Quick start (development)
+
+```bash
+npm install
+npm run check
+```
+
+## Installation
+
+**As a dependency (recommended for consumer repos):**
+
+```bash
+npm install auto-pr
+# or: npm install github:knirski/auto-pr
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/knirski/auto-pr.git
+cd auto-pr
+npm install
+```
+
+## Commands
+
+| Command | Purpose |
+|--------|---------|
+| `npx auto-pr-get-commits` | Get commit log and changed files; output to GITHUB_OUTPUT |
+| `npx auto-pr-generate-content` | Generate PR title and filled body (Ollama for 2+ commits) |
+| `npx auto-pr-create-or-update-pr` | Create or update PR via `gh` |
+| `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
+| `npx auto-pr-init` | Create workflow, PR template, and .nvmrc in current repo |
+
+## Nix flake (contributors only, optional)
+
+Nix is **not required for consumers**. The workflows use Node and npx only.
+
+For contributors to this repo, the project includes an optional Nix flake. It provides:
+
+| Use | Command | Purpose |
+|-----|---------|---------|
+| **Dev shell** | `nix develop` | Node 24, npm, `node_modules/.bin` in PATH; run `npm run check` |
+| **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
+| **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, Ollama for 2+ commits) |
+| **Update deps hash** | `nix run .#update-npm-deps-hash` | Update `npmDepsHash` in `default.nix` after changing `package-lock.json` |
+| **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
+
+```bash
+# Development shell
+nix develop
+
+# Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
+./scripts/run-auto-pr.sh
+# or: nix run .#default
+```
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DEFAULT_BRANCH` | get-commits | — | Base branch (e.g. `main`) |
+| `GITHUB_WORKSPACE` | get-commits | `.` | Repo root |
+| `GITHUB_OUTPUT` | get-commits | — | Output file (GitHub Actions) |
+| `COMMITS` | generate-content | — | Path to commits.txt |
+| `FILES` | generate-content | — | Path to files.txt |
+| `OLLAMA_MODEL` | generate-content | `llama3.1:8b` | Ollama model |
+| `OLLAMA_URL` | generate-content | `http://localhost:11434/api/generate` | Ollama API |
+| `GH_TOKEN` | create-or-update-pr | — | GitHub token |
+| `BRANCH` | create-or-update-pr | — | Current branch |
+| `TITLE` | create-or-update-pr | — | PR title |
+| `BODY_FILE` | create-or-update-pr | — | Path to filled body |
+| `AUTO_PR_HOW_TO_TEST` | generate-content | — | Override `{{howToTest}}` for non-Node projects (e.g. `1. Run \`pytest\`\n2. `) |
+| `AUTO_PR_DEBUG` | any | — | Set to `1` for verbose error hints when debugging |
+
+## Integration
+
+Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.sh`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
+
+This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App).
+
+## Documentation
+
+- [docs/INTEGRATION.md](docs/INTEGRATION.md) — Integration guide (GitHub App, workflow)
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
+- [docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) — Template placeholders and behavior
+- [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
+- [AGENTS.md](AGENTS.md) — AI agent instructions
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Development setup, commits, PRs
+
+## Verification
+
+```bash
+npm run check
+```
+
+Runs tests, lint, knip, and typecheck.
+
+## License
+
+[Apache-2.0](LICENSE)

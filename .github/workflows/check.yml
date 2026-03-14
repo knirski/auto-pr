@@ -1,0 +1,61 @@
+# Reusable workflow: run full check (test, lint, typecheck, rumdl, typos, actionlint, shellcheck, lychee, SBOM).
+# Called by ci.yml (runs when non-.md files change).
+#
+# Uses GitHub-provided: setup-node (built-in npm cache), upload-artifact, GITHUB_TOKEN.
+
+name: Check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+
+      - name: Generate SBOM
+        run: npx @cyclonedx/cyclonedx-npm --output-file sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: sbom
+          path: sbom.json
+
+      - name: Validate commit messages
+        if: github.actor != 'dependabot[bot]'
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx commitlint --from=origin/${{ github.event.repository.default_branch }} --to=HEAD
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "Skipping commitlint: initial push (no previous commit)"
+            else
+              npx commitlint --from="$BEFORE" --to="${{ github.sha }}"
+            fi
+          fi
+
+      - name: Check (test, lint, typecheck, rumdl, typos, actionlint, shellcheck)
+        run: npm run check
+
+      - name: Check links
+        continue-on-error: true
+        run: npm run check:just-links

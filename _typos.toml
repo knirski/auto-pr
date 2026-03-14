@@ -1,0 +1,22 @@
+# Spell check config (typos). Scope: markdown only.
+# See docs/CI.md.
+
+[files]
+extend-exclude = ["*", "!**/*.md"]
+
+[default.extend-words]
+# Project-specific and technical terms (allow as valid)
+auto-pr = "auto-pr"
+Biome = "Biome"
+commitlint = "commitlint"
+Effect = "Effect"
+knirski = "knirski"
+npmDepsHash = "npmDepsHash"
+nixpkgs = "nixpkgs"
+Ollama = "Ollama"
+release-please = "release-please"
+shellcheck = "shellcheck"
+TypeScript = "TypeScript"
+Vitest = "Vitest"
+workflow = "workflow"
+workflows = "workflows"

@@ -1,0 +1,23 @@
+# Minimal consumer workflow — uses reusable workflow from auto-pr repo.
+# No package.json or auto-pr dependency required.
+#
+# Copy to your repo as .github/workflows/auto-pr.yml
+# Requires: APP_ID, APP_PRIVATE_KEY secrets; .github/PULL_REQUEST_TEMPLATE.md
+# Run: npx auto-pr-init (creates workflow, template, .nvmrc)
+
+name: Auto-PR
+
+on:
+  push:
+    branches:
+      - "ai/**"
+
+concurrency:
+  group: auto-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auto-pr:
+    if: github.event.repository.fork != true
+    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@main
+    secrets: inherit

@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.env
+.env.*
+.DS_Store
+coverage/
+.rumdl_cache/
+test-report.junit.xml
+sbom.json
+result
+.cursor/worktrees.json
+.cursor/debug-*.log

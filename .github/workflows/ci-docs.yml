@@ -1,0 +1,28 @@
+# Complementary to ci.yml: runs when only *.md changes.
+# Calls check-docs.yml so both report "check / check" for branch protection.
+# See docs/CI.md.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/check-docs.yml

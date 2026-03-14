@@ -1,0 +1,12 @@
+{
+	"$schema": "https://unpkg.com/knip@5/schema.json",
+	"project": ["scripts/**/*.ts", "test/**/*.ts"],
+	"tags": ["-lintignore"],
+	"ignoreExportsUsedInFile": { "interface": true, "type": true },
+	"ignoreBinaries": [
+		"auto-pr-get-commits",
+		"auto-pr-generate-content",
+		"auto-pr-create-or-update-pr",
+		"scripts/nix-run-if-missing.sh"
+	]
+}
