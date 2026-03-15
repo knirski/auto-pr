@@ -43,7 +43,9 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ inputs.push_allowed && steps.app-token.outputs.token || github.token }}
 
-      - uses: ./.github/actions/nix-setup
+      - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
+        with:
+          extra_nix_config: "experimental-features = nix-command flakes"
 
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
@@ -55,11 +57,25 @@ jobs:
         with:
           check-outdated: false
 
-      - uses: ./.github/actions/nix-npm-deps-hash
-        id: hash
+      - id: hash
+        shell: bash
+        run: |
+          output=$(./scripts/update-npm-deps-hash.sh)
+          if [ -n "$output" ]; then
+            echo "$output" >> "$GITHUB_OUTPUT"
+          fi
 
-      - uses: ./.github/actions/nix-commit-npm-deps-hash
-        if: steps.hash.outputs.hash != '' && inputs.push_allowed
+      - if: steps.hash.outputs.hash != '' && inputs.push_allowed
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add default.nix
+          git commit -m "fix(nix): update npmDepsHash for package-lock.json"
+          if ! git push; then
+            echo "::error::git push failed (exit 128 often = permission denied; check App has Contents: Read and write)"
+            exit 1
+          fi
 
       - name: Trigger check on new commit
         if: steps.hash.outputs.hash != '' && inputs.push_allowed
@@ -74,9 +90,15 @@ jobs:
             exit 1
           fi
 
-      - uses: ./.github/actions/nix-fail-npm-deps-hash-fork
-        if: steps.hash.outputs.hash != '' && !inputs.push_allowed
-        with:
-          hash: ${{ steps.hash.outputs.hash }}
+      - if: steps.hash.outputs.hash != '' && !inputs.push_allowed
+        shell: bash
+        run: |
+          echo "::error::npmDepsHash mismatch. CI cannot push to fork PRs."
+          echo ""
+          echo "Update locally and commit:"
+          echo "  nix run .#update-npm-deps-hash"
+          echo "  # or: npm run update-nix-hash -- ${{ steps.hash.outputs.hash }}"
+          echo "  git add default.nix && git commit -m 'fix(nix): update npmDepsHash for package-lock.json'"
+          exit 1
 
       - run: nix build .#default

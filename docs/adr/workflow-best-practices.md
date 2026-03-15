@@ -21,7 +21,7 @@ Research date: 2025-03-15. Assesses all `.github/workflows/*.yml` against modern
 
 **Best practice** ([GitHub Actions security](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)): Set `persist-credentials: false` when checkout is read-only. Prevents token exposure to subsequent steps.
 
-**Applied**: check.yml, check-docs.yml, ci.yml (dependency-review), codeql.yml. nix-setup and release-please need credentials for push; keep default.
+**Applied**: check.yml, check-docs.yml, ci.yml (dependency-review), codeql.yml. nix.yml and release-please need credentials for push; keep default.
 
 **Open-source usage**: [hashicorp/vagrant](https://github.com/hashicorp/vagrant/blob/main/.github/workflows/code.yml) uses `persist-credentials: false` with `actions/checkout`. Scorecard workflow template also uses it. ~10k+ repos use this pattern.
 

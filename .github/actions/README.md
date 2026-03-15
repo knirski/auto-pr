@@ -1,17 +1,6 @@
-# Composite Actions
+# GitHub Actions
 
-Reusable actions for Nix-related CI workflows. Used by reusable workflows (check.yml, nix.yml) and standalone workflows (update-flake-lock.yml). See [docs/CI.md](../../docs/CI.md) for workflow structure.
-
-## Structure
-
-| Action | Purpose | Used by |
-|--------|---------|---------|
-| **nix-setup** | Install Nix (cachix/install-nix-action). Workflow must run checkout before calling. | nix workflow, update-flake-lock |
-| **nix-npm-deps-hash** | Run update-npm-deps-hash.sh, output hash when updated | nix workflow |
-| **nix-commit-npm-deps-hash** | Commit and push npmDepsHash update | nix workflow |
-| **nix-fail-npm-deps-hash-fork** | Fail with instructions for fork PRs | nix workflow |
-
-## Reusable Workflows
+Reusable workflows. See [docs/CI.md](../../docs/CI.md) for workflow structure.
 
 | Workflow | Purpose | Called by |
 |----------|---------|-----------|

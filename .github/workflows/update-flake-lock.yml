@@ -20,7 +20,11 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: ./.github/actions/nix-setup
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
+        with:
+          extra_nix_config: "experimental-features = nix-command flakes"
 
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7

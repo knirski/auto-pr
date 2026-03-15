@@ -1,15 +1,15 @@
 # Nix CI Research: Best Practices Assessment
 
-Research date: 2025-03-15. Assesses `.github/actions/nix-*` and `.github/workflows/*nix*` against current best practices.
+Research date: 2025-03-15. Assesses `.github/workflows/*nix*` against current best practices.
 
-**Applied 2025-03-15:** Switched to cachix/install-nix-action, added cache-nix-action, consolidated checkout with token passthrough.
+**Applied 2025-03-15:** Switched to cachix/install-nix-action, added cache-nix-action, consolidated checkout in workflow. Inlined all Nix actions into workflows (2025-03-15).
 
 ## Current Setup Summary
 
 | Component | Current | Purpose |
 |-----------|---------|---------|
 | **Nix installer** | `cachix/install-nix-action@v25` | Install upstream Nix on runners |
-| **Nix setup** | Custom composite action | Checkout + Nix install (token passthrough) |
+| **Nix setup** | Inline in nix.yml, update-flake-lock.yml | Checkout + Nix install |
 | **Nix cache** | `nix-community/cache-nix-action@v7` | Cache /nix/store in GitHub Actions |
 | **Flake checker** | `DeterminateSystems/flake-checker-action@v12` | Warn on outdated flake |
 | **Update flake lock** | `DeterminateSystems/update-flake-lock@v28` | Weekly flake.lock updates |
@@ -43,13 +43,9 @@ Research date: 2025-03-15. Assesses `.github/actions/nix-*` and `.github/workflo
 
 **Recommendation**: Add `nix-community/cache-nix-action@v7` for faster runs. Use `primary-key` based on `hashFiles('**/*.nix', '**/flake.lock')` to invalidate when Nix inputs change.
 
-### 3. Duplicate Checkout in nix-setup (Low Priority)
+### 3. Checkout (Resolved)
 
-**Current**: `nix.yml` does checkout (with App token when `push_allowed`), then `nix-setup` does checkout again (without token).
-
-**Issue**: The second checkout uses default `GITHUB_TOKEN`, overwriting the first. For same-repo pushes, `GITHUB_TOKEN` can push, but its pushes don't trigger workflows—hence the separate `gh workflow run` step with App token. Flow is correct but redundant.
-
-**Recommendation**: Add a `token` input to `nix-setup` and pass it through to `actions/checkout`, so the workflow can use a single checkout with the right token. Alternatively, have `nix-setup` skip checkout when the parent already checked out (e.g. `skip-checkout` input).
+**Current**: Single checkout in nix.yml with token passthrough. All Nix logic inlined into workflows; no composite actions.
 
 ### 4. Action Pinning (Good)
 
@@ -71,7 +67,7 @@ Research date: 2025-03-15. Assesses `.github/actions/nix-*` and `.github/workflo
 
 ### 7. npmDepsHash Automation (Good)
 
-**Current**: Script + composite actions for hash update, fork detection, App-token push, workflow trigger. Handles same-repo vs fork correctly.
+**Current**: Script + inline steps in nix.yml for hash update, fork detection, App-token push, workflow trigger. Handles same-repo vs fork correctly.
 
 **Recommendation**: No change. Consider documenting the `gh workflow run` step (App token needed because `GITHUB_TOKEN` pushes don't trigger workflows).
 
@@ -87,7 +83,7 @@ Research date: 2025-03-15. Assesses `.github/actions/nix-*` and `.github/workflo
 |------|--------|--------|
 | Nix installer | ✅ Done | Switched to `cachix/install-nix-action@v25` |
 | Caching | ✅ Done | Added `cache-nix-action@v7` |
-| Checkout | ✅ Done | Consolidated; token passthrough in nix-setup |
+| Checkout | ✅ Done | Single checkout in workflow; actions inlined |
 | Pinning | ✅ Good | Keep SHA pinning |
 | Flake | ✅ Good | No change |
 | update-flake-lock | ✅ Good | No change |
