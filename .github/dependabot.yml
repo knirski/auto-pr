@@ -1,3 +1,4 @@
+# Nix (flake.lock) is updated by update-flake-lock workflow, not Dependabot.
 version: 2
 updates:
   - package-ecosystem: "npm"

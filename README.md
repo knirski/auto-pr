@@ -1,8 +1,13 @@
 # auto-pr
 
 [![CI](https://github.com/knirski/auto-pr/actions/workflows/ci.yml/badge.svg)](https://github.com/knirski/auto-pr/actions)
+[![Coverage](https://codecov.io/gh/knirski/auto-pr/graph/badge.svg)](https://app.codecov.io/gh/knirski/auto-pr)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/knirski/auto-pr/badge)](https://scorecard.dev/viewer/?uri=github.com/knirski/auto-pr)
 [![Version](https://img.shields.io/github/package-json/v/knirski/auto-pr)](https://github.com/knirski/auto-pr/blob/main/package.json)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa.svg)](https://github.com/sponsors/knirski)
+[![Liberapay](https://img.shields.io/badge/Liberapay-Support-yellow.svg)](https://liberapay.com/knirski/)
+[![CII Best Practices](https://img.shields.io/badge/CII%20Best%20Practices-register-green)](https://www.bestpractices.dev/en/projects/new?project_url=https%3A%2F%2Fgithub.com%2Fknirski%2Fauto-pr)
 
 Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses [Ollama](https://ollama.com/) to generate descriptions for multi-commit PRs.
 
@@ -129,16 +134,25 @@ nix develop
 
 Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.sh`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
 
-This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App).
+This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** npm audit in check; CycloneDX SBOM, Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
 
 ## Documentation
 
 - [docs/INTEGRATION.md](docs/INTEGRATION.md) — Integration guide (GitHub App, workflow)
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
 - [docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) — Template placeholders and behavior
+- [docs/CI.md](docs/CI.md) — Workflows, branch protection, first-time setup
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
+- [docs/adr/](docs/adr/) — Architecture Decision Records
 - [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
+- [docs/CII.md](docs/CII.md) — CII Best Practices badge progress
 - [AGENTS.md](AGENTS.md) — AI agent instructions
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Development setup, commits, PRs
+- [SECURITY.md](SECURITY.md) — Vulnerability reporting
+- [SUPPORT.md](SUPPORT.md) — Getting help
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Community standards
+
+This project was developed with assistance from AI coding tools.
 
 ## Verification
 
@@ -146,7 +160,7 @@ This repo uses [release-please](https://github.com/googleapis/release-please) fo
 npm run check
 ```
 
-Runs tests, lint, knip, and typecheck.
+Runs full check: audit, test, lint, knip, typecheck, docs (rumdl, typos), actionlint, shellcheck. Use `check:with-links` to add lychee link verification.
 
 ## License
 

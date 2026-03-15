@@ -7,8 +7,9 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 Before CI can run fully:
 
 1. **GitHub App** — Create an app with Contents and Pull requests (Read and write). Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. Required for auto-pr and release-please.
-2. **Labels** — Run `./scripts/create-labels.sh` so update-flake-lock can open PRs (needs `dependencies`, `nix`, `automated`).
-3. **Branch protection** — Require `check / check` before merging to main.
+2. **Codecov** (optional) — Add `CODECOV_TOKEN` for coverage badge. Get from [codecov.io](https://codecov.io). Without it, the upload step is skipped; CI still passes.
+3. **Labels** — Run `./scripts/create-labels.sh` so update-flake-lock can open PRs (needs `dependencies`, `nix`, `automated`) and issue templates work (`bug`, `enhancement`, `good first issue`).
+4. **Branch protection** — Require `check / check` before merging to main.
 
 ## Workflows
 
@@ -21,6 +22,10 @@ Before CI can run fully:
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
 | [update-nix-hash.yml](../.github/workflows/update-nix-hash.yml) | workflow_dispatch | — | update-hash |
 | [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) | workflow_dispatch, schedule | — | update-flake-lock |
+| [codeql.yml](../.github/workflows/codeql.yml) | push, pull_request → main | `paths-ignore: **/*.md, docs/**` | analyze |
+| [codeql-docs.yml](../.github/workflows/codeql-docs.yml) | pull_request → main | `paths: **/*.md, docs/**` | analyze (pass-through) |
+| [scorecard.yml](../.github/workflows/scorecard.yml) | push → main, schedule (Sat 01:30 UTC) | — | Scorecard analysis |
+| [stale.yml](../.github/workflows/stale.yml) | schedule (Mon 00:00 UTC), workflow_dispatch | — | Mark stale issues/PRs |
 
 **auto-pr.yml** runs on push to `ai/**` branches (non-forks). Creates or updates a PR with title and body from conventional commits; Ollama generates description for 2+ commits. See [docs/INTEGRATION.md](INTEGRATION.md).
 
@@ -32,6 +37,14 @@ Before CI can run fully:
 
 **update-flake-lock.yml** runs weekly (Sunday 00:00 UTC) and on manual trigger. Updates `flake.lock` and opens a PR. Requires `dependencies`, `nix`, and `automated` labels. Run `./scripts/create-labels.sh` before the first scheduled run.
 
+**codeql.yml** runs when non-docs code changes. Uses security-extended queries for actions and javascript-typescript. Skips for docs-only changes.
+
+**codeql-docs.yml** is complementary to codeql.yml: runs when only docs change. CodeQL skips for docs (paths-ignore); this reports passing status so code scanning allows merge.
+
+**scorecard.yml** runs on push to main and weekly (Saturday 01:30 UTC). Publishes OpenSSF Scorecard results to code scanning.
+
+**stale.yml** runs weekly (Monday 00:00 UTC) and on manual trigger. Marks issues/PRs stale after 180 days, closes after 180 more. Exempts `pinned` and `security` labels.
+
 ## Branch Protection
 
 Both ci.yml and ci-docs.yml report **`check / check`**. Configure main branch protection to require:
@@ -39,6 +52,14 @@ Both ci.yml and ci-docs.yml report **`check / check`**. Configure main branch pr
 - **Status checks that are required:** `check / check`
 
 Do not require `dependency-review` (PR-only) or `nix` (path-filtered); they would block when skipped.
+
+## Troubleshooting: "check / check" waiting for status
+
+When ci-nix pushes an npmDepsHash update, the PR head changes to a new commit. The required check must run on that new commit. If you see "waiting for status to be reported":
+
+1. **Wait 1–2 minutes** — The push triggers the check workflow; it may take a moment to start.
+2. **Re-run workflows** — If the check still hasn't run, use "Re-run all jobs" from the Actions tab.
+3. **Manual trigger** — Push an empty commit: `git commit --allow-empty -m "ci: trigger workflows" && git push`.
 
 ## Fork PRs
 

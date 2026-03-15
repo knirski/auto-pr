@@ -1,0 +1,36 @@
+# 180 days inactive = stale, 180 more days = close (360 days total).
+name: Stale
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10.2.0
+        with:
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has not had
+            recent activity. It will be closed in 180 days if no further activity occurs.
+            Thank you for your contributions.
+          close-issue-message: >
+            This issue was closed due to inactivity. Feel free to reopen if the
+            issue persists.
+          stale-pr-message: >
+            This pull request has been automatically marked as stale because it has
+            not had recent activity. It will be closed in 180 days if no further
+            activity occurs.
+          close-pr-message: >
+            This pull request was closed due to inactivity. Feel free to reopen if
+            you'd like to continue.
+          days-before-stale: 180
+          days-before-close: 180
+          exempt-issue-labels: "pinned,security"
+          exempt-pr-labels: "pinned,security"
