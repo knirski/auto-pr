@@ -14,7 +14,7 @@ let
       && builtins.baseNameOf path != "result"
       && builtins.baseNameOf path != "coverage";
   };
-  npmDepsHash = "sha256-FKCzgyOvLTCC1TM5X05tYBT2C5NtsAqicTa9RYWv6LU=";
+  npmDepsHash = "sha256-SqXJxXx9/7jB7EgOa31q6I6j+6ceyNgp1ffBlCGbDTE=";
 in
 pkgs.buildNpmPackage rec {
   pname = "auto-pr";
