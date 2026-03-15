@@ -46,7 +46,7 @@ jobs:
         uses: rvben/rumdl@8c1798b13cf961c88a4c5d1136448f4f4391383d # v0.1.47
 
       - name: Spell check
-        uses: crate-ci/typos@631208b7aac2daa8b707f55e7331b9112b0e062d # v1.44.0
+        uses: crate-ci/typos@631208b7aac2daa8b707f55e7331f9112b0e062d # v1.44.0
 
       - name: Lint workflows
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2

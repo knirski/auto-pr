@@ -30,4 +30,4 @@ jobs:
           args: --timeout 30 --max-retries 10 --retry-wait-time 2 --no-progress .
 
       - name: Spell check
-        uses: crate-ci/typos@631208b7aac2daa8b707f55e7331b9112b0e062d # v1.44.0
+        uses: crate-ci/typos@631208b7aac2daa8b707f55e7331f9112b0e062d # v1.44.0
