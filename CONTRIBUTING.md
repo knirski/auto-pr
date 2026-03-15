@@ -16,7 +16,7 @@ If you change `package-lock.json` (e.g. add a dependency), the Nix hash must be 
 
 **Local warning:** `npm run check` warns when the hash is stale. You can ignore it — CI will fix it when you push.
 
-**If CI pushes an npmDepsHash update:** The PR head will change. Wait 1–2 minutes for the new check to complete before merging. See [docs/CI.md](docs/CI.md) if the required check stays "waiting for status".
+**If CI pushes an npmDepsHash update:** The PR head will change. Wait 1–2 minutes for the new check to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-check--check-waiting-for-status) if the required check stays "waiting for status".
 
 **Fork PRs:** CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-npm-deps-hash` (or `npm run update-nix-hash -- <hash>` using the hash from the failed job), then commit and push. See [docs/CI.md](docs/CI.md).
 
@@ -28,7 +28,7 @@ See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architect
 
 ## Commits
 
-All commits must follow [Conventional Commits](https://www.conventionalcommits.org/). This is enforced locally via [commitlint](https://commitlint.js.org/) (lefthook hook).
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/). This is enforced locally via [commitlint](https://commitlint.js.org/) (lefthook hook) and in CI.
 
 Examples:
 
@@ -46,6 +46,10 @@ For AI-assisted development: push to `ai/**` branches to auto-create PRs with ti
 1. Run `npm run check` before submitting.
 2. Ensure your commits follow Conventional Commits (the PR template includes a checklist).
 3. Update documentation if your changes affect user-facing behavior.
+
+## Good First Issues
+
+Issues labeled `good first issue` are suitable for newcomers: they have clear scope, acceptance criteria, and links to relevant code. If you're new to the project, start there.
 
 ## When Unsure About Approach
 
