@@ -6,7 +6,7 @@ Reusable actions for Nix-related CI workflows. Used by reusable workflows (check
 
 | Action | Purpose | Used by |
 |--------|---------|---------|
-| **nix-setup** | Checkout, install Nix | nix workflow, update-flake-lock |
+| **nix-setup** | Checkout, install Nix (cachix/install-nix-action). Accepts token for App-token checkout. | nix workflow, update-flake-lock |
 | **nix-npm-deps-hash** | Run update-npm-deps-hash.sh, output hash when updated | nix workflow |
 | **nix-commit-npm-deps-hash** | Commit and push npmDepsHash update | nix workflow |
 | **nix-fail-npm-deps-hash-fork** | Fail with instructions for fork PRs | nix workflow |
@@ -15,5 +15,5 @@ Reusable actions for Nix-related CI workflows. Used by reusable workflows (check
 
 | Workflow | Purpose | Called by |
 |----------|---------|-----------|
-| **check.yml** | Full check (test, lint, rumdl, typos, actionlint, shellcheck, SBOM) | ci.yml |
+| **check.yml** | Full check (test, lint, rumdl, typos, actionlint, shellcheck, SBOM via npm sbom) | ci.yml |
 | **nix.yml** | Nix build + npmDepsHash update | ci-nix.yml, update-nix-hash.yml |

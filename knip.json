@@ -8,5 +8,6 @@
 		"auto-pr-generate-content",
 		"auto-pr-create-or-update-pr",
 		"scripts/nix-run-if-missing.sh"
-	]
+	],
+	"ignoreDependencies": ["shellcheck"]
 }

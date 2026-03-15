@@ -4,6 +4,7 @@
 # Inputs:
 #   ref: Checkout ref (e.g. PR head for ci). Omit for default.
 #   fetch-depth: Git fetch depth. Default 0 (full history).
+#   token: Checkout token (e.g. App token for push). Omit for GITHUB_TOKEN.
 
 name: "Nix setup"
 description: "Checkout repo, install Nix"
@@ -17,13 +18,20 @@ inputs:
     description: "Git fetch depth (0 = full history)"
     required: false
     default: "0"
+  token:
+    description: "Checkout token (e.g. App token for push). Omit for GITHUB_TOKEN."
+    required: false
+    default: ""
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         fetch-depth: ${{ inputs.fetch-depth }}
         ref: ${{ inputs.ref || github.ref }}
+        token: ${{ inputs.token || github.token }}
 
-    - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+    - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
+      with:
+        extra_nix_config: "experimental-features = nix-command flakes"

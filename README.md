@@ -62,6 +62,12 @@ npm install
 npm run check
 ```
 
+| Command | Purpose |
+|---------|---------|
+| `npm run check` | Local checks (npm + optional typos/lychee/actionlint) |
+| `npm run check:code` | Code only (npm deps); runs on pre-push |
+| `npm run check:ci` | Full CI parity in Docker (requires act or gh-act) |
+
 ## Installation
 
 **As a dependency (recommended for consumer repos):**
@@ -134,7 +140,7 @@ nix develop
 
 Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.sh`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
 
-This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** npm audit in check; CycloneDX SBOM, Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
+This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** npm audit in check; SBOM (CycloneDX via npm sbom), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
 
 ## Documentation
 
@@ -160,7 +166,7 @@ This project was developed with assistance from AI coding tools.
 npm run check
 ```
 
-Runs full check: audit, test, lint, knip, typecheck, docs (rumdl, typos), actionlint, shellcheck. Use `check:with-links` to add lychee link verification.
+Runs full check: audit, test, lint, knip, typecheck, docs (rumdl, typos), actionlint, shellcheck. Use `check:with-links` to add lychee link verification. Pre-push runs `check:code` (npm deps only). Use `check:ci` for full CI parity in Docker.
 
 ## License
 

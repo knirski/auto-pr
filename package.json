@@ -34,13 +34,14 @@
 		"test:unit": "vitest run --coverage=false --typecheck",
 		"test:watch": "vitest",
 		"check": "bash scripts/check-nix-hash.sh && npm run check:code && npm run check:docs && npm run lint:workflows && npm run lint:scripts",
+		"check:ci": "bash scripts/run-check-ci.sh",
 		"check:code": "npm audit --audit-level=high && npm run test && npm run lint && npm run knip && npm run typecheck",
 		"check:with-links": "npm run check && npm run check:just-links",
-		"check:docs": "scripts/nix-run-if-missing.sh rumdl check . && scripts/nix-run-if-missing.sh typos",
+		"check:docs": "npx rumdl check . && scripts/nix-run-if-missing.sh typos",
 		"check:just-links": "scripts/nix-run-if-missing.sh lychee --timeout 30 --max-retries 10 --retry-wait-time 2 --no-progress .",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --write --unsafe",
-		"lint:scripts": "find scripts -name '*.sh' -print0 | xargs -0 -r scripts/nix-run-if-missing.sh shellcheck",
+		"lint:scripts": "find scripts -name '*.sh' -print0 | xargs -0 -r npx shellcheck",
 		"lint:workflows": "scripts/nix-run-if-missing.sh actionlint",
 		"format": "biome format --write .",
 		"knip": "knip",
@@ -62,7 +63,6 @@
 		"unist-util-visit": "^5.1.0"
 	},
 	"devDependencies": {
-		"@cyclonedx/cyclonedx-npm": "^4.2.1",
 		"@biomejs/biome": "^2.4.6",
 		"@effect/vitest": "4.0.0-beta.31",
 		"@types/mdast": "^4.0.4",
@@ -76,7 +76,9 @@
 		"lint-staged": "^16.3.2",
 		"tsx": "^4.21.0",
 		"typescript": "^5.7.0",
-		"vitest": "^4.0.18"
+		"vitest": "^4.0.18",
+		"rumdl": "^0.1.51",
+		"shellcheck": "^4.1.0"
 	},
 	"lint-staged": {
 		"*.{ts,tsx,mjs}": [

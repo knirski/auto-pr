@@ -16,7 +16,7 @@ When unsure about how to implement something or when multiple approaches exist:
 ## Setup
 
 - Install: `npm install`
-- Verify: `npm run check` (test, lint, knip, typecheck)
+- Verify: `npm run check` (audit, test, lint, knip, typecheck, docs, actionlint, shellcheck). Pre-push runs `check:code` automatically.
 - **Build/typecheck:** Uses TypeScript Native (`tsgo`) for faster typecheck. No declaration emit.
 
 ## Commands
@@ -24,7 +24,8 @@ When unsure about how to implement something or when multiple approaches exist:
 | Command | Purpose |
 |---------|---------|
 | `npm run check` | Full check: test, lint, knip, typecheck, docs. Run before committing. |
-| `npm run check:code` | Code only: test, lint, knip, typecheck. |
+| `npm run check:code` | Code only: test, lint, knip, typecheck. Runs on pre-push. |
+| `npm run check:ci` | Full CI parity in Docker (gh act or act). Use when debugging CI. |
 | `npm test` | Unit tests with coverage |
 | `npm run lint` | Lint (Biome) |
 | `npm run lint:fix` | Lint and fix |
@@ -59,6 +60,7 @@ scripts/
   create-or-update-pr.ts
   collapse-prose-paragraphs.ts
   run-auto-pr.sh
+  run-check-ci.sh
 test/
   *.test.ts          — Unit tests
 ```
@@ -73,6 +75,7 @@ test/
 | New service interface | `scripts/auto-pr/interfaces/` |
 | New live interpreter | `scripts/auto-pr/live/` |
 | New CLI script | `scripts/` |
+| New shell script | `scripts/` |
 | New prompt | `scripts/auto-pr/prompts/` |
 
 ## Key Rules
@@ -121,6 +124,8 @@ Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:doc
 
 - Add or update tests for the code you change, even if nobody asked.
 - Before committing: run `npm run check`; ensure all tests pass.
+- Pre-push runs `check:code` automatically (Lefthook). Use `git push --no-verify` only when necessary.
+- For full CI parity locally (e.g. debugging CI): `npm run check:ci` (requires Docker + act or gh-act).
 
 ## Documentation
 

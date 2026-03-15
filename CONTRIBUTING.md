@@ -10,6 +10,35 @@ cd auto-pr
 npm install
 ```
 
+### Optional: typos, lychee, and actionlint for full local check
+
+`npm run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use Nix:
+
+| OS | typos | lychee | actionlint |
+|----|-------|--------|------------|
+| **macOS** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
+| **Linux** (Ubuntu/Debian) | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
+| **Linux** (Fedora) | `dnf install typos-cli` | `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
+| **Linux** (Arch) | `pacman -S typos` | `pacman -S lychee` or `cargo install lychee` | `pacman -S actionlint` |
+| **Linux** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
+| **Windows** | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
+| **Nix** | `nix develop` (tools in PATH) or `nix run nixpkgs#typos` | `nix run nixpkgs#lychee` | `nix run nixpkgs#actionlint` |
+
+Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run nixpkgs#<tool>` if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
+
+### Run CI locally (full parity)
+
+`npm run check:ci` runs the same check workflow as CI in Docker. Requires [Docker](https://docs.docker.com/get-docker/) and either:
+
+- **gh extension** (preferred): `gh extension install nektos/gh-act`
+- **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
+
+The script tries `gh act` first, then falls back to `act`.
+
+### Pre-push hook
+
+Lefthook runs `npm run check:code` before each push. Uses only npm deps (audit, test, lint, knip, typecheck); no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
+
 If you change `package-lock.json` (e.g. add a dependency), the Nix hash must be updated:
 
 **CI handles it:** Push your branch. CI will update `default.nix` automatically for same-repo PRs and main. No need to commit the hash change yourself.

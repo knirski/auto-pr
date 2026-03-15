@@ -106,6 +106,8 @@ curl -o .github/workflows/auto-pr.yml https://raw.githubusercontent.com/knirski/
 curl -o .github/workflows/auto-pr.yml https://raw.githubusercontent.com/knirski/auto-pr/main/.github/workflows/auto-pr-consumer.yml
 ```
 
+Option B runs `npm run check` before creating the PR. Your `package.json` must define a `check` script (e.g. `"check": "npm run test && npm run lint"`).
+
 Or create `.github/workflows/auto-pr.yml` manually (reusable workflow — no package.json):
 
 ```yaml
@@ -187,6 +189,7 @@ Or adjust the `branches` filter in the workflow.
 | Workflow doesn't run | Ensure branch name matches `ai/**`; workflow skips on forks |
 | "Missing .github/PULL_REQUEST_TEMPLATE.md" | Run `npx auto-pr-init` or copy the template. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | "node-version-file" error | Only for Option B (npm). Create `.nvmrc` or use `node-version: '24'` |
+| "Missing script: check" | Option B requires a `check` script in package.json. Add one (e.g. `"check": "npm run test && npm run lint"`) or use Option A (reusable) |
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
 | "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |
 | PR already exists | Workflow updates the PR title and body from the latest commits |
