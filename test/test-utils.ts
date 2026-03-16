@@ -19,7 +19,7 @@ export const ChildProcessSpawnerTestMock = Layer.mock(ChildProcessSpawner)({
 });
 
 /**
- * Mock that simulates "no PR exists" for gh pr view, success for gh pr create/edit.
+ * Mock that simulates "no PR exists" for gh pr view --json, success for gh pr create/edit.
  * Exercises the create path (vs update path) in runCreateOrUpdatePr.
  */
 export const ChildProcessSpawnerCreatePathMock = Layer.mock(ChildProcessSpawner)({
@@ -34,6 +34,22 @@ export const ChildProcessSpawnerCreatePathMock = Layer.mock(ChildProcessSpawner)
 					description: "no PR found",
 				}),
 			);
+		}
+		return Effect.succeed("");
+	},
+	streamString: () => Stream.empty,
+	streamLines: () => Stream.empty,
+});
+
+/**
+ * Mock that simulates "PR exists" for gh pr view --json (returns number,url), success for gh pr edit.
+ * Exercises the update path in runCreateOrUpdatePr.
+ */
+export const ChildProcessSpawnerUpdatePathMock = Layer.mock(ChildProcessSpawner)({
+	string: (cmd: { _tag: string; command?: string; args?: readonly string[] }) => {
+		const args = "args" in cmd ? cmd.args : [];
+		if (cmd.command === "gh" && args[1] === "view" && args.includes("--json")) {
+			return Effect.succeed('{"number":1,"url":"https://github.com/owner/repo/pull/1"}');
 		}
 		return Effect.succeed("");
 	},

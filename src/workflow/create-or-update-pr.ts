@@ -3,12 +3,14 @@
  *
  * Requires env: GH_TOKEN, BRANCH, DEFAULT_BRANCH, TITLE, BODY_FILE
  *
- * Validates required env at startup, then calls gh pr view → gh pr edit or gh pr create.
+ * Validates required env at startup, then calls gh pr view --json → gh pr edit or gh pr create.
+ * Uses --json number,url for reliable PR existence check (avoids exit-code ambiguity).
+ * Uses PR number for edits (more robust than branch name).
  *
  * Run: npx tsx src/workflow/create-or-update-pr.ts
  */
 
-import { Duration, Effect, FileSystem, Schedule } from "effect";
+import { Duration, Effect, FileSystem, Option, Schedule } from "effect";
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	AutoPrLoggerLayer,
@@ -29,58 +31,105 @@ import {
 const GH_RETRY_ATTEMPTS = 3;
 const GH_RETRY_DELAY_MS = 5000;
 
-// ─── Shell (Effect) ───────────────────────────────────────────────────────
+type PrInfo = { number: number; url: string };
 
-function ghPrView(branch: string, cwd: string): Effect.Effect<boolean, never, ChildProcessSpawner> {
-	return runCommand("gh", ["pr", "view", branch], cwd).pipe(
-		Effect.as(true),
-		Effect.catch(() => Effect.succeed(false)),
+/** Reliable PR existence check: gh pr view --json number,url. Returns Option with PR info if exists. */
+function ghPrViewJson(
+	branch: string,
+	cwd: string,
+): Effect.Effect<Option.Option<PrInfo>, never, ChildProcessSpawner> {
+	return runCommand("gh", ["pr", "view", branch, "--json", "number,url"], cwd).pipe(
+		Effect.map((stdout) => {
+			const trimmed = stdout.trim();
+			if (!trimmed) return Option.none();
+			try {
+				const parsed = JSON.parse(trimmed) as { number?: number; url?: string };
+				if (
+					typeof parsed.number === "number" &&
+					typeof parsed.url === "string" &&
+					parsed.url.length > 0
+				) {
+					return Option.some({ number: parsed.number, url: parsed.url });
+				}
+			} catch {
+				// Invalid JSON or missing fields
+			}
+			return Option.none();
+		}),
+		Effect.catch(() => Effect.succeed(Option.none())),
 	);
 }
 
 function ghPrEdit(
-	branch: string,
-	title: string,
-	bodyPath: string,
-	cwd: string,
-): Effect.Effect<void, PullRequestFailedError, ChildProcessSpawner> {
-	return runCommand("gh", ["pr", "edit", branch, "--title", title, "--body-file", bodyPath], cwd);
-}
-
-function ghPrCreate(
-	baseBranch: string,
+	prNumber: number,
 	title: string,
 	bodyPath: string,
 	cwd: string,
 ): Effect.Effect<void, PullRequestFailedError, ChildProcessSpawner> {
 	return runCommand(
 		"gh",
-		["pr", "create", "--base", baseBranch, "--title", title, "--body-file", bodyPath],
+		["pr", "edit", String(prNumber), "--title", title, "--body-file", bodyPath],
 		cwd,
 	);
 }
 
-const ghRetrySchedule = Schedule.recurs(GH_RETRY_ATTEMPTS - 1).pipe(
-	Schedule.addDelay(() =>
-		Effect.logWarning({
-			event: "create_or_update_pr",
-			status: "gh_retry",
-			message: "gh failed, retrying in 5s...",
-		}).pipe(Effect.as(Duration.millis(GH_RETRY_DELAY_MS))),
-	),
-);
+function ghPrCreate(
+	headBranch: string,
+	baseBranch: string,
+	title: string,
+	bodyPath: string,
+	cwd: string,
+): Effect.Effect<string, PullRequestFailedError, ChildProcessSpawner> {
+	return runCommand(
+		"gh",
+		[
+			"pr",
+			"create",
+			"--head",
+			headBranch,
+			"--base",
+			baseBranch,
+			"--title",
+			title,
+			"--body-file",
+			bodyPath,
+		],
+		cwd,
+	);
+}
 
-function runGhWithRetry<R, E>(effect: Effect.Effect<void, E, R>): Effect.Effect<void, E, R> {
+function createGhRetrySchedule(branch: string) {
+	return Schedule.recurs(GH_RETRY_ATTEMPTS - 1).pipe(
+		Schedule.addDelay(() =>
+			Effect.logWarning({
+				event: "create_or_update_pr",
+				status: "gh_retry",
+				branch,
+				message: "gh failed, retrying in 5s...",
+			}).pipe(Effect.as(Duration.millis(GH_RETRY_DELAY_MS))),
+		),
+	);
+}
+
+function runGhWithRetry<R, E, A>(
+	effect: Effect.Effect<A, E, R>,
+	branch: string,
+): Effect.Effect<A, E, R> {
 	return effect.pipe(
-		Effect.retry(ghRetrySchedule),
+		Effect.retry(createGhRetrySchedule(branch)),
 		Effect.tapError(() =>
 			Effect.logError({
 				event: "create_or_update_pr",
 				status: "failed_after_retries",
+				branch,
 				message: "gh pr failed after 3 attempts",
 			}),
 		),
 	);
+}
+
+function extractPrUrl(stdout: string): string {
+	return stdout.trim().split("\n").at(-1) ?? "";
 }
 
 type CreateOrUpdatePrError = PullRequestFailedError | BodyFileNotFoundError | FileSystemError;
@@ -104,13 +153,43 @@ export function runCreateOrUpdatePr(params: {
 
 		const cwd = params.workspace;
 
-		const prExists = yield* ghPrView(params.branch, cwd);
-		if (prExists) {
-			yield* Effect.log({ event: "create_or_update_pr", status: "updating" });
-			yield* runGhWithRetry(ghPrEdit(params.branch, params.title, params.bodyFile, cwd));
+		const prInfo = yield* ghPrViewJson(params.branch, cwd);
+		if (Option.isSome(prInfo)) {
+			const { number: prNumber, url } = prInfo.value;
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "updating",
+				branch: params.branch,
+				base: params.defaultBranch,
+				prNumber,
+			});
+			yield* runGhWithRetry(ghPrEdit(prNumber, params.title, params.bodyFile, cwd), params.branch);
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "updated",
+				url,
+				branch: params.branch,
+			});
 		} else {
-			yield* Effect.log({ event: "create_or_update_pr", status: "creating" });
-			yield* runGhWithRetry(ghPrCreate(params.defaultBranch, params.title, params.bodyFile, cwd));
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "creating",
+				head: params.branch,
+				base: params.defaultBranch,
+			});
+			const stdout = yield* runGhWithRetry(
+				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
+				params.branch,
+			);
+			const url = extractPrUrl(stdout);
+			if (url) {
+				yield* Effect.log({
+					event: "create_or_update_pr",
+					status: "created",
+					url,
+					branch: params.branch,
+				});
+			}
 		}
 	});
 }
