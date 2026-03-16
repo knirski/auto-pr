@@ -10,7 +10,7 @@
  * Run: npx tsx src/workflow/create-or-update-pr.ts
  */
 
-import { Duration, Effect, FileSystem, Option, Schedule } from "effect";
+import { Duration, Effect, FileSystem, Option, Schedule, Schema } from "effect";
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	AutoPrLoggerLayer,
@@ -31,33 +31,31 @@ import {
 const GH_RETRY_ATTEMPTS = 3;
 const GH_RETRY_DELAY_MS = 5000;
 
-type PrInfo = { number: number; url: string };
+const PrInfoSchema = Schema.Struct({
+	number: Schema.Number,
+	url: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+});
+type PrInfo = Schema.Schema.Type<typeof PrInfoSchema>;
 
 /** Reliable PR existence check: gh pr view --json number,url. Returns Option with PR info if exists. */
 function ghPrViewJson(
 	branch: string,
 	cwd: string,
 ): Effect.Effect<Option.Option<PrInfo>, never, ChildProcessSpawner> {
-	return runCommand("gh", ["pr", "view", branch, "--json", "number,url"], cwd).pipe(
-		Effect.map((stdout) => {
-			const trimmed = stdout.trim();
-			if (!trimmed) return Option.none();
-			try {
-				const parsed = JSON.parse(trimmed) as { number?: number; url?: string };
-				if (
-					typeof parsed.number === "number" &&
-					typeof parsed.url === "string" &&
-					parsed.url.length > 0
-				) {
-					return Option.some({ number: parsed.number, url: parsed.url });
-				}
-			} catch {
-				// Invalid JSON or missing fields
-			}
-			return Option.none();
-		}),
-		Effect.catch(() => Effect.succeed(Option.none())),
-	);
+	return Effect.gen(function* () {
+		const stdout = yield* runCommand("gh", ["pr", "view", branch, "--json", "number,url"], cwd);
+		const trimmed = stdout.trim();
+		if (!trimmed) return Option.none();
+		const parsed = yield* Effect.try({
+			try: () => JSON.parse(trimmed) as unknown,
+			catch: () => null,
+		}).pipe(Effect.catch(() => Effect.succeed(null)));
+		if (parsed === null) return Option.none();
+		return yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
+			Effect.map(Option.some),
+			Effect.catch(() => Effect.succeed(Option.none())),
+		);
+	}).pipe(Effect.catch(() => Effect.succeed(Option.none())));
 }
 
 function ghPrEdit(
