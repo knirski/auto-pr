@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import {
 	ChildProcessSpawnerCreatePathMock,
 	ChildProcessSpawnerTestMock,
+	ChildProcessSpawnerUpdatePathMock,
 	createTestTempDirEffect,
 	SilentLoggerLayer,
 	TestBaseLayer,
@@ -10,6 +11,11 @@ import {
 import { runCreateOrUpdatePr } from "#workflow/create-or-update-pr.js";
 
 const TestLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, ChildProcessSpawnerTestMock);
+const UpdatePathLayer = Layer.mergeAll(
+	TestBaseLayer,
+	SilentLoggerLayer,
+	ChildProcessSpawnerUpdatePathMock,
+);
 
 layer(TestLayer)("runCreateOrUpdatePr", (it) => {
 	it.effect("fails when body file missing", () =>
@@ -40,7 +46,7 @@ layer(TestLayer)("runCreateOrUpdatePr", (it) => {
 				bodyFile: bodyPath,
 				workspace: tmp.path,
 			});
-		}).pipe(Effect.scoped),
+		}).pipe(Effect.provide(UpdatePathLayer)),
 	);
 });
 

@@ -1,0 +1,87 @@
+# Reusable workflow: create/update PR (privileged).
+# Checkout of default branch (trusted) with pull-requests: write.
+# Satisfies CodeQL — no untrusted checkout in this workflow.
+#
+# Requires: needs generate job first. Artifact pr-content from generate.
+# See auto-pr.yml for the pattern.
+
+name: Auto-PR create (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      auto_pr_pkg:
+        required: false
+        type: string
+        default: "github:knirski/auto-pr"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
+    steps:
+      - name: Check prerequisites (secrets)
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
+            echo "::error::Missing secrets APP_ID or APP_PRIVATE_KEY. Create a GitHub App and add secrets."
+            echo "::error::See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md"
+            exit 1
+          fi
+
+      - name: Validate auto_pr_pkg input
+        run: |
+          TRUSTED_BASE="github:knirski/auto-pr"
+          if [ "$AUTO_PR_PKG" != "$TRUSTED_BASE" ] && [[ ! "$AUTO_PR_PKG" == "$TRUSTED_BASE"#* ]]; then
+            echo "::error::Invalid auto_pr_pkg input: '$AUTO_PR_PKG'. Must be '$TRUSTED_BASE' or '$TRUSTED_BASE#<ref>' (for testing or version pinning)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: pr-content
+          path: ${{ runner.temp }}/pr-artifact
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
+          ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
+        run: |
+          TITLE=$(cat "$ARTIFACT_DIR/title.txt")
+          export TITLE
+          BODY_FILE="$GITHUB_WORKSPACE_SAFE/pr-body.md"
+          cp "$ARTIFACT_DIR/body.md" "$BODY_FILE"
+          export BODY_FILE
+          BRANCH=$(cat "$ARTIFACT_DIR/branch.txt")
+          export BRANCH
+          DEFAULT_BRANCH=$(cat "$ARTIFACT_DIR/default_branch.txt")
+          export DEFAULT_BRANCH
+          npx -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr

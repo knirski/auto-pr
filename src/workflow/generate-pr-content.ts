@@ -20,7 +20,6 @@ import {
 	appendGhOutput,
 	buildDescriptionPrompt,
 	buildGenerateContentGhEntries,
-	FillPrTemplate,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
@@ -34,14 +33,19 @@ import {
 import type { CommitInfo } from "#lib/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
+	getDescriptionFromCommits,
 	getDescriptionPromptText,
+	getTitle as getTitleFromCommits,
+	isValidConventionalTitle,
 	parseCommits,
+	parseFilesContent,
+	renderBody as renderBodyCore,
 } from "#lib/fill-pr-template-core.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const BODY_FILE_NAME = "pr-body.md";
-const MAX_OLLAMA_ATTEMPTS = 3;
+const MAX_OLLAMA_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
 
 const OllamaResponseSchema = Schema.Struct({
@@ -83,45 +87,102 @@ function callOllama(
 	});
 }
 
-const retrySchedule = Schedule.recurs(MAX_OLLAMA_ATTEMPTS - 1).pipe(
-	Schedule.addDelay(() =>
-		Effect.logWarning({
-			event: "generate_pr_content",
-			status: "ollama_retry",
-			message: "Ollama failed, retrying in 3s...",
-		}).pipe(Effect.as(Duration.millis(RETRY_DELAY_MS))),
-	),
-);
+function makeRetrySchedule(delayMs: number) {
+	return Schedule.recurs(MAX_OLLAMA_ATTEMPTS - 1).pipe(
+		Schedule.addDelay(() =>
+			Effect.logWarning({
+				event: "generate_pr_content",
+				status: "ollama_retry",
+				message: "Title invalid or Ollama failed, retrying in 3s...",
+			}).pipe(Effect.as(Duration.millis(delayMs))),
+		),
+	);
+}
+
+function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
+	title: string;
+	description: string;
+} {
+	const firstSubject = filtered[0]?.subject?.trim() ?? "";
+	const title = isValidConventionalTitle(firstSubject) ? firstSubject : "chore: update";
+	const description = getDescriptionFromCommits(filtered);
+	return { title, description };
+}
 
 function generateTitleAndDescription(
 	ollamaUrl: string,
 	model: string,
 	prompt: string,
+	filtered: readonly CommitInfo[],
+	retryDelayMs: number = RETRY_DELAY_MS,
 ): Effect.Effect<{ title: string; description: string }, Error, Http.HttpClient.HttpClient> {
-	return callOllama(ollamaUrl, model, prompt).pipe(
+	const attempt = callOllama(ollamaUrl, model, prompt).pipe(
 		Effect.flatMap((raw) => Effect.fromResult(parseTitleDescriptionResponse(raw))),
-		Effect.retry(retrySchedule),
+		Effect.flatMap(({ title, description }) =>
+			isValidConventionalTitle(title)
+				? Effect.succeed({ title, description })
+				: Effect.fail(new Error(`Title not in conventional format: "${title}"`)),
+		),
+	);
+	return attempt.pipe(
+		Effect.retry(makeRetrySchedule(retryDelayMs)),
+		Effect.catch(() =>
+			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
+				Effect.tap(() =>
+					Effect.logWarning({
+						event: "generate_pr_content",
+						status: "fallback",
+						message: "Using fallback title after 5 invalid attempts",
+					}),
+				),
+			),
+		),
 	);
 }
 
-// ─── Main pipeline ───────────────────────────────────────────────────────
+// ─── Value-based API (no file I/O) ────────────────────────────────────────
 
-function parseAndValidateCommits(
-	commitsPath: string,
+/** Parameters for generatePrContentFromValues. All content as strings. */
+export type GeneratePrContentFromValuesParams = {
+	commitsContent: string;
+	filesContent: string;
+	templateContent: string;
+	descriptionPromptText: string;
+	howToTestDefault: string;
+	model: string;
+	ollamaUrl: string;
+	/** Retry delay in ms. Use 0 for tests. Default 3000. */
+	retryDelayMs?: number;
+};
+
+/**
+ * Generate PR title and body from content. No file I/O.
+ * Use for tests or when content is already in memory.
+ */
+export function generatePrContentFromValues(
+	params: GeneratePrContentFromValuesParams,
 ): Effect.Effect<
-	{ filtered: readonly CommitInfo[]; count: number },
+	{ title: string; body: string; count: number },
 	Error | NoSemanticCommitsError,
-	FileSystem.FileSystem
+	Http.HttpClient.HttpClient
 > {
 	return Effect.gen(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const logContent = yield* fs
-			.readFileString(commitsPath)
-			.pipe(Effect.mapError((e) => new Error(`commits: ${String(e)}`)));
-		const parseResult = parseCommits(logContent);
+		const {
+			commitsContent,
+			filesContent,
+			templateContent,
+			descriptionPromptText,
+			howToTestDefault,
+			model,
+			ollamaUrl,
+			retryDelayMs,
+		} = params;
+
+		const parseResult = parseCommits(commitsContent);
 		const rawCommits = yield* Effect.fromResult(parseResult);
 		const filtered = filterMergeCommits(rawCommits);
 		const count = filtered.length;
+
 		if (count === 0) {
 			return yield* Effect.fail(
 				new NoSemanticCommitsError({
@@ -130,40 +191,42 @@ function parseAndValidateCommits(
 				}),
 			);
 		}
-		return { filtered, count };
+
+		const files = parseFilesContent(filesContent);
+
+		let title: string;
+		let descriptionOverride: string | undefined;
+
+		if (count >= 2) {
+			const commitContent = getDescriptionPromptText(filtered);
+			const prompt = buildDescriptionPrompt(descriptionPromptText, commitContent);
+			const result = yield* generateTitleAndDescription(
+				ollamaUrl,
+				model,
+				prompt,
+				filtered,
+				retryDelayMs ?? RETRY_DELAY_MS,
+			);
+			title = result.title;
+			descriptionOverride = result.description;
+		} else {
+			title = getTitleFromCommits(filtered);
+			descriptionOverride = undefined;
+		}
+
+		const bodyResult = renderBodyCore(
+			filtered,
+			files,
+			templateContent,
+			descriptionOverride,
+			howToTestDefault,
+		);
+		const body = yield* Effect.fromResult(bodyResult);
+		return { title, body, count };
 	});
 }
 
-function generateAndWriteDescription(
-	workspace: string,
-	ollamaUrl: string,
-	model: string,
-	filtered: readonly CommitInfo[],
-): Effect.Effect<
-	{ title: string; descriptionFilePath: string },
-	Error,
-	FileSystem.FileSystem | Path.Path | Http.HttpClient.HttpClient
-> {
-	return Effect.gen(function* () {
-		const pathApi = yield* Path.Path;
-		const fs = yield* FileSystem.FileSystem;
-
-		const promptPath = yield* getPrDescriptionPromptPath();
-		const descPrompt = yield* fs
-			.readFileString(promptPath)
-			.pipe(Effect.mapError((e) => new Error(`pr-description.txt: ${String(e)}`)));
-		const commitContent = getDescriptionPromptText(filtered);
-		const prompt = buildDescriptionPrompt(descPrompt, commitContent);
-
-		const { title, description } = yield* generateTitleAndDescription(ollamaUrl, model, prompt);
-
-		const descriptionFilePath = pathApi.join(workspace, "description.txt");
-		yield* fs
-			.writeFileString(descriptionFilePath, description)
-			.pipe(Effect.mapError((e) => new Error(`write description: ${String(e)}`)));
-		return { title, descriptionFilePath };
-	});
-}
+// ─── Main pipeline ───────────────────────────────────────────────────────
 
 export function runGeneratePrContent(config: {
 	commits: string;
@@ -174,10 +237,12 @@ export function runGeneratePrContent(config: {
 	model: string;
 	ollamaUrl: string;
 	howToTestDefault: string;
+	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
+	retryDelayMs?: number;
 }): Effect.Effect<
 	void,
 	Error | NoSemanticCommitsError,
-	FileSystem.FileSystem | Path.Path | FillPrTemplate | Http.HttpClient.HttpClient
+	FileSystem.FileSystem | Path.Path | Http.HttpClient.HttpClient
 > {
 	return Effect.gen(function* () {
 		const {
@@ -189,30 +254,36 @@ export function runGeneratePrContent(config: {
 			model,
 			ollamaUrl,
 			howToTestDefault,
+			retryDelayMs,
 		} = config;
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
 
-		const { filtered, count } = yield* parseAndValidateCommits(commits);
+		const [commitsContent, filesContent, templateContent, descriptionPromptText] =
+			yield* Effect.all([
+				fs.readFileString(commits).pipe(Effect.mapError((e) => new Error(`commits: ${String(e)}`))),
+				fs.readFileString(files).pipe(Effect.mapError((e) => new Error(`files: ${String(e)}`))),
+				fs
+					.readFileString(templatePath)
+					.pipe(Effect.mapError((e) => new Error(`template: ${String(e)}`))),
+				getPrDescriptionPromptPath().pipe(
+					Effect.flatMap((p) =>
+						fs
+							.readFileString(p)
+							.pipe(Effect.mapError((e) => new Error(`pr-description.txt: ${String(e)}`))),
+					),
+				),
+			]);
 
-		const fillPr = yield* FillPrTemplate;
-		const fillParams = {
-			logFilePath: commits,
-			filesFilePath: files,
-			templatePath,
+		const { title, body, count } = yield* generatePrContentFromValues({
+			commitsContent,
+			filesContent,
+			templateContent,
+			descriptionPromptText,
 			howToTestDefault,
-		};
-
-		const ollamaResult =
-			count >= 2
-				? yield* generateAndWriteDescription(workspace, ollamaUrl, model, filtered)
-				: undefined;
-
-		const title =
-			ollamaResult !== undefined ? ollamaResult.title : yield* fillPr.getTitle(fillParams);
-		const body = yield* fillPr.getBody({
-			...fillParams,
-			...(ollamaResult && { descriptionFilePath: ollamaResult.descriptionFilePath }),
+			model,
+			ollamaUrl,
+			...(retryDelayMs !== undefined && { retryDelayMs }),
 		});
 
 		const bodyPath = pathApi.join(workspace, BODY_FILE_NAME);
@@ -234,11 +305,7 @@ export function runGeneratePrContent(config: {
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const GeneratePrContentLayer = Layer.mergeAll(
-	AutoPrPlatformLayer,
-	FillPrTemplate.Live,
-	Http.FetchHttpClient.layer,
-);
+const GeneratePrContentLayer = Layer.mergeAll(AutoPrPlatformLayer, Http.FetchHttpClient.layer);
 
 const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;

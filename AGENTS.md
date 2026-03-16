@@ -41,7 +41,7 @@ When unsure about how to implement something or when multiple approaches exist:
 |---------|---------|
 | `npm run check` | Full check: test, lint, knip, typecheck, docs, actionlint, shellcheck. Run before committing. |
 | `npm run check:code` | Code only: test, lint, knip, typecheck. Runs on pre-push. |
-| `npm run check:ci` | Full CI parity in Docker (`gh act` or `act`). Use when debugging CI. |
+| `npm run check:ci` | Full CI parity in Docker (`gh act` or `act`). **Prefer for local workflow testing** over pushing to trigger CI. |
 | `npm run check:with-links` | Full check + lychee link verification. Can fail on broken external URLs. |
 | `npm run check:just-links` | Lychee link check only. Requires lychee or Nix. |
 | `npm test` | Unit tests with coverage |
@@ -70,7 +70,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for high-level structure, pipel
 ```
 .github/
   PULL_REQUEST_TEMPLATE.md
-  workflows/         — ci, release-please, ci-release-please, auto-pr, auto-pr-reusable, auto-pr-user
+  workflows/         — ci, release-please, ci-release-please, auto-pr, auto-pr-generate-reusable, auto-pr-create-reusable, auto-pr-user
 src/
   auto-pr/          — config, core, errors, interfaces, live, paths, shell, utils
   workflow/         — main auto-PR pipeline (get-commits, generate-content, create-or-update-pr, run-auto-pr)
@@ -113,6 +113,7 @@ test/
 | Domain errors | `Schema.TaggedErrorClass` in `errors.ts` |
 | Optional returns | Use `Option<T>`; avoid `T \| null` or `T \| undefined` |
 | File names | kebab-case for multi-word |
+| Workflow testing | Prefer `check:ci` (act) locally; update `auto-pr.yml` SHA to `git rev-parse HEAD` when testing on new branches |
 
 ## Avoid
 
@@ -149,6 +150,7 @@ Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:doc
 - Before committing: run `npm run check`; ensure all tests pass.
 - Pre-push runs `check:code` automatically (Lefthook). Use `git push --no-verify` only when necessary.
 - For full CI parity locally (e.g. debugging CI): `npm run check:ci` (requires Docker + act or gh-act).
+- **Workflow testing:** Prefer `npm run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.
 
 ## Documentation
 
@@ -157,6 +159,7 @@ Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:doc
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
 - [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
 - [docs/CI.md](docs/CI.md) — Workflows, branch protection, fork PRs
+- [docs/WORKFLOW_SECURITY.md](docs/WORKFLOW_SECURITY.md) — Auto-PR workflow security model (two-phase, CWE-829)
 - [docs/CII.md](docs/CII.md) — CII Best Practices badge progress
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
 - [docs/adr/](docs/adr/) — Architecture Decision Records. See ADR workflow below.

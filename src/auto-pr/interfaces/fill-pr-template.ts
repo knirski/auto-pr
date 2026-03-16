@@ -2,7 +2,7 @@
  * FillPrTemplate — Tagless Final interface for PR title and body generation.
  *
  * Single implementation (Live). Interface enables layer composition and clear R
- * declaration. Use FillPrTemplateTestMock (Layer.mock) for workflow tests.
+ * declaration. Use Layer.mock(FillPrTemplate) for workflow tests.
  */
 
 import type { Effect, FileSystem, Path } from "effect";

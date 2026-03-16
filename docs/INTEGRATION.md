@@ -22,7 +22,7 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
 | **Secrets** | Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. [Step 5](#step-5-add-repository-secrets) |
-| **Branch protection** | (Optional) Require `Auto-PR / auto-pr` and your CI checks before merging. [Step 8](#step-8-configure-branch-protection-optional) |
+| **Branch protection** | (Optional) Require `Auto-PR generate (reusable) / generate` and `Auto-PR create (reusable) / create` before merging. [Step 8](#step-8-configure-branch-protection-optional) |
 
 **Quick setup:** `npx auto-pr-init` → GitHub App (Steps 2–5) → push to `ai/**`.
 
@@ -91,7 +91,7 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 **Recommended:** Run `npx auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command.
 
-**Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
+**Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
 All inputs use sensible defaults (Ollama model, PR template path, "how to test" text). Override via `with:` only when needed.
 
@@ -109,12 +109,13 @@ To require the auto-pr workflow and your CI to pass before merging PRs into `mai
 2. Set **Branch name pattern** to `main` (or your default branch)
 3. Enable **Require status checks to pass before merging**
 4. Search for and add:
-   - **`Auto-PR / auto-pr`** — ensures the PR was created/updated successfully
+   - **`Auto-PR generate (reusable) / generate`** — content generation (checkout + template fill)
+   - **`Auto-PR create (reusable) / create`** — PR creation/update
    - Your CI job(s), e.g. **`check / check`** or **`test`** — if you have workflows that run on `pull_request`
 5. Optionally enable **Require branches to be up to date before merging** (strict mode)
 6. Save the rule
 
-**Note:** Status checks must have run successfully in the past 7 days to appear in the list. Push an `ai/**` branch and open a PR first if `Auto-PR / auto-pr` is missing.
+**Note:** Status checks must have run successfully in the past 7 days to appear in the list. Push an `ai/**` branch and open a PR first if `Auto-PR generate (reusable) / generate` is missing.
 
 See [Managing a branch protection rule](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/managing-a-branch-protection-rule) and [Troubleshooting required status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks).
 
