@@ -30,8 +30,11 @@ jobs:
       AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
     steps:
       - name: Check prerequisites (secrets)
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
         run: |
-          if [ -z "${{ secrets.APP_ID }}" ] || [ -z "${{ secrets.APP_PRIVATE_KEY }}" ]; then
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
             echo "::error::Missing secrets APP_ID or APP_PRIVATE_KEY. Create a GitHub App and add secrets."
             echo "::error::See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md"
             exit 1
@@ -60,10 +63,11 @@ jobs:
       - name: Create or update PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
         run: |
           TITLE=$(cat pr-content/title.txt)
           export TITLE
-          BODY_FILE="${{ github.workspace }}/pr-body.md"
+          BODY_FILE="$GITHUB_WORKSPACE_SAFE/pr-body.md"
           cp pr-content/body.md "$BODY_FILE"
           export BODY_FILE
           BRANCH=$(cat pr-content/branch.txt)

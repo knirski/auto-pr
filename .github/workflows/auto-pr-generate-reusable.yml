@@ -70,7 +70,9 @@ jobs:
           node-version: "24"
 
       - name: Fetch base branch
-        run: git fetch origin "${{ github.event.repository.default_branch }}"
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: git fetch origin "$DEFAULT_BRANCH"
 
       - name: Get commit log and changed files
         id: commits
@@ -96,12 +98,17 @@ jobs:
         run: npx -p "$AUTO_PR_PKG" auto-pr-generate-content
 
       - name: Prepare artifact
+        env:
+          TITLE: ${{ steps.generate.outputs.title }}
+          BODY_FILE: ${{ steps.generate.outputs.body_file }}
+          BRANCH: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           mkdir -p pr-content
-          echo -n "${{ steps.generate.outputs.title }}" > pr-content/title.txt
-          cp "${{ steps.generate.outputs.body_file }}" pr-content/body.md
-          echo -n "${{ github.ref_name }}" > pr-content/branch.txt
-          echo -n "${{ github.event.repository.default_branch }}" > pr-content/default_branch.txt
+          echo -n "$TITLE" > pr-content/title.txt
+          cp "$BODY_FILE" pr-content/body.md
+          echo -n "$BRANCH" > pr-content/branch.txt
+          echo -n "$DEFAULT_BRANCH" > pr-content/default_branch.txt
 
       - name: Upload PR content
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
