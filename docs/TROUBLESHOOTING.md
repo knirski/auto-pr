@@ -6,6 +6,15 @@
 
 ## Workflow fails immediately
 
+### "workflow was not found" or "failed to fetch workflow"
+
+**Cause:** The reusable workflow is pinned to a commit SHA. If that SHA doesn't exist in the repo (e.g. force-pushed history, or testing on a branch), GitHub can't fetch it.
+
+**Fix:**
+
+- **Adopters:** Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch and use the SHA from its `uses:` lines.
+- **Contributors to auto-pr:** When testing workflow changes on a branch, update both `uses:` refs in [auto-pr.yml](../.github/workflows/auto-pr.yml) to the current commit: `git rev-parse HEAD`. After merging to main, update the pin to the merge commit SHA.
+
 ### "Missing .github/PULL_REQUEST_TEMPLATE.md" (or custom path)
 
 **Cause:** The PR template is required for auto-pr to fill the body. The error shows the path from the workflow (default `.github/PULL_REQUEST_TEMPLATE.md`, or your `pr_template_path` override).

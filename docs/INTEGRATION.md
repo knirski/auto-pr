@@ -195,7 +195,7 @@ Adjust the install step for your project (e.g. `pip install -r requirements.txt`
       - run: cargo test
 ```
 
-Use the same SHA for the reusable workflow refs as in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (e.g. `auto_pr_how_to_test: "1. Run \`pytest\`\n2. "` for Python).
+Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (e.g. `auto_pr_how_to_test: "1. Run \`pytest\`\n2. "` for Python).
 
 ## Verification
 
@@ -225,6 +225,7 @@ Override defaults via workflow `with:` inputs when needed (e.g. `auto_pr_how_to_
 | Issue | Fix |
 |-------|-----|
 | Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
+| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, set the SHA to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
 | "Missing [path]" (PR template) | Run `npx auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | "node-version-file" error | When using setup-node with node-version-file in your check job: create `.nvmrc` or use `node-version: '24'` |
 | Check job fails | Ensure your check command exists (e.g. `npm run check`, `pytest`, `cargo test`). See [Running checks before PR creation](#running-checks-before-pr-creation) |
