@@ -28,9 +28,9 @@ concurrency:
 
 jobs:
   generate:
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@c8f8f5950558972106f07c28eff824e3bf316138
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@e12c1b589119c39d09a5d7b6007c2cbf48894e60
 
   create:
     needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@c8f8f5950558972106f07c28eff824e3bf316138
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@e12c1b589119c39d09a5d7b6007c2cbf48894e60
     secrets: inherit
