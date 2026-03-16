@@ -37,18 +37,6 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 **Skip this step** — the default reusable workflow uses `npx -p github:knirski/auto-pr` and needs no `package.json`.
 
-**Only if** you want the npm-based workflow (runs `npm run check` before PR creation): add `auto-pr` to `package.json`:
-
-```json
-{
-  "dependencies": {
-    "auto-pr": "github:knirski/auto-pr"
-  }
-}
-```
-
-Commit `package.json` and `package-lock.json`. Then use [auto-pr-user.yml](../.github/workflows/auto-pr-user.yml) instead of the default workflow.
-
 ## Step 2: Create the GitHub App
 
 1. Go to [github.com/settings/apps/new](https://github.com/settings/apps/new)
@@ -95,7 +83,7 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 All inputs use sensible defaults (Ollama model, PR template path, "how to test" text). Override via `with:` only when needed.
 
-**Alternative — npm dependency:** If you have `package.json` with auto-pr and want `npm run check` to run before PR creation, use [auto-pr-user.yml](../.github/workflows/auto-pr-user.yml) instead. Requires a `check` script.
+**Run checks first:** See [Running checks before PR creation](#running-checks-before-pr-creation) to add a check job before generate/create.
 
 ## Step 7: Add the PR template
 
@@ -128,6 +116,87 @@ When creating changes, use branch names that match the workflow:
 
 Or adjust the `branches` filter in the workflow.
 
+## Running checks before PR creation
+
+To run your tests or checks before PR creation, add a `check` job and make `generate` depend on it. Edit the check job for your stack.
+
+**Pattern:** Add a job before `generate` and set `needs: check` on the generate job:
+
+```yaml
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      # Add your stack's setup and run command below
+      - name: Check
+        run: echo "Add your check command (npm run check, pytest, cargo test, etc.)" && exit 1
+
+  generate:
+    needs: check
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@<SHA>
+
+  create:
+    needs: generate
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@<SHA>
+    secrets: inherit
+```
+
+**Node/npm example:**
+
+```yaml
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run check
+```
+
+**Python example:**
+
+```yaml
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest
+```
+
+Adjust the install step for your project (e.g. `pip install -r requirements.txt`, `uv sync`).
+
+**Rust example:**
+
+```yaml
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - run: cargo test
+```
+
+Use the same SHA for the reusable workflow refs as in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (e.g. `auto_pr_how_to_test: "1. Run \`pytest\`\n2. "` for Python).
+
 ## Verification
 
 1. Create and push a branch:
@@ -157,8 +226,8 @@ Override defaults via workflow `with:` inputs when needed (e.g. `auto_pr_how_to_
 |-------|-----|
 | Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
 | "Missing [path]" (PR template) | Run `npx auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| "node-version-file" error | Only for npm-based workflow. Create `.nvmrc` or use `node-version: '24'` |
-| "Missing script: check" | npm-based workflow requires a `check` script. Add one or use the default reusable workflow |
+| "node-version-file" error | When using setup-node with node-version-file in your check job: create `.nvmrc` or use `node-version: '24'` |
+| Check job fails | Ensure your check command exists (e.g. `npm run check`, `pytest`, `cargo test`). See [Running checks before PR creation](#running-checks-before-pr-creation) |
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
 | "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |
 | PR already exists | Workflow updates the PR title and body from the latest commits |

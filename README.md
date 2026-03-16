@@ -65,7 +65,7 @@ npm run check
 
 ## Installation
 
-**As a dependency (recommended for user repos):**
+**As a dependency (optional; for local runs or when pinning a version):**
 
 ```bash
 npm install auto-pr

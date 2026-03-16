@@ -36,10 +36,6 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    env:
-      OLLAMA_MODEL: ${{ inputs.ollama_model }}
-      OLLAMA_URL: ${{ inputs.ollama_url }}
-      AUTO_PR_PKG: ${{ github.repository == 'knirski/auto-pr' && format('github:knirski/auto-pr#{0}', github.ref_name) || 'github:knirski/auto-pr' }}
     steps:
       - name: Validate pr_template_path
         env:
@@ -74,10 +70,14 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: git fetch origin "$DEFAULT_BRANCH"
 
+      - id: auto-pr-pkg
+        run: echo "value=${{ github.repository == 'knirski/auto-pr' && format('github:knirski/auto-pr#{0}', github.ref_name) || 'github:knirski/auto-pr' }}" >> "$GITHUB_OUTPUT"
+
       - name: Get commit log and changed files
         id: commits
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
         run: npx -p "$AUTO_PR_PKG" auto-pr-get-commits
 
       - name: Setup Ollama
@@ -86,6 +86,8 @@ jobs:
 
       - name: Pull model
         if: steps.commits.outputs.count != '1'
+        env:
+          OLLAMA_MODEL: ${{ inputs.ollama_model }}
         run: ollama pull ${{ env.OLLAMA_MODEL }}
 
       - name: Generate PR content
@@ -95,6 +97,9 @@ jobs:
           FILES: ${{ steps.commits.outputs.files }}
           PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
           AUTO_PR_HOW_TO_TEST: ${{ inputs.auto_pr_how_to_test }}
+          OLLAMA_MODEL: ${{ inputs.ollama_model }}
+          OLLAMA_URL: ${{ inputs.ollama_url }}
+          AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
         run: npx -p "$AUTO_PR_PKG" auto-pr-generate-content
 
       - name: Prepare artifact
