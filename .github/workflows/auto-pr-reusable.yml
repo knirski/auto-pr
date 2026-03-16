@@ -59,6 +59,11 @@ jobs:
             exit 1
           fi
 
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
       - name: Check prerequisites
         env:
           PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
@@ -73,11 +78,6 @@ jobs:
             echo "::error::See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md"
             exit 1
           fi
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
