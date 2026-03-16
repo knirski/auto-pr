@@ -33,4 +33,5 @@ jobs:
           - language: actions
           - language: javascript-typescript
     steps:
-      - run: echo "Docs-only change, no CodeQL scan required"
+      - name: Skip CodeQL (docs-only)
+        run: echo "Docs-only change, no CodeQL scan required"

@@ -10,9 +10,11 @@ Thanks for your interest in contributing to auto-pr.
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
 npm install
+npm run build
+npx lefthook install
 ```
 
-**Fork contributors:** Fork the repo, clone your fork, then `npm install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
+**Fork contributors:** Fork the repo, clone your fork, then `npm install`, `npm run build`, and `npx lefthook install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
 ### Optional: typos, lychee, and actionlint for full local check
 
@@ -45,7 +47,9 @@ The script tries `gh act` first, then falls back to `act`.
 
 ### Pre-push hook
 
-Lefthook runs `npm run check:code` before each push. Uses only npm deps (audit, test, lint, knip, typecheck); no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
+Lefthook runs `npm run check:code` before each push. It is installed as an npm devDependency; run `npx lefthook install` after cloning to enable git hooks (no separate install required). Uses only npm deps (build, audit, test, lint, knip, typecheck); no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
+
+**When changing `src/`:** Run `npm run build`; commit `dist/` if it changed (required for GitHub installs).
 
 If you change `package-lock.json` (e.g. add a dependency), the Nix hash must be updated:
 

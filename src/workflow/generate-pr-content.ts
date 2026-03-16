@@ -10,7 +10,7 @@
  *
  * Outputs to GITHUB_OUTPUT: title, body_file (path to filled template)
  *
- * Run: npx tsx src/workflow/generate-pr-content.ts
+ * Run: npx tsx src/workflow/generate-pr-content.ts (or: node dist/workflow/auto-pr-generate-pr-content.mjs)
  */
 
 import { Duration, Effect, FileSystem, Layer, Path, Schedule, Schema } from "effect";

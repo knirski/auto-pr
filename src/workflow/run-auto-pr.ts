@@ -3,7 +3,7 @@
  * Requires: DEFAULT_BRANCH, GITHUB_WORKSPACE, PR_TEMPLATE_PATH, GH_TOKEN, OLLAMA_MODEL, OLLAMA_URL.
  * For 2+ commits: Ollama must be running (default: localhost:11434).
  *
- * Run: npx tsx src/workflow/run-auto-pr.ts
+ * Run: npx tsx src/workflow/run-auto-pr.ts (or: node dist/workflow/auto-pr-run.mjs)
  */
 
 import { Effect, FileSystem, Layer } from "effect";
