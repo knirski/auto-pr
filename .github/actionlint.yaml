@@ -1,0 +1,7 @@
+# actionlint config. See https://github.com/rhysd/actionlint/blob/main/docs/config.md
+paths:
+  .github/workflows/auto-pr.yml:
+    # Dynamic ref in uses: github.repository/sha are available at runtime (push event).
+    # actionlint flags them as unavailable in static analysis.
+    ignore:
+      - 'context "github" is not allowed here\. no context is available here\.'
