@@ -1,4 +1,6 @@
-import { W as redactPath, o as runMain, r as PlatformLayer, t as AutoPrLoggerLayer } from "../auto-pr-DkfFR68I.mjs";
+#!/usr/bin/env node
+
+import { W as redactPath, o as runMain, r as PlatformLayer, t as AutoPrLoggerLayer } from "../auto-pr-gJsKsYcH.mjs";
 import { Effect, FileSystem, Path } from "effect";
 //#region src/lib/init-core.ts
 /** File specs for init: dest (relative to cwd), optional from (package path), optional inline content. */

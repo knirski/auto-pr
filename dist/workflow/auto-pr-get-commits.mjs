@@ -1,4 +1,6 @@
-import { B as NoSemanticCommitsError, F as GetCommitsConfig, I as GetCommitsConfigLayer, a as runCommand, b as buildGetCommitsGhEntries, i as appendGhOutput, n as ChildProcessSpawnerLayer, o as runMain, r as PlatformLayer, w as parseSubjects, x as filterSemanticSubjects } from "../auto-pr-DkfFR68I.mjs";
+#!/usr/bin/env node
+
+import { B as NoSemanticCommitsError, F as GetCommitsConfig, I as GetCommitsConfigLayer, a as runCommand, b as buildGetCommitsGhEntries, i as appendGhOutput, n as ChildProcessSpawnerLayer, o as runMain, r as PlatformLayer, w as parseSubjects, x as filterSemanticSubjects } from "../auto-pr-gJsKsYcH.mjs";
 import { Effect, FileSystem, Path } from "effect";
 //#region src/workflow/auto-pr-get-commits.ts
 /**

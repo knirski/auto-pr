@@ -1,6 +1,10 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
+	banner: (chunk: { fileName?: string }) => {
+		const f = String(chunk.fileName ?? "");
+		return f.startsWith("workflow/") || f.startsWith("tools/") ? "#!/usr/bin/env node\n" : "";
+	},
 	entry: {
 		"workflow/auto-pr-get-commits": "src/workflow/auto-pr-get-commits.ts",
 		"workflow/generate-pr-content": "src/workflow/generate-pr-content.ts",

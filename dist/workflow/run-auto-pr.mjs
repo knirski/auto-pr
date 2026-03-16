@@ -1,4 +1,6 @@
-import { C as parseGhOutput, D as validateGenerateContentOutput, L as RunAutoPrConfig, O as validateGetCommitsOutput, R as RunAutoPrConfigLayer, a as runCommand, c as FillPrTemplate, n as ChildProcessSpawnerLayer, o as runMain, r as PlatformLayer, t as AutoPrLoggerLayer } from "../auto-pr-DkfFR68I.mjs";
+#!/usr/bin/env node
+
+import { C as parseGhOutput, D as validateGenerateContentOutput, L as RunAutoPrConfig, O as validateGetCommitsOutput, R as RunAutoPrConfigLayer, a as runCommand, c as FillPrTemplate, n as ChildProcessSpawnerLayer, o as runMain, r as PlatformLayer, t as AutoPrLoggerLayer } from "../auto-pr-gJsKsYcH.mjs";
 import { runAutoPrGetCommits } from "./auto-pr-get-commits.mjs";
 import { runGeneratePrContent } from "./generate-pr-content.mjs";
 import { runCreateOrUpdatePr } from "./create-or-update-pr.mjs";

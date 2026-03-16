@@ -1,4 +1,6 @@
-import { B as NoSemanticCommitsError, E as trimOllamaResponse, N as GeneratePrContentConfig, P as GeneratePrContentConfigLayer, S as isHttpError, T as parseTitleDescriptionResponse, V as OllamaHttpError, _ as renderBody, d as getDescriptionFromCommits, f as getDescriptionPromptText, g as parseFilesContent, h as parseCommits, i as appendGhOutput, l as filterMergeCommits, m as isValidConventionalTitle, o as runMain, p as getTitle, r as PlatformLayer, s as getPrDescriptionPromptPath, v as buildDescriptionPrompt, y as buildGenerateContentGhEntries } from "../auto-pr-DkfFR68I.mjs";
+#!/usr/bin/env node
+
+import { B as NoSemanticCommitsError, E as trimOllamaResponse, N as GeneratePrContentConfig, P as GeneratePrContentConfigLayer, S as isHttpError, T as parseTitleDescriptionResponse, V as OllamaHttpError, _ as renderBody, d as getDescriptionFromCommits, f as getDescriptionPromptText, g as parseFilesContent, h as parseCommits, i as appendGhOutput, l as filterMergeCommits, m as isValidConventionalTitle, o as runMain, p as getTitle, r as PlatformLayer, s as getPrDescriptionPromptPath, v as buildDescriptionPrompt, y as buildGenerateContentGhEntries } from "../auto-pr-gJsKsYcH.mjs";
 import { Duration, Effect, FileSystem, Layer, Path, Schedule, Schema } from "effect";
 import * as Http from "effect/unstable/http";
 //#region src/workflow/generate-pr-content.ts

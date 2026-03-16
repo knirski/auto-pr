@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Config, Effect, FileSystem, Layer, Logger, Match, Option, Path, Redacted, Result, Schema, ServiceMap, pipe } from "effect";
 import { CommitParser } from "conventional-commits-parser";
 import * as Arr from "effect/Array";
@@ -756,4 +758,4 @@ function runMain(program, eventName) {
 //#endregion
 export { CreateOrUpdatePrConfigLayer as A, NoSemanticCommitsError as B, parseGhOutput as C, validateGenerateContentOutput as D, trimOllamaResponse as E, GetCommitsConfig as F, formatError as H, GetCommitsConfigLayer as I, RunAutoPrConfig as L, FillPrTemplateConfigLayer as M, GeneratePrContentConfig as N, validateGetCommitsOutput as O, GeneratePrContentConfigLayer as P, RunAutoPrConfigLayer as R, isHttpError as S, parseTitleDescriptionResponse as T, mapFsError as U, OllamaHttpError as V, redactPath as W, renderBody$1 as _, runCommand as a, buildGetCommitsGhEntries as b, FillPrTemplate as c, getDescriptionFromCommits as d, getDescriptionPromptText as f, parseFilesContent as g, parseCommits as h, appendGhOutput as i, FillPrTemplateConfig as j, CreateOrUpdatePrConfig as k, filterMergeCommits as l, isValidConventionalTitle as m, ChildProcessSpawnerLayer as n, runMain as o, getTitle as p, PlatformLayer as r, getPrDescriptionPromptPath as s, AutoPrLoggerLayer as t, formatTitleBody as u, buildDescriptionPrompt as v, parseSubjects as w, filterSemanticSubjects as x, buildGenerateContentGhEntries as y, BodyFileNotFoundError as z };
 
-//# sourceMappingURL=auto-pr-DkfFR68I.mjs.map
+//# sourceMappingURL=auto-pr-gJsKsYcH.mjs.map

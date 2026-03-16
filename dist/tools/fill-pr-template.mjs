@@ -1,4 +1,6 @@
-import { H as formatError, M as FillPrTemplateConfigLayer, U as mapFsError, c as FillPrTemplate, f as getDescriptionPromptText, h as parseCommits, j as FillPrTemplateConfig, l as filterMergeCommits, m as isValidConventionalTitle, u as formatTitleBody } from "../auto-pr-DkfFR68I.mjs";
+#!/usr/bin/env node
+
+import { H as formatError, M as FillPrTemplateConfigLayer, U as mapFsError, c as FillPrTemplate, f as getDescriptionPromptText, h as parseCommits, j as FillPrTemplateConfig, l as filterMergeCommits, m as isValidConventionalTitle, u as formatTitleBody } from "../auto-pr-gJsKsYcH.mjs";
 import { Console, Effect, FileSystem, Layer, Logger, Option } from "effect";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodePath from "@effect/platform-node-shared/NodePath";
