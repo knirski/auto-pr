@@ -118,10 +118,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
-      # Checkout PR head for validation; push_allowed=false for fork PRs (no write). npm ci --ignore-scripts mitigates postinstall risk.
+      # Checkout from workflow ref to avoid caller-controlled refs in privileged contexts (CodeQL).
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
           fetch-depth: 1
 
       - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
