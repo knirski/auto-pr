@@ -9,6 +9,10 @@ name: Auto-PR generate (reusable)
 
 on:
   workflow_call:
+    outputs:
+      auto_pr_pkg:
+        description: "Package spec for npx (e.g. github:knirski/auto-pr#branch)"
+        value: ${{ jobs.generate.outputs.auto_pr_pkg }}
     inputs:
       ollama_model:
         required: false
@@ -36,6 +40,8 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    outputs:
+      auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
     steps:
       - name: Validate pr_template_path
         env:
