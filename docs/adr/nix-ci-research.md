@@ -1,8 +1,8 @@
 # Nix CI Research: Best Practices Assessment
 
-Research date: 2025-03-15. Assesses `.github/workflows/*nix*` against current best practices.
+Research date: 2026-03-15. Assesses `.github/workflows/*nix*` against current best practices.
 
-**Applied 2025-03-15:** Switched to cachix/install-nix-action, added cache-nix-action, consolidated checkout in workflow. Inlined all Nix actions into workflows. **Reverted 2025-03-15:** Back to upstream Nix; Determinate Nix and Determinate CI reverted. **Applied 2025-03-15:** Added `checks` output, `nix flake check -L` in CI, pinned nixpkgs to `nixos-25.11`, enabled `auto-allocate-uids`.
+**Applied 2026-03-15:** Switched to cachix/install-nix-action, added cache-nix-action, consolidated checkout in workflow. Inlined all Nix actions into workflows. **Reverted 2026-03-15:** Back to upstream Nix; Determinate Nix and Determinate CI reverted. **Applied 2026-03-15:** Added `checks` output, `nix flake check -L` in CI, pinned nixpkgs to `nixos-25.11`, enabled `auto-allocate-uids`.
 
 ## Current Setup Summary
 

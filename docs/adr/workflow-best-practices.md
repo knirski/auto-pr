@@ -1,6 +1,6 @@
 # GitHub Actions Workflow Best Practices Assessment
 
-Research date: 2025-03-15. Assesses all `.github/workflows/*.yml` against modern best practices. Includes findings from respectable open-source projects (GitHub MCP, web).
+Research date: 2026-03-15. Assesses all `.github/workflows/*.yml` against modern best practices. Includes findings from respectable open-source projects (GitHub MCP, web).
 
 ## Current Setup Summary
 

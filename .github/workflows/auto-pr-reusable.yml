@@ -47,10 +47,21 @@ jobs:
       OLLAMA_MODEL: ${{ inputs.ollama_model }}
       OLLAMA_URL: ${{ inputs.ollama_url }}
     steps:
-      - name: Check prerequisites
+      - name: Validate pr_template_path
+        env:
+          PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
         run: |
-          if [ ! -f "${{ inputs.pr_template_path }}" ]; then
-            echo "::error::Missing ${{ inputs.pr_template_path }}. Run: npx auto-pr-init"
+          if [[ "$PR_TEMPLATE_PATH" == *".."* ]] || [[ "$PR_TEMPLATE_PATH" == /* ]] || [[ ! "$PR_TEMPLATE_PATH" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::Invalid pr_template_path: must be a relative path without '..'"
+            exit 1
+          fi
+
+      - name: Check prerequisites
+        env:
+          PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
+        run: |
+          if [ ! -f "$PR_TEMPLATE_PATH" ]; then
+            echo "::error::Missing $PR_TEMPLATE_PATH. Run: npx auto-pr-init"
             echo "::error::See https://github.com/knirski/auto-pr#integration"
             exit 1
           fi
