@@ -11,7 +11,7 @@ describe("init-core", () => {
 			const specs = getInitFileSpecs();
 			const workflow = specs.find((s) => s.dest.includes("auto-pr.yml"));
 			expect(workflow?.dest).toBe(".github/workflows/auto-pr.yml");
-			expect(workflow?.from).toBe(".github/workflows/auto-pr-consumer-reusable.yml");
+			expect(workflow?.from).toBe(".github/workflows/auto-pr.yml");
 		});
 		test("nvmrc spec has content", () => {
 			const specs = getInitFileSpecs();

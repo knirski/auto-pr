@@ -4,11 +4,15 @@ Thanks for your interest in contributing to auto-pr.
 
 ## Development Setup
 
+**Direct contributors** (with write access):
+
 ```bash
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
 npm install
 ```
+
+**Fork contributors:** Fork the repo, clone your fork, then `npm install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
 ### Optional: typos, lychee, and actionlint for full local check
 
@@ -74,7 +78,10 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 ## Pull Requests
 
-For AI-assisted development: push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for maintainer setup.
+**AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
+
+- **Same-repo contributors:** Workflow runs automatically. Update the pin in auto-pr.yml to the merge commit SHA after merging reusable workflow changes to enable branch code for contributors.
+- **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
 1. Run `npm run check` before submitting.
 2. Ensure your commits follow Conventional Commits (the PR template includes a checklist).

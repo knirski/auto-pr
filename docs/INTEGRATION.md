@@ -2,9 +2,16 @@
 
 This guide walks through adding auto-pr to any repository so that pushes to `ai/**` branches automatically create or update pull requests.
 
-**Convention over configuration.** Run `npx auto-pr-init`, set up a GitHub App, and you're done. No `package.json` required. Works with any project (Node, Python, Rust, etc.).
+## Getting started
 
-**No Nix required.** Consumers use Node and npx only. Nix is used only by contributors to the auto-pr repo itself.
+1. **Run** `npx auto-pr-init` in your repo — creates the workflow, PR template, and `.nvmrc`
+2. **Create** a [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
+3. **Generate** a private key in the app settings and save the `.pem` file
+4. **Install** the app on your repository
+5. **Add** `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
+6. **Test** — push to an `ai/*` branch: `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push`
+
+No `package.json` required. Works with any project (Node, Python, Rust, etc.). No Nix required.
 
 ## Repository setup checklist
 
@@ -40,7 +47,7 @@ This guide walks through adding auto-pr to any repository so that pushes to `ai/
 }
 ```
 
-Commit `package.json` and `package-lock.json`. Then use [auto-pr-consumer.yml](../.github/workflows/auto-pr-consumer.yml) instead of the default workflow.
+Commit `package.json` and `package-lock.json`. Then use [auto-pr-user.yml](../.github/workflows/auto-pr-user.yml) instead of the default workflow.
 
 ## Step 2: Create the GitHub App
 
@@ -84,30 +91,11 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 **Recommended:** Run `npx auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command.
 
-**Manual:** Copy [auto-pr-consumer-reusable.yml](../.github/workflows/auto-pr-consumer-reusable.yml) to `.github/workflows/auto-pr.yml`, or create:
-
-```yaml
-name: Auto-PR
-
-on:
-  push:
-    branches:
-      - "ai/**"
-
-concurrency:
-  group: auto-pr-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  auto-pr:
-    if: github.event.repository.fork != true
-    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@main
-    secrets: inherit
-```
+**Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
 All inputs use sensible defaults (Ollama model, PR template path, "how to test" text). Override via `with:` only when needed.
 
-**Alternative — npm dependency:** If you have `package.json` with auto-pr and want `npm run check` to run before PR creation, use [auto-pr-consumer.yml](../.github/workflows/auto-pr-consumer.yml) instead. Requires a `check` script.
+**Alternative — npm dependency:** If you have `package.json` with auto-pr and want `npm run check` to run before PR creation, use [auto-pr-user.yml](../.github/workflows/auto-pr-user.yml) instead. Requires a `check` script.
 
 ## Step 7: Add the PR template
 
@@ -166,7 +154,7 @@ Override defaults via workflow `with:` inputs when needed (e.g. `auto_pr_how_to_
 
 | Issue | Fix |
 |-------|-----|
-| Workflow doesn't run | Ensure branch name matches `ai/**`; workflow skips on forks |
+| Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
 | "Missing [path]" (PR template) | Run `npx auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | "node-version-file" error | Only for npm-based workflow. Create `.nvmrc` or use `node-version: '24'` |
 | "Missing script: check" | npm-based workflow requires a `check` script. Add one or use the default reusable workflow |

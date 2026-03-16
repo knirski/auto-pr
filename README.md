@@ -13,7 +13,7 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 **Convention over configuration.** Run `npx auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
 
-**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflow](.github/workflows/auto-pr-reusable.yml). **No Nix required** — consumers use Node/npx only.
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflow](.github/workflows/auto-pr-reusable.yml). **No Nix required** — users use Node/npx only.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, Ollama summarizes the changes into a coherent description.
 
@@ -35,27 +35,18 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 Merge commits are filtered out. Non-conventional commits are included; type falls back to "Chore".
 
-## Quick start (consumer)
+## Quick start (user)
 
-Add auto-pr to any repo:
+Add auto-pr to any repo in 6 steps:
 
-```bash
-npx auto-pr-init
-```
+1. **Init** — `npx auto-pr-init` (creates workflow, PR template, `.nvmrc`)
+2. **Create** — [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
+3. **Generate** — Private key in app settings → save `.pem`
+4. **Install** — Install the app on your repository
+5. **Secrets** — Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
+6. **Test** — `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push`
 
-Then set up the GitHub App and secrets (required for the workflow to create PRs):
-
-1. Create a [GitHub App](https://github.com/settings/apps/new) with **Contents** and **Pull requests** (Read and write)
-2. Generate a private key, install the app on your repo
-3. Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
-
-Test:
-
-```bash
-git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push
-```
-
-No `package.json` required. Full setup: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ## Quick start (development)
 
@@ -74,7 +65,7 @@ npm run check
 
 ## Installation
 
-**As a dependency (recommended for consumer repos):**
+**As a dependency (recommended for user repos):**
 
 ```bash
 npm install auto-pr
@@ -101,7 +92,7 @@ npm install
 
 ## Nix flake (contributors only, optional)
 
-Nix is **not required for consumers**. The workflows use Node and npx only.
+Nix is **not required for users**. The workflows use Node and npx only.
 
 For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. Builds on x86_64-linux and aarch64-linux (arm64 runners). The flake provides:
 

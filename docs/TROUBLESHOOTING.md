@@ -2,7 +2,7 @@
 
 ## Do I need Nix?
 
-**No.** Nix is optional and only used by contributors to the auto-pr repo. Consumers use Node and npx only. The reusable workflow and npm dependency work without Nix.
+**No.** Nix is optional and only used by contributors to the auto-pr repo. Users use Node and npx only. The reusable workflow and npm dependency work without Nix.
 
 ## Workflow fails immediately
 
@@ -17,6 +17,8 @@
 **Cause:** The workflow needs a GitHub App token to create PRs.
 
 **Fix:** Create a GitHub App (see [INTEGRATION.md](INTEGRATION.md#step-2-create-the-github-app)), install it on your repo, and add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets.
+
+**Fork contributors:** The workflow runs on forks. To test auto-PR on your fork, add the same secrets to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Otherwise, create the PR manually from your branch to the upstream repo.
 
 ### "Missing required env: DEFAULT_BRANCH, GITHUB_OUTPUT, ..."
 

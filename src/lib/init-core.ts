@@ -13,7 +13,7 @@ export function getInitFileSpecs(): readonly InitFileSpec[] {
 	return [
 		{
 			dest: ".github/workflows/auto-pr.yml",
-			from: ".github/workflows/auto-pr-consumer-reusable.yml",
+			from: ".github/workflows/auto-pr.yml",
 		},
 		{
 			dest: ".github/PULL_REQUEST_TEMPLATE.md",
