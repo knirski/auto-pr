@@ -1,6 +1,6 @@
 {
 	"name": "auto-pr",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Auto-create PRs from conventional commits on ai/* branches",
 	"keywords": [
 		"auto-pr",
@@ -29,7 +29,12 @@
 		"auto-pr-fill-pr-template": "./dist/tools/auto-pr-fill-pr-template.mjs",
 		"auto-pr-init": "./dist/tools/auto-pr-init.mjs"
 	},
-	"files": ["dist", ".github", "docs", ".nvmrc"],
+	"files": [
+		"dist",
+		".github",
+		"docs",
+		".nvmrc"
+	],
 	"scripts": {
 		"test": "vitest run --coverage --typecheck",
 		"test:unit": "vitest run --coverage=false --typecheck",
