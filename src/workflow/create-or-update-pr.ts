@@ -48,6 +48,7 @@ function ghPrEdit(
 }
 
 function ghPrCreate(
+	headBranch: string,
 	baseBranch: string,
 	title: string,
 	bodyPath: string,
@@ -55,7 +56,18 @@ function ghPrCreate(
 ): Effect.Effect<void, PullRequestFailedError, ChildProcessSpawner> {
 	return runCommand(
 		"gh",
-		["pr", "create", "--base", baseBranch, "--title", title, "--body-file", bodyPath],
+		[
+			"pr",
+			"create",
+			"--head",
+			headBranch,
+			"--base",
+			baseBranch,
+			"--title",
+			title,
+			"--body-file",
+			bodyPath,
+		],
 		cwd,
 	);
 }
@@ -106,11 +118,23 @@ export function runCreateOrUpdatePr(params: {
 
 		const prExists = yield* ghPrView(params.branch, cwd);
 		if (prExists) {
-			yield* Effect.log({ event: "create_or_update_pr", status: "updating" });
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "updating",
+				branch: params.branch,
+				base: params.defaultBranch,
+			});
 			yield* runGhWithRetry(ghPrEdit(params.branch, params.title, params.bodyFile, cwd));
 		} else {
-			yield* Effect.log({ event: "create_or_update_pr", status: "creating" });
-			yield* runGhWithRetry(ghPrCreate(params.defaultBranch, params.title, params.bodyFile, cwd));
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "creating",
+				head: params.branch,
+				base: params.defaultBranch,
+			});
+			yield* runGhWithRetry(
+				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
+			);
 		}
 	});
 }
