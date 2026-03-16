@@ -6,7 +6,7 @@
  * Requires env: AUTO_PR_HOW_TO_TEST
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only.
- * For 2+: Ollama generates description, then FillPrTemplate with override.
+ * For 2+: Ollama generates title and description, then FillPrTemplate with override.
  *
  * Outputs to GITHUB_OUTPUT: title, body_file (path to filled template)
  *
@@ -27,9 +27,9 @@ import {
 	isHttpError,
 	NoSemanticCommitsError,
 	OllamaHttpError,
+	parseTitleDescriptionResponse,
 	runMain,
 	trimOllamaResponse,
-	validateDescriptionResponse,
 } from "#auto-pr";
 import type { CommitInfo } from "#lib/fill-pr-template-core.js";
 import {
@@ -93,13 +93,13 @@ const retrySchedule = Schedule.recurs(MAX_OLLAMA_ATTEMPTS - 1).pipe(
 	),
 );
 
-function generateDescription(
+function generateTitleAndDescription(
 	ollamaUrl: string,
 	model: string,
 	prompt: string,
-): Effect.Effect<string, Error, Http.HttpClient.HttpClient> {
+): Effect.Effect<{ title: string; description: string }, Error, Http.HttpClient.HttpClient> {
 	return callOllama(ollamaUrl, model, prompt).pipe(
-		Effect.flatMap((raw) => Effect.fromResult(validateDescriptionResponse(raw))),
+		Effect.flatMap((raw) => Effect.fromResult(parseTitleDescriptionResponse(raw))),
 		Effect.retry(retrySchedule),
 	);
 }
@@ -140,7 +140,7 @@ function generateAndWriteDescription(
 	model: string,
 	filtered: readonly CommitInfo[],
 ): Effect.Effect<
-	string | undefined,
+	{ title: string; descriptionFilePath: string },
 	Error,
 	FileSystem.FileSystem | Path.Path | Http.HttpClient.HttpClient
 > {
@@ -155,14 +155,13 @@ function generateAndWriteDescription(
 		const commitContent = getDescriptionPromptText(filtered);
 		const prompt = buildDescriptionPrompt(descPrompt, commitContent);
 
-		const desc = yield* generateDescription(ollamaUrl, model, prompt);
-		if (desc === "null") return undefined;
+		const { title, description } = yield* generateTitleAndDescription(ollamaUrl, model, prompt);
 
 		const descriptionFilePath = pathApi.join(workspace, "description.txt");
 		yield* fs
-			.writeFileString(descriptionFilePath, desc)
+			.writeFileString(descriptionFilePath, description)
 			.pipe(Effect.mapError((e) => new Error(`write description: ${String(e)}`)));
-		return descriptionFilePath;
+		return { title, descriptionFilePath };
 	});
 }
 
@@ -204,15 +203,16 @@ export function runGeneratePrContent(config: {
 			howToTestDefault,
 		};
 
-		const descriptionFilePath =
+		const ollamaResult =
 			count >= 2
 				? yield* generateAndWriteDescription(workspace, ollamaUrl, model, filtered)
 				: undefined;
 
-		const title = yield* fillPr.getTitle(fillParams);
+		const title =
+			ollamaResult !== undefined ? ollamaResult.title : yield* fillPr.getTitle(fillParams);
 		const body = yield* fillPr.getBody({
 			...fillParams,
-			...(descriptionFilePath && { descriptionFilePath }),
+			...(ollamaResult && { descriptionFilePath: ollamaResult.descriptionFilePath }),
 		});
 
 		const bodyPath = pathApi.join(workspace, BODY_FILE_NAME);

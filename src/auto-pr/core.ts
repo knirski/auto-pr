@@ -86,6 +86,26 @@ export function validateDescriptionResponse(
 	return Result.succeed(t);
 }
 
+/** Parse Ollama response: line 1 = title, line 2 = blank, line 3+ = description. */
+export function parseTitleDescriptionResponse(
+	raw: string,
+): Result.Result<{ title: string; description: string }, OllamaDescriptionInvalidError> {
+	const t = trimOllamaResponse(raw);
+	if (!t || t === "null") return Result.fail(new OllamaDescriptionInvalidError({ cause: "empty" }));
+	const lines = t.split("\n");
+	const title = lines[0]?.trim();
+	const description = lines.slice(2).join("\n").trim();
+	if (!title || !description) {
+		return Result.fail(
+			new OllamaDescriptionInvalidError({
+				cause:
+					"title or description missing (expected: line 1 = title, line 2 = blank, line 3+ = description)",
+			}),
+		);
+	}
+	return Result.succeed({ title, description });
+}
+
 // ─── GITHUB_OUTPUT parsing (run-auto-pr) ──────────────────────────────────────
 
 /** Parse key=value lines from GITHUB_OUTPUT content into a record. */

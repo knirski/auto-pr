@@ -1,2 +1,7 @@
-Summarize these commit messages into a single PR description paragraph (2-4 sentences). Focus on what changed and why. Reply with only the description, nothing else. Do not wrap in quotes.
+Summarize these commits into a PR title and description. No preamble. No quotes.
+
+Output format (exactly):
+Line 1: Title as type: message (feat, fix, docs, chore, refactor). Max 72 chars.
+Line 2: (blank line)
+Line 3+: Paragraph(s). What changed and why. Plain prose only.
 

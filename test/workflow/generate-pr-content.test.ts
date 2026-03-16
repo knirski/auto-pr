@@ -117,11 +117,17 @@ layer(TestLayer)("runGeneratePrContent", (it) => {
 });
 
 layer(IntegrationLayer)("runGeneratePrContent integration (2+ commits, mocked Ollama)", (it) => {
-	it.effect("calls Ollama, writes description.txt, uses it in body", () =>
+	it.effect("calls Ollama, writes title and description, uses both in output", () =>
 		Effect.gen(function* () {
 			const originalFetch = globalThis.fetch;
 			globalThis.fetch = () =>
-				Promise.resolve(new Response(JSON.stringify({ response: "Ollama-generated summary." })));
+				Promise.resolve(
+					new Response(
+						JSON.stringify({
+							response: "feat: add X and fix B\n\nOllama-generated summary.",
+						}),
+					),
+				);
 			try {
 				const tmp = yield* createTestTempDirEffect("generate-pr-content-2commits-");
 				const fs = yield* FileSystem.FileSystem;
@@ -172,6 +178,7 @@ layer(IntegrationLayer)("runGeneratePrContent integration (2+ commits, mocked Ol
 				const ghContent = yield* fs.readFileString(ghOutput);
 				expect(ghContent).toContain("title=");
 				expect(ghContent).toContain("body_file=");
+				expect(ghContent).toContain("feat: add X and fix B");
 			} finally {
 				globalThis.fetch = originalFetch;
 			}

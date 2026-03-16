@@ -14,6 +14,7 @@ import {
 	isMergeCommitSubject,
 	parseGhOutput,
 	parseSubjects,
+	parseTitleDescriptionResponse,
 	sanitizeForGhOutput,
 	trimOllamaResponse,
 	validateDescriptionResponse,
@@ -136,6 +137,39 @@ describe("auto-pr core", () => {
 				onFailure: () => {},
 			});
 			Result.match(validateDescriptionResponse("null"), {
+				onSuccess: () => expect.fail("expected failure"),
+				onFailure: () => {},
+			});
+		});
+	});
+
+	describe("parseTitleDescriptionResponse", () => {
+		test("parses title and description", () => {
+			const input = "feat: add X\n\nSummary of changes here.";
+			Result.match(parseTitleDescriptionResponse(input), {
+				onSuccess: (v) => {
+					expect(v.title).toBe("feat: add X");
+					expect(v.description).toBe("Summary of changes here.");
+				},
+				onFailure: () => expect.fail("expected success"),
+			});
+		});
+		test("fails for empty or null", () => {
+			Result.match(parseTitleDescriptionResponse(""), {
+				onSuccess: () => expect.fail("expected failure"),
+				onFailure: () => {},
+			});
+			Result.match(parseTitleDescriptionResponse("null"), {
+				onSuccess: () => expect.fail("expected failure"),
+				onFailure: () => {},
+			});
+		});
+		test("fails when title or description missing", () => {
+			Result.match(parseTitleDescriptionResponse("feat: x"), {
+				onSuccess: () => expect.fail("expected failure"),
+				onFailure: () => {},
+			});
+			Result.match(parseTitleDescriptionResponse("\n\nDescription only"), {
 				onSuccess: () => expect.fail("expected failure"),
 				onFailure: () => {},
 			});

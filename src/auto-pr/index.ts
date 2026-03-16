@@ -30,6 +30,7 @@ export {
 	isMergeCommitSubject,
 	parseGhOutput,
 	parseSubjects,
+	parseTitleDescriptionResponse,
 	sanitizeForGhOutput,
 	trimOllamaResponse,
 	validateDescriptionResponse,
