@@ -23,12 +23,13 @@
 	},
 	"type": "module",
 	"bin": {
-		"auto-pr-get-commits": "./bin/auto-pr-get-commits.mjs",
-		"auto-pr-generate-content": "./bin/generate-pr-content.mjs",
-		"auto-pr-create-or-update-pr": "./bin/create-or-update-pr.mjs",
-		"auto-pr-fill-pr-template": "./bin/fill-pr-template.mjs",
-		"auto-pr-init": "./bin/init.mjs"
+		"auto-pr-get-commits": "./dist/workflow/auto-pr-get-commits.mjs",
+		"auto-pr-generate-content": "./dist/workflow/auto-pr-generate-content.mjs",
+		"auto-pr-create-or-update-pr": "./dist/workflow/auto-pr-create-or-update-pr.mjs",
+		"auto-pr-fill-pr-template": "./dist/tools/auto-pr-fill-pr-template.mjs",
+		"auto-pr-init": "./dist/tools/auto-pr-init.mjs"
 	},
+	"files": ["dist", ".github", "docs", ".nvmrc"],
 	"scripts": {
 		"test": "vitest run --coverage --typecheck",
 		"test:unit": "vitest run --coverage=false --typecheck",
@@ -36,7 +37,7 @@
 		"test:ui": "vitest --ui",
 		"check": "bash scripts/check-nix-hash.sh && npm run check:nix && npm run check:code && npm run check:docs && npm run lint:workflows && npm run lint:scripts",
 		"check:ci": "bash scripts/run-check-ci.sh",
-		"check:code": "npm audit --audit-level=high && run-p lint knip typecheck && npm run test",
+		"check:code": "npm run build && npm audit --audit-level=high && run-p lint knip typecheck && npm run test",
 		"check:with-links": "npm run check && npm run check:just-links",
 		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix .",
 		"check:docs": "npx rumdl check . && scripts/nix-run-if-missing.sh typos",
@@ -49,12 +50,12 @@
 		"format": "biome format --write .",
 		"knip": "knip",
 		"typecheck": "tsgo --noEmit",
-		"prepare": "lefthook install",
 		"get-commits": "tsx src/workflow/auto-pr-get-commits.ts",
 		"generate-content": "tsx src/workflow/generate-pr-content.ts",
 		"create-or-update-pr": "tsx src/workflow/create-or-update-pr.ts",
 		"fill-pr-template": "tsx src/tools/fill-pr-template.ts",
-		"build": "echo 'No build step; scripts run via tsx'",
+		"build": "tsdown",
+		"prepublishOnly": "npm run build",
 		"update-nix-hash": "tsx src/tools/update-nix-hash.ts",
 		"update-npm-deps-hash": "tsx src/tools/update-npm-deps-hash.ts",
 		"run-auto-pr": "tsx src/workflow/run-auto-pr.ts"
@@ -69,6 +70,8 @@
 		"unist-util-visit": "^5.1.0"
 	},
 	"devDependencies": {
+		"tsdown": "^0.21.4",
+		"tsx": "^4.21.0",
 		"@biomejs/biome": "^2.4.6",
 		"@commitlint/cli": "^20.4.4",
 		"@commitlint/config-conventional": "^20.4.4",
@@ -79,17 +82,16 @@
 		"@vitest/coverage-v8": "^4.0.18",
 		"@vitest/ui": "^4.0.18",
 		"knip": "^5.86.0",
-		"npm-run-all": "^4.1.5",
 		"lefthook": "^2.1.4",
 		"lint-staged": "^16.3.2",
+		"npm-run-all": "^4.1.5",
 		"rumdl": "^0.1.51",
-		"tsx": "^4.21.0",
 		"typescript": "^5.7.0",
 		"vite-tsconfig-paths": "^5.1.2",
 		"vitest": "^4.0.18"
 	},
 	"lint-staged": {
-		"*.{ts,tsx,mjs}": [
+		"*.{ts,tsx}": [
 			"npx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true"
 		],
 		"*.sh": [

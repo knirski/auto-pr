@@ -52,20 +52,21 @@ No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.m
 
 ```bash
 npm install
+npx lefthook install
 npm run check
 ```
 
 | Command | Purpose |
 |---------|---------|
 | `npm run check` | Local checks (npm, statix, deadnix, typos, lychee, actionlint) |
-| `npm run check:code` | Code only (npm deps); runs on pre-push |
+| `npm run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
 | `npm run check:ci` | Full CI parity in Docker (requires Docker + `gh act` or `act`) |
 | `npm run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
 | `npm run check:just-links` | Lychee link check only (requires lychee or Nix) |
 
 ## Installation
 
-**As a dependency (recommended for user repos):**
+**As a dependency (optional; for local runs or when pinning a version):**
 
 ```bash
 npm install auto-pr
@@ -78,6 +79,8 @@ npm install auto-pr
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
 npm install
+npm run build
+npx lefthook install
 ```
 
 ## Commands
@@ -112,6 +115,7 @@ nix develop
 
 # Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
 npx tsx src/workflow/run-auto-pr.ts
+# or: node dist/workflow/auto-pr-run.mjs (after npm run build)
 # or: nix run .#default
 ```
 
@@ -131,7 +135,7 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 | `PR_TEMPLATE_PATH` | generate-content | Path to PR template (default `.github/PULL_REQUEST_TEMPLATE.md`) |
 | `OLLAMA_MODEL` | generate-content | Ollama model (default `llama3.1:8b`) |
 | `OLLAMA_URL` | generate-content | Ollama API (default `http://localhost:11434/api/generate`) |
-| `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; override via workflow `auto_pr_how_to_test` for Node/Python/etc.) |
+| `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; Node projects: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`; Python: `"1. Run \`pytest\`\n2. "`) |
 | `GH_TOKEN` | create-or-update-pr | GitHub token |
 | `BRANCH` | create-or-update-pr | Current branch |
 | `TITLE` | create-or-update-pr | PR title |

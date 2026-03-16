@@ -9,6 +9,10 @@ name: Auto-PR generate (reusable)
 
 on:
   workflow_call:
+    outputs:
+      auto_pr_pkg:
+        description: "Package spec for npx (e.g. github:knirski/auto-pr#branch)"
+        value: ${{ jobs.generate.outputs.auto_pr_pkg }}
     inputs:
       ollama_model:
         required: false
@@ -36,10 +40,8 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    env:
-      OLLAMA_MODEL: ${{ inputs.ollama_model }}
-      OLLAMA_URL: ${{ inputs.ollama_url }}
-      AUTO_PR_PKG: ${{ github.repository == 'knirski/auto-pr' && format('github:knirski/auto-pr#{0}', github.ref_name) || 'github:knirski/auto-pr' }}
+    outputs:
+      auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
     steps:
       - name: Validate pr_template_path
         env:
@@ -50,7 +52,8 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
@@ -65,19 +68,37 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: "24"
+          node-version-file: ".nvmrc"
+          cache: "npm"
 
       - name: Fetch base branch
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: git fetch origin "$DEFAULT_BRANCH"
 
+      - name: Set auto-pr package ref
+        id: auto-pr-pkg
+        env:
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # Validate ref_name: only allow safe branch chars to prevent code injection.
+          # For knirski/auto-pr on ai/* branches, use branch; else use published package.
+          if [ "$REPO" = "knirski/auto-pr" ] && [[ "$REF_NAME" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            value="github:knirski/auto-pr#$REF_NAME"
+          else
+            value="github:knirski/auto-pr"
+          fi
+          printf 'value=%s\n' "$value" >> "$GITHUB_OUTPUT"
+
       - name: Get commit log and changed files
         id: commits
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
         run: npx -p "$AUTO_PR_PKG" auto-pr-get-commits
 
       - name: Setup Ollama
@@ -86,7 +107,14 @@ jobs:
 
       - name: Pull model
         if: steps.commits.outputs.count != '1'
-        run: ollama pull ${{ env.OLLAMA_MODEL }}
+        env:
+          OLLAMA_MODEL: ${{ inputs.ollama_model }}
+        run: |
+          if [[ ! "$OLLAMA_MODEL" =~ ^[a-zA-Z0-9._:-]+$ ]]; then
+            echo "::error::Invalid ollama_model: must match ^[a-zA-Z0-9._:-]+$"
+            exit 1
+          fi
+          ollama pull "$OLLAMA_MODEL"
 
       - name: Generate PR content
         id: generate
@@ -95,6 +123,9 @@ jobs:
           FILES: ${{ steps.commits.outputs.files }}
           PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
           AUTO_PR_HOW_TO_TEST: ${{ inputs.auto_pr_how_to_test }}
+          OLLAMA_MODEL: ${{ inputs.ollama_model }}
+          OLLAMA_URL: ${{ inputs.ollama_url }}
+          AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
         run: npx -p "$AUTO_PR_PKG" auto-pr-generate-content
 
       - name: Prepare artifact
