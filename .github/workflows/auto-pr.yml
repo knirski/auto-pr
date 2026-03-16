@@ -1,5 +1,10 @@
-# Auto-PR for this repo — uses the reusable workflow (same as consumers).
-# Push to ai/* branch to auto-create a PR.
+# Auto-PR — uses the reusable workflow. Push to ai/* to auto-create a PR.
+# No package.json required. Run: npx auto-pr-init (creates this file, template, .nvmrc)
+#
+# Pin to SHA: reproducible runs, immutable supply chain. Update to merge commit SHA
+# after merging changes to the reusable workflow.
+#
+# Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
 
 name: Auto-PR
 
@@ -14,6 +19,5 @@ concurrency:
 
 jobs:
   auto-pr:
-    if: github.event.repository.fork != true
-    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@main
+    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@1e991ad63a5e72d0acc3b44f8dca8f41dde69e62
     secrets: inherit

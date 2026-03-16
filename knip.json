@@ -1,7 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@5/schema.json",
-	"project": ["scripts/**/*.ts", "test/**/*.ts"],
-	"tags": ["-lintignore"],
+	"project": ["src/**/*.ts", "test/**/*.ts"],
 	"ignoreExportsUsedInFile": { "interface": true, "type": true },
 	"ignoreBinaries": [
 		"auto-pr-get-commits",

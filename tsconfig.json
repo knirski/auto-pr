@@ -1,5 +1,13 @@
 {
 	"compilerOptions": {
+		"paths": {
+			"#auto-pr": ["./src/auto-pr/index.ts"],
+			"#auto-pr/*": ["./src/auto-pr/*"],
+			"#lib/*": ["./src/lib/*"],
+			"#tools/*": ["./src/tools/*"],
+			"#workflow/*": ["./src/workflow/*"],
+			"#test/*": ["./test/*"]
+		},
 		"target": "ESNext",
 		"lib": ["ESNext", "DOM"],
 		"module": "NodeNext",
@@ -19,6 +27,6 @@
 		"verbatimModuleSyntax": true,
 		"isolatedModules": true
 	},
-	"include": ["scripts/**/*.ts", "test/**/*.ts"],
+	"include": ["src/**/*.ts", "test/**/*.ts"],
 	"exclude": ["node_modules"]
 }

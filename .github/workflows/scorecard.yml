@@ -7,6 +7,10 @@ on:
   schedule:
     - cron: "30 1 * * 6"
 
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   security-events: none
@@ -15,7 +19,7 @@ permissions:
 jobs:
   analysis:
     name: Scorecard analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

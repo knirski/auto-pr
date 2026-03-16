@@ -32,9 +32,11 @@
 				"noVar": "error"
 			},
 			"style": {
+				"noEnum": "error",
 				"noParameterAssign": "error",
 				"noNonNullAssertion": "error",
 				"useConst": "error",
+				"useNumberNamespace": "error",
 				"useTemplate": "error",
 				"useImportType": "error"
 			},
@@ -49,18 +51,6 @@
 			}
 		}
 	},
-	"overrides": [
-		{
-			"includes": ["scripts/**"],
-			"linter": {
-				"rules": {
-					"suspicious": {
-						"noConsole": "off"
-					}
-				}
-			}
-		}
-	],
 	"assist": {
 		"enabled": true,
 		"actions": {

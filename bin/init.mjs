@@ -1,2 +1,5 @@
 #!/usr/bin/env node
-import "./../scripts/init.mjs";
+
+import { run } from "./run-ts.mjs";
+
+run("tools/init");

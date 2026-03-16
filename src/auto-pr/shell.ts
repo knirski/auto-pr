@@ -1,0 +1,70 @@
+/**
+ * Shared shell (Effect) for auto-PR scripts. I/O, exec, layers.
+ */
+
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeChildProcessSpawner from "@effect/platform-node-shared/NodeChildProcessSpawner";
+import * as NodeFileSystem from "@effect/platform-node-shared/NodeFileSystem";
+import * as NodePath from "@effect/platform-node-shared/NodePath";
+import { Effect, FileSystem, Layer, Logger } from "effect";
+import { ChildProcess } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { formatGhOutput } from "#auto-pr/core.js";
+import { formatError, PullRequestFailedError } from "#auto-pr/errors.js";
+
+/** Platform layer for auto-PR scripts: FileSystem + Path. */
+export const PlatformLayer = NodeFileSystem.layer.pipe(Layer.provideMerge(NodePath.layer));
+
+/** ChildProcessSpawner layer (requires FileSystem + Path). */
+export const ChildProcessSpawnerLayer = NodeChildProcessSpawner.layer.pipe(
+	Layer.provide(PlatformLayer),
+);
+
+/** Run a command and return stdout. Maps PlatformError to PullRequestFailedError. */
+export const runCommand = Effect.fn("runCommand")(function* (
+	command: string,
+	args: string[],
+	cwd: string,
+) {
+	const spawner = yield* ChildProcessSpawner;
+	return yield* spawner
+		.string(ChildProcess.make(command, args, { cwd }))
+		.pipe(Effect.mapError((e) => new PullRequestFailedError({ cause: String(e) })));
+});
+
+/** Append entries to GITHUB_OUTPUT file. */
+export const appendGhOutput = Effect.fn("appendGhOutput")(function* (
+	path: string,
+	entries: ReadonlyArray<{ key: string; value: string }>,
+) {
+	const fs = yield* FileSystem.FileSystem;
+	const content = formatGhOutput(entries);
+	yield* fs.writeFileString(path, content, { flag: "a" });
+});
+
+/** Logger layer for auto-PR scripts. Respects NO_COLOR. */
+export const AutoPrLoggerLayer = Logger.layer([
+	Logger.consolePretty({ colors: process.env.NO_COLOR === undefined }),
+]).pipe(Layer.provide(Layer.succeed(Logger.LogToStderr)(true)));
+
+/** Debug hint for error output when AUTO_PR_DEBUG is not set. Reads process.env. */
+export function getDebugHint(): string {
+	return process.env.AUTO_PR_DEBUG === "1" || process.env.AUTO_PR_DEBUG === "true"
+		? ""
+		: " Set AUTO_PR_DEBUG=1 for verbose output.";
+}
+
+/** Run main with NodeRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
+export function runMain(program: Effect.Effect<void, unknown>, eventName: string): void {
+	NodeRuntime.runMain(
+		program.pipe(
+			Effect.provide(AutoPrLoggerLayer),
+			Effect.tapError((e) =>
+				Effect.logError({
+					event: eventName,
+					error: formatError(e) + getDebugHint(),
+				}),
+			),
+		),
+	);
+}

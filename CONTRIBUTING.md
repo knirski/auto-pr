@@ -4,11 +4,48 @@ Thanks for your interest in contributing to auto-pr.
 
 ## Development Setup
 
+**Direct contributors** (with write access):
+
 ```bash
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
 npm install
 ```
+
+**Fork contributors:** Fork the repo, clone your fork, then `npm install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
+
+### Optional: typos, lychee, and actionlint for full local check
+
+`npm run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use Nix:
+
+| OS | typos | lychee | actionlint |
+|----|-------|--------|------------|
+| **macOS** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
+| **Linux** (Ubuntu/Debian) | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
+| **Linux** (Fedora) | `dnf install typos-cli` | `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
+| **Linux** (Arch) | `pacman -S typos` | `pacman -S lychee` or `cargo install lychee` | `pacman -S actionlint` |
+| **Linux** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
+| **Windows** | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
+| **Nix** | `nix develop` (tools in PATH) or `nix run .#typos` | `nix run .#lychee` | `nix run .#actionlint` |
+
+Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
+
+**check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `npm run check:just-links` to verify links locally. CI uses `continue-on-error: true` for lychee in check.yml; docs-only CI (ci-docs) runs lychee without that.
+
+**statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
+
+### Run CI locally (full parity)
+
+`npm run check:ci` runs the same check workflow as CI in Docker. Requires [Docker](https://docs.docker.com/get-docker/) and either:
+
+- **gh extension** (preferred): `gh extension install nektos/gh-act`
+- **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
+
+The script tries `gh act` first, then falls back to `act`.
+
+### Pre-push hook
+
+Lefthook runs `npm run check:code` before each push. Uses only npm deps (audit, test, lint, knip, typecheck); no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
 
 If you change `package-lock.json` (e.g. add a dependency), the Nix hash must be updated:
 
@@ -41,7 +78,10 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 ## Pull Requests
 
-For AI-assisted development: push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for maintainer setup.
+**AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
+
+- **Same-repo contributors:** Workflow runs automatically. Update the pin in auto-pr.yml to the merge commit SHA after merging reusable workflow changes to enable branch code for contributors.
+- **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
 1. Run `npm run check` before submitting.
 2. Ensure your commits follow Conventional Commits (the PR template includes a checklist).

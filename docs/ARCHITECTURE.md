@@ -6,19 +6,20 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  CLI entry points (scripts/*.ts)                                  │
-│  auto-pr-get-commits, generate-pr-content, create-or-update-pr,   │
-│  fill-pr-template                                                 │
+│  CLI entry points (src/workflow/*.ts, src/tools/*.ts)           │
+│  workflow: auto-pr-get-commits, generate-pr-content,             │
+│  create-or-update-pr, run-auto-pr                               │
+│  tools: fill-pr-template, init, update-nix-hash                 │
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│  Imperative Shell (scripts/auto-pr/shell.ts, config.ts)           │
-│  Orchestrates I/O, reads env, calls core via Effect.fromResult   │
+│  Imperative Shell (src/auto-pr/shell.ts, config.ts)             │
+│  Orchestrates I/O, reads env, calls core via Effect.fromResult  │
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│  Functional Core (scripts/auto-pr/core.ts, fill-pr-template-core) │
-│  Pure functions, no Effect, no I/O, returns Result                │
+│  Functional Core (src/auto-pr/core.ts, src/lib/*.ts)             │
+│  Pure functions, no Effect, no I/O, returns Result              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -30,23 +31,25 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Functional Core / Imperative Shell (FC/IS)
 
-- **`scripts/*.ts`** — CLI entry points. Parse env, delegate to shell.
-- **`scripts/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Orchestrates I/O.
-- **`scripts/auto-pr/config.ts`** — Schema-validated env. Config as service.
-- **`scripts/auto-pr/core.ts`** — Pure helpers. filterSemanticSubjects, formatGhOutput, etc. No Effect, no I/O.
-- **`scripts/fill-pr-template-core.ts`** — Pure PR template logic. parseCommits, fillTemplate, renderBody.
-- **`scripts/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).
-- **`scripts/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production.
+- **`src/workflow/*.ts`** — Main auto-PR workflow. get-commits, generate-content, create-or-update-pr, run-auto-pr.
+- **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init, update-nix-hash, update-npm-deps-hash.
+- **`src/lib/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs.
+- **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Orchestrates I/O.
+- **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets (e.g. getPrDescriptionPromptPath).
+- **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
+- **`src/auto-pr/core.ts`** — Pure helpers. filterSemanticSubjects, formatGhOutput, etc. No Effect, no I/O.
+- **`src/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).
+- **`src/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production. Per Effect idiom, layers are attached to services: `FillPrTemplate.Live`. Workflow-specific config layers (GetCommitsConfig, GeneratePrContentConfig, etc.) provide per-workflow env validation.
 
 **Bridge:** Core returns `Result`; shell calls `Effect.fromResult` at the boundary.
 
 ## Where to Start
 
-- **Entry points:** `scripts/auto-pr-get-commits.ts`, `scripts/generate-pr-content.ts`, `scripts/create-or-update-pr.ts`, `scripts/fill-pr-template.ts`
-- **Core logic:** `scripts/auto-pr/core.ts`, `scripts/fill-pr-template-core.ts`
-- **Ollama integration:** `scripts/auto-pr/live/fill-pr-template.ts` (FillPrTemplate implementation)
-- **Config:** `scripts/auto-pr/config.ts` — env schema and validation
+- **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/generate-pr-content.ts`, `src/workflow/create-or-update-pr.ts`, `src/tools/fill-pr-template.ts`
+- **Core logic:** `src/auto-pr/core.ts`, `src/lib/fill-pr-template-core.ts`
+- **Ollama integration:** `src/auto-pr/live/fill-pr-template.ts` (FillPrTemplate implementation)
+- **Config:** `src/auto-pr/config.ts` — env schema and validation
 
 ## Dependency Direction
 
-`core.ts` and `fill-pr-template-core.ts` do not depend on shell or live interpreters. Shell and live depend on core and interfaces.
+`core.ts` and `fill-pr-template-core.ts` do not depend on shell or live interpreters. Shell and live depend on core and interfaces. `live/` does not depend on `tools/`; Effect wrappers like `renderBody` live in `auto-pr/live/`.
