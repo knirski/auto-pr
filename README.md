@@ -59,7 +59,7 @@ npm run check
 | Command | Purpose |
 |---------|---------|
 | `npm run check` | Local checks (npm, statix, deadnix, typos, lychee, actionlint) |
-| `npm run check:code` | Code only (npm deps); runs on pre-push |
+| `npm run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
 | `npm run check:ci` | Full CI parity in Docker (requires Docker + `gh act` or `act`) |
 | `npm run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
 | `npm run check:just-links` | Lychee link check only (requires lychee or Nix) |
@@ -79,6 +79,7 @@ npm install auto-pr
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
 npm install
+npm run build
 npx lefthook install
 ```
 
@@ -114,6 +115,7 @@ nix develop
 
 # Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
 npx tsx src/workflow/run-auto-pr.ts
+# or: node dist/workflow/run-auto-pr.mjs (after npm run build)
 # or: nix run .#default
 ```
 

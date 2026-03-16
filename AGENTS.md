@@ -31,16 +31,16 @@ When unsure about how to implement something or when multiple approaches exist:
 
 ## Setup
 
-- Install: `npm install` then `npx lefthook install` (enables pre-commit/pre-push hooks)
+- Install: `npm install` then `npx lefthook install` (Lefthook is a devDependency; the second step enables pre-commit/pre-push hooks)
 - Verify: `npm run check` (audit, test, lint, knip, typecheck, docs, actionlint, shellcheck, shfmt). Pre-push runs `check:code` automatically.
-- **Build/typecheck:** Uses TypeScript Native (`tsgo`) for faster typecheck. No declaration emit.
+- **Build/typecheck:** Uses tsdown to build `dist/`; `tsgo --noEmit` for typecheck. No declaration emit.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
 | `npm run check` | Full check: test, lint, knip, typecheck, docs, actionlint, shellcheck. Run before committing. |
-| `npm run check:code` | Code only: test, lint, knip, typecheck. Runs on pre-push. |
+| `npm run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
 | `npm run check:ci` | Full CI parity in Docker (`gh act` or `act`). **Prefer for local workflow testing** over pushing to trigger CI. |
 | `npm run check:with-links` | Full check + lychee link verification. Can fail on broken external URLs. |
 | `npm run check:just-links` | Lychee link check only. Requires lychee or Nix. |

@@ -1,6 +1,6 @@
 # Architecture
 
-This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. No declaration emit; scripts run via tsx.
+This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. tsdown builds `dist/`; scripts run via `node dist/`. No declaration emit.
 
 ## High-Level Structure
 
