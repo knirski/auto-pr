@@ -3,5 +3,5 @@ Summarize these commits into a PR title and description. No preamble. No quotes.
 Output format (exactly):
 Line 1: type: message (feat, fix, docs, chore, refactor). Max 72 chars. Nothing else.
 Line 2: (blank line)
-Line 3+: Bullet points. One per change. What changed and why. No "This PR introduces". No function names or implementation details.
+Line 3+: Prose paragraph(s). Summarize changes with emphasis on why they were made, what they relate to, and high-level how. Separate paragraphs with blank lines. No "This PR introduces". No function names or implementation details.
 
