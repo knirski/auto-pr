@@ -52,6 +52,7 @@ No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.m
 
 ```bash
 npm install
+npx lefthook install
 npm run check
 ```
 
@@ -78,6 +79,7 @@ npm install auto-pr
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
 npm install
+npx lefthook install
 ```
 
 ## Commands

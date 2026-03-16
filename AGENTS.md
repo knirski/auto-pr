@@ -31,7 +31,7 @@ When unsure about how to implement something or when multiple approaches exist:
 
 ## Setup
 
-- Install: `npm install`
+- Install: `npm install` then `npx lefthook install` (enables pre-commit/pre-push hooks)
 - Verify: `npm run check` (audit, test, lint, knip, typecheck, docs, actionlint, shellcheck, shfmt). Pre-push runs `check:code` automatically.
 - **Build/typecheck:** Uses TypeScript Native (`tsgo`) for faster typecheck. No declaration emit.
 
@@ -148,7 +148,7 @@ Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:doc
 - Add or update tests for the code you change, even if nobody asked.
 - **Coverage policy:** Current coverage (~85%) meets thresholds. Do not chase coverage for its own sake. Add tests when: fixing a bug (add a regression test), adding a feature, or changing risky code. Skip tests for trivial branches, CLI entry points, or code that would require heavy mocking for little benefit.
 - Before committing: run `npm run check`; ensure all tests pass.
-- Pre-push runs `check:code` automatically (Lefthook). Use `git push --no-verify` only when necessary.
+- Pre-push runs `check:code` automatically (Lefthook). Run `npx lefthook install` after cloning. Use `git push --no-verify` only when necessary.
 - For full CI parity locally (e.g. debugging CI): `npm run check:ci` (requires Docker + act or gh-act).
 - **Workflow testing:** Prefer `npm run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.
 

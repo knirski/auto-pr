@@ -157,7 +157,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: "24"
+          node-version-file: ".nvmrc"
           cache: "npm"
       - run: npm ci
       - run: npm run check
@@ -227,7 +227,7 @@ Override defaults via workflow `with:` inputs when needed (e.g. `auto_pr_how_to_
 | Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
 | "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, set the SHA to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
 | "Missing [path]" (PR template) | Run `npx auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| "node-version-file" error | When using setup-node with node-version-file in your check job: create `.nvmrc` or use `node-version: '24'` |
+| "node-version-file" error | Ensure `.nvmrc` exists (run `npx auto-pr-init`). Use `node-version-file: ".nvmrc"` for single source of truth. |
 | Check job fails | Ensure your check command exists (e.g. `npm run check`, `pytest`, `cargo test`). See [Running checks before PR creation](#running-checks-before-pr-creation) |
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
 | "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |

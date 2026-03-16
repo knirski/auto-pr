@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Shared runner for TypeScript bin entry points.
- * Spawns tsx with the given script. Use via: import { run } from "./run-ts.mjs"; run("script-name");
+ * Spawns tsx via npx (fetches when not installed). Use via: import { run } from "./run-ts.mjs"; run("script-name");
  */
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";

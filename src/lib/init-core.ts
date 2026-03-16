@@ -19,6 +19,6 @@ export function getInitFileSpecs(): readonly InitFileSpec[] {
 			dest: ".github/PULL_REQUEST_TEMPLATE.md",
 			from: ".github/PULL_REQUEST_TEMPLATE.md",
 		},
-		{ dest: ".nvmrc", content: "24\n" },
+		{ dest: ".nvmrc", from: ".nvmrc" },
 	];
 }
