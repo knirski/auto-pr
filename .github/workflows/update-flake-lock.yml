@@ -3,6 +3,10 @@
 
 name: Update flake.lock
 
+concurrency:
+  group: update-flake-lock
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   schedule:
@@ -21,15 +25,17 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
 
       - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
         with:
-          extra_nix_config: "experimental-features = nix-command flakes"
+          extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
 
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/package-lock.json', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
 
       - uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28

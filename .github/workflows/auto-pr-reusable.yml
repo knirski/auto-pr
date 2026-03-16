@@ -1,7 +1,7 @@
 # Reusable workflow: auto-pr for any GitHub project.
 # No package.json required — uses npx to fetch auto-pr from GitHub.
 #
-# Consumer workflow:
+# Convention over configuration: all inputs have defaults. Consumer workflow:
 #   on:
 #     push:
 #       branches: [ai/**]
@@ -17,6 +17,23 @@ name: Auto-PR (reusable)
 
 on:
   workflow_call:
+    inputs:
+      ollama_model:
+        required: false
+        type: string
+        default: "llama3.1:8b"
+      ollama_url:
+        required: false
+        type: string
+        default: "http://localhost:11434/api/generate"
+      pr_template_path:
+        required: false
+        type: string
+        default: ".github/PULL_REQUEST_TEMPLATE.md"
+      auto_pr_how_to_test:
+        required: false
+        type: string
+        default: "1. Run the relevant tests or checks.\n2. "
 
 permissions:
   contents: read
@@ -27,13 +44,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL || 'llama3.1:8b' }}
-      OLLAMA_URL: ${{ vars.OLLAMA_URL || 'http://localhost:11434/api/generate' }}
+      OLLAMA_MODEL: ${{ inputs.ollama_model }}
+      OLLAMA_URL: ${{ inputs.ollama_url }}
     steps:
       - name: Check prerequisites
         run: |
-          if [ ! -f .github/PULL_REQUEST_TEMPLATE.md ]; then
-            echo "::error::Missing .github/PULL_REQUEST_TEMPLATE.md. Run: npx auto-pr-init"
+          if [ ! -f "${{ inputs.pr_template_path }}" ]; then
+            echo "::error::Missing ${{ inputs.pr_template_path }}. Run: npx auto-pr-init"
             echo "::error::See https://github.com/knirski/auto-pr#integration"
             exit 1
           fi
@@ -74,6 +91,8 @@ jobs:
         env:
           COMMITS: ${{ steps.commits.outputs.commits }}
           FILES: ${{ steps.commits.outputs.files }}
+          PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
+          AUTO_PR_HOW_TO_TEST: ${{ inputs.auto_pr_how_to_test }}
         run: npx -p github:knirski/auto-pr auto-pr-generate-content
 
       - name: Generate GitHub App token

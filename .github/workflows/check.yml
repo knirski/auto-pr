@@ -1,6 +1,6 @@
 # Reusable workflow: run full check (test, lint, typecheck, rumdl, typos, actionlint, shellcheck, lychee, SBOM, Codecov).
 # Called by ci.yml (runs when non-.md files change).
-# No Nix — uses GitHub Actions for rumdl/typos/lychee, npm for shellcheck/actionlint.
+# No Nix — uses GitHub Actions for rumdl/typos/lychee/actionlint/shellcheck.
 
 name: Check
 
@@ -52,7 +52,13 @@ jobs:
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2
 
       - name: Lint scripts
-        run: find scripts -name '*.sh' -print0 | xargs -0 -r npx shellcheck
+        uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca
+        with:
+          scandir: ./scripts
+
+      - name: Format check scripts (shfmt)
+        uses: mfinelli/setup-shfmt@a25fda4c1fe115aec0f85e04126610841bc3141d # v4.0.1
+      - run: shfmt -d scripts
 
       - name: Check links
         continue-on-error: true

@@ -29,7 +29,7 @@ if ! command -v nix >/dev/null 2>&1; then
 	exit 0
 fi
 
-expected=$(nix run nixpkgs#prefetch-npm-deps -- package-lock.json 2>/dev/null) || true
+expected=$(nix run .#prefetch-npm-deps -- package-lock.json 2>/dev/null) || true
 if [ -z "$expected" ]; then
 	echo "warning: package-lock.json changed. Could not compute npmDepsHash (prefetch-npm-deps failed)." >&2
 	echo "" >&2
@@ -38,8 +38,8 @@ if [ -z "$expected" ]; then
 fi
 
 current=$(sed -n 's/.*npmDepsHash = "\([^"]*\)".*/\1/p' default.nix 2>/dev/null | head -1)
-if [ -z "$current" ] || [[ ! "$current" =~ ^sha256-[A-Za-z0-9+/=]+$ ]]; then
-	echo "warning: Could not parse npmDepsHash from default.nix (expected format: npmDepsHash = \"sha256-...\"). Skipping check." >&2
+if [ -z "$current" ] || [[ ! $current =~ ^sha256-[A-Za-z0-9+/=]+$ ]]; then
+	echo 'warning: Could not parse npmDepsHash from default.nix (expected format: npmDepsHash = "sha256-..."). Skipping check.' >&2
 	exit 0
 fi
 if [ "$expected" != "$current" ]; then

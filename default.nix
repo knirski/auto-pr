@@ -8,27 +8,27 @@ let
   src = builtins.path {
     path = ./.;
     name = "auto-pr-src";
-    filter = path: type:
+    filter = path: _:
       builtins.baseNameOf path != "node_modules"
       && builtins.baseNameOf path != ".git"
       && builtins.baseNameOf path != "result"
       && builtins.baseNameOf path != "coverage";
   };
-  npmDepsHash = "sha256-SqXJxXx9/7jB7EgOa31q6I6j+6ceyNgp1ffBlCGbDTE=";
+  npmDepsHash = "sha256-CfkQD7yXVWA7tf6ZIORGMBURzbrY0oAHSxb9B+ysLmg=";
 in
 pkgs.buildNpmPackage rec {
   pname = "auto-pr";
-  version = packageJson.version;
+  inherit (packageJson) version;
   inherit src npmDepsHash;
   nodejs = pkgs.nodejs_24;
   npmBuildScript = "build";
   dontCheck = true;
   installPhase = ''
     mkdir -p $out/lib/node_modules/auto-pr
-    cp -r package.json package-lock.json node_modules scripts .github $out/lib/node_modules/auto-pr/
+    cp -r package.json package-lock.json node_modules src .github $out/lib/node_modules/auto-pr/
     mkdir -p $out/bin
     echo '#!${pkgs.runtimeShell}
-    cd "${placeholder "out"}/lib/node_modules/auto-pr" && exec npx tsx scripts/run-auto-pr.sh "$@"' > $out/bin/run-auto-pr
+    cd "${placeholder "out"}/lib/node_modules/auto-pr" && exec npx tsx src/workflow/run-auto-pr.ts "$@"' > $out/bin/run-auto-pr
     chmod +x $out/bin/run-auto-pr
   '';
 }
