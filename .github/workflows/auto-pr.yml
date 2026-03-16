@@ -15,5 +15,5 @@ concurrency:
 jobs:
   auto-pr:
     if: github.event.repository.fork != true
-    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@main
+    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@1e991ad63a5e72d0acc3b44f8dca8f41dde69e62
     secrets: inherit
