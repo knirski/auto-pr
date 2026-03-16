@@ -39,9 +39,11 @@ When unsure about how to implement something or when multiple approaches exist:
 
 | Command | Purpose |
 |---------|---------|
-| `npm run check` | Full check: test, lint, knip, typecheck, docs. Run before committing. |
+| `npm run check` | Full check: test, lint, knip, typecheck, docs, actionlint, shellcheck. Run before committing. |
 | `npm run check:code` | Code only: test, lint, knip, typecheck. Runs on pre-push. |
-| `npm run check:ci` | Full CI parity in Docker (gh act or act). Use when debugging CI. |
+| `npm run check:ci` | Full CI parity in Docker (`gh act` or `act`). Use when debugging CI. |
+| `npm run check:with-links` | Full check + lychee link verification. Can fail on broken external URLs. |
+| `npm run check:just-links` | Lychee link check only. Requires lychee or Nix. |
 | `npm test` | Unit tests with coverage |
 | `npm run lint` | Lint (Biome) |
 | `npm run lint:fix` | Lint and fix |

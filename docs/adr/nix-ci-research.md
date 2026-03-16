@@ -28,7 +28,7 @@ Research date: 2026-03-15. Assesses `.github/workflows/*nix*` against current be
 
 **Options**:
 - **A) Switch to `cachix/install-nix-action`** — Community standard for upstream Nix (662 stars). Used by nix.dev docs. No deprecation.
-- **B) Migrate to Determinate Nix** — [Migration guide](https://docs.determinate.systems/guides/migrating-from-upstream). Requires testing; Determinate Nix has different behavior.
+- **B) Migrate to Determinate Nix** — [Migration guide](https://docs.determinate.systems/guides/migrating-from-upstream-nix/). Requires testing; Determinate Nix has different behavior.
 - **C) Wait for community fork** — Nix Installer Working Group may publish upstream-only fork.
 
 **Recommendation**: Switch to `cachix/install-nix-action@v25` before Jan 2026 for upstream Nix continuity.

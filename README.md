@@ -68,7 +68,9 @@ npm run check
 |---------|---------|
 | `npm run check` | Local checks (npm, statix, deadnix, typos, lychee, actionlint) |
 | `npm run check:code` | Code only (npm deps); runs on pre-push |
-| `npm run check:ci` | Full CI parity in Docker (requires act or gh-act) |
+| `npm run check:ci` | Full CI parity in Docker (requires Docker + `gh act` or `act`) |
+| `npm run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
+| `npm run check:just-links` | Lychee link check only (requires lychee or Nix) |
 
 ## Installation
 

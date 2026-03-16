@@ -26,6 +26,8 @@ npm install
 
 Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
 
+**check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `npm run check:just-links` to verify links locally. CI uses `continue-on-error: true` for lychee in check.yml; docs-only CI (ci-docs) runs lychee without that.
+
 **statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
 
 ### Run CI locally (full parity)

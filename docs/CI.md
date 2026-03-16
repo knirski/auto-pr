@@ -69,6 +69,10 @@ Before CI can run fully:
 
 Pre-push runs `check:code` before each push (npm deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
 
+## Link verification
+
+`npm run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge.
+
 ## Branch Protection
 
 Both ci.yml and ci-docs.yml report **`check / check`**. Configure main branch protection to require:
