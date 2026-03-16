@@ -50,7 +50,7 @@ CodeQL flags "Checkout of untrusted code in trusted context" (CWE-829) when a wo
 - Generate: untrusted checkout, unprivileged context
 - Create: trusted checkout only, privileged context
 
-CodeQL may still report alerts on reusable workflows because it does not fully model cross-workflow permission separation. The security model above is preserved; alerts can be dismissed as false positives in the Code Scanning UI.
+CodeQL does not fully model cross-workflow permission separation, so it may report false positives on reusable workflows. We exclude the untrusted-checkout queries via [.github/codeql/codeql-config.yml](../.github/codeql/codeql-config.yml); the security model above is preserved.
 
 ## Related
 
