@@ -8,12 +8,12 @@ Research date: 2026-03-15. Assesses all `.github/workflows/*.yml` against modern
 |----------|--------|-------|
 | **Action pinning** | ✅ | SHA-pinned (e.g. `@de0fac2e... # v6.0.2`) |
 | **Least privilege** | ✅ | `permissions: {}` or job-level overrides |
-| **Concurrency** | ✅ | ci.yml, auto-pr.yml, ci-nix.yml use cancel-in-progress |
+| **Concurrency** | ✅ | All workflows; `cancel-in-progress: true` except release-please (false) |
 | **Timeouts** | ✅ | Jobs have timeout-minutes (10–20) |
 | **Path filters** | ✅ | Built-in paths/paths-ignore, no third-party |
 | **persist-credentials** | ✅ | Set false on read-only checkouts (check, check-docs, ci dependency-review, codeql) |
 | **release-please** | ✅ | Documented in docs/CI.md workflows table |
-| **Runner pinning** | ⚠️ | Uses `ubuntu-latest`; Exercism recommends `ubuntu-22.04` for stability |
+| **Runner pinning** | ✅ | Uses `ubuntu-24.04` (x86), `ubuntu-24.04-arm` (arm64) for stability |
 
 ## Findings
 
@@ -31,28 +31,38 @@ Research date: 2026-03-15. Assesses all `.github/workflows/*.yml` against modern
 
 **Open-source usage**: GitHub's security guide recommends full-length commit SHA as "the only way to use an action as an immutable release." Exercism docs require SHA pinning. [actions/starter-workflows](https://github.com/actions/starter-workflows) uses tags (v4) in some templates—less strict. hashicorp/vagrant uses SHA (`@8e8c483... # v6.0.1`).
 
-### 3. Runner Pinning (ubuntu-latest vs ubuntu-22.04)
+### 3. Concurrency
+
+**Best practice**: Add `concurrency` to avoid redundant runs and resource waste. Use `group` to scope by workflow and ref; use `cancel-in-progress: true` to cancel outdated runs.
+
+**Applied**: All workflows have concurrency. Groups: `${{ workflow }}-${{ github.ref }}` for push/PR workflows; `stale`, `update-nix-hash` for single-run workflows. `release-please` uses `cancel-in-progress: false` to avoid cancelling a release in progress.
+
+### 4. Runner Pinning (ubuntu-latest vs ubuntu-22.04)
 
 **Exercism recommendation** ([gha-best-practices](https://github.com/exercism/docs/blob/main/building/github/gha-best-practices.md)): Use `ubuntu-22.04` instead of `ubuntu-latest` for build stability—same runner each run.
 
-**Trade-off**: `ubuntu-latest` gets security updates automatically; pinned runners require manual bumps. Many projects (vercel/next.js, etc.) still use `ubuntu-latest`. **Deferred**: not critical for this repo.
+**Applied**: All workflows use `ubuntu-24.04` (x86) or `ubuntu-24.04-arm` (arm64 in nix matrix). Pinned runners ensure reproducible builds; bump when upgrading.
 
-### 4. Documentation
+### 5. Documentation
 
 - **docs/CI.md**: release-please.yml added to workflows table
 - **ci-nix.yml**: Uses cachix/install-nix-action, cache-nix-action (see docs/adr/nix-ci-research.md)
 
-### 5. Reusable Workflows
+### 6. Reusable Workflows
 
 **Current**: check.yml, check-docs.yml, nix.yml are reusable. Good structure.
 
-### 6. Dependency Review
+### 7. Dependency Review
 
 **Current**: ci.yml runs dependency-review on PRs. Good.
 
-### 7. CodeQL
+### 8. CodeQL
 
 **Current**: Security-extended queries, matrix for actions + javascript-typescript. Good.
+
+### 9. OpenSSF Scorecard
+
+**Current**: scorecard.yml runs on push to main and weekly (Saturday 01:30 UTC). Publishes results to code scanning (SARIF). Validates token permissions, pinned actions, and other supply-chain checks.
 
 ## Open-Source Project Comparison
 
@@ -62,7 +72,7 @@ Research date: 2026-03-15. Assesses all `.github/workflows/*.yml` against modern
 | **vercel/next.js** | — | SHA | ✅ | ✅ | ubuntu-latest |
 | **exercism/docs** | — | SHA (required) | ✅ | ✅ 30min | ubuntu-22.04 |
 | **actions/starter-workflows** | — | Tags (v4) | — | — | ubuntu-latest |
-| **auto-pr** | ✅ false | SHA | ✅ | ✅ 10–20min | ubuntu-latest |
+| **auto-pr** | ✅ false | SHA | ✅ | ✅ 10–20min | ubuntu-24.04 |
 
 ## References
 
