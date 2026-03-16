@@ -12,6 +12,7 @@ import {
 	getDescriptionFromCommits,
 	getDescriptionPromptText,
 	getRelatedIssues,
+	getUnreplacedPlaceholders,
 	hasDocsFiles,
 	hasTestFiles,
 	hasUnreplacedPlaceholders,
@@ -166,6 +167,18 @@ describe("hasUnreplacedPlaceholders", () => {
 	});
 	test("false when no placeholders", () => {
 		expect(hasUnreplacedPlaceholders("plain text")).toBe(false);
+	});
+});
+
+describe("getUnreplacedPlaceholders", () => {
+	test("returns unique placeholders", () => {
+		expect(getUnreplacedPlaceholders("{{foo}} and {{bar}} and {{foo}}")).toEqual([
+			"{{foo}}",
+			"{{bar}}",
+		]);
+	});
+	test("returns empty when none", () => {
+		expect(getUnreplacedPlaceholders("plain text")).toEqual([]);
 	});
 });
 

@@ -38,49 +38,83 @@ function ghPrView(branch: string, cwd: string): Effect.Effect<boolean, never, Ch
 	);
 }
 
+function ghPrViewUrl(
+	branch: string,
+	cwd: string,
+): Effect.Effect<string, PullRequestFailedError, ChildProcessSpawner> {
+	return runCommand("gh", ["pr", "view", branch, "--json", "url", "-q", ".url"], cwd);
+}
+
 function ghPrEdit(
 	branch: string,
 	title: string,
 	bodyPath: string,
 	cwd: string,
-): Effect.Effect<void, PullRequestFailedError, ChildProcessSpawner> {
-	return runCommand("gh", ["pr", "edit", branch, "--title", title, "--body-file", bodyPath], cwd);
+): Effect.Effect<undefined, PullRequestFailedError, ChildProcessSpawner> {
+	return runCommand(
+		"gh",
+		["pr", "edit", branch, "--title", title, "--body-file", bodyPath],
+		cwd,
+	).pipe(Effect.as(undefined));
 }
 
 function ghPrCreate(
+	headBranch: string,
 	baseBranch: string,
 	title: string,
 	bodyPath: string,
 	cwd: string,
-): Effect.Effect<void, PullRequestFailedError, ChildProcessSpawner> {
+): Effect.Effect<string, PullRequestFailedError, ChildProcessSpawner> {
 	return runCommand(
 		"gh",
-		["pr", "create", "--base", baseBranch, "--title", title, "--body-file", bodyPath],
+		[
+			"pr",
+			"create",
+			"--head",
+			headBranch,
+			"--base",
+			baseBranch,
+			"--title",
+			title,
+			"--body-file",
+			bodyPath,
+		],
 		cwd,
 	);
 }
 
-const ghRetrySchedule = Schedule.recurs(GH_RETRY_ATTEMPTS - 1).pipe(
-	Schedule.addDelay(() =>
-		Effect.logWarning({
-			event: "create_or_update_pr",
-			status: "gh_retry",
-			message: "gh failed, retrying in 5s...",
-		}).pipe(Effect.as(Duration.millis(GH_RETRY_DELAY_MS))),
-	),
-);
+function createGhRetrySchedule(branch: string) {
+	return Schedule.recurs(GH_RETRY_ATTEMPTS - 1).pipe(
+		Schedule.addDelay(() =>
+			Effect.logWarning({
+				event: "create_or_update_pr",
+				status: "gh_retry",
+				branch,
+				message: "gh failed, retrying in 5s...",
+			}).pipe(Effect.as(Duration.millis(GH_RETRY_DELAY_MS))),
+		),
+	);
+}
 
-function runGhWithRetry<R, E>(effect: Effect.Effect<void, E, R>): Effect.Effect<void, E, R> {
+function runGhWithRetry<R, E>(
+	effect: Effect.Effect<string | undefined, E, R>,
+	branch: string,
+): Effect.Effect<string | undefined, E, R> {
 	return effect.pipe(
-		Effect.retry(ghRetrySchedule),
+		Effect.retry(createGhRetrySchedule(branch)),
 		Effect.tapError(() =>
 			Effect.logError({
 				event: "create_or_update_pr",
 				status: "failed_after_retries",
+				branch,
 				message: "gh pr failed after 3 attempts",
 			}),
 		),
 	);
+}
+
+function extractPrUrl(stdout: string): string {
+	return stdout.trim().split("\n").at(-1) ?? "";
 }
 
 type CreateOrUpdatePrError = PullRequestFailedError | BodyFileNotFoundError | FileSystemError;
@@ -106,11 +140,47 @@ export function runCreateOrUpdatePr(params: {
 
 		const prExists = yield* ghPrView(params.branch, cwd);
 		if (prExists) {
-			yield* Effect.log({ event: "create_or_update_pr", status: "updating" });
-			yield* runGhWithRetry(ghPrEdit(params.branch, params.title, params.bodyFile, cwd));
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "updating",
+				branch: params.branch,
+				base: params.defaultBranch,
+			});
+			yield* runGhWithRetry(
+				ghPrEdit(params.branch, params.title, params.bodyFile, cwd),
+				params.branch,
+			);
+			const url = yield* ghPrViewUrl(params.branch, cwd).pipe(
+				Effect.catch(() => Effect.succeed("")),
+			);
+			if (typeof url === "string" && url.trim()) {
+				yield* Effect.log({
+					event: "create_or_update_pr",
+					status: "updated",
+					url,
+					branch: params.branch,
+				});
+			}
 		} else {
-			yield* Effect.log({ event: "create_or_update_pr", status: "creating" });
-			yield* runGhWithRetry(ghPrCreate(params.defaultBranch, params.title, params.bodyFile, cwd));
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "creating",
+				head: params.branch,
+				base: params.defaultBranch,
+			});
+			const stdout = yield* runGhWithRetry(
+				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
+				params.branch,
+			);
+			const url = typeof stdout === "string" ? extractPrUrl(stdout) : "";
+			if (url.trim()) {
+				yield* Effect.log({
+					event: "create_or_update_pr",
+					status: "created",
+					url,
+					branch: params.branch,
+				});
+			}
 		}
 	});
 }

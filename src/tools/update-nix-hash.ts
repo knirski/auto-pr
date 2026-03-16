@@ -16,6 +16,7 @@ import {
 	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
 	formatError,
+	redactPath,
 	UpdateNixHashNotFoundError,
 	UpdateNixHashUsageError,
 } from "#auto-pr";
@@ -47,12 +48,21 @@ function runUpdateNixHash(
 		const updated = replaceNpmDepsHash(content, hash);
 
 		if (content === updated) {
-			yield* Effect.log({ event: "update_nix_hash", status: "unchanged" });
+			yield* Effect.log({
+				event: "update_nix_hash",
+				status: "unchanged",
+				path: redactPath(defaultNixPath),
+			});
 			return;
 		}
 
 		yield* fs.writeFileString(defaultNixPath, updated);
-		yield* Effect.log({ event: "update_nix_hash", status: "updated" });
+		yield* Effect.log({
+			event: "update_nix_hash",
+			status: "updated",
+			path: redactPath(defaultNixPath),
+			hashPreview: hash.slice(0, 12),
+		});
 	});
 }
 
@@ -93,6 +103,7 @@ if (import.meta.main) {
 			Effect.tapError((e: unknown) =>
 				Effect.logError({
 					event: "update_nix_hash_failed",
+					path: "default.nix",
 					error: formatError(e),
 				}),
 			),

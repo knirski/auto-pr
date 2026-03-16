@@ -237,6 +237,11 @@ export function hasUnreplacedPlaceholders(body: string): boolean {
 	return body.includes("{{");
 }
 
+/** Extract unreplaced {{placeholder}} patterns from body. */
+export function getUnreplacedPlaceholders(body: string): readonly string[] {
+	return [...new Set(body.match(/\{\{[^}]+\}\}/g) ?? [])];
+}
+
 /** Format title and body as single string (title-body output format). */
 export function formatTitleBody(title: string, body: string): string {
 	return `${title}\n\n${body}`;

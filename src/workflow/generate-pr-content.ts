@@ -28,6 +28,7 @@ import {
 	NoSemanticCommitsError,
 	OllamaHttpError,
 	parseTitleDescriptionResponse,
+	redactPath,
 	runMain,
 	trimOllamaResponse,
 } from "#auto-pr";
@@ -83,15 +84,19 @@ function callOllama(
 	});
 }
 
-const retrySchedule = Schedule.recurs(MAX_OLLAMA_ATTEMPTS - 1).pipe(
-	Schedule.addDelay(() =>
-		Effect.logWarning({
-			event: "generate_pr_content",
-			status: "ollama_retry",
-			message: "Ollama failed, retrying in 3s...",
-		}).pipe(Effect.as(Duration.millis(RETRY_DELAY_MS))),
-	),
-);
+function createOllamaRetrySchedule(model: string) {
+	return Schedule.recurs(MAX_OLLAMA_ATTEMPTS - 1).pipe(
+		Schedule.addDelay((output: number) =>
+			Effect.logWarning({
+				event: "generate_pr_content",
+				status: "ollama_retry",
+				model,
+				attempt: output + 1,
+				message: "Ollama failed, retrying in 3s...",
+			}).pipe(Effect.as(Duration.millis(RETRY_DELAY_MS))),
+		),
+	);
+}
 
 function generateTitleAndDescription(
 	ollamaUrl: string,
@@ -100,7 +105,7 @@ function generateTitleAndDescription(
 ): Effect.Effect<{ title: string; description: string }, Error, Http.HttpClient.HttpClient> {
 	return callOllama(ollamaUrl, model, prompt).pipe(
 		Effect.flatMap((raw) => Effect.fromResult(parseTitleDescriptionResponse(raw))),
-		Effect.retry(retrySchedule),
+		Effect.retry(createOllamaRetrySchedule(model)),
 	);
 }
 
@@ -228,6 +233,8 @@ export function runGeneratePrContent(config: {
 			status: "success",
 			count,
 			mode: count >= 2 ? "ollama" : "single_commit",
+			titlePreview: title.slice(0, 50) + (title.length > 50 ? "…" : ""),
+			bodyPath: redactPath(bodyPath),
 		});
 	});
 }

@@ -32,10 +32,13 @@ function runInit(cwd: string): Effect.Effect<void, Error, FileSystem.FileSystem 
 		const scriptPath = yield* pathApi.fromFileUrl(new URL(import.meta.url));
 		const pkgRoot = pathApi.join(pathApi.dirname(scriptPath), "..", "..");
 
+		let createdCount = 0;
+		let skippedCount = 0;
 		for (const spec of getInitFileSpecs()) {
 			const destPath = pathApi.join(cwd, spec.dest);
 			const exists = yield* fs.exists(destPath);
 			if (exists) {
+				skippedCount += 1;
 				yield* Effect.log({
 					event: "init",
 					status: "skipped",
@@ -43,9 +46,11 @@ function runInit(cwd: string): Effect.Effect<void, Error, FileSystem.FileSystem 
 					reason: "already exists",
 				});
 			} else if (spec.content !== undefined) {
+				createdCount += 1;
 				yield* fs.writeFileString(destPath, spec.content);
 				yield* Effect.log({ event: "init", status: "created", path: redactPath(destPath) });
 			} else if (spec.from !== undefined) {
+				createdCount += 1;
 				yield* copy(fs, pathApi, pkgRoot, spec.from, destPath);
 				yield* Effect.log({ event: "init", status: "created", path: redactPath(destPath) });
 			}
@@ -54,6 +59,8 @@ function runInit(cwd: string): Effect.Effect<void, Error, FileSystem.FileSystem 
 		yield* Effect.log({
 			event: "init",
 			status: "next_steps",
+			createdCount,
+			skippedCount,
 			message: `Next steps (required for the workflow to create PRs):
 1. Create a GitHub App: https://github.com/settings/apps/new
    - Permissions: Contents, Pull requests (Read and write)

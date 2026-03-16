@@ -48,14 +48,23 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 
 		const ghOutput = yield* fs.makeTempFile();
 
-		yield* Effect.log({ event: "run_auto_pr", step: "get_commits" });
+		yield* Effect.log({
+			event: "run_auto_pr",
+			step: "get_commits",
+			branch: branchVal,
+			defaultBranch,
+		});
 		yield* runAutoPrGetCommits(defaultBranch, workspace, ghOutput);
 
 		const content1 = yield* fs.readFileString(ghOutput);
 		const parsed1 = parseGhOutput(content1);
 		const { commits, files } = yield* Effect.fromResult(validateGetCommitsOutput(parsed1));
 
-		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
+		yield* Effect.log({
+			event: "run_auto_pr",
+			step: "generate_content",
+			branch: branchVal,
+		});
 		yield* runGeneratePrContent({
 			commits,
 			files,
@@ -71,7 +80,12 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 		const parsed2 = parseGhOutput(content2);
 		const { title, bodyFile } = yield* Effect.fromResult(validateGenerateContentOutput(parsed2));
 
-		yield* Effect.log({ event: "run_auto_pr", step: "create_or_update_pr" });
+		yield* Effect.log({
+			event: "run_auto_pr",
+			step: "create_or_update_pr",
+			branch: branchVal,
+			title,
+		});
 		yield* runCreateOrUpdatePr({
 			branch: branchVal,
 			defaultBranch,
@@ -80,7 +94,7 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 			workspace,
 		});
 
-		yield* Effect.log({ event: "run_auto_pr", status: "done" });
+		yield* Effect.log({ event: "run_auto_pr", status: "done", branch: branchVal });
 	}).pipe(
 		Effect.provide(RunAutoPrLayer),
 		Effect.provide(RunAutoPrConfigLayer),

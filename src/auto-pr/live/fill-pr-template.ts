@@ -19,6 +19,7 @@ import type { CommitInfo } from "#lib/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
 	getTitle as getTitleFromCommits,
+	getUnreplacedPlaceholders,
 	hasUnreplacedPlaceholders,
 	parseCommits,
 	parseFilesContent,
@@ -43,9 +44,11 @@ export const renderBody = Effect.fn("renderBody")(function* (
 	const body = yield* Effect.fromResult(bodyResult);
 	return hasUnreplacedPlaceholders(body)
 		? yield* Effect.gen(function* () {
+				const placeholders = getUnreplacedPlaceholders(body);
 				yield* Effect.logWarning({
 					event: "fill_pr_template",
 					message: "Output contains unreplaced {{placeholder}}s",
+					placeholders: [...placeholders],
 				});
 				return body;
 			})

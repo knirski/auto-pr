@@ -109,6 +109,7 @@ export function runAutoPrGetCommits(
 			event: "auto_pr_get_commits",
 			status: "success",
 			count: data.semanticSubjects.length,
+			base: defaultBranch,
 		});
 	});
 }
