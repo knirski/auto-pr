@@ -8,3 +8,4 @@ globs: [".github/workflows/**/*.yml"]
 - **Lint:** Run `actionlint` on workflow files before finishing.
 - **Project command:** `npm run lint:workflows` (uses system actionlint or `nix run nixpkgs#actionlint`).
 - **Full check:** `npm run check` (includes actionlint). Use `check:with-links` to add lychee.
+- **Workflow testing:** Prefer `npm run check:ci` (act) for local testing over pushing to CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.

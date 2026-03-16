@@ -13,7 +13,7 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 **Convention over configuration.** Run `npx auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
 
-**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflow](.github/workflows/auto-pr-reusable.yml). **No Nix required** — users use Node/npx only.
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). **No Nix required** — users use Node/npx only.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, Ollama summarizes the changes into a coherent description.
 
@@ -119,7 +119,7 @@ npx tsx src/workflow/run-auto-pr.ts
 
 When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
 
-When using the [reusable workflow](.github/workflows/auto-pr-reusable.yml), `PR_TEMPLATE_PATH`, `OLLAMA_MODEL`, `OLLAMA_URL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration).
+When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `OLLAMA_MODEL`, `OLLAMA_URL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration).
 
 | Variable | Required | Description |
 |----------|----------|-------------|

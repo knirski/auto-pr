@@ -1,14 +1,17 @@
 import { expect, layer } from "@effect/vitest";
 import { Cause, Effect, Exit, FileSystem, Layer, Path, Result } from "effect";
-import * as Http from "effect/unstable/http";
-import { FillPrTemplate, NoSemanticCommitsError } from "#auto-pr";
+import { NoSemanticCommitsError } from "#auto-pr";
 import {
 	createTestTempDirEffect,
-	FillPrTemplateTestMock,
+	OllamaHttpClientMock,
 	SilentLoggerLayer,
 	TestBaseLayer,
 } from "#test/test-utils.js";
-import { runGeneratePrContent } from "#workflow/generate-pr-content.js";
+import type { GeneratePrContentFromValuesParams } from "#workflow/generate-pr-content.js";
+import {
+	generatePrContentFromValues,
+	runGeneratePrContent,
+} from "#workflow/generate-pr-content.js";
 
 /** Format commit blocks for parseCommits (---COMMIT--- separated). */
 function logContent(...blocks: Array<{ subject: string; body: string }>): string {
@@ -16,95 +19,53 @@ function logContent(...blocks: Array<{ subject: string; body: string }>): string
 	return `---COMMIT---\n${formatted.join("\n---COMMIT---\n")}`;
 }
 
-const TestLayer = Layer.mergeAll(
+const DEFAULT_TEMPLATE = "# PR\n\n{{description}}";
+const TEMPLATE_WITH_CHANGES = "# PR\n\n{{description}}\n\n## Changes\n{{changes}}";
+const DEFAULT_HOW_TO_TEST = "1. Run `npm run check`\n2. ";
+const DEFAULT_DESCRIPTION_PROMPT = "Summarize. Line 1: title. Line 2: blank. Line 3+: description.";
+
+function params(
+	commits: Array<{ subject: string; body: string }>,
+	overrides?: Partial<GeneratePrContentFromValuesParams>,
+): GeneratePrContentFromValuesParams {
+	return {
+		commitsContent: logContent(...commits),
+		filesContent: "src/foo.ts\n",
+		templateContent: DEFAULT_TEMPLATE,
+		descriptionPromptText: DEFAULT_DESCRIPTION_PROMPT,
+		howToTestDefault: DEFAULT_HOW_TO_TEST,
+		model: "llama3.1:8b",
+		ollamaUrl: "http://localhost:11434/api/generate",
+		...overrides,
+	};
+}
+
+const ValueBasedLayer = Layer.mergeAll(
 	TestBaseLayer,
 	SilentLoggerLayer,
-	FillPrTemplateTestMock({ title: "feat: add x", body: "# Mock body\n\nfeat: add x" }),
-	Http.FetchHttpClient.layer,
+	OllamaHttpClientMock(""), // unused for 1-commit
 );
 
-/** Full pipeline with real FillPrTemplate and mocked Ollama (for 2+ commits). */
-const IntegrationLayer = Layer.mergeAll(
-	TestBaseLayer,
-	SilentLoggerLayer,
-	FillPrTemplate.Live,
-	Http.FetchHttpClient.layer,
-);
-
-layer(TestLayer)("runGeneratePrContent", (it) => {
-	it.effect("writes title and body_file to GITHUB_OUTPUT for 1 commit (no Ollama)", () =>
+layer(ValueBasedLayer)("generatePrContentFromValues (value-based, no file I/O)", (it) => {
+	it.effect("returns title and body for 1 commit (no Ollama)", () =>
 		Effect.gen(function* () {
-			const tmp = yield* createTestTempDirEffect("generate-pr-content-");
-			const fs = yield* FileSystem.FileSystem;
-			const pathApi = yield* Path.Path;
-
-			const commitsPath = pathApi.join(tmp.path, "commits.txt");
-			const filesPath = pathApi.join(tmp.path, "files.txt");
-			const ghOutput = pathApi.join(tmp.path, "github_output.txt");
-
-			yield* fs.writeFileString(commitsPath, logContent({ subject: "feat: add x", body: "" }));
-			yield* fs.writeFileString(filesPath, "src/foo.ts\n");
-
-			const templatePath = pathApi.join(tmp.path, "template.md");
-			yield* fs.writeFileString(templatePath, "# PR\n\n{{description}}");
-
-			const config = {
-				commits: commitsPath,
-				files: filesPath,
-				ghOutput,
-				workspace: tmp.path,
-				templatePath,
-				model: "llama3.1:8b",
-				ollamaUrl: "http://localhost:11434/api/generate",
-				howToTestDefault: "1. Run `npm run check`\n2. ",
-			};
-
-			yield* runGeneratePrContent(config);
-
-			const content = yield* fs.readFileString(ghOutput);
-			expect(content).toContain("title=");
-			expect(content).toContain("body_file=");
-
-			const bodyPath = pathApi.join(tmp.path, "pr-body.md");
-			const bodyContent = yield* fs.readFileString(bodyPath);
-			expect(bodyContent).toContain("feat: add x");
+			const result = yield* generatePrContentFromValues(
+				params([{ subject: "feat: add x", body: "" }]),
+			);
+			expect(result.title).toBe("feat: add x");
+			expect(result.body).toContain("add x"); // description from subject
+			expect(result.count).toBe(1);
 		}).pipe(Effect.scoped),
 	);
 
 	it.effect("fails with NoSemanticCommitsError when all commits are merge", () =>
 		Effect.gen(function* () {
-			const tmp = yield* createTestTempDirEffect("generate-pr-content-");
-			const fs = yield* FileSystem.FileSystem;
-			const pathApi = yield* Path.Path;
-
-			const commitsPath = pathApi.join(tmp.path, "commits.txt");
-			const filesPath = pathApi.join(tmp.path, "files.txt");
-			const ghOutput = pathApi.join(tmp.path, "github_output.txt");
-
-			yield* fs.writeFileString(
-				commitsPath,
-				logContent(
+			const exit = yield* generatePrContentFromValues(
+				params([
 					{ subject: "Merge branch 'main' into feature", body: "" },
 					{ subject: "Merge pull request #1", body: "" },
-				),
-			);
-			yield* fs.writeFileString(filesPath, "src/foo.ts\n");
-
-			const templatePath = pathApi.join(tmp.path, "template.md");
-			yield* fs.writeFileString(templatePath, "# PR\n\n{{description}}");
-
-			const config = {
-				commits: commitsPath,
-				files: filesPath,
-				ghOutput,
-				workspace: tmp.path,
-				templatePath,
-				model: "llama3.1:8b",
-				ollamaUrl: "http://localhost:11434/api/generate",
-				howToTestDefault: "1. Run `npm run check`\n2. ",
-			};
-
-			const exit = yield* runGeneratePrContent(config).pipe(Effect.exit, Effect.scoped);
+				]),
+			).pipe(Effect.exit, Effect.scoped);
 			expect(Exit.isFailure(exit)).toBe(true);
 			if (Exit.isFailure(exit)) {
 				Result.match(Cause.findError(exit.cause), {
@@ -116,72 +77,138 @@ layer(TestLayer)("runGeneratePrContent", (it) => {
 	);
 });
 
-layer(IntegrationLayer)("runGeneratePrContent integration (2+ commits, mocked Ollama)", (it) => {
-	it.effect("calls Ollama, writes title and description, uses both in output", () =>
+const VALID_OLLAMA_RESPONSE = "feat: add X and fix B\n\nOllama-generated summary.";
+const INVALID_OLLAMA_RESPONSE = "feat\n\nInvalid.";
+
+const twoCommits = [
+	{ subject: "feat: add module A", body: "Adds A." },
+	{ subject: "fix: fix bug in B", body: "Fixes B." },
+];
+
+layer(ValueBasedLayer)("generatePrContentFromValues (2+ commits, mocked Ollama)", (it) => {
+	it.layer(OllamaHttpClientMock(VALID_OLLAMA_RESPONSE))("valid title", (it) => {
+		it.effect("returns Ollama title and body with description", () =>
+			Effect.gen(function* () {
+				const result = yield* generatePrContentFromValues(
+					params(twoCommits, {
+						filesContent: "src/a.ts\nsrc/b.ts\n",
+						templateContent: TEMPLATE_WITH_CHANGES,
+					}),
+				);
+				expect(result.title).toBe("feat: add X and fix B");
+				expect(result.body).toContain("Ollama-generated summary.");
+				expect(result.body).toContain("feat: add module A");
+				expect(result.body).toContain("fix: fix bug in B");
+				expect(result.count).toBe(2);
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	it.layer(OllamaHttpClientMock(INVALID_OLLAMA_RESPONSE))("invalid title (fallback)", (it) => {
+		it.effect("falls back to first commit subject when Ollama returns invalid title 5 times", () =>
+			Effect.gen(function* () {
+				const result = yield* generatePrContentFromValues(
+					params(twoCommits, {
+						filesContent: "src/a.ts\nsrc/b.ts\n",
+						templateContent: TEMPLATE_WITH_CHANGES,
+						retryDelayMs: 0,
+					}),
+				);
+				expect(result.title).toBe("feat: add module A");
+				expect(result.count).toBe(2);
+			}).pipe(Effect.scoped),
+		);
+
+		it.effect("falls back to chore: update when first commit subject is non-conventional", () =>
+			Effect.gen(function* () {
+				const result = yield* generatePrContentFromValues(
+					params(
+						[
+							{ subject: "Add feature", body: "" },
+							{ subject: "Fix bug", body: "" },
+						],
+						{ retryDelayMs: 0 },
+					),
+				);
+				expect(result.title).toBe("chore: update");
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	it.layer(OllamaHttpClientMock(""))("Ollama empty response", (it) => {
+		it.effect("falls back when Ollama returns empty response 5 times", () =>
+			Effect.gen(function* () {
+				const result = yield* generatePrContentFromValues(params(twoCommits, { retryDelayMs: 0 }));
+				expect(result.title).toBe("feat: add module A");
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	it.layer(OllamaHttpClientMock("feat: x\n\n"))("Ollama title-only (no description)", (it) => {
+		it.effect("falls back when Ollama returns title-only 5 times", () =>
+			Effect.gen(function* () {
+				const result = yield* generatePrContentFromValues(params(twoCommits, { retryDelayMs: 0 }));
+				expect(result.title).toBe("feat: add module A");
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	it.layer(OllamaHttpClientMock({ response: VALID_OLLAMA_RESPONSE, status: 500 }))(
+		"Ollama HTTP 500",
+		(it) => {
+			it.effect("falls back when Ollama returns HTTP 500 five times", () =>
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(
+						params(twoCommits, { retryDelayMs: 0 }),
+					);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		},
+	);
+});
+
+/** Integration: runGeneratePrContent with file I/O. Verifies shell reads files, writes outputs. */
+const RunIntegrationLayer = Layer.mergeAll(
+	TestBaseLayer,
+	SilentLoggerLayer,
+	OllamaHttpClientMock(""), // unused for 1-commit
+);
+
+layer(RunIntegrationLayer)("runGeneratePrContent (integration, file I/O)", (it) => {
+	it.effect("reads files, writes title and body_file to GITHUB_OUTPUT and pr-body.md", () =>
 		Effect.gen(function* () {
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = () =>
-				Promise.resolve(
-					new Response(
-						JSON.stringify({
-							response: "feat: add X and fix B\n\nOllama-generated summary.",
-						}),
-					),
-				);
-			try {
-				const tmp = yield* createTestTempDirEffect("generate-pr-content-2commits-");
-				const fs = yield* FileSystem.FileSystem;
-				const pathApi = yield* Path.Path;
+			const tmp = yield* createTestTempDirEffect("generate-pr-content-integration-");
+			const fs = yield* FileSystem.FileSystem;
+			const pathApi = yield* Path.Path;
 
-				const commitsPath = pathApi.join(tmp.path, "commits.txt");
-				const filesPath = pathApi.join(tmp.path, "files.txt");
-				const ghOutput = pathApi.join(tmp.path, "github_output.txt");
+			const commitsPath = pathApi.join(tmp.path, "commits.txt");
+			const filesPath = pathApi.join(tmp.path, "files.txt");
+			const ghOutput = pathApi.join(tmp.path, "github_output.txt");
+			const templatePath = pathApi.join(tmp.path, "template.md");
 
-				yield* fs.writeFileString(
-					commitsPath,
-					logContent(
-						{ subject: "feat: add module A", body: "Adds A." },
-						{ subject: "fix: fix bug in B", body: "Fixes B." },
-					),
-				);
-				yield* fs.writeFileString(filesPath, "src/a.ts\nsrc/b.ts\n");
+			yield* fs.writeFileString(commitsPath, logContent({ subject: "feat: add x", body: "" }));
+			yield* fs.writeFileString(filesPath, "src/foo.ts\n");
+			yield* fs.writeFileString(templatePath, DEFAULT_TEMPLATE);
 
-				const templatePath = pathApi.join(tmp.path, "template.md");
-				yield* fs.writeFileString(
-					templatePath,
-					"# PR\n\n{{description}}\n\n## Changes\n{{changes}}",
-				);
+			yield* runGeneratePrContent({
+				commits: commitsPath,
+				files: filesPath,
+				ghOutput,
+				workspace: tmp.path,
+				templatePath,
+				model: "llama3.1:8b",
+				ollamaUrl: "http://localhost:11434/api/generate",
+				howToTestDefault: DEFAULT_HOW_TO_TEST,
+			});
 
-				const config = {
-					commits: commitsPath,
-					files: filesPath,
-					ghOutput,
-					workspace: tmp.path,
-					templatePath,
-					model: "llama3.1:8b",
-					ollamaUrl: "http://localhost:11434/api/generate",
-					howToTestDefault: "1. Run `npm run check`\n2. ",
-				};
+			const ghContent = yield* fs.readFileString(ghOutput);
+			expect(ghContent).toContain("title=");
+			expect(ghContent).toContain("body_file=");
 
-				yield* runGeneratePrContent(config);
-
-				const descriptionPath = pathApi.join(tmp.path, "description.txt");
-				const descriptionContent = yield* fs.readFileString(descriptionPath);
-				expect(descriptionContent).toBe("Ollama-generated summary.");
-
-				const bodyPath = pathApi.join(tmp.path, "pr-body.md");
-				const bodyContent = yield* fs.readFileString(bodyPath);
-				expect(bodyContent).toContain("Ollama-generated summary.");
-				expect(bodyContent).toContain("feat: add module A");
-				expect(bodyContent).toContain("fix: fix bug in B");
-
-				const ghContent = yield* fs.readFileString(ghOutput);
-				expect(ghContent).toContain("title=");
-				expect(ghContent).toContain("body_file=");
-				expect(ghContent).toContain("feat: add X and fix B");
-			} finally {
-				globalThis.fetch = originalFetch;
-			}
+			const bodyPath = pathApi.join(tmp.path, "pr-body.md");
+			const bodyContent = yield* fs.readFileString(bodyPath);
+			expect(bodyContent).toContain("add x");
 		}).pipe(Effect.scoped),
 	);
 });
