@@ -1,5 +1,6 @@
 import { describe, expect, layer, test } from "@effect/vitest";
-import { Effect, Layer, Option, pipe, Result } from "effect";
+import { Cause, Effect, Exit, Layer, Option, pipe, Result } from "effect";
+import { Command } from "effect/unstable/cli";
 import { FillPrTemplate, renderBody } from "#auto-pr";
 import type { CommitInfo } from "#lib/fill-pr-template-core.js";
 import {
@@ -26,10 +27,16 @@ import {
 } from "#lib/fill-pr-template-core.js";
 import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
 import {
+	CliLayer,
+	fillCommand,
 	handleOutputDescriptionPrompt,
 	handleValidateTitle,
 	runFillBody,
 } from "#tools/fill-pr-template.js";
+import pkg from "../../package.json" with { type: "json" };
+
+// Required by FillPrTemplateConfigLayer when running CLI in-process
+process.env.AUTO_PR_HOW_TO_TEST ??= "1. Run tests";
 
 const TEST_TEMPLATE = `## Description
 {{description}}
@@ -869,79 +876,107 @@ layer(Layer.mergeAll(TestBaseLayer))("handleOutputDescriptionPrompt", (it) => {
 	);
 });
 
-// ─── CLI error paths (via subprocess) ───────────────────────────────────────
+// ─── CLI error paths (in-process via Command.runWith) ─────────────────────────────────
 
-describe("fill-pr-template CLI", () => {
-	function runCli(args: string[]): { stdout: string; stderr: string; status: number | null } {
-		const { spawnSync } = require("node:child_process");
-		const r = spawnSync("npx", ["tsx", "src/tools/fill-pr-template.ts", ...args], {
-			encoding: "utf8",
-			cwd: process.cwd(),
-			env: { ...process.env, AUTO_PR_HOW_TO_TEST: "1. Run tests" },
-		});
-		return {
-			stdout: r.stdout ?? "",
-			stderr: r.stderr ?? "",
-			status: r.status,
-		};
-	}
+function runCliWithArgs(args: string[]): Effect.Effect<void, unknown, never> {
+	return Command.runWith(fillCommand, { version: pkg.version })(args).pipe(
+		Effect.provide(CliLayer),
+	);
+}
 
-	test("--validate-title valid exits 0", () => {
-		const { status } = runCli(["--validate-title", "feat: add x"]);
-		expect(status).toBe(0);
-	});
+layer(Layer.empty)("fill-pr-template CLI", (it) => {
+	const runCli = (args: string[]) => runCliWithArgs(args).pipe(Effect.exit);
 
-	test("--validate-title invalid exits 1", () => {
-		const { status, stderr, stdout } = runCli(["--validate-title", "invalid title"]);
-		expect(status).toBe(1);
-		expect(stderr + stdout).toContain("Invalid conventional commit title");
-	});
+	it.effect("--validate-title valid exits 0", () =>
+		Effect.gen(function* () {
+			const exit = yield* runCli(["--validate-title", "feat: add x"]);
+			expect(Exit.isSuccess(exit)).toBe(true);
+		}),
+	);
 
-	test("--output-description-prompt without --log-file exits 1", () => {
-		const { status, stderr, stdout } = runCli(["--output-description-prompt"]);
-		expect(status).toBe(1);
-		expect(stderr + stdout).toContain("--log-file");
-	});
+	it.effect("--validate-title invalid exits 1", () =>
+		Effect.gen(function* () {
+			const exit = yield* runCli(["--validate-title", "invalid title"]);
+			expect(Exit.isFailure(exit)).toBe(true);
+			const msg = Exit.match(exit, {
+				onSuccess: () => "",
+				onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+			});
+			expect(msg instanceof Error ? msg.message : msg).toContain(
+				"Invalid conventional commit title",
+			);
+		}),
+	);
 
-	test("--format required when filling", () => {
-		const { status, stderr, stdout } = runCli([
-			"--log-file",
-			"/tmp/x",
-			"--files-file",
-			"/tmp/y",
-			"--template",
-			"/tmp/z",
-		]);
-		expect(status).toBe(1);
-		expect(stderr + stdout).toContain("--format");
-	});
+	it.effect("--output-description-prompt without --log-file exits 1", () =>
+		Effect.gen(function* () {
+			const exit = yield* runCli(["--output-description-prompt"]);
+			expect(Exit.isFailure(exit)).toBe(true);
+			const msg = Exit.match(exit, {
+				onSuccess: () => "",
+				onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+			});
+			expect(msg instanceof Error ? msg.message : msg).toContain("--log-file");
+		}),
+	);
 
-	test("--format invalid value exits 1", () => {
-		const { status, stderr, stdout } = runCli([
-			"--log-file",
-			"/tmp/x",
-			"--files-file",
-			"/tmp/y",
-			"--template",
-			"/tmp/z",
-			"--format",
-			"invalid",
-		]);
-		expect(status).toBe(1);
-		expect(stderr + stdout).toContain("body");
-		expect(stderr + stdout).toContain("title-body");
-	});
+	it.effect("--format required when filling", () =>
+		Effect.gen(function* () {
+			const exit = yield* runCli([
+				"--log-file",
+				"/tmp/x",
+				"--files-file",
+				"/tmp/y",
+				"--template",
+				"/tmp/z",
+			]);
+			expect(Exit.isFailure(exit)).toBe(true);
+			const msg = Exit.match(exit, {
+				onSuccess: () => "",
+				onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+			});
+			expect(msg instanceof Error ? msg.message : msg).toContain("--format");
+		}),
+	);
 
-	test("--template required when filling", () => {
-		const { status, stderr, stdout } = runCli([
-			"--log-file",
-			"/tmp/x",
-			"--files-file",
-			"/tmp/y",
-			"--format",
-			"body",
-		]);
-		expect(status).toBe(1);
-		expect(stderr + stdout).toContain("--template");
-	});
+	it.effect("--format invalid value exits 1", () =>
+		Effect.gen(function* () {
+			const exit = yield* runCli([
+				"--log-file",
+				"/tmp/x",
+				"--files-file",
+				"/tmp/y",
+				"--template",
+				"/tmp/z",
+				"--format",
+				"invalid",
+			]);
+			expect(Exit.isFailure(exit)).toBe(true);
+			const msg = Exit.match(exit, {
+				onSuccess: () => "",
+				onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+			});
+			expect(msg instanceof Error ? msg.message : msg).toContain("body");
+			expect(msg instanceof Error ? msg.message : msg).toContain("title-body");
+		}),
+	);
+
+	it.effect("--template required when filling", () =>
+		Effect.gen(function* () {
+			const exit = yield* runCli([
+				"--log-file",
+				"/tmp/x",
+				"--files-file",
+				"/tmp/y",
+				"--format",
+				"body",
+			]);
+			expect(Exit.isFailure(exit)).toBe(true);
+			const msg = Exit.match(exit, {
+				onSuccess: () => "",
+				onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+			});
+			expect(msg instanceof Error ? msg.message : msg).toContain("--template");
+		}),
+	);
 });
