@@ -16,7 +16,7 @@ A single template at [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUES
 | `{{description}}` | For 1 commit: first commit body (or subject after colon if body starts with Closes/Fixes); max 20 lines. For 2+ commits: Ollama summary (workflow) or concatenated bodies (fallback) |
 | `{{typeOfChange}}` | Inferred from conventional commits |
 | `{{changes}}` | One bullet per commit subject |
-| `{{howToTest}}` | `N/A` for docs-only, else `1. Run \`npm run check\`\n2. ` (override via `AUTO_PR_HOW_TO_TEST` env for non-Node projects) |
+| `{{howToTest}}` | `N/A` for docs-only, else generic default (`1. Run the relevant tests or checks.\n2. `). Override via `AUTO_PR_HOW_TO_TEST` env or workflow `auto_pr_how_to_test` input (e.g. Node: `1. Run \`npm run check\`\n2. `, Python: `1. Run \`pytest\`\n2. `) |
 | `{{checklistConventional}}` | `x` or ` ` |
 | `{{checklistDocs}}` | `x` or ` ` |
 | `{{checklistTests}}` | `x` or ` ` |

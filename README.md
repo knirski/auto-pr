@@ -11,6 +11,8 @@
 
 Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses [Ollama](https://ollama.com/) to generate descriptions for multi-commit PRs.
 
+**Convention over configuration.** Run `npx auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
+
 **Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflow](.github/workflows/auto-pr-reusable.yml). **No Nix required** — consumers use Node/npx only.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, Ollama summarizes the changes into a coherent description.
@@ -64,7 +66,7 @@ npm run check
 
 | Command | Purpose |
 |---------|---------|
-| `npm run check` | Local checks (npm + optional typos/lychee/actionlint) |
+| `npm run check` | Local checks (npm, statix, deadnix, typos, lychee, actionlint) |
 | `npm run check:code` | Code only (npm deps); runs on pre-push |
 | `npm run check:ci` | Full CI parity in Docker (requires act or gh-act) |
 
@@ -99,46 +101,53 @@ npm install
 
 Nix is **not required for consumers**. The workflows use Node and npx only.
 
-For contributors to this repo, the project includes an optional Nix flake. It provides:
+For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. Builds on x86_64-linux and aarch64-linux (arm64 runners). The flake provides:
 
 | Use | Command | Purpose |
 |-----|---------|---------|
-| **Dev shell** | `nix develop` | Node 24, npm, `node_modules/.bin` in PATH; run `npm run check` |
+| **Dev shell** | `nix develop` | Node 24, npm, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `npm run check` |
 | **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
+| **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
 | **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, Ollama for 2+ commits) |
 | **Update deps hash** | `nix run .#update-npm-deps-hash` | Update `npmDepsHash` in `default.nix` after changing `package-lock.json` |
 | **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
+| **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, prefetch-npm-deps directly |
 
 ```bash
 # Development shell
 nix develop
 
 # Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
-./scripts/run-auto-pr.sh
+npx tsx src/workflow/run-auto-pr.ts
 # or: nix run .#default
 ```
 
 ## Environment variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DEFAULT_BRANCH` | get-commits | — | Base branch (e.g. `main`) |
-| `GITHUB_WORKSPACE` | get-commits | `.` | Repo root |
-| `GITHUB_OUTPUT` | get-commits | — | Output file (GitHub Actions) |
-| `COMMITS` | generate-content | — | Path to commits.txt |
-| `FILES` | generate-content | — | Path to files.txt |
-| `OLLAMA_MODEL` | generate-content | `llama3.1:8b` | Ollama model |
-| `OLLAMA_URL` | generate-content | `http://localhost:11434/api/generate` | Ollama API |
-| `GH_TOKEN` | create-or-update-pr | — | GitHub token |
-| `BRANCH` | create-or-update-pr | — | Current branch |
-| `TITLE` | create-or-update-pr | — | PR title |
-| `BODY_FILE` | create-or-update-pr | — | Path to filled body |
-| `AUTO_PR_HOW_TO_TEST` | generate-content | — | Override `{{howToTest}}` for non-Node projects (e.g. `1. Run \`pytest\`\n2. `) |
-| `AUTO_PR_DEBUG` | any | — | Set to `1` for verbose error hints when debugging |
+When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
+
+When using the [reusable workflow](.github/workflows/auto-pr-reusable.yml), `PR_TEMPLATE_PATH`, `OLLAMA_MODEL`, `OLLAMA_URL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration).
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DEFAULT_BRANCH` | get-commits, create-or-update-pr | Base branch (e.g. `main`) |
+| `GITHUB_WORKSPACE` | get-commits, generate-content, create-or-update-pr | Repo root |
+| `GITHUB_OUTPUT` | get-commits, generate-content | Output file (GitHub Actions) |
+| `COMMITS` | generate-content | Path to commits.txt |
+| `FILES` | generate-content | Path to files.txt |
+| `PR_TEMPLATE_PATH` | generate-content | Path to PR template (default `.github/PULL_REQUEST_TEMPLATE.md`) |
+| `OLLAMA_MODEL` | generate-content | Ollama model (default `llama3.1:8b`) |
+| `OLLAMA_URL` | generate-content | Ollama API (default `http://localhost:11434/api/generate`) |
+| `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; override via workflow `auto_pr_how_to_test` for Node/Python/etc.) |
+| `GH_TOKEN` | create-or-update-pr | GitHub token |
+| `BRANCH` | create-or-update-pr | Current branch |
+| `TITLE` | create-or-update-pr | PR title |
+| `BODY_FILE` | create-or-update-pr | Path to filled body |
+| `AUTO_PR_DEBUG` | any | Optional. Set to `1` for verbose error hints when debugging |
 
 ## Integration
 
-Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.sh`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
+Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.ts`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
 
 This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** npm audit in check; SBOM (CycloneDX via npm sbom), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
 
@@ -166,7 +175,7 @@ This project was developed with assistance from AI coding tools.
 npm run check
 ```
 
-Runs full check: audit, test, lint, knip, typecheck, docs (rumdl, typos), actionlint, shellcheck. Use `check:with-links` to add lychee link verification. Pre-push runs `check:code` (npm deps only). Use `check:ci` for full CI parity in Docker.
+Runs full check: audit, test, lint, knip, typecheck, Nix (statix, deadnix), docs (rumdl, typos), actionlint, shellcheck, shfmt. Use `check:with-links` to add lychee link verification. Pre-push runs `check:code` (npm deps only). Use `check:ci` for full CI parity in Docker.
 
 ## License
 

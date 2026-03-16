@@ -22,9 +22,11 @@ npm install
 | **Linux** (Arch) | `pacman -S typos` | `pacman -S lychee` or `cargo install lychee` | `pacman -S actionlint` |
 | **Linux** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
 | **Windows** | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
-| **Nix** | `nix develop` (tools in PATH) or `nix run nixpkgs#typos` | `nix run nixpkgs#lychee` | `nix run nixpkgs#actionlint` |
+| **Nix** | `nix develop` (tools in PATH) or `nix run .#typos` | `nix run .#lychee` | `nix run .#actionlint` |
 
-Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run nixpkgs#<tool>` if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
+Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
+
+**statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
 
 ### Run CI locally (full parity)
 

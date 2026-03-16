@@ -4,7 +4,7 @@ auto-pr was extracted from [paperless-ingestion-bot](https://github.com/knirski/
 
 ## What was extracted
 
-The module was self-contained in paperless-ingestion-bot: `scripts/auto-pr/` (config, core, errors, interfaces, live, prompts, shell, utils) plus sibling scripts (`fill-pr-template-core.ts`, `fill-pr-template.ts`, `collapse-prose-paragraphs.ts`, `auto-pr-get-commits.ts`, `generate-pr-content.ts`, `create-or-update-pr.ts`). It had no imports from `src/` (domain, shell, core).
+The module was self-contained in paperless-ingestion-bot: `scripts/auto-pr/` (config, core, errors, interfaces, live, prompts, shell, utils) plus sibling scripts (`fill-pr-template-core.ts`, `fill-pr-template.ts`, `collapse-prose-paragraphs.ts`, `auto-pr-get-commits.ts`, `generate-pr-content.ts`, `create-or-update-pr.ts`). It had no imports from `src/` (domain, shell, core). In auto-pr, the structure was moved to `src/` for clearer separation from shell scripts in `scripts/`.
 
 ## Source
 

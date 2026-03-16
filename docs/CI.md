@@ -9,7 +9,7 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | Push to `ai/**` | auto-pr creates/updates PR |
 | PR to main (code changes) | ci → check, dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
-| PR to main (nix/deps) | ci-nix → nix build + npmDepsHash update |
+| PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + npmDepsHash update |
 | PR to main (release-please) | ci-release-please → check |
 | Push to main | release-please, scorecard (if configured) |
 | Manual | update-nix-hash, update-flake-lock |
@@ -47,7 +47,7 @@ Before CI can run fully:
 
 **ci-docs.yml** is complementary: runs when only `*.md` files change. Reports a passing `check` job so branch protection allows merge.
 
-**ci-nix.yml** runs only when Nix or dependency files change. Runs Nix build and auto-updates `npmDepsHash` in `default.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
+**ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `npmDepsHash` in `default.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
 **update-nix-hash.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `npmDepsHash` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated hash to `main`. For same-repo PRs, ci-nix handles updates automatically.
 

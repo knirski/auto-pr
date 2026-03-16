@@ -2,7 +2,7 @@
 
 Research date: 2025-03-15. Assesses `.github/workflows/*nix*` against current best practices.
 
-**Applied 2025-03-15:** Switched to cachix/install-nix-action, added cache-nix-action, consolidated checkout in workflow. Inlined all Nix actions into workflows (2025-03-15).
+**Applied 2025-03-15:** Switched to cachix/install-nix-action, added cache-nix-action, consolidated checkout in workflow. Inlined all Nix actions into workflows. **Reverted 2025-03-15:** Back to upstream Nix; Determinate Nix and Determinate CI reverted. **Applied 2025-03-15:** Added `checks` output, `nix flake check -L` in CI, pinned nixpkgs to `nixos-25.11`, enabled `auto-allocate-uids`.
 
 ## Current Setup Summary
 
@@ -13,7 +13,7 @@ Research date: 2025-03-15. Assesses `.github/workflows/*nix*` against current be
 | **Nix cache** | `nix-community/cache-nix-action@v7` | Cache /nix/store in GitHub Actions |
 | **Flake checker** | `DeterminateSystems/flake-checker-action@v12` | Warn on outdated flake |
 | **Update flake lock** | `DeterminateSystems/update-flake-lock@v28` | Weekly flake.lock updates |
-| **npmDepsHash** | Custom script + actions | Auto-update default.nix hash |
+| **npmDepsHash** | nix.yml + update-npm-deps-hash.sh | Same-repo: auto-push. Fork PRs: instructions to update locally |
 
 ## Findings
 
@@ -24,7 +24,7 @@ Research date: 2025-03-15. Assesses `.github/workflows/*nix*` against current be
 - **Nov 10, 2025**: Installer defaults to Determinate Nix; `--prefer-upstream-nix` still available
 - **Jan 1, 2026**: Upstream Nix support ends; `--prefer-upstream-nix` removed
 
-**Impact**: Your flake uses `nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable"` (upstream). The `nix-installer-action` will eventually install Determinate Nix only.
+**Impact**: Your flake uses `nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11"` (pinned release). The `nix-installer-action` will eventually install Determinate Nix only.
 
 **Options**:
 - **A) Switch to `cachix/install-nix-action`** — Community standard for upstream Nix (662 stars). Used by nix.dev docs. No deprecation.
@@ -55,9 +55,9 @@ Research date: 2025-03-15. Assesses `.github/workflows/*nix*` against current be
 
 ### 5. Flake Structure (Good)
 
-**Current**: Standard flake with `packages`, `devShells`, `apps`, `formatter`. Uses `nixos-unstable`. Single-system (`x86_64-linux`) is fine for CI.
+**Current**: Standard flake with `checks`, `packages`, `devShells`, `apps`, `formatter`. Uses `nixos-25.11`, `flake-utils.lib.eachSystem`. Multi-system (`x86_64-linux`, `aarch64-linux`). CI runs `nix flake check -L --system <system>` on matrix (ubuntu-latest + ubuntu-24.04-arm). `checks.nix-lint` runs statix and deadnix on the flake source. Experimental features: `nix-command`, `flakes`, `auto-allocate-uids`.
 
-**Recommendation**: Consider `nix-systems` for multi-system if you add macOS/ARM later. Not required for current setup.
+**Recommendation**: Done. Flake supports `x86_64-linux` and `aarch64-linux`; CI matrix uses ubuntu-latest and ubuntu-24.04-arm. Statix and deadnix run in flake check and via `npm run check:nix`; Lefthook runs them on pre-commit when `*.nix` changes.
 
 ### 6. update-flake-lock (Good)
 
