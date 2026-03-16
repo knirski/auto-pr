@@ -7,7 +7,7 @@ A single template at [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUES
 | Mode | How |
 |------|-----|
 | **Manual** | GitHub shows the template when creating a PR. Replace each `{{placeholder}}` with your content. |
-| **Automated** | `auto-pr-generate-content` runs FillPrTemplate for title and body; Ollama generates description for 2+ commits. Outputs `title` and `body_file` to GITHUB_OUTPUT. `auto-pr-create-or-update-pr` calls `gh` with those values. |
+| **Automated** | `auto-pr-generate-content` runs FillPrTemplate for title and body; Ollama generates title and description for 2+ commits. Outputs `title` and `body_file` to GITHUB_OUTPUT. `auto-pr-create-or-update-pr` calls `gh` with those values. |
 
 ## Placeholders
 
@@ -16,7 +16,7 @@ A single template at [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUES
 | `{{description}}` | For 1 commit: first commit body (or subject after colon if body starts with Closes/Fixes); max 20 lines. For 2+ commits: Ollama summary (workflow) or concatenated bodies (fallback) |
 | `{{typeOfChange}}` | Inferred from conventional commits |
 | `{{changes}}` | One bullet per commit subject |
-| `{{howToTest}}` | `N/A` for docs-only, else `1. Run \`npm run check\`\n2. ` (override via `AUTO_PR_HOW_TO_TEST` env for non-Node projects) |
+| `{{howToTest}}` | `N/A` for docs-only, else generic default (`1. Run the relevant tests or checks.\n2. `). Override via `AUTO_PR_HOW_TO_TEST` env or workflow `auto_pr_how_to_test` input (e.g. Node: `1. Run \`npm run check\`\n2. `, Python: `1. Run \`pytest\`\n2. `) |
 | `{{checklistConventional}}` | `x` or ` ` |
 | `{{checklistDocs}}` | `x` or ` ` |
 | `{{checklistTests}}` | `x` or ` ` |
@@ -34,7 +34,7 @@ Uses `effect/unstable/cli` (Command, Argument, Flag).
 - **`--template PATH`:** Override template file. Default: `.github/PULL_REQUEST_TEMPLATE.md` relative to cwd.
 - **`--description-file PATH`:** Use file content as description (e.g. Ollama-generated). Overrides computed description.
 - **`--output-description-prompt`:** Output commit content for Ollama to summarize. Requires `--log-file` only. Used by auto-pr-generate-content (2+ commits).
-- **`--format title-body`:** Output first line = PR title, blank line, then body. Title = first commit subject.
+- **`--format title-body`:** Output first line = PR title, blank line, then body. Title = first commit subject (1 commit) or Ollama-generated (2+ commits).
 - **`--validate-title TITLE`:** Validate that the string is a conventional commit title; exit 0 if valid, 1 otherwise.
 - **`--quiet`:** Suppress logs (for CI when capturing stdout).
 

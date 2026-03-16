@@ -3,6 +3,9 @@
 #
 # Uses GitHub App token when push_allowed so the push triggers CI on the new commit
 # (GITHUB_TOKEN pushes do not trigger workflows). Same App as auto-pr (APP_ID, APP_PRIVATE_KEY).
+#
+# Uses upstream Nix (cachix/install-nix-action).
+# Builds on x86_64-linux and aarch64-linux (arm64 runners).
 
 name: Nix
 
@@ -23,17 +26,18 @@ on:
 permissions: {}
 
 jobs:
-  nix:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Push uses App token; job needs contents: write for git push (exit 128 fix)
+  hash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
+    outputs:
+      hash_changed: ${{ steps.hash.outputs.hash != '' }}
     steps:
       - name: Generate GitHub App token
         if: inputs.push_allowed
         id: app-token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -42,19 +46,39 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ inputs.push_allowed && steps.app-token.outputs.token || github.token }}
-      - uses: ./.github/actions/nix-setup
+          fetch-depth: 1
+
+      - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
 
-      - uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          check-outdated: false
+          node-version-file: .nvmrc
+          cache: npm
 
-      - uses: ./.github/actions/nix-npm-deps-hash
-        id: hash
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
 
-      - uses: ./.github/actions/nix-commit-npm-deps-hash
-        if: steps.hash.outputs.hash != '' && inputs.push_allowed
+      - id: hash
+        run: |
+          output=$(npm run update-npm-deps-hash --silent 2>/dev/null) || true
+          if echo "$output" | grep -q '^hash='; then
+            echo "$output" | grep '^hash=' >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.hash.outputs.hash != '' && inputs.push_allowed
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add default.nix
+          git commit -m "fix(nix): update npmDepsHash for package-lock.json"
+          if ! git push; then
+            echo "::error::git push failed (exit 128 often = permission denied; check App has Contents: Read and write)"
+            exit 1
+          fi
 
       - name: Trigger check on new commit
         if: steps.hash.outputs.hash != '' && inputs.push_allowed
@@ -62,16 +86,52 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REF: ${{ inputs.ref || github.ref }}
         run: |
-          # gh expects branch name; strip refs/heads/ if present
           BRANCH="${REF#refs/heads/}"
           if ! gh workflow run ci.yml --ref "$BRANCH"; then
             echo "::error::Failed to trigger ci.yml. Ensure App has Actions: Read and write permission."
             exit 1
           fi
 
-      - uses: ./.github/actions/nix-fail-npm-deps-hash-fork
-        if: steps.hash.outputs.hash != '' && !inputs.push_allowed
-        with:
-          hash: ${{ steps.hash.outputs.hash }}
+      - if: steps.hash.outputs.hash != '' && !inputs.push_allowed
+        shell: bash
+        run: |
+          echo "::error::npmDepsHash mismatch. CI cannot push to fork PRs."
+          echo ""
+          echo "Update locally and commit:"
+          echo "  nix run .#update-npm-deps-hash"
+          echo "  # or: npm run update-nix-hash -- ${{ steps.hash.outputs.hash }}"
+          echo "  git add default.nix && git commit -m 'fix(nix): update npmDepsHash for package-lock.json'"
+          exit 1
 
-      - run: nix build .#default
+  build:
+    needs: hash
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      # Checkout from workflow ref to avoid caller-controlled refs in privileged contexts (CodeQL).
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
+        with:
+          extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ matrix.system }}-${{ hashFiles('**/*.nix', '**/package-lock.json', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ matrix.system }}-
+
+      - run: nix flake check -L --system ${{ matrix.system }}

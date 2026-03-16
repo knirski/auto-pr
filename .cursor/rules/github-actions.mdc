@@ -1,10 +1,10 @@
 ---
 description: GitHub Actions workflow and composite action conventions - run actionlint before finishing
-globs: [".github/workflows/**/*.yml", ".github/actions/**/*.yml"]
+globs: [".github/workflows/**/*.yml"]
 ---
 
-# GitHub Actions (workflows and composite actions)
+# GitHub Actions (workflows)
 
-- **Lint:** Run `actionlint` on workflow and action files before finishing.
+- **Lint:** Run `actionlint` on workflow files before finishing.
 - **Project command:** `npm run lint:workflows` (uses system actionlint or `nix run nixpkgs#actionlint`).
 - **Full check:** `npm run check` (includes actionlint). Use `check:with-links` to add lychee.

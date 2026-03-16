@@ -2,21 +2,23 @@
 
 ## Do I need Nix?
 
-**No.** Nix is optional and only used by contributors to the auto-pr repo. Consumers use Node and npx only. The reusable workflow and npm dependency work without Nix.
+**No.** Nix is optional and only used by contributors to the auto-pr repo. Users use Node and npx only. The reusable workflow and npm dependency work without Nix.
 
 ## Workflow fails immediately
 
-### "Missing .github/PULL_REQUEST_TEMPLATE.md"
+### "Missing .github/PULL_REQUEST_TEMPLATE.md" (or custom path)
 
-**Cause:** The PR template is required for auto-pr to fill the body.
+**Cause:** The PR template is required for auto-pr to fill the body. The error shows the path from the workflow (default `.github/PULL_REQUEST_TEMPLATE.md`, or your `pr_template_path` override).
 
-**Fix:** Run `npx auto-pr-init` in your repo, or copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to your repo.
+**Fix:** Run `npx auto-pr-init` in your repo, or copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to the path shown in the error.
 
 ### "Missing secrets APP_ID or APP_PRIVATE_KEY"
 
 **Cause:** The workflow needs a GitHub App token to create PRs.
 
 **Fix:** Create a GitHub App (see [INTEGRATION.md](INTEGRATION.md#step-2-create-the-github-app)), install it on your repo, and add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets.
+
+**Fork contributors:** The workflow runs on forks. To test auto-PR on your fork, add the same secrets to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Otherwise, create the PR manually from your branch to the upstream repo.
 
 ### "Missing required env: DEFAULT_BRANCH, GITHUB_OUTPUT, ..."
 
@@ -58,13 +60,19 @@
 
 **Cause:** For 2+ commits, auto-pr uses Ollama to generate the description. The workflow installs Ollama via `ai-action/setup-ollama`.
 
-**Fix:** The action should install Ollama. If it fails, check the "Setup Ollama" step. Ensure `OLLAMA_URL` is correct (default: `http://localhost:11434/api/generate` — in CI, Ollama runs on the runner).
+**Fix:** The action should install Ollama. If it fails, check the "Setup Ollama" step. Ensure `OLLAMA_URL` is set (e.g. `http://localhost:11434/api/generate` — in CI, Ollama runs on the runner).
 
 ### Description is empty or "null"
 
 **Cause:** Ollama returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
 
-**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. Try a different `OLLAMA_MODEL` (default: `llama3.1:8b`).
+**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. Try a different `OLLAMA_MODEL` (e.g. `llama3.1:8b`).
+
+## npm "Unknown user config always-auth"
+
+**Cause:** Your `~/.npmrc` or `NPM_CONFIG_ALWAYS_AUTH` env contains `always-auth`, which npm removed in v7+.
+
+**Fix:** Run `npm config delete always-auth` or remove it from `~/.npmrc`. This is a local config issue; CI typically has no such setting.
 
 ## Debug mode
 
