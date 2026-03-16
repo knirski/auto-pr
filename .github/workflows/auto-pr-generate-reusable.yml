@@ -109,7 +109,12 @@ jobs:
         if: steps.commits.outputs.count != '1'
         env:
           OLLAMA_MODEL: ${{ inputs.ollama_model }}
-        run: ollama pull ${{ env.OLLAMA_MODEL }}
+        run: |
+          if [[ ! "$OLLAMA_MODEL" =~ ^[a-zA-Z0-9._:-]+$ ]]; then
+            echo "::error::Invalid ollama_model: must match ^[a-zA-Z0-9._:-]+$"
+            exit 1
+          fi
+          ollama pull "$OLLAMA_MODEL"
 
       - name: Generate PR content
         id: generate
