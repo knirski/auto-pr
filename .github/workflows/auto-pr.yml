@@ -4,10 +4,12 @@
 # Two workflows: generate (unprivileged, checkout branch) + create (privileged, checkout default).
 # Satisfies CodeQL "untrusted checkout in trusted context" — no suppression.
 #
-# Pin to SHA: reproducible runs, immutable supply chain. Update pinned SHA after
-# merging changes to the reusable workflows.
-#
 # Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
+#
+# Update both @SHA refs below when:
+# - After merging changes to auto-pr-generate-reusable.yml or auto-pr-create-reusable.yml
+# - When testing workflow changes on a branch: set to current commit (git rev-parse HEAD)
+# - After merge: set to the merge commit SHA on main
 
 name: Auto-PR
 
