@@ -81,7 +81,7 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
-All inputs use sensible defaults (Ollama model, PR template path, "how to test" text). Override via `with:` only when needed.
+All inputs use sensible defaults (Ollama model, PR template path, generic "how to test" text). Override via `with:` only when needed. **Node projects:** add `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "` to the generate job for accurate PR instructions.
 
 **Run checks first:** See [Running checks before PR creation](#running-checks-before-pr-creation) to add a check job before generate/create.
 
@@ -195,7 +195,7 @@ Adjust the install step for your project (e.g. `pip install -r requirements.txt`
       - run: cargo test
 ```
 
-Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (e.g. `auto_pr_how_to_test: "1. Run \`pytest\`\n2. "` for Python).
+Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (Node: `"1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).
 
 ## Verification
 
@@ -218,7 +218,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | **auto-pr-generate-content** | `COMMITS`, `FILES`, `GITHUB_OUTPUT`, `GITHUB_WORKSPACE` | `PR_TEMPLATE_PATH` (default `.github/PULL_REQUEST_TEMPLATE.md`), `OLLAMA_MODEL` (default `llama3.1:8b`), `OLLAMA_URL`, `AUTO_PR_HOW_TO_TEST` (default generic) |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `TITLE`, `BODY_FILE`, `GITHUB_WORKSPACE` | — |
 
-Override defaults via workflow `with:` inputs when needed (e.g. `auto_pr_how_to_test: "1. Run \`pytest\`\n2. "` for Python).
+Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).
 
 ## Troubleshooting
 

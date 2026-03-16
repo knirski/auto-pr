@@ -135,7 +135,7 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 | `PR_TEMPLATE_PATH` | generate-content | Path to PR template (default `.github/PULL_REQUEST_TEMPLATE.md`) |
 | `OLLAMA_MODEL` | generate-content | Ollama model (default `llama3.1:8b`) |
 | `OLLAMA_URL` | generate-content | Ollama API (default `http://localhost:11434/api/generate`) |
-| `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; override via workflow `auto_pr_how_to_test` for Node/Python/etc.) |
+| `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; Node projects: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`; Python: `"1. Run \`pytest\`\n2. "`) |
 | `GH_TOKEN` | create-or-update-pr | GitHub token |
 | `BRANCH` | create-or-update-pr | Current branch |
 | `TITLE` | create-or-update-pr | PR title |
