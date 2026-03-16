@@ -269,7 +269,8 @@ const LoggerLayer = Logger.layer([
 	Logger.consolePretty({ colors: process.env.NO_COLOR === undefined }),
 ]).pipe(Layer.provide(Layer.succeed(Logger.LogToStderr)(true)));
 
-const CliLayer = NodeServices.layer.pipe(
+/** CLI layer (NodeServices + Logger + FillPrTemplateConfig). Exported for tests. */
+export const CliLayer = NodeServices.layer.pipe(
 	Layer.provideMerge(LoggerLayer),
 	Layer.provideMerge(FillPrTemplateConfigLayer),
 );
