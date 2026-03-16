@@ -94,13 +94,11 @@ function runUpdateNpmDepsHash(): Effect.Effect<
 		const current = yield* Effect.fromResult(parseCurrentNpmDepsHash(content, defaultNixPath));
 
 		if (expected === current) {
-			yield* Effect.log({ event: "update_npm_deps_hash", status: "unchanged" });
 			return;
 		}
 
 		const updated = replaceNpmDepsHash(content, expected);
 		yield* fs.writeFileString(defaultNixPath, updated);
-		yield* Effect.log({ event: "update_npm_deps_hash", status: "updated" });
 		yield* Console.log(`hash=${expected}`);
 	});
 }

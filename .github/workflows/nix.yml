@@ -63,9 +63,9 @@ jobs:
 
       - id: hash
         run: |
-          output=$(npm run update-npm-deps-hash --silent 2>/dev/null)
-          if [ -n "$output" ]; then
-            echo "$output" >> "$GITHUB_OUTPUT"
+          output=$(npm run update-npm-deps-hash --silent 2>/dev/null) || true
+          if echo "$output" | grep -q '^hash='; then
+            echo "$output" | grep '^hash=' >> "$GITHUB_OUTPUT"
           fi
 
       - if: steps.hash.outputs.hash != '' && inputs.push_allowed
