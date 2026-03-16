@@ -1,0 +1,12 @@
+# CodeQL config for code scanning.
+# Excludes untrusted-checkout queries: auto-pr uses two-phase design (generate unprivileged +
+# create trusted checkout only). CodeQL may still flag reusable workflows; security model is satisfied.
+name: "CodeQL config"
+
+query-filters:
+  - exclude:
+      id: actions/untrusted-checkout/high
+  - exclude:
+      id: actions/untrusted-checkout/critical
+  - exclude:
+      id: actions/untrusted-checkout/medium

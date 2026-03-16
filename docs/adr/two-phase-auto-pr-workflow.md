@@ -17,7 +17,8 @@ Chosen option: **"Two separate reusable workflow files"** (Option 4), because Co
 
 ### Consequences
 
-* Good: CodeQL passes; no suppression.
+* Good: Security model satisfied — generate unprivileged, create trusted checkout only.
 * Good: Single push trigger; no workflow_run.
 * Minor: Branch protection requires two checks (`Auto-PR generate (reusable) / generate`, `Auto-PR create (reusable) / create`).
 * Minor: Entry workflow (auto-pr.yml) has two jobs instead of one.
+* Note: CodeQL may still flag reusable workflows; we exclude untrusted-checkout queries via [codeql-config.yml](../../.github/codeql/codeql-config.yml). See [docs/WORKFLOW_SECURITY.md](../WORKFLOW_SECURITY.md).

@@ -159,6 +159,7 @@ Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:doc
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
 - [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
 - [docs/CI.md](docs/CI.md) — Workflows, branch protection, fork PRs
+- [docs/WORKFLOW_SECURITY.md](docs/WORKFLOW_SECURITY.md) — Auto-PR workflow security model (two-phase, CWE-829)
 - [docs/CII.md](docs/CII.md) — CII Best Practices badge progress
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
 - [docs/adr/](docs/adr/) — Architecture Decision Records. See ADR workflow below.
