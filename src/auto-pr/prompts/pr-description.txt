@@ -1,7 +1,7 @@
-Summarize these commits into a PR title and description. No preamble. No quotes.
+Summarize these commits into a PR title and description. No preamble. No quotes. No markdown (** or `). No "Title:" prefix.
 
 Output format (exactly):
-Line 1: Title as type: message (feat, fix, docs, chore, refactor). Max 72 chars.
+Line 1: type: message (feat, fix, docs, chore, refactor). Max 72 chars. Nothing else.
 Line 2: (blank line)
-Line 3+: Paragraph(s). What changed and why. Plain prose only.
+Line 3+: Bullet points. One per change. What changed and why. No "This PR introduces". No function names or implementation details.
 
