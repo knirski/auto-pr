@@ -1,20 +1,11 @@
-# Reusable workflow: auto-pr for any GitHub project.
-# No package.json required — uses npx to fetch auto-pr from GitHub.
+# Reusable workflow: generate PR content only (unprivileged).
+# Checkout of branch (untrusted) with contents: read only. No secrets.
+# Satisfies CodeQL "untrusted checkout in trusted context" — no privileged context.
 #
-# Convention over configuration: all inputs have defaults. User workflow:
-#   on:
-#     push:
-#       branches: [ai/**]
-#   jobs:
-#     auto-pr:
-#       uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@<sha>  # pin to SHA
-#       secrets: inherit
-#
-# Pin to SHA for reproducible runs. Update auto-pr.yml to the merge commit SHA
-# after merging changes to this workflow.
-# Prerequisites: APP_ID, APP_PRIVATE_KEY secrets; .github/PULL_REQUEST_TEMPLATE.md
+# Call with create workflow: generate job → create job (needs: generate).
+# See auto-pr.yml for the pattern.
 
-name: Auto-PR (reusable)
+name: Auto-PR generate (reusable)
 
 on:
   workflow_call:
@@ -38,16 +29,16 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  auto-pr:
+  generate:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       OLLAMA_MODEL: ${{ inputs.ollama_model }}
       OLLAMA_URL: ${{ inputs.ollama_url }}
-      # In auto-pr repo: fetch branch code so PRs test their own prompt/logic. Else: main.
       AUTO_PR_PKG: ${{ github.repository == 'knirski/auto-pr' && format('github:knirski/auto-pr#{0}', github.ref_name) || 'github:knirski/auto-pr' }}
     steps:
       - name: Validate pr_template_path
@@ -64,18 +55,13 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Check prerequisites
+      - name: Check prerequisites (template only)
         env:
           PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
         run: |
           if [ ! -f "$PR_TEMPLATE_PATH" ]; then
             echo "::error::Missing $PR_TEMPLATE_PATH. Run: npx auto-pr-init"
             echo "::error::See https://github.com/knirski/auto-pr#integration"
-            exit 1
-          fi
-          if [ -z "${{ secrets.APP_ID }}" ] || [ -z "${{ secrets.APP_PRIVATE_KEY }}" ]; then
-            echo "::error::Missing secrets APP_ID or APP_PRIVATE_KEY. Create a GitHub App and add secrets."
-            echo "::error::See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md"
             exit 1
           fi
 
@@ -109,18 +95,16 @@ jobs:
           AUTO_PR_HOW_TO_TEST: ${{ inputs.auto_pr_how_to_test }}
         run: npx -p "$AUTO_PR_PKG" auto-pr-generate-content
 
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Prepare artifact
+        run: |
+          mkdir -p pr-content
+          echo -n "${{ steps.generate.outputs.title }}" > pr-content/title.txt
+          cp "${{ steps.generate.outputs.body_file }}" pr-content/body.md
+          echo -n "${{ github.ref_name }}" > pr-content/branch.txt
+          echo -n "${{ github.event.repository.default_branch }}" > pr-content/default_branch.txt
 
-      - name: Create or update PR
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          BRANCH: ${{ github.ref_name }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          TITLE: ${{ steps.generate.outputs.title }}
-          BODY_FILE: ${{ steps.generate.outputs.body_file }}
-        run: npx -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr
+      - name: Upload PR content
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: pr-content
+          path: pr-content/

@@ -70,7 +70,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for high-level structure, pipel
 ```
 .github/
   PULL_REQUEST_TEMPLATE.md
-  workflows/         — ci, release-please, ci-release-please, auto-pr, auto-pr-reusable, auto-pr-user
+  workflows/         — ci, release-please, ci-release-please, auto-pr, auto-pr-generate-reusable, auto-pr-create-reusable, auto-pr-user
 src/
   auto-pr/          — config, core, errors, interfaces, live, paths, shell, utils
   workflow/         — main auto-PR pipeline (get-commits, generate-content, create-or-update-pr, run-auto-pr)

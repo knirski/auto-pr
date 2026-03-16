@@ -1,9 +1,11 @@
-# Auto-PR — uses the reusable workflow. Push to ai/* to auto-create a PR.
+# Auto-PR — uses two reusable workflows (generate + create). Push to ai/* to auto-create a PR.
 # No package.json required. Run: npx auto-pr-init (creates this file, template, .nvmrc)
 #
-# Pin to SHA: reproducible runs, immutable supply chain. In this repo, use current
-# commit so PRs can test workflow changes; elsewhere use pinned SHA. Update pinned
-# SHA after merging changes to the reusable workflow.
+# Two workflows: generate (unprivileged, checkout branch) + create (privileged, checkout default).
+# Satisfies CodeQL "untrusted checkout in trusted context" — no suppression.
+#
+# Pin to SHA: reproducible runs, immutable supply chain. Update pinned SHA after
+# merging changes to the reusable workflows.
 #
 # Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
 
@@ -23,6 +25,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  auto-pr:
-    uses: knirski/auto-pr/.github/workflows/auto-pr-reusable.yml@${{ github.repository == 'knirski/auto-pr' && github.sha || '1e991ad63a5e72d0acc3b44f8dca8f41dde69e62' }}
+  generate:
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@c8f8f5950558972106f07c28eff824e3bf316138
+
+  create:
+    needs: generate
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@c8f8f5950558972106f07c28eff824e3bf316138
     secrets: inherit
