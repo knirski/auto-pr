@@ -5,9 +5,12 @@ globs: ["**/*.ts"]
 
 # auto-pr conventions
 
-- **FC/IS:** `scripts/fill-pr-template-core.ts` and `scripts/auto-pr/core.ts` are pure (no Effect, no I/O). Shell in `scripts/*.ts` and `scripts/auto-pr/shell.ts`. Bridge with `Effect.fromResult`.
-- **Config as service:** Pipelines `yield* GetCommitsConfig` / `yield* GeneratePrContentConfig` / `yield* CreateOrUpdatePrConfig`. No config params.
+**Use the ts-scripting skill** when analyzing or editing. It provides canonical patterns; compare this project against its checklist and apply applicable suggestions.
+
+- **FC/IS:** `src/lib/fill-pr-template-core.ts` and `src/auto-pr/core.ts` are pure (no Effect, no I/O). Shell in `src/workflow/*.ts`, `src/tools/*.ts`, and `src/auto-pr/shell.ts`. Bridge with `Effect.fromResult`.
+- **Config as service:** Workflow-specific config layers (GetCommitsConfig, GeneratePrContentConfig, etc.). Validate and fail early: required env vars are required at load; missing vars cause immediate failure. No Option for required fields.
 - **Tagless Final:** Services via Tag + Layer. Programs declare `R`; shell provides. Tests swap with mocks.
 - **Effect first:** Prefer `effect` and `@effect/*`. No `any`, `!`, `enum`, `console.log`. Use `Option<T>` for optional.
-- **Domain errors:** `Schema.TaggedErrorClass` in `scripts/auto-pr/errors.ts`. Exhaustive handling with `Match.exhaustive`.
+- **Domain errors:** `Schema.TaggedErrorClass` in `src/auto-pr/errors.ts`. Exhaustive handling with `Match.exhaustive`.
 - **Verification:** Run `npm run check` before finishing. See AGENTS.md for full rules.
+- **Config in tests:** When tests need config layers, use `Layer.succeed(Config)({ ... })`. Workflow tests typically call `run*` with plain objects and bypass config.
