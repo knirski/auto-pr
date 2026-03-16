@@ -14,7 +14,7 @@ let
       && builtins.baseNameOf path != "result"
       && builtins.baseNameOf path != "coverage";
   };
-  npmDepsHash = "sha256-Yf0NZCoXCykPAaUBtYfBsEqmP7HSNalDeibcZ2KyM7A=";
+  npmDepsHash = "sha256-XnFAoP1KUtNDDVytikA9mYMLzDWylOz0NuaoBOISnQk=";
 in
 pkgs.buildNpmPackage rec {
   pname = "auto-pr";
@@ -28,7 +28,7 @@ pkgs.buildNpmPackage rec {
     cp -r package.json package-lock.json node_modules dist .github .nvmrc $out/lib/node_modules/auto-pr/
     mkdir -p $out/bin
     echo '#!${pkgs.runtimeShell}
-    cd "${placeholder "out"}/lib/node_modules/auto-pr" && exec node dist/workflow/run-auto-pr.mjs "$@"' > $out/bin/run-auto-pr
+    cd "${placeholder "out"}/lib/node_modules/auto-pr" && exec node dist/workflow/auto-pr-run.mjs "$@"' > $out/bin/run-auto-pr
     chmod +x $out/bin/run-auto-pr
   '';
 }

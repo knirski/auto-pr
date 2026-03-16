@@ -115,7 +115,7 @@ nix develop
 
 # Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
 npx tsx src/workflow/run-auto-pr.ts
-# or: node dist/workflow/run-auto-pr.mjs (after npm run build)
+# or: node dist/workflow/auto-pr-run.mjs (after npm run build)
 # or: nix run .#default
 ```
 

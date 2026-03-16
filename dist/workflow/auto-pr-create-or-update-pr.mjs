@@ -12,7 +12,7 @@ import { Duration, Effect, FileSystem, Option, Schedule, Schema } from "effect";
 * Uses --json number,url for reliable PR existence check (avoids exit-code ambiguity).
 * Uses PR number for edits (more robust than branch name). Uses --head for create (CI-safe).
 *
-* Run: npx tsx src/workflow/create-or-update-pr.ts (or: node dist/workflow/create-or-update-pr.mjs)
+* Run: npx tsx src/workflow/create-or-update-pr.ts (or: node dist/workflow/auto-pr-create-or-update-pr.mjs)
 */
 const GH_RETRY_ATTEMPTS = 3;
 const GH_RETRY_DELAY_MS = 5e3;
@@ -131,4 +131,4 @@ if (import.meta.main) runMain(program, "create_or_update_pr_failed");
 //#endregion
 export { runCreateOrUpdatePr };
 
-//# sourceMappingURL=create-or-update-pr.mjs.map
+//# sourceMappingURL=auto-pr-create-or-update-pr.mjs.map

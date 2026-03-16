@@ -2,7 +2,7 @@
  * Fill PR template from conventional commit messages.
  * Shell only: Effect pipelines, CLI, I/O. Core in fill-pr-template-core.ts.
  *
- * Run: npx tsx src/tools/fill-pr-template.ts (or: node dist/tools/fill-pr-template.mjs) --log-file <path> --files-file <path> --template <path> --format body|title-body
+ * Run: npx tsx src/tools/fill-pr-template.ts (or: node dist/tools/auto-pr-fill-pr-template.mjs) --log-file <path> --files-file <path> --template <path> --format body|title-body
  *
  * Replaces {{placeholder}} values, outputs to stdout.
  *

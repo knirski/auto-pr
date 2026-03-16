@@ -43,6 +43,12 @@
 
 **Fix:** Add at least one conventional commit (e.g. `feat: add X`, `fix: resolve Y`). Merge commits are filtered out. See [Conventional Commits](https://www.conventionalcommits.org/).
 
+### "pr-description.txt: NotFound" or "FileSystem.readFile .../dist/prompts/pr-description.txt"
+
+**Cause:** The prompt file is missing from the installed package. The package ships `dist/prompts/pr-description.txt`; if you're on an old version or a broken install, it may be absent.
+
+**Fix:** Use the latest auto-pr (e.g. `npx -p github:knirski/auto-pr` or a recent release). If building from source, run `npm run build` before use.
+
 ### "BODY_FILE does not exist"
 
 **Cause:** The generate-content step failed or didn't produce output.

@@ -14,7 +14,7 @@ var version = "0.1.0";
 * Fill PR template from conventional commit messages.
 * Shell only: Effect pipelines, CLI, I/O. Core in fill-pr-template-core.ts.
 *
-* Run: npx tsx src/tools/fill-pr-template.ts (or: node dist/tools/fill-pr-template.mjs) --log-file <path> --files-file <path> --template <path> --format body|title-body
+* Run: npx tsx src/tools/fill-pr-template.ts (or: node dist/tools/auto-pr-fill-pr-template.mjs) --log-file <path> --files-file <path> --template <path> --format body|title-body
 *
 * Replaces {{placeholder}} values, outputs to stdout.
 *
@@ -115,4 +115,4 @@ if (import.meta.main) NodeRuntime.runMain(cliProgram.pipe(Effect.provide(CliLaye
 //#endregion
 export { CliLayer, fillCommand, handleOutputDescriptionPrompt, handleValidateTitle, runFillBody };
 
-//# sourceMappingURL=fill-pr-template.mjs.map
+//# sourceMappingURL=auto-pr-fill-pr-template.mjs.map

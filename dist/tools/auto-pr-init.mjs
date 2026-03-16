@@ -93,4 +93,4 @@ if (import.meta.main) runMain(Effect.gen(function* () {
 //#endregion
 export { runInit };
 
-//# sourceMappingURL=init.mjs.map
+//# sourceMappingURL=auto-pr-init.mjs.map

@@ -16,7 +16,7 @@ import * as Http from "effect/unstable/http";
 *
 * Outputs to GITHUB_OUTPUT: title, body_file (path to filled template)
 *
-* Run: npx tsx src/workflow/generate-pr-content.ts (or: node dist/workflow/generate-pr-content.mjs)
+* Run: npx tsx src/workflow/generate-pr-content.ts (or: node dist/workflow/auto-pr-generate-pr-content.mjs)
 */
 const BODY_FILE_NAME = "pr-body.md";
 const MAX_OLLAMA_ATTEMPTS = 5;
@@ -145,4 +145,4 @@ if (import.meta.main) runMain(program, "generate_pr_content_failed");
 //#endregion
 export { generatePrContentFromValues, runGeneratePrContent };
 
-//# sourceMappingURL=generate-pr-content.mjs.map
+//# sourceMappingURL=auto-pr-generate-content.mjs.map

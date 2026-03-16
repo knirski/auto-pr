@@ -1,13 +1,13 @@
 # Architecture
 
-This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. tsdown builds `dist/`; scripts run via `node dist/`. No declaration emit.
+This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. tsdown builds `dist/`; bins run via `node dist/workflow/auto-pr-*.mjs` and `node dist/tools/auto-pr-*.mjs`. Prompts at `dist/prompts/`. No declaration emit.
 
 ## High-Level Structure
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLI entry points (src/workflow/*.ts, src/tools/*.ts)           │
-│  workflow: auto-pr-get-commits, generate-pr-content,             │
+│  workflow: auto-pr-get-commits, generate-pr-content,            │
 │  create-or-update-pr, run-auto-pr                               │
 │  tools: fill-pr-template, init, update-nix-hash                 │
 └────────────────────────────┬────────────────────────────────────┘
@@ -18,7 +18,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│  Functional Core (src/auto-pr/core.ts, src/lib/*.ts)             │
+│  Functional Core (src/auto-pr/core.ts, src/lib/*.ts)            │
 │  Pure functions, no Effect, no I/O, returns Result              │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -35,7 +35,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 - **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init, update-nix-hash, update-npm-deps-hash.
 - **`src/lib/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs.
 - **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Orchestrates I/O.
-- **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets (e.g. getPrDescriptionPromptPath).
+- **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets. `getPrDescriptionPromptPath` resolves `dist/prompts/pr-description.txt` (relative to shared chunk in `dist/`).
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
 - **`src/auto-pr/core.ts`** — Pure helpers. filterSemanticSubjects, formatGhOutput, etc. No Effect, no I/O.
 - **`src/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).

@@ -59,7 +59,7 @@
    - Clean: true
    - No dts for CLI entries (consumers run JS; types not needed at runtime)
    - **Path aliases:** Use `alias` from tsconfig paths, or `tsdown --from-vite vitest` in build script to reuse vitest's `vite-tsconfig-paths` plugin.
-   - **Prompt at runtime:** `getPrDescriptionPromptPath` resolves `prompts/pr-description.txt` relative to the script. Add `copy: [{ from: "src/auto-pr/prompts", to: "dist/workflow/prompts" }]` so the prompt is next to `generate-pr-content.js`.
+   - **Prompt at runtime:** `getPrDescriptionPromptPath` resolves `prompts/pr-description.txt` relative to the shared chunk (in `dist/`). Add `copy: [{ from: "src/auto-pr/prompts/**", to: "dist/prompts", flatten: true }]` so the prompt is at `dist/prompts/pr-description.txt`.
 
 3. **Update `package.json` scripts**
    - `"build": "tsdown"` (or `"tsdown --from-vite vitest"` if using Vitest for path resolution)
@@ -70,15 +70,15 @@
 
 4. **Change `bin` to point to `dist/`**
    - `auto-pr-get-commits` → `./dist/workflow/auto-pr-get-commits.mjs`
-   - `auto-pr-generate-content` → `./dist/workflow/generate-pr-content.mjs`
-   - `auto-pr-create-or-update-pr` → `./dist/workflow/create-or-update-pr.mjs`
-   - `auto-pr-fill-pr-template` → `./dist/tools/fill-pr-template.mjs`
-   - `auto-pr-init` → `./dist/tools/init.mjs`
-   - (run-auto-pr: no bin; Nix runs `node dist/workflow/run-auto-pr.mjs`)
+   - `auto-pr-generate-content` → `./dist/workflow/auto-pr-generate-content.mjs`
+   - `auto-pr-create-or-update-pr` → `./dist/workflow/auto-pr-create-or-update-pr.mjs`
+   - `auto-pr-fill-pr-template` → `./dist/tools/auto-pr-fill-pr-template.mjs`
+   - `auto-pr-init` → `./dist/tools/auto-pr-init.mjs`
+   - (run-auto-pr: no bin; Nix runs `node dist/workflow/auto-pr-run.mjs`)
    - **Note:** tsdown outputs `.mjs` for ESM (package has `"type": "module"`).
 
 5. **Add `files` field**
-   - `["dist", ".github", "docs", ".nvmrc"]` — init copies `.nvmrc` from the package. Add other assets if needed at runtime.
+   - `["dist", ".github", "docs", ".nvmrc"]` — init copies `.nvmrc` from the package. `dist/` includes `workflow/`, `tools/`, `prompts/`. Add other assets if needed at runtime.
 
 6. **Remove**
    - `bin/*.mjs` (all 5 wrappers + run-ts.mjs)
@@ -101,12 +101,12 @@
 
 9. **default.nix**
    - `installPhase` currently copies `src` and runs `npx tsx src/workflow/run-auto-pr.ts`
-   - Change to: copy `dist` (not `src`), `package.json`, `package-lock.json`, `node_modules`, `.github`; run `node dist/workflow/run-auto-pr.mjs`. Example:
+   - Change to: copy `dist` (not `src`), `package.json`, `package-lock.json`, `node_modules`, `.github`; run `node dist/workflow/auto-pr-run.mjs`. Example:
 
      ```nix
      cp -r package.json package-lock.json node_modules dist .github $out/lib/node_modules/auto-pr/
      ...
-     exec node dist/workflow/run-auto-pr.mjs "$@"
+     exec node dist/workflow/auto-pr-run.mjs "$@"
      ```
 
    - `npmBuildScript = "build"` already runs build; `dist/` exists in the build directory after build phase.

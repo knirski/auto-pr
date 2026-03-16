@@ -2,8 +2,8 @@
 
 import { C as parseGhOutput, D as validateGenerateContentOutput, L as RunAutoPrConfig, O as validateGetCommitsOutput, R as RunAutoPrConfigLayer, a as runCommand, c as FillPrTemplate, n as ChildProcessSpawnerLayer, o as runMain, r as PlatformLayer, t as AutoPrLoggerLayer } from "../auto-pr-gJsKsYcH.mjs";
 import { runAutoPrGetCommits } from "./auto-pr-get-commits.mjs";
-import { runGeneratePrContent } from "./generate-pr-content.mjs";
-import { runCreateOrUpdatePr } from "./create-or-update-pr.mjs";
+import { runGeneratePrContent } from "./auto-pr-generate-content.mjs";
+import { runCreateOrUpdatePr } from "./auto-pr-create-or-update-pr.mjs";
 import { Effect, FileSystem, Layer } from "effect";
 import * as Http from "effect/unstable/http";
 //#region src/workflow/run-auto-pr.ts
@@ -12,7 +12,7 @@ import * as Http from "effect/unstable/http";
 * Requires: DEFAULT_BRANCH, GITHUB_WORKSPACE, PR_TEMPLATE_PATH, GH_TOKEN, OLLAMA_MODEL, OLLAMA_URL.
 * For 2+ commits: Ollama must be running (default: localhost:11434).
 *
-* Run: npx tsx src/workflow/run-auto-pr.ts (or: node dist/workflow/run-auto-pr.mjs)
+* Run: npx tsx src/workflow/run-auto-pr.ts (or: node dist/workflow/auto-pr-run.mjs)
 */
 const RunAutoPrLayer = Layer.mergeAll(PlatformLayer, ChildProcessSpawnerLayer, FillPrTemplate.Live, Http.FetchHttpClient.layer);
 function runPipeline() {
@@ -68,4 +68,4 @@ if (import.meta.main) runMain(runPipeline(), "run_auto_pr_failed");
 //#endregion
 export {};
 
-//# sourceMappingURL=run-auto-pr.mjs.map
+//# sourceMappingURL=auto-pr-run.mjs.map
