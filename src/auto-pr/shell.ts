@@ -42,7 +42,7 @@ export const appendGhOutput = Effect.fn("appendGhOutput")(function* (
 	yield* fs.writeFileString(path, content, { flag: "a" });
 });
 
-/** Logger layer for auto-PR scripts. Respects NO_COLOR. */
+/** Respect NO_COLOR (https://no-color.org): disable colors when set, for CI/scripting. */
 export const AutoPrLoggerLayer = Logger.layer([
 	Logger.consolePretty({ colors: process.env.NO_COLOR === undefined }),
 ]).pipe(Layer.provide(Layer.succeed(Logger.LogToStderr)(true)));
@@ -54,13 +54,12 @@ export function getDebugHint(): string {
 		: " Set AUTO_PR_DEBUG=1 for verbose output.";
 }
 
-/** Prepares a main program with Logger layer and error logging. Used by runMain. */
+/** Prepares a main program with error logging. Requires Logger in environment. Used by runMain. */
 export function withMainSetup(
 	program: Effect.Effect<void, unknown>,
 	eventName: string,
-): Effect.Effect<void, unknown> {
+): Effect.Effect<void, unknown, Logger.Logger<unknown, void>> {
 	return program.pipe(
-		Effect.provide(AutoPrLoggerLayer),
 		Effect.tapError((e) =>
 			Effect.logError({
 				event: eventName,
@@ -72,5 +71,6 @@ export function withMainSetup(
 
 /** Run main with BunRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
 export function runMain(program: Effect.Effect<void, unknown>, eventName: string): void {
-	BunRuntime.runMain(withMainSetup(program, eventName));
+	const main = withMainSetup(program, eventName).pipe(Effect.provide(AutoPrLoggerLayer));
+	BunRuntime.runMain(main as Effect.Effect<void, unknown>);
 }

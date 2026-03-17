@@ -14,6 +14,7 @@ import * as BunServices from "@effect/platform-bun/BunServices";
 import { Console, Effect, FileSystem, Layer, Logger, Option, type Path } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import {
+	AutoPrLoggerLayer,
 	type FileSystemError,
 	FillPrTemplate,
 	FillPrTemplateConfig,
@@ -137,11 +138,7 @@ export function handleOutputDescriptionPrompt(
 	quiet: boolean,
 ): Effect.Effect<void, Error, FileSystem.FileSystem> {
 	return Effect.gen(function* () {
-		const loggerLayer = quiet
-			? Logger.layer([])
-			: Logger.layer([Logger.consolePretty({ colors: process.env.NO_COLOR === undefined })]).pipe(
-					Layer.provide(Layer.succeed(Logger.LogToStderr)(true)),
-				);
+		const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
 		const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
 		const output = yield* Effect.gen(function* () {
 			const fs = yield* FileSystem.FileSystem.asEffect();
@@ -166,11 +163,7 @@ function handleFill(
 	descriptionFile: Option.Option<string>,
 ) {
 	return Effect.gen(function* () {
-		const loggerLayer = quiet
-			? Logger.layer([])
-			: Logger.layer([Logger.consolePretty({ colors: process.env.NO_COLOR === undefined })]).pipe(
-					Layer.provide(Layer.succeed(Logger.LogToStderr)(true)),
-				);
+		const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
 		const layer = Layer.mergeAll(
 			BunServices.layer,
 			loggerLayer,
@@ -263,13 +256,9 @@ export const fillCommand = Command.make(
 
 const cliProgram = Command.run(fillCommand, { version: pkg.version });
 
-const LoggerLayer = Logger.layer([
-	Logger.consolePretty({ colors: process.env.NO_COLOR === undefined }),
-]).pipe(Layer.provide(Layer.succeed(Logger.LogToStderr)(true)));
-
 /** CLI layer (BunServices + Logger + FillPrTemplateConfig). Exported for tests. */
 export const CliLayer = BunServices.layer.pipe(
-	Layer.provideMerge(LoggerLayer),
+	Layer.provideMerge(AutoPrLoggerLayer),
 	Layer.provideMerge(FillPrTemplateConfigLayer),
 );
 

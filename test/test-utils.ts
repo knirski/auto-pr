@@ -8,7 +8,13 @@ import * as Http from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { AutoPrPlatformLayer } from "#auto-pr";
 
-export const SilentLoggerLayer = Logger.layer([]);
+/**
+ * Silent logger for tests. Suppresses all log output.
+ * No-op logger: Logger.make(() => {}) does nothing; single layer avoids mergeAll.
+ */
+export const SilentLoggerLayer = Logger.layer([
+	Logger.make<unknown, void>(() => {}),
+]) as Layer.Layer<Logger.Logger<unknown, void>>;
 export const TestBaseLayer = Layer.mergeAll(SilentLoggerLayer, AutoPrPlatformLayer);
 
 /** Mock ChildProcessSpawner for tests. string() returns empty; stream methods return empty streams. */
