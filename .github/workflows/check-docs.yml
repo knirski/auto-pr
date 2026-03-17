@@ -1,6 +1,6 @@
 # Reusable workflow for docs-only PRs.
 # Runs rumdl (markdown lint), lychee (link check), typos (spell check).
-# No npm ci — all tools run via GitHub Actions.
+# No dependency install — all tools run via GitHub Actions.
 # Reports "check / check" so branch protection allows merge.
 # See docs/CI.md.
 
