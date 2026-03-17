@@ -2,7 +2,7 @@
 
 auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Effect v4 beta, Tagless Final, FC/IS.
 
-When editing this project, apply these rules. Workflow: apply rules → make changes → run `npm run check` → fix until pass.
+When editing this project, apply these rules. Workflow: apply rules → make changes → run `bun run check` → fix until pass.
 
 ## Skills
 
@@ -14,7 +14,7 @@ When editing this project, apply these rules. Workflow: apply rules → make cha
 |-----------|-------|
 | Editing TypeScript | ts-scripting |
 | New features, non-trivial changes | brainstorming — design before implementation |
-| Before claiming completion | verification-before-completion — run `npm run check`, show output |
+| Before claiming completion | verification-before-completion — run `bun run check`, show output |
 | Creating or editing rules | create-rule |
 
 **For new features or non-trivial changes:** Invoke the brainstorming skill before implementation. Present design and get approval before coding.
@@ -31,26 +31,26 @@ When unsure about how to implement something or when multiple approaches exist:
 
 ## Setup
 
-- Install: `npm install` then `npx lefthook install` (Lefthook is a devDependency; the second step enables pre-commit/pre-push hooks)
-- Verify: `npm run check` (audit, test, lint, knip, typecheck, docs, actionlint, shellcheck, shfmt). Pre-push runs `check:code` automatically.
-- **Build/typecheck:** Uses tsdown to build `dist/`; `tsgo --noEmit` for typecheck. No declaration emit.
+- Install: `bun install` then `bun x lefthook install` (Lefthook is a devDependency; the second step enables pre-commit/pre-push hooks)
+- Verify: `bun run check` (audit, test, lint, knip, typecheck, docs, actionlint, shellcheck, shfmt). Pre-push runs `check:code` automatically.
+- **Build/typecheck:** Uses `bun run scripts/build.ts` (Bun.build) to build `dist/`; entrypoints derived from `package.json` bin. `tsgo --noEmit` for typecheck. No declaration emit.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `npm run check` | Full check: test, lint, knip, typecheck, docs, actionlint, shellcheck. Run before committing. |
-| `npm run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
-| `npm run check:ci` | Full CI parity in Docker (`gh act` or `act`). **Prefer for local workflow testing** over pushing to trigger CI. |
-| `npm run check:with-links` | Full check + lychee link verification. Can fail on broken external URLs. |
-| `npm run check:just-links` | Lychee link check only. Requires lychee or Nix. |
-| `npm test` | Unit tests with coverage |
-| `npm run lint` | Lint (Biome) |
-| `npm run lint:fix` | Lint and fix |
-| `npm run lint:scripts` | Shellcheck + shfmt format check |
-| `npm run format:scripts` | Format shell scripts (shfmt -w) |
-| `npm run typecheck` | TypeScript check |
-| `npm run knip` | Unused code detection |
+| `bun run check` | Full check: test, lint, knip, typecheck, docs, actionlint, shellcheck. Run before committing. |
+| `bun run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
+| `bun run check:ci` | Full CI parity in Docker (`gh act` or `act`). **Prefer for local workflow testing** over pushing to trigger CI. |
+| `bun run check:with-links` | Full check + lychee link verification. Can fail on broken external URLs. |
+| `bun run check:just-links` | Lychee link check only. Requires lychee or Nix. |
+| `bun test` | Unit tests with coverage |
+| `bun run lint` | Lint (Biome) |
+| `bun run lint:fix` | Lint and fix |
+| `bun run lint:scripts` | Shellcheck + shfmt format check |
+| `bun run format:scripts` | Format shell scripts (shfmt -w) |
+| `bun run typecheck` | TypeScript check |
+| `bun run knip` | Unused code detection |
 
 ## Design Principles
 
@@ -73,9 +73,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for high-level structure, pipel
   workflows/         — ci, release-please, ci-release-please, auto-pr, auto-pr-generate-reusable, auto-pr-create-reusable
 src/
   auto-pr/          — config, core, errors, interfaces, live, paths, shell, utils
-  workflow/         — main auto-PR pipeline (get-commits, generate-content, create-or-update-pr, run-auto-pr)
-  tools/            — standalone (fill-pr-template, init, update-nix-hash, update-npm-deps-hash)
-  lib/              — pure core (fill-pr-template-core, collapse-prose-paragraphs, update-nix-hash-core, init-core)
+  workflow/         — main auto-PR pipeline (auto-pr-get-commits, auto-pr-generate-content, auto-pr-create-or-update-pr, auto-pr-run)
+  tools/            — standalone (auto-pr-fill-pr-template, auto-pr-init)
+  lib/              — pure core (fill-pr-template-core, collapse-prose-paragraphs, init-core)
 scripts/             — shell scripts only (.sh)
   check-nix-hash.sh
   nix-run-if-missing.sh
@@ -98,6 +98,7 @@ test/
 | New live interpreter | `src/auto-pr/live/`. Attach layer to service: `static readonly Live = Layer.effect(...)` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
+| Composite action (workflow) | `.github/actions/<name>/` |
 | New prompt | `src/auto-pr/prompts/` |
 
 ## Key Rules
@@ -140,17 +141,17 @@ Create small, focused commits. If changes span many files or concerns, propose s
 ## Verification
 
 ```bash
-npm run check
+bun run check
 ```
 
 Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:docs (rumdl, typos), lint:workflows (actionlint), lint:scripts (shellcheck, shfmt). **Do not finish until all pass.**
 
 - Add or update tests for the code you change, even if nobody asked.
 - **Coverage policy:** Current coverage (~85%) meets thresholds. Do not chase coverage for its own sake. Add tests when: fixing a bug (add a regression test), adding a feature, or changing risky code. Skip tests for trivial branches, CLI entry points, or code that would require heavy mocking for little benefit.
-- Before committing: run `npm run check`; ensure all tests pass.
-- Pre-push runs `check:code` automatically (Lefthook). Run `npx lefthook install` after cloning. Use `git push --no-verify` only when necessary.
-- For full CI parity locally (e.g. debugging CI): `npm run check:ci` (requires Docker + act or gh-act).
-- **Workflow testing:** Prefer `npm run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.
+- Before committing: run `bun run check`; ensure all tests pass.
+- Pre-push runs `check:code` automatically (Lefthook). Run `bun x lefthook install` after cloning. Use `git push --no-verify` only when necessary.
+- For full CI parity locally (e.g. debugging CI): `bun run check:ci` (requires Docker + act or gh-act).
+- **Workflow testing:** Prefer `bun run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.
 
 ## Documentation
 

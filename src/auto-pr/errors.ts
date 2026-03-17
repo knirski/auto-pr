@@ -71,20 +71,6 @@ export class NoSemanticCommitsError extends Schema.TaggedErrorClass<NoSemanticCo
 	{ message: Schema.String },
 ) {}
 
-// ─── update-nix-hash / update-npm-deps-hash ───────────────────────────────────
-
-/** update-nix-hash: invalid hash or missing argument. */
-export class UpdateNixHashUsageError extends Schema.TaggedErrorClass<UpdateNixHashUsageError>()(
-	"UpdateNixHashUsageError",
-	{ message: Schema.String },
-) {}
-
-/** update-nix-hash: no npmDepsHash found in default.nix. */
-export class UpdateNixHashNotFoundError extends Schema.TaggedErrorClass<UpdateNixHashNotFoundError>()(
-	"UpdateNixHashNotFoundError",
-	{ path: Schema.String },
-) {}
-
 // ─── template ───────────────────────────────────────────────────────────────
 
 /** Template render failed (micromustache syntax error). */
@@ -111,8 +97,6 @@ export function formatError(e: unknown): string {
 		e instanceof OllamaDescriptionInvalidError ||
 		e instanceof ParseError ||
 		e instanceof NoSemanticCommitsError ||
-		e instanceof UpdateNixHashUsageError ||
-		e instanceof UpdateNixHashNotFoundError ||
 		e instanceof TemplateRenderError ||
 		e instanceof FillPrTemplateValidationError
 	) {
@@ -147,8 +131,6 @@ export function formatError(e: unknown): string {
 				"NoSemanticCommitsError",
 				({ message }) => `${message} See https://www.conventionalcommits.org`,
 			),
-			Match.tag("UpdateNixHashUsageError", ({ message }) => message),
-			Match.tag("UpdateNixHashNotFoundError", ({ path }) => `No npmDepsHash found in ${path}`),
 			Match.tag("TemplateRenderError", ({ message, cause }) =>
 				cause == null ? message : `${message}: ${String(cause)}`,
 			),

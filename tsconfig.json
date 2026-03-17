@@ -12,7 +12,7 @@
 		"lib": ["ESNext", "DOM"],
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
-		"types": ["node"],
+		"types": ["node", "bun-types"],
 		"strict": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,

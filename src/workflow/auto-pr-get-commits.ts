@@ -5,7 +5,7 @@
  *
  * Requires env: DEFAULT_BRANCH (e.g. main), GITHUB_WORKSPACE, GITHUB_OUTPUT
  *
- * Run: npx tsx src/workflow/auto-pr-get-commits.ts (or: node dist/workflow/auto-pr-get-commits.mjs)
+ * Run: npx tsx src/workflow/auto-pr-get-commits.ts (or: node dist/workflow/auto-pr-get-commits.js)
  */
 
 import { Effect, FileSystem, Path } from "effect";

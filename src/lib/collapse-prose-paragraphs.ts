@@ -8,8 +8,8 @@ import { remark } from "remark";
 import { visit } from "unist-util-visit";
 import { isBlank } from "#auto-pr/core.js";
 
-/** Fallback when remark parsing fails: collapse newlines within paragraphs. */
-function fallback(text: string): string {
+/** Fallback when remark parsing fails: collapse newlines within paragraphs. Exported for tests. */
+export function fallbackWhenParseFails(text: string): string {
 	return text
 		.split(/\n\n+/)
 		.map((p) => p.replace(/\n/g, " ").replace(/\s+/g, " ").trim())
@@ -53,6 +53,6 @@ export function collapseProseParagraphs(text: string): string {
 		const result = processor.processSync(text);
 		return String(result).trim();
 	} catch {
-		return fallback(text);
+		return fallbackWhenParseFails(text);
 	}
 }

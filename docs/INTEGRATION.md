@@ -37,6 +37,8 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 **Skip this step** — the default reusable workflow uses `npx -p github:knirski/auto-pr` and needs no `package.json`.
 
+**JS/TS projects:** The generate and create jobs auto-detect your runtime (npm, yarn, pnpm, bun) from `packageManager` or lockfile. No config needed.
+
 ## Step 2: Create the GitHub App
 
 1. Go to [github.com/settings/apps/new](https://github.com/settings/apps/new)
@@ -162,6 +164,8 @@ jobs:
       - run: npm ci
       - run: npm run check
 ```
+
+**Bun/pnpm/yarn:** Use `oven-sh/setup-bun`, `pnpm/action-setup` + `actions/setup-node`, or `actions/setup-node` with `cache: "yarn"` respectively. The generate and create jobs auto-detect your runtime; your check job should match.
 
 **Python example:**
 

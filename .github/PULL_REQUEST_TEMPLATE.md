@@ -31,7 +31,7 @@
 ## Checklist
 
 - [{{checklistConventional}}] My commits follow [Conventional Commits](https://www.conventionalcommits.org/)
-- [ ] I have run `npm run check` and fixed any issues
+- [ ] I have run `bun run check` and fixed any issues
 - [{{checklistDocs}}] I have updated the documentation if needed
 - [{{checklistTests}}] I have added or updated tests for my changes
 

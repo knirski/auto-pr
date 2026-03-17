@@ -5,12 +5,9 @@
 }:
 
 pkgs.mkShell {
-  buildInputs = [
-    pkgs.nodejs_24
-    pkgs.nodePackages.npm
-  ];
+  buildInputs = [ pkgs.bun ];
   shellHook = ''
     export PATH="$PWD/node_modules/.bin:$PATH"
-    [ -d node_modules ] || npm install
+    [ -d node_modules ] || bun install
   '';
 }

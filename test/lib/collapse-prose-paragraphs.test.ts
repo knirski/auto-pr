@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { collapseProseParagraphs } from "#lib/collapse-prose-paragraphs.js";
+import { describe, expect, test } from "bun:test";
+import { collapseProseParagraphs, fallbackWhenParseFails } from "#lib/collapse-prose-paragraphs.js";
 
 describe("collapse-prose-paragraphs", () => {
 	describe("collapseProseParagraphs", () => {
@@ -54,6 +54,11 @@ describe("collapse-prose-paragraphs", () => {
 			expect(result).toContain("a");
 			expect(result).toContain("b");
 			expect(result).toContain("c");
+		});
+
+		test("fallbackWhenParseFails collapses newlines within paragraphs", () => {
+			const input = "Line one.\nLine two.\n\nNext para.";
+			expect(fallbackWhenParseFails(input)).toBe("Line one. Line two.\n\nNext para.");
 		});
 	});
 });

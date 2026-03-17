@@ -68,11 +68,9 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
+      - name: Setup runtime (Node or alternative) with cache
+        id: setup
+        uses: ./.github/actions/setup-runtime
 
       - name: Fetch base branch
         env:
@@ -99,7 +97,8 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
-        run: npx -p "$AUTO_PR_PKG" auto-pr-get-commits
+          RUNNER: ${{ steps.setup.outputs.runner }}
+        run: $RUNNER -p "$AUTO_PR_PKG" auto-pr-get-commits
 
       - name: Setup Ollama
         if: steps.commits.outputs.count != '1'
@@ -126,7 +125,8 @@ jobs:
           OLLAMA_MODEL: ${{ inputs.ollama_model }}
           OLLAMA_URL: ${{ inputs.ollama_url }}
           AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
-        run: npx -p "$AUTO_PR_PKG" auto-pr-generate-content
+          RUNNER: ${{ steps.setup.outputs.runner }}
+        run: $RUNNER -p "$AUTO_PR_PKG" auto-pr-generate-content
 
       - name: Prepare artifact
         env:

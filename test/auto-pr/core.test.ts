@@ -1,4 +1,4 @@
-import { describe, expect, it, test } from "@effect/vitest";
+import { describe, expect, test } from "bun:test";
 import { Result } from "effect";
 import * as FastCheck from "effect/testing/FastCheck";
 import {
@@ -8,6 +8,7 @@ import {
 	decodeGhOutputTitle,
 	filterSemanticSubjects,
 	formatGhOutput,
+	type GhOutputValue,
 	getGhOutputValue,
 	isBlank,
 	isHttpError,
@@ -57,23 +58,23 @@ describe("auto-pr core", () => {
 	describe("sanitizeForGhOutput", () => {
 		test("escapes percent, CR, newline", () => {
 			Result.match(sanitizeForGhOutput("a%b\nc\rd"), {
-				onSuccess: (v) => expect(v).toBe("a%25b%0Ac%0Dd"),
-				onFailure: () => expect.fail("expected success"),
+				onSuccess: (v) => expect(v).toBe("a%25b%0Ac%0Dd" as GhOutputValue),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("trims and slices to 72", () => {
 			Result.match(sanitizeForGhOutput("  x  "), {
-				onSuccess: (v) => expect(v).toBe("x"),
-				onFailure: () => expect.fail("expected success"),
+				onSuccess: (v) => expect(v).toBe("x" as GhOutputValue),
+				onFailure: () => expect().fail("expected success"),
 			});
 			Result.match(sanitizeForGhOutput("a".repeat(100)), {
 				onSuccess: (v) => expect(v.length).toBe(72),
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails when escaped value exceeds 72 chars", () => {
 			Result.match(sanitizeForGhOutput("%".repeat(72)), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
@@ -95,17 +96,20 @@ describe("auto-pr core", () => {
 		test("splits and filters", () => {
 			expect(parseSubjects("a\n\nb\n  c  ")).toEqual(["a", "b", "c"]);
 		});
-		it.prop("split by newline, trim, filter blank", [FastCheck.array(FastCheck.string())], (as) => {
-			const subjects = as[0] as string[];
-			const formatted = subjects.join("\n");
-			const parsed = parseSubjects(formatted);
-			const expected = subjects.flatMap((s) =>
-				s
-					.split("\n")
-					.map((l) => l.trim())
-					.filter(Boolean),
+		test("split by newline, trim, filter blank", () => {
+			FastCheck.assert(
+				FastCheck.property(FastCheck.array(FastCheck.string()), (subjects) => {
+					const formatted = subjects.join("\n");
+					const parsed = parseSubjects(formatted);
+					const expected = subjects.flatMap((s) =>
+						s
+							.split("\n")
+							.map((l) => l.trim())
+							.filter(Boolean),
+					);
+					expect(parsed).toEqual(expected);
+				}),
 			);
-			expect(parsed).toEqual(expected);
 		});
 	});
 
@@ -128,16 +132,16 @@ describe("auto-pr core", () => {
 		test("succeeds for non-empty", () => {
 			Result.match(validateDescriptionResponse("some text"), {
 				onSuccess: (v) => expect(v).toBe("some text"),
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails for empty", () => {
 			Result.match(validateDescriptionResponse(""), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 			Result.match(validateDescriptionResponse("null"), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
@@ -151,26 +155,26 @@ describe("auto-pr core", () => {
 					expect(v.title).toBe("feat: add X");
 					expect(v.description).toBe("Summary of changes here.");
 				},
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails for empty or null", () => {
 			Result.match(parseTitleDescriptionResponse(""), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 			Result.match(parseTitleDescriptionResponse("null"), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
 		test("fails when title or description missing", () => {
 			Result.match(parseTitleDescriptionResponse("feat: x"), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 			Result.match(parseTitleDescriptionResponse("\n\nDescription only"), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
@@ -194,13 +198,13 @@ describe("auto-pr core", () => {
 			const parsed = { a: "1", b: "2" };
 			Result.match(getGhOutputValue(parsed, "a"), {
 				onSuccess: (v) => expect(v).toBe("1"),
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails when key absent", () => {
 			const parsed = { a: "1", b: "2" };
 			Result.match(getGhOutputValue(parsed, "missing"), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: (e) => expect(e.message).toContain("missing key"),
 			});
 		});
@@ -210,45 +214,46 @@ describe("auto-pr core", () => {
 		test("decodes URI component", () => {
 			Result.match(decodeGhOutputTitle("feat%3A%20add%20x"), {
 				onSuccess: (v) => expect(v).toBe("feat: add x"),
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails when absent (blank)", () => {
 			Result.match(decodeGhOutputTitle(""), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: (e) => expect(e.message).toContain("absent"),
 			});
 		});
 		test("fails on invalid", () => {
 			Result.match(decodeGhOutputTitle("%"), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
 	});
 
 	describe("sanitizeForGhOutput and decodeGhOutputTitle round-trip", () => {
-		it.prop(
-			"sanitize then decode yields original for non-empty strings without special chars (≤72 chars)",
-			[
-				FastCheck.string({ minLength: 1, maxLength: 72 }).filter(
-					(s) => s.trim().length > 0 && !/[\n\r%]/.test(s),
-				),
-			],
-			([title]) => {
-				const sanitized = sanitizeForGhOutput(title);
-				Result.match(sanitized, {
-					onSuccess: (encoded) => {
-						const decoded = decodeGhOutputTitle(encoded);
-						Result.match(decoded, {
-							onSuccess: (v) => expect(v).toBe(title.trim().slice(0, 72)),
-							onFailure: () => expect.fail("decode should succeed"),
+		test("sanitize then decode yields original for non-empty strings without special chars (≤72 chars)", () => {
+			FastCheck.assert(
+				FastCheck.property(
+					FastCheck.string({ minLength: 1, maxLength: 72 }).filter(
+						(s) => s.trim().length > 0 && !/[\n\r%]/.test(s),
+					),
+					(title) => {
+						const sanitized = sanitizeForGhOutput(title);
+						Result.match(sanitized, {
+							onSuccess: (encoded) => {
+								const decoded = decodeGhOutputTitle(encoded);
+								Result.match(decoded, {
+									onSuccess: (v) => expect(v).toBe(title.trim().slice(0, 72)),
+									onFailure: () => expect().fail("decode should succeed"),
+								});
+							},
+							onFailure: () => {},
 						});
 					},
-					onFailure: () => {},
-				});
-			},
-		);
+				),
+			);
+		});
 	});
 
 	describe("validateGetCommitsOutput", () => {
@@ -256,24 +261,24 @@ describe("auto-pr core", () => {
 			const r = validateGetCommitsOutput({ commits: "/c", files: "/f" });
 			Result.match(r, {
 				onSuccess: (v) => expect(v).toEqual({ commits: "/c", files: "/f" }),
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails when missing", () => {
 			Result.match(validateGetCommitsOutput({}), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
 		test("fails when commits blank", () => {
 			Result.match(validateGetCommitsOutput({ commits: "  ", files: "/f" }), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: (e) => expect(e.message).toContain("commits and files"),
 			});
 		});
 		test("fails when files blank", () => {
 			Result.match(validateGetCommitsOutput({ commits: "/c", files: "" }), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: (e) => expect(e.message).toContain("commits and files"),
 			});
 		});
@@ -284,12 +289,12 @@ describe("auto-pr core", () => {
 			const r = validateGenerateContentOutput({ title: "feat: x", body_file: "/b" });
 			Result.match(r, {
 				onSuccess: (v) => expect(v).toEqual({ title: "feat: x", bodyFile: "/b" }),
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 		test("fails when missing", () => {
 			Result.match(validateGenerateContentOutput({}), {
-				onSuccess: () => expect.fail("expected failure"),
+				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
 		});
@@ -314,7 +319,7 @@ describe("auto-pr core", () => {
 					expect(entries[0]?.value).toBe("feat: add x");
 					expect(entries[1]).toEqual({ key: "body_file", value: "/body.md" });
 				},
-				onFailure: () => expect.fail("expected success"),
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 	});

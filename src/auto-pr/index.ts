@@ -48,8 +48,6 @@ export {
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
 	TemplateRenderError,
-	UpdateNixHashNotFoundError,
-	UpdateNixHashUsageError,
 } from "#auto-pr/errors.js";
 
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";

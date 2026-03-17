@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { getInitFileSpecs } from "#lib/init-core.js";
 
 describe("init-core", () => {

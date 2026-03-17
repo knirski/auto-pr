@@ -57,7 +57,7 @@ Research date: 2026-03-15. Assesses `.github/workflows/*nix*` against current be
 
 **Current**: Standard flake with `checks`, `packages`, `devShells`, `apps`, `formatter`. Uses `nixos-25.11`, `flake-utils.lib.eachSystem`. Multi-system (`x86_64-linux`, `aarch64-linux`). CI runs `nix flake check -L --system <system>` on matrix (ubuntu-latest + ubuntu-24.04-arm). `checks.nix-lint` runs statix and deadnix on the flake source. Experimental features: `nix-command`, `flakes`, `auto-allocate-uids`.
 
-**Recommendation**: Done. Flake supports `x86_64-linux` and `aarch64-linux`; CI matrix uses ubuntu-latest and ubuntu-24.04-arm. Statix and deadnix run in flake check and via `npm run check:nix`; Lefthook runs them on pre-commit when `*.nix` changes.
+**Recommendation**: Done. Flake supports `x86_64-linux` and `aarch64-linux`; CI matrix uses ubuntu-latest and ubuntu-24.04-arm. Statix and deadnix run in flake check and via `bun run check:nix`; Lefthook runs them on pre-commit when `*.nix` changes.
 
 ### 6. update-flake-lock (Good)
 
