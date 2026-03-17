@@ -1,0 +1,21 @@
+# Updates bun.nix. Manual fix when main is stale.
+# ci-nix.yml handles updates on push and PR when nix/deps change.
+# Reuses the nix workflow (same-repo, push allowed).
+
+name: Update bun.nix
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: update-bun-nix
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  update-bun-nix:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/nix.yml
+    secrets: inherit

@@ -9,16 +9,16 @@ Thanks for your interest in contributing to auto-pr.
 ```bash
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
-npm install
-npm run build
-npx lefthook install
+bun install
+bun run build
+bun x lefthook install
 ```
 
-**Fork contributors:** Fork the repo, clone your fork, then `npm install`, `npm run build`, and `npx lefthook install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
+**Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
 ### Optional: typos, lychee, and actionlint for full local check
 
-`npm run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use Nix:
+`bun run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use Nix:
 
 | OS | typos | lychee | actionlint |
 |----|-------|--------|------------|
@@ -32,13 +32,13 @@ npx lefthook install
 
 Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
 
-**check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `npm run check:just-links` to verify links locally. CI uses `continue-on-error: true` for lychee in check.yml; docs-only CI (ci-docs) runs lychee without that.
+**check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `bun run check:just-links` to verify links locally. CI uses `continue-on-error: true` for lychee in check.yml; docs-only CI (ci-docs) runs lychee without that.
 
 **statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
 
 ### Run CI locally (full parity)
 
-`npm run check:ci` runs the same check workflow as CI in Docker. Requires [Docker](https://docs.docker.com/get-docker/) and either:
+`bun run check:ci` runs the same check workflow as CI in Docker. Requires [Docker](https://docs.docker.com/get-docker/) and either:
 
 - **gh extension** (preferred): `gh extension install nektos/gh-act`
 - **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
@@ -47,19 +47,19 @@ The script tries `gh act` first, then falls back to `act`.
 
 ### Pre-push hook
 
-Lefthook runs `npm run check:code` before each push. It is installed as an npm devDependency; run `npx lefthook install` after cloning to enable git hooks (no separate install required). Uses only npm deps (build, audit, test, lint, knip, typecheck); no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
+Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, test, lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
 
-**When changing `src/`:** Run `npm run build`; commit `dist/` if it changed (required for GitHub installs).
+**When changing `src/`:** Run `bun run build`; commit `dist/` if it changed (required for GitHub installs).
 
-If you change `package-lock.json` (e.g. add a dependency), the Nix hash must be updated:
+If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 
-**CI handles it:** Push your branch. CI will update `default.nix` automatically for same-repo PRs and main. No need to commit the hash change yourself.
+**CI handles it:** Push your branch. CI will update `bun.nix` automatically for same-repo PRs and main. No need to commit the change yourself.
 
-**Local warning:** `npm run check` warns when the hash is stale. You can ignore it — CI will fix it when you push.
+**Local warning:** `bun run check` warns when `bun.nix` is stale. You can ignore it — CI will fix it when you push.
 
-**If CI pushes an npmDepsHash update:** The PR head will change. Wait 1–2 minutes for the new check to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-check--check-waiting-for-status) if the required check stays "waiting for status".
+**If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for the new check to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-check--check-waiting-for-status) if the required check stays "waiting for status".
 
-**Fork PRs:** CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-npm-deps-hash` (or `npm run update-nix-hash -- <hash>` using the hash from the failed job), then commit and push. See [docs/CI.md](docs/CI.md).
+**Fork PRs:** CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
 
 See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architecture.
 
@@ -84,10 +84,10 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 **AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
 
-- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `npm run check:ci` (act) for local testing. (2) If pushing to CI, update the SHA in auto-pr.yml to the current commit so the workflow uses the branch code. After merging, update the pin to the merge commit SHA.
+- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run check:ci` (act) for local testing. (2) If pushing to CI, update the SHA in auto-pr.yml to the current commit so the workflow uses the branch code. After merging, update the pin to the merge commit SHA.
 - **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
-1. Run `npm run check` before submitting.
+1. Run `bun run check` before submitting.
 2. Ensure your commits follow Conventional Commits (the PR template includes a checklist).
 3. Update documentation if your changes affect user-facing behavior.
 
@@ -104,4 +104,4 @@ If you're unsure how to implement something or there are several valid options:
 
 ## Code Style
 
-The project uses [Biome](https://biomejs.dev/) for linting and formatting. Run `npm run lint:fix` to auto-fix issues.
+The project uses [Biome](https://biomejs.dev/) for linting and formatting. Run `bun run lint:fix` to auto-fix issues.

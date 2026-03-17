@@ -55,7 +55,7 @@ Uses `effect/unstable/cli` (Command, Argument, Flag).
 - **Merge commits:** Filtered from body and title input (subjects like `Merge branch 'x' into y` add no semantic value).
 - **Non-conventional commits:** Included in body and as Ollama input; type falls back to "Chore".
 - **Docs-only:** `isDocsOnly(files)` when `files.length === 0`. PR with commits but no file changes gets `howToTest: "N/A"`.
-- **Checklist:** The "I have run `npm run check`" box has no placeholder — always unchecked. By design.
+- **Checklist:** The "I have run `bun run check`" box has no placeholder — always unchecked. By design.
 - **Cross-repo refs:** `owner/repo#123` format supported; deduplicated and sorted.
 
 ## Implementation notes

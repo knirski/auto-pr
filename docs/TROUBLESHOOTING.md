@@ -47,7 +47,7 @@
 
 **Cause:** The prompt file is missing from the installed package. The package ships `dist/prompts/pr-description.txt`; if you're on an old version or a broken install, it may be absent.
 
-**Fix:** Use the latest auto-pr (e.g. `npx -p github:knirski/auto-pr` or a recent release). If building from source, run `npm run build` before use.
+**Fix:** Use the latest auto-pr (e.g. `npx -p github:knirski/auto-pr` or a recent release). If building from source, run `bun run build` before use.
 
 ### "BODY_FILE does not exist"
 

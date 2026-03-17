@@ -2,9 +2,11 @@
 
 Research date: 2025-03-15. Outlines steps to switch from upstream Nix (`cachix/install-nix-action`) to Determinate Nix (`DeterminateSystems/determinate-nix-action`).
 
+**Note:** This plan was written when auto-pr used npm and `npmDepsHash`. The project has since migrated to Bun and bun2nix (`bun.nix`). Phase 1.3 (npmDepsHash flow) is obsolete; the equivalent for bun is `bun.nix` auto-update in nix.yml. The Nix installer migration (Phases 1.1, 1.2) remains relevant.
+
 ## Context
 
-- **Current:** Upstream Nix via `cachix/install-nix-action`, custom `update-npm-deps-hash.sh` + inline git for npmDepsHash.
+- **Current:** Upstream Nix via `cachix/install-nix-action`, bun2nix for `bun.nix` (replaces legacy npmDepsHash).
 - **Driver:** Determinate Nix Installer drops upstream support Jan 1, 2026. Migrating aligns with Determinate’s direction and enables `determinate-nixd fix hashes` for hash automation.
 - **Scope:** CI workflows, local dev docs, flake apps. No change to `default.nix` or `buildNpmPackage` usage.
 

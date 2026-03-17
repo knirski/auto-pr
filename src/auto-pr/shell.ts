@@ -2,10 +2,10 @@
  * Shared shell (Effect) for auto-PR scripts. I/O, exec, layers.
  */
 
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeChildProcessSpawner from "@effect/platform-node-shared/NodeChildProcessSpawner";
-import * as NodeFileSystem from "@effect/platform-node-shared/NodeFileSystem";
-import * as NodePath from "@effect/platform-node-shared/NodePath";
+import * as BunChildProcessSpawner from "@effect/platform-bun/BunChildProcessSpawner";
+import * as BunFileSystem from "@effect/platform-bun/BunFileSystem";
+import * as BunPath from "@effect/platform-bun/BunPath";
+import * as BunRuntime from "@effect/platform-bun/BunRuntime";
 import { Effect, FileSystem, Layer, Logger } from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
@@ -13,10 +13,10 @@ import { formatGhOutput } from "#auto-pr/core.js";
 import { formatError, PullRequestFailedError } from "#auto-pr/errors.js";
 
 /** Platform layer for auto-PR scripts: FileSystem + Path. */
-export const PlatformLayer = NodeFileSystem.layer.pipe(Layer.provideMerge(NodePath.layer));
+export const PlatformLayer = BunFileSystem.layer.pipe(Layer.provideMerge(BunPath.layer));
 
 /** ChildProcessSpawner layer (requires FileSystem + Path). */
-export const ChildProcessSpawnerLayer = NodeChildProcessSpawner.layer.pipe(
+export const ChildProcessSpawnerLayer = BunChildProcessSpawner.layer.pipe(
 	Layer.provide(PlatformLayer),
 );
 
@@ -54,9 +54,9 @@ export function getDebugHint(): string {
 		: " Set AUTO_PR_DEBUG=1 for verbose output.";
 }
 
-/** Run main with NodeRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
+/** Run main with BunRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
 export function runMain(program: Effect.Effect<void, unknown>, eventName: string): void {
-	NodeRuntime.runMain(
+	BunRuntime.runMain(
 		program.pipe(
 			Effect.provide(AutoPrLoggerLayer),
 			Effect.tapError((e) =>

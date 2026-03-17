@@ -9,10 +9,10 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | Push to `ai/**` | auto-pr creates/updates PR |
 | PR to main (code changes) | ci → check, dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
-| PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + npmDepsHash update |
+| PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
 | Push to main | release-please, scorecard (if configured) |
-| Manual | update-nix-hash, update-flake-lock |
+| Manual | update-bun-nix, update-flake-lock |
 | Weekly | update-flake-lock (Sun), scorecard (Sat), stale (Mon) |
 
 ## First-time setup
@@ -31,9 +31,9 @@ Before CI can run fully:
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
 | [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md'` | check, dependency-review |
 | [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
-| [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, flake.lock` | nix |
+| [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
-| [update-nix-hash.yml](../.github/workflows/update-nix-hash.yml) | workflow_dispatch | — | update-hash (runs on default branch, pushes hash to main) |
+| [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
 | [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) | workflow_dispatch, schedule | — | update-flake-lock |
 | [release-please.yml](../.github/workflows/release-please.yml) | push → main | — | release-please (creates release PRs) |
 | [codeql.yml](../.github/workflows/codeql.yml) | push, pull_request → main | `paths-ignore: **/*.md, docs/**` | analyze |
@@ -47,9 +47,9 @@ Before CI can run fully:
 
 **ci-docs.yml** is complementary: runs when only `*.md` files change. Reports a passing `check` job so branch protection allows merge.
 
-**ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `npmDepsHash` in `default.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
+**ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
-**update-nix-hash.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `npmDepsHash` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated hash to `main`. For same-repo PRs, ci-nix handles updates automatically.
+**update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, ci-nix handles updates automatically.
 
 **update-flake-lock.yml** runs weekly (Sunday 00:00 UTC) and on manual trigger. Updates `flake.lock` and opens a PR. Requires `dependencies`, `nix`, and `automated` labels. Run `./scripts/create-labels.sh` before the first scheduled run.
 
@@ -65,13 +65,13 @@ Before CI can run fully:
 
 ## Run CI locally
 
-`npm run check:ci` runs the check workflow locally via [act](https://github.com/nektos/act) in Docker. Requires Docker and either `gh extension install nektos/gh-act` or `act` installed. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-full-parity).
+`bun run check:ci` runs the check workflow locally via [act](https://github.com/nektos/act) in Docker. Requires Docker and either `gh extension install nektos/gh-act` or `act` installed. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-full-parity).
 
-Pre-push runs `check:code` before each push (npm deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
+Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
 
 ## Link verification
 
-`npm run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge.
+`bun run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge.
 
 ## Branch Protection
 
@@ -83,7 +83,7 @@ Do not require `dependency-review` (PR-only) or `nix` (path-filtered); they woul
 
 ## Troubleshooting: "check / check" waiting for status
 
-When ci-nix pushes an npmDepsHash update, the PR head changes to a new commit. The required check must run on that new commit. If you see "waiting for status to be reported":
+When ci-nix pushes a bun.nix update, the PR head changes to a new commit. The required check must run on that new commit. If you see "waiting for status to be reported":
 
 1. **Wait 1–2 minutes** — The push triggers the check workflow; it may take a moment to start.
 2. **Re-run workflows** — If the check still hasn't run, use "Re-run all jobs" from the Actions tab.
@@ -91,4 +91,4 @@ When ci-nix pushes an npmDepsHash update, the PR head changes to a new commit. T
 
 ## Fork PRs
 
-CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-npm-deps-hash` (or `npm run update-nix-hash -- <hash>` using the hash from the failed job), then commit and push. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [CONTRIBUTING.md](../CONTRIBUTING.md).

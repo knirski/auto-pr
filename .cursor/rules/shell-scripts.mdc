@@ -6,6 +6,6 @@ globs: ["**/*.sh"]
 # Shell Scripts
 
 - **Lint:** Run `shellcheck` and `shfmt -d` on `.sh` files before finishing.
-- **Project commands:** `npm run lint:scripts` (shellcheck + format check), `npm run format:scripts` (shfmt -w to fix).
+- **Project commands:** `bun run lint:scripts` (shellcheck + format check), `bun run format:scripts` (shfmt -w to fix).
 - **Pre-commit:** Staged `.sh` files are auto-formatted via lint-staged (shfmt -w).
-- **Full check:** `npm run check` (includes shellcheck + shfmt). Use `check:with-links` to add lychee.
+- **Full check:** `bun run check` (includes shellcheck + shfmt). Use `check:with-links` to add lychee.

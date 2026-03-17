@@ -51,18 +51,18 @@ No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.m
 ## Quick start (development)
 
 ```bash
-npm install
-npx lefthook install
-npm run check
+bun install
+bun x lefthook install
+bun run check
 ```
 
 | Command | Purpose |
 |---------|---------|
-| `npm run check` | Local checks (npm, statix, deadnix, typos, lychee, actionlint) |
-| `npm run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
-| `npm run check:ci` | Full CI parity in Docker (requires Docker + `gh act` or `act`) |
-| `npm run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
-| `npm run check:just-links` | Lychee link check only (requires lychee or Nix) |
+| `bun run check` | Local checks (Bun, statix, deadnix, typos, lychee, actionlint) |
+| `bun run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
+| `bun run check:ci` | Full CI parity in Docker (requires Docker + `gh act` or `act`) |
+| `bun run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
+| `bun run check:just-links` | Lychee link check only (requires lychee or Nix) |
 
 ## Installation
 
@@ -78,9 +78,9 @@ npm install auto-pr
 ```bash
 git clone https://github.com/knirski/auto-pr.git
 cd auto-pr
-npm install
-npm run build
-npx lefthook install
+bun install
+bun run build
+bun x lefthook install
 ```
 
 ## Commands
@@ -101,21 +101,21 @@ For contributors to this repo, the project includes an optional Nix flake. CI us
 
 | Use | Command | Purpose |
 |-----|---------|---------|
-| **Dev shell** | `nix develop` | Node 24, npm, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `npm run check` |
+| **Dev shell** | `nix develop` | Bun, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
 | **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
 | **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
 | **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, Ollama for 2+ commits) |
-| **Update deps hash** | `nix run .#update-npm-deps-hash` | Update `npmDepsHash` in `default.nix` after changing `package-lock.json` |
+| **Update bun.nix** | `nix run .#update-bun-nix` | Regenerate `bun.nix` after changing `bun.lock` |
 | **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
-| **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, prefetch-npm-deps directly |
+| **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, bun2nix directly |
 
 ```bash
 # Development shell
 nix develop
 
 # Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
-npx tsx src/workflow/run-auto-pr.ts
-# or: node dist/workflow/auto-pr-run.mjs (after npm run build)
+bun run src/workflow/run-auto-pr.ts
+# or: node dist/workflow/auto-pr-run.js (after bun run build)
 # or: nix run .#default
 ```
 
@@ -146,7 +146,7 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 
 Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.ts`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
 
-This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** npm audit in check; SBOM (CycloneDX via npm sbom), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
+This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** bun audit in check; SBOM (CycloneDX via bun x @cyclonedx/cyclonedx-npm), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
 
 ## Documentation
 
@@ -169,10 +169,10 @@ This project was developed with assistance from AI coding tools.
 ## Verification
 
 ```bash
-npm run check
+bun run check
 ```
 
-Runs full check: audit, test, lint, knip, typecheck, Nix (statix, deadnix), docs (rumdl, typos), actionlint, shellcheck, shfmt. Use `check:with-links` to add lychee link verification. Pre-push runs `check:code` (npm deps only). Use `check:ci` for full CI parity in Docker.
+Runs full check: audit, test, lint, knip, typecheck, Nix (statix, deadnix), docs (rumdl, typos), actionlint, shellcheck, shfmt. Use `check:with-links` to add lychee link verification. Pre-push runs `check:code` (Bun deps only). Use `check:ci` for full CI parity in Docker.
 
 ## License
 

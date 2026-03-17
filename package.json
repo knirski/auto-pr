@@ -23,11 +23,12 @@
 	},
 	"type": "module",
 	"bin": {
-		"auto-pr-get-commits": "./dist/workflow/auto-pr-get-commits.mjs",
-		"auto-pr-generate-content": "./dist/workflow/auto-pr-generate-content.mjs",
-		"auto-pr-create-or-update-pr": "./dist/workflow/auto-pr-create-or-update-pr.mjs",
-		"auto-pr-fill-pr-template": "./dist/tools/auto-pr-fill-pr-template.mjs",
-		"auto-pr-init": "./dist/tools/auto-pr-init.mjs"
+		"auto-pr-get-commits": "./dist/workflow/auto-pr-get-commits.js",
+		"auto-pr-generate-content": "./dist/workflow/auto-pr-generate-content.js",
+		"auto-pr-create-or-update-pr": "./dist/workflow/auto-pr-create-or-update-pr.js",
+		"auto-pr-run": "./dist/workflow/auto-pr-run.js",
+		"auto-pr-fill-pr-template": "./dist/tools/auto-pr-fill-pr-template.js",
+		"auto-pr-init": "./dist/tools/auto-pr-init.js"
 	},
 	"files": [
 		"dist",
@@ -36,16 +37,15 @@
 		".nvmrc"
 	],
 	"scripts": {
-		"test": "vitest run --coverage --typecheck",
-		"test:unit": "vitest run --coverage=false --typecheck",
-		"test:watch": "vitest",
-		"test:ui": "vitest --ui",
-		"check": "bash scripts/check-nix-hash.sh && npm run check:nix && npm run check:code && npm run check:docs && npm run lint:workflows && npm run lint:scripts",
+		"test": "bun test --coverage",
+		"test:unit": "bun test",
+		"test:watch": "bun test --watch",
+		"check": "bash scripts/check-nix-hash.sh && bun run check:nix && bun run check:code && bun run check:docs && bun run lint:workflows && bun run lint:scripts",
 		"check:ci": "bash scripts/run-check-ci.sh",
-		"check:code": "npm run build && npm audit --audit-level=high && run-p lint knip typecheck && npm run test",
-		"check:with-links": "npm run check && npm run check:just-links",
-		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix .",
-		"check:docs": "npx rumdl check . && scripts/nix-run-if-missing.sh typos",
+		"check:code": "bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
+		"check:with-links": "bun run check && bun run check:just-links",
+		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix --exclude bun.nix .",
+		"check:docs": "bun x rumdl check . && scripts/nix-run-if-missing.sh typos",
 		"check:just-links": "scripts/nix-run-if-missing.sh lychee --timeout 30 --max-retries 10 --retry-wait-time 2 --no-progress .",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --write --unsafe",
@@ -55,19 +55,16 @@
 		"format": "biome format --write .",
 		"knip": "knip",
 		"typecheck": "tsgo --noEmit",
-		"get-commits": "tsx src/workflow/auto-pr-get-commits.ts",
-		"generate-content": "tsx src/workflow/generate-pr-content.ts",
-		"create-or-update-pr": "tsx src/workflow/create-or-update-pr.ts",
-		"fill-pr-template": "tsx src/tools/fill-pr-template.ts",
-		"build": "tsdown",
-		"prepublishOnly": "npm run build",
-		"update-nix-hash": "tsx src/tools/update-nix-hash.ts",
-		"update-npm-deps-hash": "tsx src/tools/update-npm-deps-hash.ts",
-		"run-auto-pr": "tsx src/workflow/run-auto-pr.ts"
+		"get-commits": "bun run src/workflow/auto-pr-get-commits.ts",
+		"generate-content": "bun run src/workflow/auto-pr-generate-content.ts",
+		"create-or-update-pr": "bun run src/workflow/auto-pr-create-or-update-pr.ts",
+		"fill-pr-template": "bun run src/tools/auto-pr-fill-pr-template.ts",
+		"build": "bun run scripts/build.ts",
+		"prepublishOnly": "bun run build",
+		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
 	},
 	"dependencies": {
-		"@effect/platform-node": "4.0.0-beta.33",
-		"@effect/platform-node-shared": "4.0.0-beta.33",
+		"@effect/platform-bun": "4.0.0-beta.33",
 		"conventional-commits-parser": "^6.3.0",
 		"effect": "4.0.0-beta.33",
 		"micromustache": "^8.0.3",
@@ -75,29 +72,23 @@
 		"unist-util-visit": "^5.1.0"
 	},
 	"devDependencies": {
-		"tsdown": "^0.21.4",
-		"tsx": "^4.21.0",
 		"@biomejs/biome": "^2.4.6",
 		"@commitlint/cli": "^20.4.4",
 		"@commitlint/config-conventional": "^20.4.4",
-		"@effect/vitest": "4.0.0-beta.33",
 		"@types/mdast": "^4.0.4",
 		"@types/node": "^24.0.0",
 		"@typescript/native-preview": "^7.0.0-dev",
-		"@vitest/coverage-v8": "^4.0.18",
-		"@vitest/ui": "^4.0.18",
+		"bun-types": "^1.3.10",
 		"knip": "^5.86.0",
 		"lefthook": "^2.1.4",
 		"lint-staged": "^16.3.2",
 		"npm-run-all": "^4.1.5",
 		"rumdl": "^0.1.51",
-		"typescript": "^5.7.0",
-		"vite-tsconfig-paths": "^5.1.2",
-		"vitest": "^4.0.18"
+		"typescript": "^5.7.0"
 	},
 	"lint-staged": {
 		"*.{ts,tsx}": [
-			"npx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true"
+			"bun x biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true"
 		],
 		"*.sh": [
 			"scripts/nix-run-if-missing.sh shfmt -w"
@@ -109,8 +100,7 @@
 		]
 	},
 	"engines": {
-		"node": ">=24.0.0",
-		"typescript": ">=5.0.0"
+		"node": ">=24.0.0"
 	},
-	"packageManager": "npm@10.9.0"
+	"packageManager": "bun@1.3.10"
 }

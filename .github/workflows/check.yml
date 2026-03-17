@@ -21,17 +21,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
+          bun-version: "1.3.10"
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Generate SBOM
-        run: npm sbom --sbom-format=cyclonedx > sbom.json
+        run: bun x @cyclonedx/cyclonedx-npm --output-file sbom.json
 
       - name: Upload SBOM
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -43,7 +42,7 @@ jobs:
         uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
 
       - name: Check code (test, lint, typecheck)
-        run: npm run check:code
+        run: bun run check:code
 
       - name: Markdown lint
         uses: rvben/rumdl@8c1798b13cf961c88a4c5d1136448f4f4391383d # v0.1.47
