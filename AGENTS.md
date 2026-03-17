@@ -69,8 +69,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for high-level structure, pipel
 
 ```
 .github/
+  actions/          — composite actions (setup-runtime). Reusable workflows use full path (knirski/auto-pr/...) so callers don't need them.
   PULL_REQUEST_TEMPLATE.md
-  workflows/         — ci, release-please, ci-release-please, auto-pr, auto-pr-generate-reusable, auto-pr-create-reusable
+  workflows/        — ci, release-please, ci-release-please, auto-pr, auto-pr-generate-reusable, auto-pr-create-reusable
 src/
   auto-pr/          — config, core, errors, interfaces, live, paths, shell, utils
   workflow/         — main auto-PR pipeline (auto-pr-get-commits, auto-pr-generate-content, auto-pr-create-or-update-pr, auto-pr-run)
@@ -114,7 +115,7 @@ test/
 | Domain errors | `Schema.TaggedErrorClass` in `errors.ts` |
 | Optional returns | Use `Option<T>`; avoid `T \| null` or `T \| undefined` |
 | File names | kebab-case for multi-word |
-| Workflow testing | Prefer `check:ci` (act) locally; update `auto-pr.yml` SHA to `git rev-parse HEAD` when testing on new branches |
+| Workflow testing | Prefer `check:ci` (act) locally; update all `@SHA` refs (auto-pr.yml, setup-runtime in generate/check) to `git rev-parse HEAD` when testing on new branches |
 
 ## Avoid
 
@@ -138,6 +139,30 @@ Create small, focused commits. If changes span many files or concerns, propose s
 - Issues: `issue_write`, `add_issue_comment`, `issue_read`
 - Fallback to `gh` only when MCP has no matching tool.
 
+## Post-merge: Workflow SHA updates
+
+**When you merge a PR** (or **when you notice a freshly merged PR** on main) that changed any of:
+
+- `.github/workflows/auto-pr.yml`
+- `.github/workflows/auto-pr-generate-reusable.yml`
+- `.github/workflows/auto-pr-create-reusable.yml`
+- `.github/actions/setup-runtime/`
+
+**Check if workflow pins need updating.** The reusable workflows and setup-runtime action are pinned to commit SHAs. After a merge, main has a new tip; adopters and the workflow itself must use that tip.
+
+**Procedure:**
+
+1. `git checkout main && git pull`
+2. Did the last commit touch any of those files? (`git log -1 --name-only`)
+3. If yes, get the tip of main: `git rev-parse HEAD`
+4. Update all pins to that SHA in:
+   - `auto-pr.yml` — both `uses:` refs (generate, create)
+   - `auto-pr-generate-reusable.yml` — setup-runtime ref
+   - `check.yml` — setup-runtime ref
+5. Commit and push: `chore: update workflow pins to merge commit`
+
+**Do not skip this step.** Stale pins cause adopters to run old workflow code; new fixes or features won't apply until pins are updated.
+
 ## Verification
 
 ```bash
@@ -151,7 +176,7 @@ Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:doc
 - Before committing: run `bun run check`; ensure all tests pass.
 - Pre-push runs `check:code` automatically (Lefthook). Run `bun x lefthook install` after cloning. Use `git push --no-verify` only when necessary.
 - For full CI parity locally (e.g. debugging CI): `bun run check:ci` (requires Docker + act or gh-act).
-- **Workflow testing:** Prefer `bun run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.
+- **Workflow testing:** Prefer `bun run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update all `@SHA` refs (auto-pr.yml, setup-runtime in generate/check) to `git rev-parse HEAD` so the workflow runs with the branch code.
 
 ## Documentation
 

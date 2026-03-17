@@ -13,7 +13,7 @@
 **Fix:**
 
 - **Adopters:** Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch and use the SHA from its `uses:` lines.
-- **Contributors to auto-pr:** When testing workflow changes on a branch, update both `uses:` refs in [auto-pr.yml](../.github/workflows/auto-pr.yml) to the current commit: `git rev-parse HEAD`. After merging to main, update the pin to the merge commit SHA.
+- **Contributors to auto-pr:** When testing workflow changes on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): (1) both `uses:` refs in [auto-pr.yml](../.github/workflows/auto-pr.yml), (2) the setup-runtime ref in [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml) and [check.yml](../.github/workflows/check.yml). After merging to main, update all pins to the merge commit SHA.
 
 ### "Missing .github/PULL_REQUEST_TEMPLATE.md" (or custom path)
 
@@ -85,7 +85,7 @@
 
 ## Wrong runtime (Node vs Bun) or cache not working
 
-**Cause:** The setup-runtime action detects your runtime from `packageManager` (in package.json) or lockfile. Stale lockfiles or missing `packageManager` can cause mismatches.
+**Cause:** The [setup-runtime action](../.github/actions/setup-runtime/README.md) detects your runtime from `packageManager` (in package.json) or lockfile. Stale lockfiles or missing `packageManager` can cause mismatches.
 
 **Fix:** Ensure your repo has one of: `packageManager` in package.json (`bun@*`, `npm@*`, `pnpm@*`, `yarn@*`), or a lockfile (`bun.lock`, `bun.lockb`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`). For pnpm, `pnpm/action-setup` must run before `setup-node`; setup-runtime handles this.
 

@@ -83,6 +83,8 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
+**No action copying required.** The reusable workflows fetch everything (including the setup-runtime action) from knirski/auto-pr. The `./` path would resolve to your repo; we use full paths so you don't need anything in `.github/actions/`.
+
 All inputs use sensible defaults (Ollama model, PR template path, generic "how to test" text). Override via `with:` only when needed. **Node projects:** add `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "` to the generate job for accurate PR instructions.
 
 **Run checks first:** See [Running checks before PR creation](#running-checks-before-pr-creation) to add a check job before generate/create.
@@ -229,7 +231,7 @@ Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_h
 | Issue | Fix |
 |-------|-----|
 | Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
-| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, set the SHA to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
+| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
 | "Missing [path]" (PR template) | Run `npx auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | "node-version-file" error | Ensure `.nvmrc` exists (run `npx auto-pr-init`). Use `node-version-file: ".nvmrc"` for single source of truth. |
 | Check job fails | Ensure your check command exists (e.g. `npm run check`, `pytest`, `cargo test`). See [Running checks before PR creation](#running-checks-before-pr-creation) |
