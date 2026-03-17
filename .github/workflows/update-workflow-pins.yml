@@ -59,4 +59,4 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git add .github/
           git commit -m "chore(workflows): update self-referential pins to ${{ github.sha }}"
-          git push origin main
+          git push origin HEAD:main
