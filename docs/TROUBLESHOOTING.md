@@ -2,7 +2,7 @@
 
 ## Do I need Nix?
 
-**No.** Nix is optional and only used by contributors to the auto-pr repo. Users use Node and npx only. The reusable workflow and npm dependency work without Nix.
+**No.** Nix is optional and only used by contributors to the auto-pr repo. Users run auto-pr via `npx` or `bunx`; the workflow auto-detects npm, yarn, pnpm, or bun from your repo. No Nix required.
 
 ## Workflow fails immediately
 
@@ -82,6 +82,12 @@
 **Cause:** Ollama returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
 
 **Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. Try a different `OLLAMA_MODEL` (e.g. `llama3.1:8b`).
+
+## Wrong runtime (Node vs Bun) or cache not working
+
+**Cause:** The setup-runtime action detects your runtime from `packageManager` (in package.json) or lockfile. Stale lockfiles or missing `packageManager` can cause mismatches.
+
+**Fix:** Ensure your repo has one of: `packageManager` in package.json (`bun@*`, `npm@*`, `pnpm@*`, `yarn@*`), or a lockfile (`bun.lock`, `bun.lockb`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`). For pnpm, `pnpm/action-setup` must run before `setup-node`; setup-runtime handles this.
 
 ## npm "Unknown user config always-auth"
 

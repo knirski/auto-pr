@@ -98,6 +98,7 @@ test/
 | New live interpreter | `src/auto-pr/live/`. Attach layer to service: `static readonly Live = Layer.effect(...)` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
+| Composite action (workflow) | `.github/actions/<name>/` |
 | New prompt | `src/auto-pr/prompts/` |
 
 ## Key Rules

@@ -61,10 +61,9 @@ jobs:
           name: pr-content
           path: ${{ runner.temp }}/pr-artifact
 
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          node-version-file: ".nvmrc"
+      - name: Setup runtime (Node or alternative) with cache
+        id: setup
+        uses: ./.github/actions/setup-runtime
 
       - name: Generate GitHub App token
         id: app-token
@@ -78,6 +77,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
+          RUNNER: ${{ steps.setup.outputs.runner }}
         run: |
           TITLE=$(cat "$ARTIFACT_DIR/title.txt")
           export TITLE
@@ -88,4 +88,4 @@ jobs:
           export BRANCH
           DEFAULT_BRANCH=$(cat "$ARTIFACT_DIR/default_branch.txt")
           export DEFAULT_BRANCH
-          npx -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr
+          $RUNNER -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr
