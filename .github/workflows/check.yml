@@ -25,11 +25,16 @@ jobs:
         id: setup
         uses: ./.github/actions/setup-runtime
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Setup Node (for SBOM)
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "lts/*"
 
       - name: Generate SBOM
-        run: bun x @cyclonedx/cyclonedx-npm --output-file sbom.json
+        run: npm install && npm sbom --sbom-format cyclonedx > sbom.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Upload SBOM
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

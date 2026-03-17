@@ -146,7 +146,7 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 
 Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.ts`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
 
-This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** bun audit in check; SBOM (CycloneDX via bun x @cyclonedx/cyclonedx-npm), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
+This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** bun audit in check; SBOM (CycloneDX via native npm sbom), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
 
 ## Documentation
 
