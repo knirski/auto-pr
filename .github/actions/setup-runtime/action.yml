@@ -42,14 +42,14 @@ runs:
         run_install: false
 
     - name: Setup Node (with cache)
-      if: steps.detect.outputs.cache != ''
+      if: steps.detect.outputs.cache == 'npm' || steps.detect.outputs.cache == 'yarn' || steps.detect.outputs.cache == 'pnpm'
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
       with:
         node-version-file: ${{ inputs.node-version-file }}
         cache: ${{ steps.detect.outputs.cache }}
 
     - name: Setup Node (no cache)
-      if: steps.detect.outputs.runtime == 'node' && steps.detect.outputs.cache == ''
+      if: steps.detect.outputs.runtime == 'node' && steps.detect.outputs.cache != 'npm' && steps.detect.outputs.cache != 'yarn' && steps.detect.outputs.cache != 'pnpm'
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
       with:
         node-version-file: ${{ inputs.node-version-file }}
