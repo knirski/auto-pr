@@ -54,17 +54,23 @@ export function getDebugHint(): string {
 		: " Set AUTO_PR_DEBUG=1 for verbose output.";
 }
 
-/** Run main with BunRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
-export function runMain(program: Effect.Effect<void, unknown>, eventName: string): void {
-	BunRuntime.runMain(
-		program.pipe(
-			Effect.provide(AutoPrLoggerLayer),
-			Effect.tapError((e) =>
-				Effect.logError({
-					event: eventName,
-					error: formatError(e) + getDebugHint(),
-				}),
-			),
+/** Prepares a main program with Logger layer and error logging. Used by runMain. */
+export function withMainSetup(
+	program: Effect.Effect<void, unknown>,
+	eventName: string,
+): Effect.Effect<void, unknown> {
+	return program.pipe(
+		Effect.provide(AutoPrLoggerLayer),
+		Effect.tapError((e) =>
+			Effect.logError({
+				event: eventName,
+				error: formatError(e) + getDebugHint(),
+			}),
 		),
 	);
+}
+
+/** Run main with BunRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
+export function runMain(program: Effect.Effect<void, unknown>, eventName: string): void {
+	BunRuntime.runMain(withMainSetup(program, eventName));
 }
