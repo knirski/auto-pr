@@ -141,27 +141,9 @@ Create small, focused commits. If changes span many files or concerns, propose s
 
 ## Post-merge: Workflow SHA updates
 
-**When you merge a PR** (or **when you notice a freshly merged PR** on main) that changed any of:
+**Automated.** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) runs on push to main when workflows/actions change and updates self-referential pins. No manual step needed in normal cases.
 
-- `.github/workflows/auto-pr.yml`
-- `.github/workflows/auto-pr-generate-reusable.yml`
-- `.github/workflows/auto-pr-create-reusable.yml`
-- `.github/actions/setup-runtime/`
-
-**Check if workflow pins need updating.** The reusable workflows and setup-runtime action are pinned to commit SHAs. After a merge, main has a new tip; adopters and the workflow itself must use that tip.
-
-**Procedure:**
-
-1. `git checkout main && git pull`
-2. Did the last commit touch any of those files? (`git log -1 --name-only`)
-3. If yes, get the tip of main: `git rev-parse HEAD`
-4. Update all pins to that SHA in:
-   - `auto-pr.yml` — both `uses:` refs (generate, create)
-   - `auto-pr-generate-reusable.yml` — setup-runtime ref
-   - `check.yml` — setup-runtime ref
-5. Commit and push: `chore: update workflow pins to merge commit`
-
-**Do not skip this step.** Stale pins cause adopters to run old workflow code; new fixes or features won't apply until pins are updated.
+**If automation didn't run** (e.g. merge only touched `src/`): run **Actions → Update workflow pins** manually, or update pins yourself per [docs/CI.md](docs/CI.md#workflow-pin-automation).
 
 ## Verification
 

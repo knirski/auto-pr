@@ -1,0 +1,62 @@
+# Updates self-referential workflow pins (knirski/auto-pr/...@SHA) to current commit.
+# Runs on push to main when workflows/actions change, or on workflow_dispatch.
+# Loop prevention: skips when commit message starts with "chore(workflows): update self-referential pins".
+# Only runs in knirski/auto-pr (skips forks).
+
+name: Update workflow pins
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  workflow_dispatch:
+
+concurrency:
+  group: update-workflow-pins-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  update-pins:
+    if: |
+      github.repository == 'knirski/auto-pr' &&
+      (github.event_name != 'push' || github.event.head_commit == null || !startsWith(github.event.head_commit.message, 'chore(workflows): update self-referential pins'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 1
+
+      - name: Update pins
+        id: update
+        uses: ./.github/actions/update-workflow-pins
+        with:
+          target_sha: ${{ github.sha }}
+
+      - name: Commit and push
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git add .github/
+          git commit -m "chore(workflows): update self-referential pins to ${{ github.sha }}"
+          git push origin main

@@ -1,0 +1,42 @@
+# Composite action: replace self-referential knirski/auto-pr refs with target SHA.
+# Used by update-workflow-pins.yml on push to main (when workflows/actions change).
+# Loop prevention: workflow skips when commit message starts with "chore(workflows): update self-referential pins".
+
+name: Update workflow pins
+description: Replace self-referential knirski/auto-pr refs with target SHA
+
+inputs:
+  target_sha:
+    description: "Commit SHA to pin to (default: current commit)"
+    required: false
+    default: ''
+  repo:
+    description: "Repo slug for self-refs (e.g. knirski/auto-pr)"
+    required: false
+    default: 'knirski/auto-pr'
+  check_only:
+    description: "If true, exit 1 when pins are stale (no file changes)"
+    required: false
+    default: 'false'
+
+outputs:
+  changed:
+    description: "'true' if any file was modified (or would be in check_only)"
+    value: ${{ steps.update.outputs.changed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Update pins
+      id: update
+      shell: bash
+      run: |
+        cd "$GITHUB_WORKSPACE"
+        # GitHub passes inputs as INPUT_<NAME> (uppercase, hyphens to underscores)
+        export INPUT_TARGET_SHA="${{ inputs.target_sha || github.sha }}"
+        export INPUT_REPO="${{ inputs.repo }}"
+        export INPUT_CHECK_ONLY="${{ inputs.check_only }}"
+        chmod +x .github/actions/update-workflow-pins/update-pins.sh
+        .github/actions/update-workflow-pins/update-pins.sh
+      env:
+        GITHUB_SHA: ${{ github.sha }}
