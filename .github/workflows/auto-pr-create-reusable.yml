@@ -61,9 +61,17 @@ jobs:
           name: pr-content
           path: ${{ runner.temp }}/pr-artifact
 
-      - name: Setup runtime (Node or alternative) with cache
+      # Create job checks out default branch; local actions resolve from workspace.
+      # setup-runtime lives on ai branches; main may not have it. Use npx for create
+      # (no project deps needed, just runs auto-pr package).
+      - name: Setup Node for create job
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "lts/*"
+
+      - name: Set runner for create job
         id: setup
-        uses: ./.github/actions/setup-runtime
+        run: echo "runner=npx" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App token
         id: app-token
