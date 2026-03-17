@@ -8,17 +8,17 @@ import {
 	withMainSetup,
 } from "#auto-pr/shell.js";
 import { runEffect } from "#test/run-effect.js";
-import { createTestTempDirEffect, TestBaseLayer } from "#test/test-utils.js";
+import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
 
 describe("withMainSetup", () => {
 	test("succeeds when program succeeds", async () => {
-		await runEffect(withMainSetup(Effect.succeed(undefined), "test_event"), Layer.empty);
+		await runEffect(withMainSetup(Effect.succeed(undefined), "test_event"), SilentLoggerLayer);
 	});
 
 	test("runs error logging when program fails", async () => {
 		const exit = await runEffect(
 			withMainSetup(Effect.fail("test error"), "test_event").pipe(Effect.exit, Effect.scoped),
-			Layer.empty,
+			SilentLoggerLayer,
 		);
 		expect(exit._tag).toBe("Failure");
 	});
