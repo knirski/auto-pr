@@ -28,11 +28,11 @@ concurrency:
 
 jobs:
   generate:
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@ai/simplify-auto-pr-workflows
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@f49b41fbdd1397689d6cafc1e579807447e1af04
 
   create:
     needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@ai/simplify-auto-pr-workflows
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@f49b41fbdd1397689d6cafc1e579807447e1af04
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit

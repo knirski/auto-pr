@@ -1,7 +1,8 @@
 # Standalone Nix package for auto-pr.
 # Used by flake.nix when published independently.
+# Uses bun2nix for dependency fetching.
 
-{ pkgs }:
+{ pkgs, bun2nix }:
 
 let
   packageJson = builtins.fromJSON (builtins.readFile ./package.json);
@@ -14,21 +15,25 @@ let
       && builtins.baseNameOf path != "result"
       && builtins.baseNameOf path != "coverage";
   };
-  npmDepsHash = "sha256-oJXFOMjXoh+XrOtKAfmk+6nRsLcsh1PK8CJOX9QzHX8=";
 in
-pkgs.buildNpmPackage rec {
+pkgs.stdenv.mkDerivation rec {
   pname = "auto-pr";
   inherit (packageJson) version;
-  inherit src npmDepsHash;
-  nodejs = pkgs.nodejs_24;
-  npmBuildScript = "build";
-  dontCheck = true;
+  inherit src;
+
+  nativeBuildInputs = [ bun2nix.hook pkgs.bun ];
+  bunDeps = bun2nix.fetchBunDeps { bunNix = ./bun.nix; };
+
+  dontUseBunBuild = true;
+
+  buildPhase = "bun run build";
+
   installPhase = ''
     mkdir -p $out/lib/node_modules/auto-pr
-    cp -r package.json package-lock.json node_modules dist .github .nvmrc $out/lib/node_modules/auto-pr/
+    cp -r package.json bun.lock node_modules dist .github .nvmrc $out/lib/node_modules/auto-pr/
     mkdir -p $out/bin
     echo '#!${pkgs.runtimeShell}
-    cd "${placeholder "out"}/lib/node_modules/auto-pr" && exec node dist/workflow/auto-pr-run.mjs "$@"' > $out/bin/run-auto-pr
+    cd "$out/lib/node_modules/auto-pr" && exec node dist/workflow/auto-pr-run.js "$@"' > $out/bin/run-auto-pr
     chmod +x $out/bin/run-auto-pr
   '';
 }

@@ -1,10 +1,12 @@
 # Plan: Idiomatic TypeScript Build for auto-pr (2026)
 
-**Status:** Implemented  
+**Status:** Implemented (via Bun.build, not tsdown)  
 **Date:** 2026-03-16  
 **Context:** Fix CI failure when package used as dependency; adopt standard build-before-publish pattern.
 
 **Optimality:** tsdown is the best fit for 2026: Rolldown-based (2–8× faster than tsup), ESM-first, auto-reads `engines.node`. Alternatives (pkgroll, bunup) either complicate our path-alias/copy setup or require Bun. The plan incorporates gaps (prompt copy, npmDepsHash, .nvmrc in files) and modern tips (tsdown option names, `sideEffects`, migration path).
+
+**Current implementation:** The build uses Bun.build (scripts/build.ts), not tsdown. Output is `dist/*.js`. This ADR documents the research; the chosen implementation diverged to Bun.build.
 
 ## Research Summary
 

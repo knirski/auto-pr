@@ -1,6 +1,6 @@
 # Architecture
 
-This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. tsdown builds `dist/`; bins run via `node dist/workflow/auto-pr-*.mjs` and `node dist/tools/auto-pr-*.mjs`. Prompts at `dist/prompts/`. No declaration emit.
+This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. Prompts at `dist/prompts/`. No declaration emit.
 
 ## High-Level Structure
 
@@ -9,7 +9,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 │  CLI entry points (src/workflow/*.ts, src/tools/*.ts)           │
 │  workflow: auto-pr-get-commits, generate-pr-content,            │
 │  create-or-update-pr, run-auto-pr                               │
-│  tools: fill-pr-template, init, update-nix-hash                 │
+│  tools: fill-pr-template, init                                 │
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -32,9 +32,9 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Functional Core / Imperative Shell (FC/IS)
 
 - **`src/workflow/*.ts`** — Main auto-PR workflow. get-commits, generate-content, create-or-update-pr, run-auto-pr.
-- **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init, update-nix-hash, update-npm-deps-hash.
+- **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init.
 - **`src/lib/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs.
-- **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Orchestrates I/O.
+- **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Uses `@effect/platform-bun` for FileSystem, Path, ChildProcessSpawner, Runtime. Orchestrates I/O.
 - **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets. `getPrDescriptionPromptPath` resolves `dist/prompts/pr-description.txt` (relative to shared chunk in `dist/`).
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
 - **`src/auto-pr/core.ts`** — Pure helpers. filterSemanticSubjects, formatGhOutput, etc. No Effect, no I/O.
@@ -45,7 +45,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Where to Start
 
-- **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/generate-pr-content.ts`, `src/workflow/create-or-update-pr.ts`, `src/tools/fill-pr-template.ts`
+- **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
 - **Core logic:** `src/auto-pr/core.ts`, `src/lib/fill-pr-template-core.ts`
 - **Ollama integration:** `src/auto-pr/live/fill-pr-template.ts` (FillPrTemplate implementation)
 - **Config:** `src/auto-pr/config.ts` — env schema and validation

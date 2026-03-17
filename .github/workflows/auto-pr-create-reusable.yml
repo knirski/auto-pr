@@ -61,10 +61,17 @@ jobs:
           name: pr-content
           path: ${{ runner.temp }}/pr-artifact
 
-      - name: Setup Node
+      # Create job checks out default branch; local actions resolve from workspace.
+      # setup-runtime lives on ai branches; main may not have it. Use npx for create
+      # (no project deps needed, just runs auto-pr package).
+      - name: Setup Node for create job
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version-file: ".nvmrc"
+          node-version: "lts/*"
+
+      - name: Set runner for create job
+        id: setup
+        run: echo "runner=npx" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App token
         id: app-token
@@ -78,6 +85,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
+          RUNNER: ${{ steps.setup.outputs.runner }}
         run: |
           TITLE=$(cat "$ARTIFACT_DIR/title.txt")
           export TITLE
@@ -88,4 +96,4 @@ jobs:
           export BRANCH
           DEFAULT_BRANCH=$(cat "$ARTIFACT_DIR/default_branch.txt")
           export DEFAULT_BRANCH
-          npx -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr
+          $RUNNER -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr
