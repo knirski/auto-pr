@@ -11,8 +11,8 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | PR to main (docs only) | ci-docs → check-docs |
 | PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
-| Push to main | release-please, scorecard (if configured) |
-| Manual | update-bun-nix, update-flake-lock |
+| Push to main | release-please, update-workflow-pins (when workflows/actions change), scorecard (if configured) |
+| Manual | update-bun-nix, update-flake-lock, update-workflow-pins |
 | Weekly | update-flake-lock (Sun), scorecard (Sat), stale (Mon) |
 
 ## First-time setup
@@ -34,6 +34,7 @@ Before CI can run fully:
 | [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
 | [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
+| [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) | push → main, workflow_dispatch | `paths: .github/workflows/**`, `.github/actions/**` | update-workflow-pins (updates self-referential pins) |
 | [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) | workflow_dispatch, schedule | — | update-flake-lock |
 | [release-please.yml](../.github/workflows/release-please.yml) | push → main | — | release-please (creates release PRs) |
 | [codeql.yml](../.github/workflows/codeql.yml) | push, pull_request → main | `paths-ignore: **/*.md, docs/**` | analyze |
@@ -50,6 +51,8 @@ Before CI can run fully:
 **ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
 **update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, ci-nix handles updates automatically.
+
+**update-workflow-pins.yml** runs on push to main when workflows or actions change, and on workflow_dispatch. Updates self-referential `knirski/auto-pr/...@SHA` refs to the current commit. Loop prevention: skips when the push commit message starts with `chore(workflows): update self-referential pins`. Only runs in knirski/auto-pr (skips forks). See [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
 
 **update-flake-lock.yml** runs weekly (Sunday 00:00 UTC) and on manual trigger. Updates `flake.lock` and opens a PR. Requires `dependencies`, `nix`, and `automated` labels. Run `./scripts/create-labels.sh` before the first scheduled run.
 
@@ -93,32 +96,10 @@ When ci-nix pushes a bun.nix update, the PR head changes to a new commit. The re
 
 CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-## Workflow pin maintenance (SHA updates)
+## Workflow pin automation
 
-The auto-pr reusable workflows and setup-runtime action are pinned to commit SHAs for reproducibility. These pins must be updated on main after merging PRs that change them.
+Self-referential pins (`knirski/auto-pr/...@SHA`) are updated automatically by [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) on push to main when workflows or actions change. Manual run: **Actions → Update workflow pins → Run workflow**. Rationale: [ADR 0001](adr/0001-workflow-pin-automation.md).
 
-### When to update
+**When automation runs:** Push to main with changes under `.github/workflows/` or `.github/actions/`. The workflow updates all pins to the current commit and pushes. Loop prevention: it skips when the push came from itself (commit message starts with `chore(workflows): update self-referential pins`).
 
-Update **after merging** a PR that touches any of:
-
-- `.github/workflows/auto-pr.yml`
-- `.github/workflows/auto-pr-generate-reusable.yml`
-- `.github/workflows/auto-pr-create-reusable.yml`
-- `.github/actions/setup-runtime/` (action.yml, detect-runtime.sh)
-
-### Which files and refs
-
-| File | Refs to update |
-|------|----------------|
-| [auto-pr.yml](../.github/workflows/auto-pr.yml) | Both `uses:` lines (generate and create workflows) |
-| [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml) | setup-runtime action ref |
-| [check.yml](../.github/workflows/check.yml) | setup-runtime action ref |
-
-### How to update
-
-1. Checkout main and pull: `git checkout main && git pull`
-2. Get the tip of main: `git rev-parse HEAD` (this is the merge/squash commit after your merge)
-3. Replace all pins with that SHA in the three files above
-4. Commit and push: `git add -A && git commit -m "chore: update workflow pins to merge commit" && git push`
-
-**AI agents:** When you merge a PR or notice a freshly merged PR that touched these files, check if the pins on main still reference the previous commit. If so, create a follow-up commit to update them. See [AGENTS.md](../AGENTS.md#post-merge-workflow-sha-updates).
+**Manual update (if needed):** If automation didn't run (e.g. merge only touched `src/`), run the workflow manually or update pins yourself. See [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
