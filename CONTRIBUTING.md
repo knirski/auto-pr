@@ -49,7 +49,7 @@ The script tries `gh act` first, then falls back to `act`.
 
 Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, test, lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
 
-**When changing `src/`:** Run `bun run build`; commit `dist/` if it changed (required for GitHub installs).
+**When changing `src/`:** Run `bun run build` before tests if needed. `dist/` is gitignored; the `prepare` script builds it on install (including `bunx -p github:knirski/auto-pr`).
 
 If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 

@@ -60,6 +60,7 @@
 		"create-or-update-pr": "bun run src/workflow/auto-pr-create-or-update-pr.ts",
 		"fill-pr-template": "bun run src/tools/auto-pr-fill-pr-template.ts",
 		"build": "bun run scripts/build.ts",
+		"prepare": "bun run build",
 		"prepublishOnly": "bun run build",
 		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
 	},
