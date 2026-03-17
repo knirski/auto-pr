@@ -92,3 +92,33 @@ When ci-nix pushes a bun.nix update, the PR head changes to a new commit. The re
 ## Fork PRs
 
 CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+## Workflow pin maintenance (SHA updates)
+
+The auto-pr reusable workflows and setup-runtime action are pinned to commit SHAs for reproducibility. These pins must be updated on main after merging PRs that change them.
+
+### When to update
+
+Update **after merging** a PR that touches any of:
+
+- `.github/workflows/auto-pr.yml`
+- `.github/workflows/auto-pr-generate-reusable.yml`
+- `.github/workflows/auto-pr-create-reusable.yml`
+- `.github/actions/setup-runtime/` (action.yml, detect-runtime.sh)
+
+### Which files and refs
+
+| File | Refs to update |
+|------|----------------|
+| [auto-pr.yml](../.github/workflows/auto-pr.yml) | Both `uses:` lines (generate and create workflows) |
+| [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml) | setup-runtime action ref |
+| [check.yml](../.github/workflows/check.yml) | setup-runtime action ref |
+
+### How to update
+
+1. Checkout main and pull: `git checkout main && git pull`
+2. Get the tip of main: `git rev-parse HEAD` (this is the merge/squash commit after your merge)
+3. Replace all pins with that SHA in the three files above
+4. Commit and push: `git add -A && git commit -m "chore: update workflow pins to merge commit" && git push`
+
+**AI agents:** When you merge a PR or notice a freshly merged PR that touched these files, check if the pins on main still reference the previous commit. If so, create a follow-up commit to update them. See [AGENTS.md](../AGENTS.md#post-merge-workflow-sha-updates).

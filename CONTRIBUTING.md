@@ -84,7 +84,7 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 **AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
 
-- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run check:ci` (act) for local testing. (2) If pushing to CI, update the SHA in auto-pr.yml to the current commit so the workflow uses the branch code. After merging, update the pin to the merge commit SHA.
+- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run check:ci` (act) for local testing. (2) If pushing to CI, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): auto-pr.yml (both workflow refs), and the setup-runtime ref in auto-pr-generate-reusable.yml and check.yml. **After merging:** Update all pins to the merge commit SHA on main. See [docs/CI.md](docs/CI.md#workflow-pin-maintenance-sha-updates).
 - **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
 1. Run `bun run check` before submitting.

@@ -7,7 +7,8 @@
 # Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
 #
 # Update both @SHA refs below when:
-# - After merging changes to auto-pr-generate-reusable.yml or auto-pr-create-reusable.yml
+# - After merging changes to auto-pr-generate-reusable.yml, auto-pr-create-reusable.yml,
+#   or .github/actions/setup-runtime
 # - When testing workflow changes on a branch: set to current commit (git rev-parse HEAD)
 # - After merge: set to the merge commit SHA on main
 

@@ -13,7 +13,7 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 **Convention over configuration.** Run `npx auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
 
-**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). **No Nix required** — users use Node/npx only.
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying—workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, Ollama summarizes the changes into a coherent description.
 
@@ -154,6 +154,7 @@ This repo uses [release-please](https://github.com/googleapis/release-please) fo
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
 - [docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) — Template placeholders and behavior
 - [docs/CI.md](docs/CI.md) — Workflows, branch protection, first-time setup
+- [.github/actions/setup-runtime/README.md](.github/actions/setup-runtime/README.md) — Runtime detection (contributors)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
 - [docs/adr/](docs/adr/) — Architecture Decision Records
 - [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
