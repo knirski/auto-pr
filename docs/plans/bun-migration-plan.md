@@ -251,7 +251,7 @@ junit = "test-report.junit.xml"
 - `oven-sh/setup-bun@v2` with `bun-version: "1.3.10"`
 - `bun install --frozen-lockfile`
 - `bun run check:code`
-- SBOM: replace `npm sbom` with `npx @cyclonedx/cyclonedx-npm` or equivalent
+- SBOM: native `npm sbom --sbom-format cyclonedx` (npm install first to create package-lock.json; cyclonedx-npm fails under Bun)
 
 ### 4.2 auto-pr-generate-reusable.yml and auto-pr-create-reusable.yml
 

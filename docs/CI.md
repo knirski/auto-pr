@@ -71,7 +71,7 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 
 ## Link verification
 
-`bun run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge.
+`bun run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge. Lychee accepts 200 and 429 (rate limit) via `--accept 200,429`.
 
 ## Branch Protection
 
