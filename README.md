@@ -71,9 +71,12 @@ bun run check
 ```bash
 npm install auto-pr
 # or: npm install github:knirski/auto-pr
+# or: bun add github:knirski/auto-pr
 ```
 
-**From source:**
+Installing from git runs the `prepare` script, which builds `dist/` automatically. No manual build needed.
+
+**From source (contributors):**
 
 ```bash
 git clone https://github.com/knirski/auto-pr.git
