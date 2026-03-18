@@ -9,6 +9,7 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | Push to `ai/**` | auto-pr creates/updates PR |
 | PR to main (code changes) | ci → check, dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
+| PR to main (.github only) | ci-workflows → check (actionlint, shellcheck, shfmt) |
 | PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), scorecard (if configured) |
@@ -29,8 +30,9 @@ Before CI can run fully:
 | Workflow | Trigger | Path filter | Jobs |
 |----------|---------|-------------|------|
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
-| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md'` | check, dependency-review |
+| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**'` | check, dependency-review |
 | [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
+| [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check |
 | [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
 | [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
@@ -44,9 +46,11 @@ Before CI can run fully:
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
-**ci.yml** runs when any non-.md file changes. Skips when only docs change.
+**ci.yml** runs when any non-.md, non-.github file changes. Skips when only docs or only .github changes.
 
 **ci-docs.yml** is complementary: runs when only `*.md` files change. Reports a passing `check` job so branch protection allows merge.
+
+**ci-workflows.yml** is complementary: runs when only `.github/**` changes. Minimal check (actionlint, shellcheck, shfmt on .github/actions). Reports a passing `check` job so branch protection allows merge.
 
 **ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
@@ -78,7 +82,7 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 
 ## Branch Protection
 
-Both ci.yml and ci-docs.yml report **`check / check`**. Configure main branch protection to require:
+ci.yml, ci-docs.yml, and ci-workflows.yml report **`check / check`**. Configure main branch protection to require:
 
 - **Status checks that are required:** `check / check`
 
