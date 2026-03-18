@@ -1,6 +1,6 @@
 {
 	"name": "auto-pr",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Auto-create PRs from conventional commits on ai/* branches",
 	"keywords": [
 		"auto-pr",
