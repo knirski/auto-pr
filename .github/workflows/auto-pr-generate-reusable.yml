@@ -93,6 +93,7 @@ jobs:
       - name: Get commit log and changed files
         id: commits
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
           RUNNER: ${{ steps.setup.outputs.runner }}
           USE_WORKSPACE: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
