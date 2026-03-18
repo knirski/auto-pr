@@ -30,11 +30,11 @@ concurrency:
 jobs:
   generate:
     if: github.ref_name != github.event.repository.default_branch
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@92fe80c4e42eb99d46b956573154e2ae8fe6b921
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@35de6f3ca65fb8ec7db3be7b27cad376e344d7d6
 
   create:
     needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@92fe80c4e42eb99d46b956573154e2ae8fe6b921
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@35de6f3ca65fb8ec7db3be7b27cad376e344d7d6
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit
