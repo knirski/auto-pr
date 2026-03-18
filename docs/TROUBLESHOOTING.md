@@ -14,6 +14,7 @@
 
 - **Adopters:** Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch and use the SHA from its `uses:` lines.
 - **Contributors to auto-pr:** When testing workflow changes on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): (1) both `uses:` refs in [auto-pr.yml](../.github/workflows/auto-pr.yml), (2) the setup-runtime ref in [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml) and [check.yml](../.github/workflows/check.yml). After merging to main, [update-workflow-pins](../.github/actions/update-workflow-pins/README.md) runs automatically; if it didn't, run **Actions → Update workflow pins** manually.
+- **Avoid a loop:** Structure commits so the last one is only SHA updates. First commit: your workflow logic changes. Second commit: update `@SHA` refs to point to the first commit (the previous one). When the workflow runs on push, it loads from that previous commit (which has the real changes), runs successfully, and does not trigger another run that would create more commits.
 
 ### "Missing .github/PULL_REQUEST_TEMPLATE.md" (or custom path)
 
@@ -47,7 +48,7 @@
 
 **Cause:** The prompt file is missing from the installed package. The package ships `dist/prompts/pr-description.txt`; if you're on an old version or a broken install, it may be absent.
 
-**Fix:** Use the latest auto-pr (e.g. `npx -p github:knirski/auto-pr` or a recent release). If building from source, run `bun run build` before use.
+**Fix:** Use the latest auto-pr (e.g. `npx -p github:knirski/auto-pr`, `bun add github:knirski/auto-pr`, or a recent release). When installing from git, the `prepare` script builds `dist/` automatically. If developing from source (clone), run `bun run build` before use.
 
 ### "BODY_FILE does not exist"
 

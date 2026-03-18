@@ -35,7 +35,7 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 ## Step 1: Add auto-pr as a dependency (optional)
 
-**Skip this step** — the default reusable workflow uses `npx -p github:knirski/auto-pr` and needs no `package.json`.
+**Skip this step** — the default reusable workflow fetches auto-pr from knirski/auto-pr and needs no `package.json`. When installing from git (e.g. `npx -p github:knirski/auto-pr` or `bun add github:knirski/auto-pr`), the `prepare` script builds `dist/` automatically.
 
 **JS/TS projects:** The generate and create jobs auto-detect your runtime (npm, yarn, pnpm, bun) from `packageManager` or lockfile. No config needed.
 
