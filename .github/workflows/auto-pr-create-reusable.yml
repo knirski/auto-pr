@@ -56,20 +56,25 @@ jobs:
           fetch-depth: 0
 
       - name: Download PR content artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: pr-content
           path: ${{ runner.temp }}/pr-artifact
 
-      # Create job checks out default branch; local actions resolve from workspace.
-      # setup-runtime lives on ai branches; main may not have it. Use bunx for create:
-      # package prepare script runs "bun run build" which needs Bun when installing from branch.
+      # Create job checks out default branch; workspace has no auto-pr source.
+      # Install package with bun add (runs prepare → build); run create-or-update-pr script.
       - name: Setup Bun for create job
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
-      - name: Set runner for create job
-        id: setup
-        run: echo "runner=bunx" >> "$GITHUB_OUTPUT"
+      - name: Install auto-pr package
+        id: install
+        env:
+          AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/auto-pr-create"
+          cd "$RUNNER_TEMP/auto-pr-create"
+          bun add "$AUTO_PR_PKG"
+          echo "dir=$(pwd)" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App token
         id: app-token
@@ -83,7 +88,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
-          RUNNER: ${{ steps.setup.outputs.runner }}
+          AUTO_PR_DIR: ${{ steps.install.outputs.dir }}
         run: |
           TITLE=$(cat "$ARTIFACT_DIR/title.txt")
           export TITLE
@@ -94,4 +99,4 @@ jobs:
           export BRANCH
           DEFAULT_BRANCH=$(cat "$ARTIFACT_DIR/default_branch.txt")
           export DEFAULT_BRANCH
-          $RUNNER -p "$AUTO_PR_PKG" auto-pr-create-or-update-pr
+          bun run --cwd "$AUTO_PR_DIR/node_modules/auto-pr" create-or-update-pr
