@@ -6,6 +6,7 @@
  */
 
 import { Effect, FileSystem, Path } from "effect";
+import { Url } from "effect/unstable/http";
 import { AutoPrLoggerLayer, AutoPrPlatformLayer, redactPath, runMain } from "#auto-pr";
 import { getInitFileSpecs } from "#lib/init-core.js";
 
@@ -29,7 +30,10 @@ function runInit(cwd: string): Effect.Effect<void, Error, FileSystem.FileSystem 
 	return Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		const pathApi = yield* Path.Path;
-		const scriptPath = yield* pathApi.fromFileUrl(new URL(import.meta.url));
+		const scriptUrl = yield* Effect.fromResult(Url.fromString(import.meta.url)).pipe(
+			Effect.mapError((e) => new Error(`Invalid import.meta.url: ${e.message}`)),
+		);
+		const scriptPath = yield* pathApi.fromFileUrl(scriptUrl);
 		const pkgRoot = pathApi.join(pathApi.dirname(scriptPath), "..", "..");
 
 		for (const spec of getInitFileSpecs()) {
