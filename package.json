@@ -67,7 +67,7 @@
 	"dependencies": {
 		"@effect/platform-bun": "4.0.0-beta.34",
 		"conventional-commits-parser": "^6.3.0",
-		"effect": "4.0.0-beta.34",
+		"effect": "4.0.0-beta.36",
 		"micromustache": "^8.0.3",
 		"remark": "^15.0.1",
 		"unist-util-visit": "^5.1.0"
