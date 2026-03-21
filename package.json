@@ -65,7 +65,7 @@
 		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
 	},
 	"dependencies": {
-		"@effect/platform-bun": "4.0.0-beta.34",
+		"@effect/platform-bun": "4.0.0-beta.36",
 		"conventional-commits-parser": "^6.3.0",
 		"effect": "4.0.0-beta.34",
 		"micromustache": "^8.0.3",
