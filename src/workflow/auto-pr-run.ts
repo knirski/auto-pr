@@ -63,6 +63,7 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 			provider,
 			model,
 			howToTestDefault,
+			...(provider === "github-models" ? { ghToken: config.ghToken } : {}),
 		});
 
 		const content2 = yield* fs.readFileString(ghOutput);

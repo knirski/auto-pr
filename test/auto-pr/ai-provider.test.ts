@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit, Layer, Result } from "effect";
+import { Cause, Effect, Exit, Layer, Redacted, Result } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { AutoPrConfigError } from "#auto-pr";
 import { aiProviderLayerFromConfig } from "#auto-pr/live/ai-provider.js";
@@ -25,7 +25,24 @@ describe("aiProviderLayerFromConfig", () => {
 		);
 	});
 
-	test("github-models: layer fails with AutoPrConfigError", async () => {
+	test("github-models: builds layer when ghToken and model provided", async () => {
+		const layer = Layer.mergeAll(
+			BaseLayer,
+			aiProviderLayerFromConfig({
+				provider: "github-models",
+				model: "openai/gpt-4",
+				ghToken: Redacted.make("ghp_test", { label: "GH_TOKEN" }),
+			}),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const model = yield* LanguageModel.LanguageModel;
+				expect(model).toBeDefined();
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("github-models: fails with AutoPrConfigError when ghToken missing", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
 			aiProviderLayerFromConfig({ provider: "github-models", model: "openai/gpt-4" }),
