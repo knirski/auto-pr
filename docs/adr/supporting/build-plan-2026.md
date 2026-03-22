@@ -101,7 +101,7 @@
 ### Phase 4: Nix and CI
 
 9. **default.nix**
-   - `installPhase` currently copies `src` and runs `npx tsx src/workflow/run-auto-pr.ts`
+   - `installPhase` currently copies `src` and runs `npx tsx src/workflow/auto-pr-run.ts`
    - Change to: copy `dist` (not `src`), `package.json`, `package-lock.json`, `node_modules`, `.github`; run `node dist/workflow/auto-pr-run.mjs`. Example:
 
      ```nix

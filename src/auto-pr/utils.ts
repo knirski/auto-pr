@@ -1,23 +1,21 @@
 /**
- * Auto-PR utilities. Self-contained for standalone package.
+ * Auto-PR shell utilities. Effect-ful; FileSystemError, mapFsError, etc.
+ * Pure helpers (unknownToMessage, toError) live in #core.
  */
 
 import { Effect, Redacted, Schema } from "effect";
+import { unknownToMessage as unknownToMessageCore } from "#core/string.js";
 
 /** Redact path for logs: show basename only to avoid revealing home dir. */
 export function redactPath(path: string): string {
 	return path.split("/").pop() ?? path;
 }
 
-/** Convert unknown to a short message for display. */
-export function unknownToMessage(e: unknown): string {
-	return e instanceof Error ? e.message : String(e);
-}
+/** Re-export for backward compatibility. Prefer #core/string. */
+export const unknownToMessage = unknownToMessageCore;
 
-/** Ensure unknown is an Error (pass through or wrap). Use for cause fields. */
-export function toError(e: unknown): Error {
-	return e instanceof Error ? e : new Error(String(e));
-}
+/** Re-export for backward compatibility. Prefer #core/string. */
+export { toError } from "#core/string.js";
 
 /** Wrap value for log-safe display. In formatters use r.label ?? "<redacted>". */
 function redactedForLog<T extends string>(
@@ -41,7 +39,7 @@ function wrapFs(path: string, op: string, fix?: string) {
 		new FileSystemError({
 			path: redactedForLog(path, redactPath),
 			operation: op,
-			message: unknownToMessage(e),
+			message: unknownToMessageCore(e),
 			fix,
 		});
 }
@@ -62,10 +60,10 @@ export function errorToLogMessage(e: unknown, formatFn: (err: { _tag: string }) 
 		try {
 			return formatFn(e);
 		} catch {
-			return unknownToMessage(e);
+			return unknownToMessageCore(e);
 		}
 	}
-	return unknownToMessage(e);
+	return unknownToMessageCore(e);
 }
 
 function formatWithFix(base: string, fix?: string): string {

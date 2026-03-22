@@ -7,14 +7,14 @@
 
 import type { Effect, FileSystem, Path } from "effect";
 import { Schema } from "effect";
+import type { FileSystemError } from "#auto-pr/utils.js";
 import type {
 	FillPrTemplateValidationError,
 	ParseError,
 	PullRequestBodyBlankError,
 	PullRequestTitleBlankError,
 	TemplateRenderError,
-} from "#auto-pr/errors.js";
-import type { FileSystemError } from "#auto-pr/utils.js";
+} from "#core/errors.js";
 
 /** Schema for FillPrTemplateParams. Use for runtime validation at boundaries. */
 export const FillPrTemplateParamsSchema = Schema.Struct({

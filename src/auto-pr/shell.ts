@@ -9,8 +9,8 @@ import * as BunRuntime from "@effect/platform-bun/BunRuntime";
 import { Effect, FileSystem, Layer, Logger } from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { formatGhOutput } from "#auto-pr/core.js";
 import { formatError, PullRequestFailedError } from "#auto-pr/errors.js";
+import { formatGhOutput } from "#core/gh-output.js";
 
 /** Platform layer for auto-PR scripts: FileSystem + Path. */
 export const PlatformLayer = BunFileSystem.layer.pipe(Layer.provideMerge(BunPath.layer));

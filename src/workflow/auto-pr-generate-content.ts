@@ -35,7 +35,7 @@ import {
 	UnexpectedError,
 	unknownToMessage,
 } from "#auto-pr";
-import type { CommitInfo } from "#lib/fill-pr-template-core.js";
+import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
 	getDescriptionFromCommits,
@@ -46,7 +46,7 @@ import {
 	parseFilesContent,
 	renderBody as renderBodyCore,
 	validateTitleDescription,
-} from "#lib/fill-pr-template-core.js";
+} from "#core/fill-pr-template-core.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 

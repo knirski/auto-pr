@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { collapseProseParagraphs, fallbackWhenParseFails } from "#lib/collapse-prose-paragraphs.js";
+import {
+	collapseProseParagraphs,
+	fallbackWhenParseFails,
+} from "#core/collapse-prose-paragraphs.js";
 
 describe("collapse-prose-paragraphs", () => {
 	describe("collapseProseParagraphs", () => {

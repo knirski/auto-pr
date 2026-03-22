@@ -118,7 +118,7 @@ For contributors to this repo, the project includes an optional Nix flake. CI us
 nix develop
 
 # Run full pipeline (requires GH_TOKEN, AI provider for 2+ commits)
-bun run src/workflow/run-auto-pr.ts
+bun run src/workflow/auto-pr-run.ts
 # or: node dist/workflow/auto-pr-run.js (after bun run build)
 # or: nix run .#default
 ```
@@ -152,7 +152,7 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 
 ## Integration
 
-Designed to run in CI (e.g. GitHub Actions) or locally via `run-auto-pr.ts`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
+Designed to run in CI (e.g. GitHub Actions) or locally via `auto-pr-run.ts`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
 
 This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** bun audit in check; SBOM (CycloneDX via native npm sbom), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
 
