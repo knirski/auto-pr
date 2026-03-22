@@ -9,13 +9,13 @@
 [![Liberapay](https://img.shields.io/badge/Liberapay-Support-yellow.svg)](https://liberapay.com/knirski/)
 [![CII Best Practices](https://img.shields.io/badge/CII%20Best%20Practices-register-green)](https://www.bestpractices.dev/en/projects/new?project_url=https%3A%2F%2Fgithub.com%2Fknirski%2Fauto-pr)
 
-Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses [Ollama](https://ollama.com/) to generate descriptions for multi-commit PRs.
+Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider ([Ollama](https://ollama.com/) by default) to generate descriptions for multi-commit PRs.
 
 **Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
 
 **Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying—workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
 
-**Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, Ollama summarizes the changes into a coherent description.
+**Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, the AI provider summarizes the changes into a coherent description.
 
 **Origin:** Extracted from [paperless-ingestion-bot](https://github.com/knirski/paperless-ingestion-bot), where it powered the auto-PR workflow for AI-generated branches. See [docs/ORIGIN.md](docs/ORIGIN.md).
 
@@ -23,14 +23,14 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 - **Conventional commits** — Parses `feat:`, `fix:`, `docs:`, etc. for PR title and type
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
-- **Ollama integration** — For 2+ commits, summarizes commit bodies into a PR description (default: `llama3.1:8b`)
+- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description (Ollama default: `llama3.1:8b`)
 - **gh CLI** — Thin wrapper around `gh pr create` / `gh pr edit`
 - **CI-agnostic** — Outputs to `GITHUB_OUTPUT`; works with GitHub Actions or any orchestrator
 
 ## How it works
 
 1. **Get commits** — `auto-pr-get-commits` runs `git log` and `git diff` to produce `commits.txt`, `files.txt`, and outputs paths to `GITHUB_OUTPUT`
-2. **Generate content** — `auto-pr-generate-content` parses commits, counts semantic commits. For 1 commit: fills template from body. For 2+: calls Ollama to summarize, then fills template. Outputs `title` and `body_file` to `GITHUB_OUTPUT`
+2. **Generate content** — `auto-pr-generate-content` parses commits, counts semantic commits. For 1 commit: fills template from body. For 2+: calls the AI provider to summarize, then fills template. Outputs `title` and `body_file` to `GITHUB_OUTPUT`
 3. **Create or update PR** — `auto-pr-create-or-update-pr` runs `gh pr view` → `gh pr edit` or `gh pr create` with the title and body file
 
 Merge commits are filtered out. Non-conventional commits are included; type falls back to "Chore".
@@ -90,7 +90,7 @@ bun x lefthook install
 | Command | Purpose |
 |--------|---------|
 | `npx auto-pr-get-commits` | Get commit log and changed files; output to GITHUB_OUTPUT |
-| `npx auto-pr-generate-content` | Generate PR title and filled body (Ollama for 2+ commits) |
+| `npx auto-pr-generate-content` | Generate PR title and filled body (AI for 2+ commits) |
 | `npx auto-pr-create-or-update-pr` | Create or update PR via `gh` |
 | `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
 | `npx auto-pr-init` | Create workflow, PR template, and .nvmrc in current repo |
@@ -108,7 +108,7 @@ For contributors to this repo, the project includes an optional Nix flake. CI us
 | **Dev shell** | `nix develop` | Bun, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
 | **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
 | **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
-| **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, Ollama for 2+ commits) |
+| **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, AI provider for 2+ commits) |
 | **Update bun.nix** | `nix run .#update-bun-nix` | Regenerate `bun.nix` after changing `bun.lock` |
 | **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
 | **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, bun2nix directly |
@@ -117,7 +117,7 @@ For contributors to this repo, the project includes an optional Nix flake. CI us
 # Development shell
 nix develop
 
-# Run full pipeline (requires GH_TOKEN, Ollama for 2+ commits)
+# Run full pipeline (requires GH_TOKEN, AI provider for 2+ commits)
 bun run src/workflow/run-auto-pr.ts
 # or: node dist/workflow/auto-pr-run.js (after bun run build)
 # or: nix run .#default
@@ -127,7 +127,7 @@ bun run src/workflow/run-auto-pr.ts
 
 When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
 
-When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `OLLAMA_MODEL`, `OLLAMA_URL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration).
+When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `AUTO_PR_AI_PROVIDER`, `AUTO_PR_AI_OLLAMA_MODEL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -137,8 +137,8 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 | `COMMITS` | generate-content | Path to commits.txt |
 | `FILES` | generate-content | Path to files.txt |
 | `PR_TEMPLATE_PATH` | generate-content | Path to PR template (default `.github/PULL_REQUEST_TEMPLATE.md`) |
-| `OLLAMA_MODEL` | generate-content | Ollama model (default `llama3.1:8b`) |
-| `OLLAMA_URL` | generate-content | Ollama API (default `http://localhost:11434/api/generate`) |
+| `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `ollama`) |
+| `AUTO_PR_AI_OLLAMA_MODEL` | generate-content | Ollama model when provider is ollama (default `llama3.1:8b`) |
 | `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; Node projects: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`; Python: `"1. Run \`pytest\`\n2. "`) |
 | `GH_TOKEN` | create-or-update-pr | GitHub token |
 | `BRANCH` | create-or-update-pr | Current branch |

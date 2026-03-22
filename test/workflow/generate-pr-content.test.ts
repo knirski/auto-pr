@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Cause, Effect, Exit, FileSystem, Layer, Path, Result } from "effect";
 import {
+	aiProviderLayerFromConfig,
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
-	ollamaLanguageModelLayer,
 	ParseError,
 	TemplateRenderError,
 } from "#auto-pr";
@@ -18,7 +18,6 @@ import type { GeneratePrContentFromValuesParams } from "#workflow/auto-pr-genera
 import {
 	generatePrContentFromValues,
 	normalizeUnknownToGeneratePrContentError,
-	ollamaHostFromUrl,
 	runGeneratePrContent,
 } from "#workflow/auto-pr-generate-content.js";
 
@@ -43,8 +42,8 @@ function params(
 		templateContent: DEFAULT_TEMPLATE,
 		descriptionPromptText: DEFAULT_DESCRIPTION_PROMPT,
 		howToTestDefault: DEFAULT_HOW_TO_TEST,
+		provider: "ollama" as const,
 		model: "llama3.1:8b",
-		ollamaUrl: "http://localhost:11434/api/generate",
 		...overrides,
 	};
 }
@@ -54,24 +53,23 @@ const ValueBasedLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 function layerForGeneratePrContent(params: GeneratePrContentFromValuesParams) {
 	return Layer.mergeAll(
 		ValueBasedLayer,
-		ollamaLanguageModelLayer(params.model, {
-			host: ollamaHostFromUrl(params.ollamaUrl),
-			...(params.fetch !== undefined && { fetch: params.fetch }),
-		}),
+		aiProviderLayerFromConfig(
+			{ provider: params.provider, model: params.model },
+			params.fetch !== undefined ? { fetch: params.fetch } : undefined,
+		),
 	);
 }
 
 describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 	test("returns title and body for 1 commit (no Ollama)", async () => {
 		const p = params([{ subject: "feat: add x", body: "" }]);
-		await runEffect(
+		await runEffect(layerForGeneratePrContent(p))(
 			Effect.gen(function* () {
 				const result = yield* generatePrContentFromValues(p);
 				expect(result.title).toBe("feat: add x");
 				expect(result.body).toContain("add x");
 				expect(result.count).toBe(1);
 			}).pipe(Effect.scoped),
-			layerForGeneratePrContent(p),
 		);
 	});
 
@@ -80,7 +78,7 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 			{ subject: "Merge branch 'main' into feature", body: "" },
 			{ subject: "Merge pull request #1", body: "" },
 		]);
-		await runEffect(
+		await runEffect(layerForGeneratePrContent(p))(
 			Effect.gen(function* () {
 				const exit = yield* generatePrContentFromValues(p).pipe(Effect.exit, Effect.scoped);
 				expect(Exit.isFailure(exit)).toBe(true);
@@ -91,7 +89,6 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 					});
 				}
 			}).pipe(Effect.scoped),
-			layerForGeneratePrContent(p),
 		);
 	});
 
@@ -99,7 +96,7 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 		const p = params([{ subject: "feat: add x", body: "" }], {
 			templateContent: "# PR\n\n{{description",
 		});
-		await runEffect(
+		await runEffect(layerForGeneratePrContent(p))(
 			Effect.gen(function* () {
 				const exit = yield* generatePrContentFromValues(p).pipe(Effect.exit, Effect.scoped);
 				expect(Exit.isFailure(exit)).toBe(true);
@@ -110,7 +107,6 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 					});
 				}
 			}).pipe(Effect.scoped),
-			layerForGeneratePrContent(p),
 		);
 	});
 
@@ -119,7 +115,7 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 			filesContent: "src/foo.ts\n",
 			howToTestDefault: "",
 		});
-		await runEffect(
+		await runEffect(layerForGeneratePrContent(p))(
 			Effect.gen(function* () {
 				const exit = yield* generatePrContentFromValues(p).pipe(Effect.exit, Effect.scoped);
 				expect(Exit.isFailure(exit)).toBe(true);
@@ -130,7 +126,6 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 					});
 				}
 			}).pipe(Effect.scoped),
-			layerForGeneratePrContent(p),
 		);
 	});
 });
@@ -193,7 +188,7 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOllamaMockFetch(VALID_OLLAMA_RESPONSE),
 			});
-			await runEffect(
+			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add X and fix B");
@@ -202,7 +197,6 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 					expect(result.body).toContain("fix: fix bug in B");
 					expect(result.count).toBe(2);
 				}).pipe(Effect.scoped),
-				layerForGeneratePrContent(p),
 			);
 		});
 	});
@@ -215,13 +209,12 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 				retryDelayMs: 0,
 				fetch: createOllamaMockFetch(INVALID_OLLAMA_RESPONSE),
 			});
-			await runEffect(
+			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add module A");
 					expect(result.count).toBe(2);
 				}).pipe(Effect.scoped),
-				layerForGeneratePrContent(p),
 			);
 		});
 
@@ -233,12 +226,11 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 				],
 				{ retryDelayMs: 0, fetch: createOllamaMockFetch(INVALID_OLLAMA_RESPONSE) },
 			);
-			await runEffect(
+			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("chore: update");
 				}).pipe(Effect.scoped),
-				layerForGeneratePrContent(p),
 			);
 		});
 	});
@@ -249,12 +241,11 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 				retryDelayMs: 0,
 				fetch: createOllamaMockFetch(""),
 			});
-			await runEffect(
+			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
-				layerForGeneratePrContent(p),
 			);
 		});
 	});
@@ -265,12 +256,11 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 				retryDelayMs: 0,
 				fetch: createOllamaMockFetch("feat: x\n\n"),
 			});
-			await runEffect(
+			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
-				layerForGeneratePrContent(p),
 			);
 		});
 	});
@@ -284,12 +274,11 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 					status: 500,
 				}),
 			});
-			await runEffect(
+			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
-				layerForGeneratePrContent(p),
 			);
 		});
 	});
@@ -320,7 +309,7 @@ const RunIntegrationLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 
 describe("runGeneratePrContent (integration, file I/O)", () => {
 	test("reads files, writes title and body_file to GITHUB_OUTPUT and pr-body.md", async () => {
-		await runEffect(
+		await runEffect(RunIntegrationLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("generate-pr-content-integration-");
 				const fs = yield* FileSystem.FileSystem;
@@ -341,8 +330,8 @@ describe("runGeneratePrContent (integration, file I/O)", () => {
 					ghOutput,
 					workspace: tmp.path,
 					templatePath,
+					provider: "ollama",
 					model: "llama3.1:8b",
-					ollamaUrl: "http://localhost:11434/api/generate",
 					howToTestDefault: DEFAULT_HOW_TO_TEST,
 					fetch: createOllamaMockFetch(""),
 				});
@@ -355,7 +344,6 @@ describe("runGeneratePrContent (integration, file I/O)", () => {
 				const bodyContent = yield* fs.readFileString(bodyPath);
 				expect(bodyContent).toContain("add x");
 			}).pipe(Effect.scoped),
-			RunIntegrationLayer,
 		);
 	});
 });

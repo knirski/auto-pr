@@ -2,11 +2,11 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: COMMITS (path), FILES (path), GITHUB_OUTPUT, GITHUB_WORKSPACE,
- * PR_TEMPLATE_PATH, OLLAMA_MODEL, OLLAMA_URL (for 2+ commits)
- * Requires env: AUTO_PR_HOW_TO_TEST
+ * PR_TEMPLATE_PATH, AUTO_PR_HOW_TO_TEST. For 2+ commits: AUTO_PR_AI_PROVIDER (optional),
+ * AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only.
- * For 2+: LanguageModel (Ollama or other AI provider) generates title and description via generateObject, then FillPrTemplate with override.
+ * For 2+: LanguageModel (AI provider) generates title and description via generateObject, then FillPrTemplate with override.
  *
  * Outputs to GITHUB_OUTPUT: title, body_file (path to filled template)
  *
@@ -16,7 +16,9 @@
 import { Duration, Effect, FileSystem, Layer, Option, Path, Schedule, Schema } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import {
+	type AutoPrConfigError,
 	AutoPrPlatformLayer,
+	aiProviderLayerFromConfig,
 	appendGhOutput,
 	buildDescriptionPrompt,
 	buildGenerateContentGhEntries,
@@ -25,7 +27,6 @@ import {
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
 	NoSemanticCommitsError,
-	ollamaLanguageModelLayer,
 	ParseError,
 	runMain,
 	TemplateRenderError,
@@ -59,11 +60,6 @@ const TitleDescriptionSchema = Schema.Struct({
 const BODY_FILE_NAME = "pr-body.md";
 const MAX_AI_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
-
-/** Derive Ollama host from ollamaUrl (strip /api/generate). */
-export function ollamaHostFromUrl(ollamaUrl: string): string {
-	return ollamaUrl.replace(/\/api\/generate\/?$/, "") || ollamaUrl;
-}
 
 function makeRetrySchedule(delayMs: number) {
 	return Schedule.recurs(MAX_AI_ATTEMPTS - 1).pipe(
@@ -122,8 +118,8 @@ export type GeneratePrContentFromValuesParams = {
 	templateContent: string;
 	descriptionPromptText: string;
 	howToTestDefault: string;
+	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
-	ollamaUrl: string;
 	/** Retry delay in ms. Use 0 for tests. Default 3000. */
 	retryDelayMs?: number;
 	/** Custom fetch for tests. Omit for production. */
@@ -143,8 +139,11 @@ export type GeneratePrContentFromValuesError = Schema.Schema.Type<
 	typeof GeneratePrContentFromValuesErrorSchema
 >;
 
-/** Errors from runGeneratePrContent (includes file I/O). Adds UnexpectedError for FS/path failures. */
-export type GeneratePrContentError = GeneratePrContentFromValuesError | UnexpectedError;
+/** Errors from runGeneratePrContent (includes file I/O, AI provider config). */
+export type GeneratePrContentError =
+	| GeneratePrContentFromValuesError
+	| UnexpectedError
+	| AutoPrConfigError;
 
 export function generatePrContentFromValues(
 	params: GeneratePrContentFromValuesParams,
@@ -251,8 +250,8 @@ export function runGeneratePrContent(config: {
 	ghOutput: string;
 	workspace: string;
 	templatePath: string;
+	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
-	ollamaUrl: string;
 	howToTestDefault: string;
 	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
 	retryDelayMs?: number;
@@ -269,8 +268,8 @@ export function runGeneratePrContent(config: {
 			ghOutput,
 			workspace,
 			templatePath,
+			provider,
 			model,
-			ollamaUrl,
 			howToTestDefault,
 			retryDelayMs,
 		} = config;
@@ -292,10 +291,10 @@ export function runGeneratePrContent(config: {
 
 		const generateLayer = Layer.mergeAll(
 			AutoPrPlatformLayer,
-			ollamaLanguageModelLayer(config.model, {
-				host: ollamaHostFromUrl(config.ollamaUrl),
-				...(config.fetch !== undefined && { fetch: config.fetch }),
-			}),
+			aiProviderLayerFromConfig(
+				{ provider, model },
+				config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+			),
 		);
 		const { title, body, count } = yield* generatePrContentFromValues({
 			commitsContent,
@@ -303,8 +302,8 @@ export function runGeneratePrContent(config: {
 			templateContent,
 			descriptionPromptText,
 			howToTestDefault,
+			provider,
 			model,
-			ollamaUrl,
 			...(retryDelayMs !== undefined && { retryDelayMs }),
 			...(config.fetch !== undefined && { fetch: config.fetch }),
 		}).pipe(Effect.provide(generateLayer));
@@ -351,8 +350,8 @@ const program = Effect.gen(function* () {
 		ghOutput: config.ghOutput,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
+		provider: config.provider,
 		model: config.model,
-		ollamaUrl: config.ollamaUrl,
 		howToTestDefault: config.howToTestDefault,
 	};
 	yield* runGeneratePrContent(params).pipe(Effect.provide(GeneratePrContentLayer));

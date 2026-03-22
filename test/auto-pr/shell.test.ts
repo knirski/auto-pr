@@ -12,13 +12,12 @@ import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test
 
 describe("withMainSetup", () => {
 	test("succeeds when program succeeds", async () => {
-		await runEffect(withMainSetup(Effect.succeed(undefined), "test_event"), SilentLoggerLayer);
+		await runEffect(SilentLoggerLayer)(withMainSetup(Effect.succeed(undefined), "test_event"));
 	});
 
 	test("runs error logging when program fails", async () => {
-		const exit = await runEffect(
+		const exit = await runEffect(SilentLoggerLayer)(
 			withMainSetup(Effect.fail("test error"), "test_event").pipe(Effect.exit, Effect.scoped),
-			SilentLoggerLayer,
 		);
 		expect(exit._tag).toBe("Failure");
 	});
@@ -59,9 +58,8 @@ describe("getDebugHint", () => {
 describe("runCommand", () => {
 	test("maps command failure to PullRequestFailedError", async () => {
 		const layer = Layer.mergeAll(TestBaseLayer, ChildProcessSpawnerLayer);
-		const exit = await runEffect(
+		const exit = await runEffect(layer)(
 			runCommand("nonexistentcommandxyz123", [], process.cwd()).pipe(Effect.exit, Effect.scoped),
-			layer,
 		);
 		expect(exit._tag).toBe("Failure");
 		if (exit._tag === "Failure") {
@@ -72,7 +70,7 @@ describe("runCommand", () => {
 
 describe("appendGhOutput", () => {
 	test("writes entries to file", async () => {
-		await runEffect(
+		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-shell-");
 				const path = tmp.join("github_output.txt");
@@ -87,12 +85,11 @@ describe("appendGhOutput", () => {
 				expect(content).toContain("a=1");
 				expect(content).toContain("b=2");
 			}).pipe(Effect.scoped),
-			TestBaseLayer,
 		);
 	});
 
 	test("appends to existing file", async () => {
-		await runEffect(
+		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-shell-");
 				const path = tmp.join("github_output.txt");
@@ -105,7 +102,6 @@ describe("appendGhOutput", () => {
 				expect(content).toContain("existing=line");
 				expect(content).toContain("new=value");
 			}).pipe(Effect.scoped),
-			TestBaseLayer,
 		);
 	});
 });
