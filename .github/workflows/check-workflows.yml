@@ -23,10 +23,9 @@ jobs:
       - name: Lint workflows
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
 
-      - name: Lint scripts (.github/actions)
-        run: |
-          find .github/actions -name '*.sh' -print0 | xargs -0 -r shellcheck
+      - name: Lint scripts
+        run: find scripts .github/actions -name '*.sh' -print0 | xargs -0 -r shellcheck
       - name: Format check scripts (shfmt)
         uses: mfinelli/setup-shfmt@a25fda4c1fe115aec0f85e04126610841bc3141d # v4.0.1
       - name: Run shfmt
-        run: shfmt -d .github/actions
+        run: shfmt -d scripts .github/actions
