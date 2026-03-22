@@ -6,6 +6,30 @@
  * Each workflow has its own config with only the fields it needs. Required
  * workflow vars are non-optional; provider-specific vars use Config.option and
  * are validated when that provider is selected.
+ *
+ * ## All environment variables
+ *
+ * | Variable | Required | Config | Description |
+ * |----------|----------|--------|--------------|
+ * | DEFAULT_BRANCH | ✓ | GetCommits, CreateOrUpdatePr, RunAutoPr | Base branch (e.g. main) |
+ * | GITHUB_WORKSPACE | ✓ | All | Repo root path |
+ * | GITHUB_OUTPUT | ✓ | GetCommits, GeneratePrContent | Path to write outputs |
+ * | COMMITS | ✓ | GeneratePrContent | Path to commits file |
+ * | FILES | ✓ | GeneratePrContent | Path to changed files list |
+ * | PR_TEMPLATE_PATH | ✓ | GeneratePrContent, RunAutoPr | Path to PR template |
+ * | AUTO_PR_HOW_TO_TEST | ✓ | GeneratePrContent, RunAutoPr, FillPrTemplate | Default for {{howToTest}} |
+ * | BRANCH | ✓* | CreateOrUpdatePr | Current branch (*optional in RunAutoPr) |
+ * | TITLE | ✓ | CreateOrUpdatePr | PR title |
+ * | BODY_FILE | ✓ | CreateOrUpdatePr | Path to PR body markdown |
+ * | GH_TOKEN | ✓* | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | GitHub token (*required for github-models) |
+ * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | ollama \| github-models \| openai-compat (default: ollama) |
+ * | AUTO_PR_AI_OLLAMA_MODEL | | GeneratePrContent, RunAutoPr | Model when provider=ollama (default: llama3.1:8b) |
+ * | AUTO_PR_AI_GITHUB_MODEL | ✓* | GeneratePrContent, RunAutoPr | Model when provider=github-models |
+ * | AUTO_PR_AI_OPENAI_COMPAT_URL | ✓* | GeneratePrContent, RunAutoPr | API URL when provider=openai-compat |
+ * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | ✓* | GeneratePrContent, RunAutoPr | API key when provider=openai-compat |
+ * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | ✓* | GeneratePrContent, RunAutoPr | Model when provider=openai-compat |
+ * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
+ * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  */
 
 import type { Redacted } from "effect";
