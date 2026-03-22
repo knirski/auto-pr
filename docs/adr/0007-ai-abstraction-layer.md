@@ -18,10 +18,11 @@ Chosen option: **Config-driven provider abstraction**, because it meets the goal
 
 ### Consequences
 
-* **Good:** Single interface (`LanguageModel`); swap providers via `AUTO_PR_AI_PROVIDER`; no code changes for new providers; config validated at load.
-* **Good:** Workflow inputs (`ai_provider`, `ai_ollama_model`) map cleanly to env; Ollama setup only when needed.
+* **Good:** Single interface (`LanguageModel`); swap providers via `AUTO_PR_AI_PROVIDER`; config validated at load.
+* **Good:** Workflow inputs (`ai_provider`, provider-specific model fields) map cleanly to env; Ollama setup only when needed.
 * **Bad:** Requires migrating from `OLLAMA_MODEL`/`OLLAMA_URL` to `AUTO_PR_AI_PROVIDER`/`AUTO_PR_AI_OLLAMA_MODEL`; docs and users must update.
-* **Bad:** `github-models` and `openai-compat` are deferred (not yet implemented); they fail with `AutoPrConfigError` until live adapters are added.
+
+**Phase 6 (complete):** `github-models` and `openai-compat` are implemented in `src/auto-pr/live/ai-provider.ts` using `OpenAiClient` / `OpenAiLanguageModel` from `@effect/ai-openai-compat` (GitHub Models fixed URL + `GH_TOKEN`; openai-compat configurable URL, API key, and model). Configuration lives in `src/auto-pr/config.ts`.
 
 ## References
 

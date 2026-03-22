@@ -96,6 +96,30 @@
 
 **Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. When using Ollama, try a different `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`). For other providers, verify model ID and API URL. Ensure `AUTO_PR_AI_PROVIDER` is set correctly (optional; defaults to `ollama` when unset).
 
+### GitHub Models: 401 / invalid token (provider: github-models)
+
+**Cause:** `GH_TOKEN` is missing, expired, or lacks permission to call the GitHub Models API.
+
+**Fix:** Provide a valid token via the generate workflow `secrets.GH_TOKEN` (see [INTEGRATION.md](INTEGRATION.md#github-models-github-models)). For local runs, export `GH_TOKEN` before `run-auto-pr`. Ensure the token is allowed for Models (check GitHub documentation for your account and token type).
+
+### GitHub Models: model not found / 404 (provider: github-models)
+
+**Cause:** `AUTO_PR_AI_GITHUB_MODEL` does not match an available GitHub Models id (wrong name, deprecated, or typo).
+
+**Fix:** Set `ai_github_model` / `AUTO_PR_AI_GITHUB_MODEL` to a valid id (format `publisher/model`, e.g. `openai/gpt-4.1`). Confirm the model is listed for GitHub Models in your context.
+
+### OpenAI-compatible: connection error / URL unreachable (provider: openai-compat)
+
+**Cause:** `AUTO_PR_AI_OPENAI_COMPAT_URL` is wrong, the host is down, TLS/firewall blocked the runner, or the path is not the API base your provider expects.
+
+**Fix:** Verify the URL in a small curl or client test from the same environment (local vs CI). For Azure and similar hosts, use the exact resource base URL and deployment name via `AUTO_PR_AI_OPENAI_COMPAT_MODEL` as required by that provider.
+
+### OpenAI-compatible: 401 / invalid API key (provider: openai-compat)
+
+**Cause:** `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` is empty, rotated, or incorrect for the endpoint.
+
+**Fix:** Rotate or paste the key again in repo secrets / env. Ensure the generate job passes `ai_openai_compat_api_key` when using the reusable workflow. Keys are redacted in logs; confirm the secret name matches what the workflow forwards.
+
 ## Wrong runtime (Node vs Bun) or cache not working
 
 **Cause:** The [setup-runtime action](../.github/actions/setup-runtime/README.md) detects your runtime from `packageManager` (in package.json) or lockfile. Stale lockfiles or missing `packageManager` can cause mismatches.
