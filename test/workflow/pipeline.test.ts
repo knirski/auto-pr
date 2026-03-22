@@ -3,12 +3,16 @@
  */
 import { describe, expect, test } from "bun:test";
 import { Effect, FileSystem, Layer, Path } from "effect";
-import * as Http from "effect/unstable/http";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { ChildProcessSpawnerLayer, FillPrTemplate, parseGhOutput } from "#auto-pr";
 import { runEffect } from "#test/run-effect.js";
-import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
+import {
+	createOllamaMockFetch,
+	createTestTempDirEffect,
+	SilentLoggerLayer,
+	TestBaseLayer,
+} from "#test/test-utils.js";
 import { runGeneratePrContent } from "#workflow/auto-pr-generate-content.js";
 import { runAutoPrGetCommits } from "#workflow/auto-pr-get-commits.js";
 
@@ -17,7 +21,6 @@ const TestLayer = Layer.mergeAll(
 	SilentLoggerLayer,
 	ChildProcessSpawnerLayer,
 	FillPrTemplate.Live,
-	Http.FetchHttpClient.layer,
 );
 
 function setupGitRepo(
@@ -76,6 +79,7 @@ describe("get-commits → generate-pr-content pipeline", () => {
 					model: "llama3.1:8b",
 					ollamaUrl: "http://localhost:11434/api/generate",
 					howToTestDefault: "1. Run `npm run check`\n2. ",
+					fetch: createOllamaMockFetch(""),
 				});
 
 				const ghAfterGenerate = yield* fs.readFileString(ghOutput);

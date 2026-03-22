@@ -66,6 +66,7 @@
 	},
 	"dependencies": {
 		"@effect/platform-bun": "4.0.0-beta.36",
+		"ollama": "^0.6.3",
 		"conventional-commits-parser": "^6.3.0",
 		"effect": "4.0.0-beta.36",
 		"micromustache": "^8.0.3",

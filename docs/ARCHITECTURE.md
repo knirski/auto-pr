@@ -26,7 +26,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Pipeline Flow
 
 1. **get-commits** — `git log` + `git diff` → commits.txt, files.txt, GITHUB_OUTPUT
-2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: Ollama summarize → fill template → title, body_file
+2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: LanguageModel (Ollama) via `generateObject` → fill template → title, body_file
 3. **create-or-update-pr** — `gh pr view` → `gh pr edit` or `gh pr create`
 
 ## Functional Core / Imperative Shell (FC/IS)
@@ -47,7 +47,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 - **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
 - **Core logic:** `src/auto-pr/core.ts`, `src/lib/fill-pr-template-core.ts`
-- **Ollama integration:** `src/auto-pr/live/fill-pr-template.ts` (FillPrTemplate implementation)
+- **AI integration:** `src/auto-pr/live/ollama-language-model.ts` (LanguageModel adapter for Ollama); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateObject` for PR title/description
 - **Config:** `src/auto-pr/config.ts` — env schema and validation
 
 ## Dependency Direction
