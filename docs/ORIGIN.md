@@ -8,4 +8,4 @@ The module was self-contained in paperless-ingestion-bot: `scripts/auto-pr/` (co
 
 ## Source
 
-- **Extraction guide:** [paperless-ingestion-bot/docs/auto-pr-extraction.md](https://github.com/knirski/paperless-ingestion-bot/blob/main/docs/auto-pr-extraction.md) — boundary, extraction steps, decoupled utilities
+- **Extraction guide:** Documented in paperless-ingestion-bot at extraction time (boundary, extraction steps, decoupled utilities). See [paperless-ingestion-bot](https://github.com/knirski/paperless-ingestion-bot) for the source repo.

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.worktrees/
 package-lock.json
 *.log
 .env

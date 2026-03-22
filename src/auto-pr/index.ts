@@ -30,16 +30,15 @@ export {
 	isMergeCommitSubject,
 	parseGhOutput,
 	parseSubjects,
-	parseTitleDescriptionResponse,
 	sanitizeForGhOutput,
-	trimOllamaResponse,
-	validateDescriptionResponse,
 	validateGenerateContentOutput,
 	validateGetCommitsOutput,
 } from "#auto-pr/core.js";
 export {
+	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
+	DescriptionParseError,
 	formatError,
 	NoSemanticCommitsError,
 	OllamaHttpError,
@@ -53,7 +52,6 @@ export {
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
-
 export { getPrDescriptionPromptPath } from "#auto-pr/paths.js";
 export {
 	AutoPrLoggerLayer,
@@ -65,3 +63,4 @@ export {
 	runMain,
 } from "#auto-pr/shell.js";
 export { type FileSystemError, mapFsError, redactPath } from "#auto-pr/utils.js";
+export { validateTitleDescription } from "#lib/fill-pr-template-core.js";

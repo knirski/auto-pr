@@ -3,7 +3,6 @@
  */
 
 import { pipe, Result, Schema } from "effect";
-import { OllamaDescriptionInvalidError } from "#auto-pr/errors.js";
 
 /** Branded type for sanitized GITHUB_OUTPUT values (max 72 chars, percent/CR/newline escaped). */
 const GhOutputValueSchema = Schema.String.pipe(
@@ -67,43 +66,9 @@ export function parseSubjects(content: string): string[] {
 		.filter(Boolean);
 }
 
-/** Trim quotes and surrounding whitespace from Ollama response. */
-export function trimOllamaResponse(s: string): string {
-	return s.replace(/^"|"$/g, "").replace(/^\s+|\s+$/g, "");
-}
-
 /** Build full description prompt from template and commit content. */
 export function buildDescriptionPrompt(promptTemplate: string, commitContent: string): string {
 	return `${promptTemplate.trim()}\n\nCommits:\n${commitContent}`;
-}
-
-/** Validate description response: non-empty, not "null". */
-export function validateDescriptionResponse(
-	raw: string,
-): Result.Result<string, OllamaDescriptionInvalidError> {
-	const t = trimOllamaResponse(raw);
-	if (!t || t === "null") return Result.fail(new OllamaDescriptionInvalidError({ cause: "empty" }));
-	return Result.succeed(t);
-}
-
-/** Parse Ollama response: line 1 = title, line 2 = blank, line 3+ = description. */
-export function parseTitleDescriptionResponse(
-	raw: string,
-): Result.Result<{ title: string; description: string }, OllamaDescriptionInvalidError> {
-	const t = trimOllamaResponse(raw);
-	if (!t || t === "null") return Result.fail(new OllamaDescriptionInvalidError({ cause: "empty" }));
-	const lines = t.split("\n");
-	const title = lines[0]?.trim();
-	const description = lines.slice(2).join("\n").trim();
-	if (!title || !description) {
-		return Result.fail(
-			new OllamaDescriptionInvalidError({
-				cause:
-					"title or description missing (expected: line 1 = title, line 2 = blank, line 3+ = description)",
-			}),
-		);
-	}
-	return Result.succeed({ title, description });
 }
 
 // ─── GITHUB_OUTPUT parsing (run-auto-pr) ──────────────────────────────────────

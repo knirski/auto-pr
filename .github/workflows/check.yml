@@ -25,7 +25,7 @@ jobs:
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@ac7350ac8c7b2fc604773049a9c3927587b209a8
+        uses: knirski/auto-pr/.github/actions/setup-runtime@f7c745499fb3b38a6de1fd041ee678a0f327fc91
 
       - name: Setup Node (for SBOM)
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
