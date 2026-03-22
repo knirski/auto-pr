@@ -1,18 +1,19 @@
 # AI Abstraction Layer Design
 
 **Date:** 2025-03-22  
-**Status:** Ready for implementation  
+**Status:** Partially implemented (Ollama path done; multi-provider deferred)  
 **Summary:** Add a pluggable AI abstraction using Effect's `LanguageModel` so auto-pr can use Ollama, GitHub Models, or any OpenAI-compatible API for PR title/description generation.
 
 **Contents:** [1. Context and Goals](#1-context-and-goals) · [2. Components and Data Flow](#2-components-and-data-flow) · [3. Error Handling](#3-error-handling) · [4. Testing](#4-testing-request-capture-verification) · [5. Workflow and Migration](#5-workflow-and-migration) · [6. Implementation Notes](#6-implementation-notes)
 
 ## 1. Context and Goals
 
-### Current State
+### Current State (as implemented)
 
-- For 2+ commits, `auto-pr-generate-content` calls Ollama via HTTP (`OLLAMA_URL`, `OLLAMA_MODEL`) to generate title and description.
-- Direct `callOllama` in `src/workflow/auto-pr-generate-content.ts`; no abstraction.
+- For 2+ commits, `auto-pr-generate-content` uses `LanguageModel.generateObject` with `TitleDescriptionSchema`; `ollama-language-model.ts` adapts the official `ollama` package to Effect's `LanguageModel`.
+- `runGeneratePrContent` builds `ollamaLanguageModelLayer` from config and provides it to `generatePrContentFromValues`.
 - Config: `GeneratePrContentConfig` with `model`, `ollamaUrl`; `RunAutoPrConfig` mirrors that.
+- **Deferred:** `ai-provider.ts`, `AUTO_PR_AI_PROVIDER`, GitHub Models, openai-compat, ResilientHttpClient, workflow input renames.
 
 ### Goals
 

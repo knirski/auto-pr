@@ -7,7 +7,6 @@
  */
 
 import { Effect, FileSystem, Layer } from "effect";
-import * as Http from "effect/unstable/http";
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import type { PullRequestFailedError } from "#auto-pr";
 import {
@@ -33,7 +32,6 @@ const RunAutoPrLayer = Layer.mergeAll(
 	AutoPrPlatformLayer,
 	ChildProcessSpawnerLayer,
 	FillPrTemplate.Live,
-	Http.FetchHttpClient.layer,
 );
 
 function runPipeline(): Effect.Effect<void, unknown, never> {

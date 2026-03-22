@@ -8,28 +8,17 @@ import {
 	FillPrTemplateValidationError,
 	formatError,
 	NoSemanticCommitsError,
-	OllamaDescriptionInvalidError,
-	OllamaHttpError,
 	ParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
 	TemplateRenderError,
+	UnexpectedError,
 } from "#auto-pr/errors.js";
 import { FileSystemError } from "#auto-pr/utils.js";
 
 test("formatError formats PullRequestFailedError", () => {
 	expect(formatError(new PullRequestFailedError({ cause: "git failed" }))).toBe("git failed");
-});
-
-test("formatError formats OllamaHttpError with status", () => {
-	expect(formatError(new OllamaHttpError({ status: 500, cause: "server error" }))).toBe(
-		"Ollama HTTP 500: server error",
-	);
-});
-
-test("formatError formats OllamaHttpError without status", () => {
-	expect(formatError(new OllamaHttpError({ cause: "timeout" }))).toBe("timeout");
 });
 
 test("formatError formats AiProviderError with status", () => {
@@ -91,10 +80,6 @@ test("formatError formats BodyFileNotFoundError", () => {
 	);
 });
 
-test("formatError formats OllamaDescriptionInvalidError", () => {
-	expect(formatError(new OllamaDescriptionInvalidError({ cause: "empty" }))).toBe("empty");
-});
-
 test("formatError formats TemplateRenderError", () => {
 	expect(formatError(new TemplateRenderError({ message: "Template failed" }))).toBe(
 		"Template failed",
@@ -111,6 +96,10 @@ test("formatError formats FillPrTemplateValidationError", () => {
 	expect(formatError(new FillPrTemplateValidationError({ message: "templatePath required" }))).toBe(
 		"templatePath required",
 	);
+});
+
+test("formatError formats UnexpectedError", () => {
+	expect(formatError(new UnexpectedError({ cause: "commits: ENOENT" }))).toBe("commits: ENOENT");
 });
 
 test("formatError formats FileSystemError (fallback path)", () => {
