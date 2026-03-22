@@ -59,15 +59,10 @@ jobs:
       - name: Lint workflows
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
 
-      - name: Lint scripts
-        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
-        with:
-          scandir: ./scripts
-
-      - name: Format check scripts (shfmt)
-        uses: mfinelli/setup-shfmt@a25fda4c1fe115aec0f85e04126610841bc3141d # v4.0.1
-      - name: Run shfmt
-        run: shfmt -d scripts
+      - name: Lint scripts (shellcheck, shfmt)
+        uses: luizm/action-sh-checker@883217215b11c1fabbf00eb1a9a041f62d74c744 # v0.10.0
+        env:
+          SHFMT_OPTS: -d
 
       - name: Check links
         continue-on-error: true
