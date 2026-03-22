@@ -29,6 +29,7 @@ import {
 	ParseError,
 	runMain,
 	TemplateRenderError,
+	toError,
 	UnexpectedError,
 	unknownToMessage,
 } from "#auto-pr";
@@ -237,7 +238,7 @@ export function normalizeUnknownToGeneratePrContentError(
 		() =>
 			new TemplateRenderError({
 				message: "Unexpected failure",
-				cause: e instanceof Error ? e : new Error(String(e)),
+				cause: toError(e),
 			}),
 	);
 }
@@ -259,7 +260,7 @@ export function runGeneratePrContent(config: {
 	fetch?: typeof fetch;
 }): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
 	const toUnexpected = (ctx: string) => (e: unknown) =>
-		new UnexpectedError({ cause: `${ctx}: ${e instanceof Error ? e.message : String(e)}` });
+		new UnexpectedError({ cause: `${ctx}: ${unknownToMessage(e)}` });
 
 	return Effect.gen(function* () {
 		const {
@@ -316,7 +317,7 @@ export function runGeneratePrContent(config: {
 			Effect.mapError(
 				(e) =>
 					new UnexpectedError({
-						cause: `GITHUB_OUTPUT: ${e instanceof Error ? e.message : String(e)}`,
+						cause: `GITHUB_OUTPUT: ${unknownToMessage(e)}`,
 					}),
 			),
 		);

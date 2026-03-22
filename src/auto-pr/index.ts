@@ -64,5 +64,11 @@ export {
 	runCommand,
 	runMain,
 } from "#auto-pr/shell.js";
-export { type FileSystemError, mapFsError, redactPath, unknownToMessage } from "#auto-pr/utils.js";
+export {
+	type FileSystemError,
+	mapFsError,
+	redactPath,
+	toError,
+	unknownToMessage,
+} from "#auto-pr/utils.js";
 export { validateTitleDescription } from "#lib/fill-pr-template-core.js";

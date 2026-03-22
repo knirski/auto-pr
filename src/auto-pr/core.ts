@@ -3,6 +3,7 @@
  */
 
 import { pipe, Result, Schema } from "effect";
+import { unknownToMessage } from "#auto-pr/utils.js";
 
 /** Branded type for sanitized GITHUB_OUTPUT values (max 72 chars, percent/CR/newline escaped). */
 const GhOutputValueSchema = Schema.String.pipe(
@@ -42,9 +43,7 @@ export function sanitizeForGhOutput(s: string): Result.Result<GhOutputValue, Err
 	return Result.try({
 		try: () => Schema.decodeSync(GhOutputValueSchema)(escaped),
 		catch: (e) =>
-			new Error(
-				`GITHUB_OUTPUT value exceeds 72 chars after escaping: ${e instanceof Error ? e.message : String(e)}`,
-			),
+			new Error(`GITHUB_OUTPUT value exceeds 72 chars after escaping: ${unknownToMessage(e)}`),
 	});
 }
 
@@ -114,11 +113,7 @@ export function decodeGhOutputTitle(raw: string): Result.Result<string, Error> {
 	try {
 		return Result.succeed(decodeURIComponent(raw));
 	} catch (e) {
-		return Result.fail(
-			new Error(
-				`Failed to decode GITHUB_OUTPUT title: ${e instanceof Error ? e.message : String(e)}`,
-			),
-		);
+		return Result.fail(new Error(`Failed to decode GITHUB_OUTPUT title: ${unknownToMessage(e)}`));
 	}
 }
 
