@@ -4,7 +4,7 @@ This guide walks through adding auto-pr to any repository so that pushes to `ai/
 
 ## Getting started
 
-1. **Run** `npx auto-pr-init` in your repo — creates the workflow, PR template, and `.nvmrc`
+1. **Run** `npx -p github:knirski/auto-pr auto-pr-init` in your repo — creates the workflow, PR template, and `.nvmrc`
 2. **Create** a [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
 3. **Generate** a private key in the app settings and save the `.pem` file
 4. **Install** the app on your repository
@@ -17,14 +17,14 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 | Requirement | How to set up |
 |-------------|---------------|
-| **Workflow + template** | Run `npx auto-pr-init` in your repo. Creates `.github/workflows/auto-pr.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.nvmrc`. [Step 6](#step-6-add-the-workflow-file) |
+| **Workflow + template** | Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo. Creates `.github/workflows/auto-pr.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.nvmrc`. [Step 6](#step-6-add-the-workflow-file) |
 | **GitHub App** | Create at [github.com/settings/apps/new](https://github.com/settings/apps/new). Permissions: Contents, Pull requests (Read and write). [Step 2](#step-2-create-the-github-app) |
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
 | **Secrets** | Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. [Step 5](#step-5-add-repository-secrets) |
 | **Branch protection** | (Optional) Require `Auto-PR generate (reusable) / generate` and `Auto-PR create (reusable) / create` before merging. [Step 8](#step-8-configure-branch-protection-optional) |
 
-**Quick setup:** `npx auto-pr-init` → GitHub App (Steps 2–5) → push to `ai/**`.
+**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App (Steps 2–5) → push to `ai/**`.
 
 ## Overview
 
@@ -35,7 +35,7 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 ## Step 1: Add auto-pr as a dependency (optional)
 
-**Skip this step** — the default reusable workflow fetches auto-pr from knirski/auto-pr and needs no `package.json`. When installing from git (e.g. `npx -p github:knirski/auto-pr` or `bun add github:knirski/auto-pr`), the `prepare` script builds `dist/` automatically.
+**Skip this step** — the default reusable workflow fetches auto-pr from knirski/auto-pr and needs no `package.json`. When installing from git (e.g. `npx -p github:knirski/auto-pr` or `bun add github:knirski/auto-pr`), the package works with Node only: `dist/` is pre-built and committed by CI. With Bun, `prepare` also builds it on install.
 
 **JS/TS projects:** The generate and create jobs auto-detect your runtime (npm, yarn, pnpm, bun) from `packageManager` or lockfile. No config needed.
 
@@ -79,7 +79,7 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 ## Step 6: Add the workflow file
 
-**Recommended:** Run `npx auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command.
+**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command.
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
@@ -91,7 +91,7 @@ All inputs use sensible defaults (Ollama model, PR template path, generic "how t
 
 ## Step 7: Add the PR template
 
-`npx auto-pr-init` creates this automatically. Otherwise, copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to your repo. Customize placeholders if needed.
+`npx -p github:knirski/auto-pr auto-pr-init` creates this automatically. Otherwise, copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to your repo. Customize placeholders if needed.
 
 ## Step 8: Configure branch protection (optional)
 
@@ -231,9 +231,9 @@ Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_h
 | Issue | Fix |
 |-------|-----|
 | Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
-| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
-| "Missing [path]" (PR template) | Run `npx auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| "node-version-file" error | Ensure `.nvmrc` exists (run `npx auto-pr-init`). Use `node-version-file: ".nvmrc"` for single source of truth. |
+| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx -p github:knirski/auto-pr auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
+| "Missing [path]" (PR template) | Run `npx -p github:knirski/auto-pr auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
+| "node-version-file" error | Ensure `.nvmrc` exists (run `npx -p github:knirski/auto-pr auto-pr-init`). Use `node-version-file: ".nvmrc"` for single source of truth. |
 | Check job fails | Ensure your check command exists (e.g. `npm run check`, `pytest`, `cargo test`). See [Running checks before PR creation](#running-checks-before-pr-creation) |
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
 | "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |

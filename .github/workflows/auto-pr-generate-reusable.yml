@@ -63,7 +63,7 @@ jobs:
           PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
         run: |
           if [ ! -f "$PR_TEMPLATE_PATH" ]; then
-            echo "::error::Missing $PR_TEMPLATE_PATH. Run: npx auto-pr-init"
+            echo "::error::Missing $PR_TEMPLATE_PATH. Run: npx -p github:knirski/auto-pr auto-pr-init"
             echo "::error::See https://github.com/knirski/auto-pr#integration"
             exit 1
           fi

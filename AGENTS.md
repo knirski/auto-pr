@@ -139,11 +139,11 @@ Create small, focused commits. If changes span many files or concerns, propose s
 - Issues: `issue_write`, `add_issue_comment`, `issue_read`
 - Fallback to `gh` only when MCP has no matching tool.
 
-## Post-merge: Workflow SHA updates
+## Post-merge: Automated updates
 
-**Automated.** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) runs on push to main when workflows/actions change and updates self-referential pins. No manual step needed in normal cases.
+**Workflow pins:** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) runs on push to main when workflows/actions change and updates self-referential pins. No manual step needed. If it didn't run: **Actions → Update workflow pins**, or update pins yourself per [docs/CI.md](docs/CI.md#workflow-pin-automation).
 
-**If automation didn't run** (e.g. merge only touched `src/`): run **Actions → Update workflow pins** manually, or update pins yourself per [docs/CI.md](docs/CI.md#workflow-pin-automation).
+**Dist:** [update-dist.yml](.github/workflows/update-dist.yml) runs on push to main when `src/`, `package.json`, `scripts/build.ts`, or `bun.lock` change. Builds `dist/` and commits it (uses `git add -f` to override `.gitignore`). Enables `npx -p github:knirski/auto-pr` for Node-only users. See [docs/CI.md](docs/CI.md#dist-and-gitignore). Do not commit `dist/` in PRs.
 
 ## Verification
 

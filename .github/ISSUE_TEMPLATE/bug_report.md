@@ -29,7 +29,7 @@ What actually happened.
 - OS: [e.g. NixOS 24.05, Ubuntu 24.04]
 - Node.js version: [e.g. 24.0.0]
 - auto-pr version: [e.g. 0.1.0]
-- How you run it: [e.g. npx auto-pr-init, GitHub Actions workflow, nix run, npm run]
+- How you run it: [e.g. npx -p github:knirski/auto-pr auto-pr-init, GitHub Actions workflow, nix run, npm run]
 
 ## Env vars (redact secrets)
 
