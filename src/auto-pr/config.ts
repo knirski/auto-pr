@@ -8,7 +8,7 @@
  */
 
 import type { Redacted } from "effect";
-import { Config, Effect, Layer, Option, ServiceMap } from "effect";
+import { Config, Effect, Layer, Match, Option, ServiceMap } from "effect";
 import { AutoPrConfigError } from "#auto-pr/errors.js";
 
 /** Type guard for cause with message property. */
@@ -74,19 +74,24 @@ export const GetCommitsConfigLayer = Layer.effect(
 
 // ─── GeneratePrContentConfig ─────────────────────────────────────────────────
 
+export type AiProvider = "ollama" | "github-models" | "openai-compat";
+
 export interface GeneratePrContentConfig {
 	readonly commits: string;
 	readonly files: string;
 	readonly ghOutput: string;
 	readonly workspace: string;
 	readonly templatePath: string;
+	readonly provider: AiProvider;
 	readonly model: string;
-	readonly ollamaUrl: string;
 	readonly howToTestDefault: string;
 }
 
 export const GeneratePrContentConfig =
 	ServiceMap.Service<GeneratePrContentConfig>("GeneratePrContentConfig");
+
+const DEFAULT_AI_PROVIDER: AiProvider = "ollama";
+const DEFAULT_OLLAMA_MODEL = "llama3.1:8b";
 
 const GeneratePrContentConfigDef = Config.all({
 	commits: Config.string("COMMITS"),
@@ -94,10 +99,31 @@ const GeneratePrContentConfigDef = Config.all({
 	ghOutput: Config.string("GITHUB_OUTPUT"),
 	workspace: Config.string("GITHUB_WORKSPACE"),
 	templatePath: Config.string("PR_TEMPLATE_PATH"),
-	model: Config.string("OLLAMA_MODEL"),
-	ollamaUrl: Config.string("OLLAMA_URL"),
+	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
+	aiOllamaModel: Config.option(Config.string("AUTO_PR_AI_OLLAMA_MODEL")),
 	howToTestDefault: Config.string("AUTO_PR_HOW_TO_TEST"),
 });
+
+function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
+	const trimmed = raw.trim().toLowerCase();
+	return Match.value(trimmed).pipe(
+		Match.when("ollama", () => Effect.succeed("ollama" as const)),
+		Match.when("github-models", () => Effect.succeed("github-models" as const)),
+		Match.when("openai-compat", () => Effect.succeed("openai-compat" as const)),
+		Match.orElse(() =>
+			Effect.fail(
+				new AutoPrConfigError({
+					missing: [
+						`Invalid AUTO_PR_AI_PROVIDER: ${raw}. Must be ollama, github-models, or openai-compat`,
+					],
+				}),
+			),
+		),
+	);
+}
+
+const parseProviderOrDefault = (raw: string) =>
+	raw === "" ? Effect.succeed(DEFAULT_AI_PROVIDER) : parseProvider(raw);
 
 export const GeneratePrContentConfigLayer = Layer.effect(
 	GeneratePrContentConfig,
@@ -109,17 +135,24 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const ghOutput = yield* requireNonEmpty("GITHUB_OUTPUT", base.ghOutput);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const templatePath = yield* requireNonEmpty("PR_TEMPLATE_PATH", base.templatePath);
-			const model = yield* requireNonEmpty("OLLAMA_MODEL", base.model);
-			const ollamaUrl = yield* requireNonEmpty("OLLAMA_URL", base.ollamaUrl);
 			const howToTestDefault = yield* requireNonEmpty("AUTO_PR_HOW_TO_TEST", base.howToTestDefault);
+
+			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
+			yield* Option.match(base.aiProvider, {
+				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to ollama"),
+				onSome: () => Effect.void,
+			});
+			const provider = yield* parseProviderOrDefault(providerRaw);
+			const model = Option.getOrElse(base.aiOllamaModel, () => DEFAULT_OLLAMA_MODEL);
+
 			return {
 				commits,
 				files,
 				ghOutput,
 				workspace,
 				templatePath,
+				provider,
 				model,
-				ollamaUrl,
 				howToTestDefault,
 			};
 		}),
@@ -178,8 +211,8 @@ export interface RunAutoPrConfig {
 	readonly workspace: string;
 	readonly templatePath: string;
 	readonly ghToken: Redacted.Redacted<string>;
+	readonly provider: AiProvider;
 	readonly model: string;
-	readonly ollamaUrl: string;
 	readonly branch: string | undefined;
 	readonly howToTestDefault: string;
 }
@@ -191,8 +224,8 @@ const RunAutoPrConfigDef = Config.all({
 	workspace: Config.string("GITHUB_WORKSPACE"),
 	templatePath: Config.string("PR_TEMPLATE_PATH"),
 	ghToken: Config.redacted("GH_TOKEN"),
-	model: Config.string("OLLAMA_MODEL"),
-	ollamaUrl: Config.string("OLLAMA_URL"),
+	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
+	aiOllamaModel: Config.option(Config.string("AUTO_PR_AI_OLLAMA_MODEL")),
 	branch: Config.option(Config.string("BRANCH")),
 	howToTestDefault: Config.string("AUTO_PR_HOW_TO_TEST"),
 });
@@ -205,16 +238,23 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const templatePath = yield* requireNonEmpty("PR_TEMPLATE_PATH", base.templatePath);
-			const model = yield* requireNonEmpty("OLLAMA_MODEL", base.model);
-			const ollamaUrl = yield* requireNonEmpty("OLLAMA_URL", base.ollamaUrl);
 			const howToTestDefault = yield* requireNonEmpty("AUTO_PR_HOW_TO_TEST", base.howToTestDefault);
+
+			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
+			yield* Option.match(base.aiProvider, {
+				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to ollama"),
+				onSome: () => Effect.void,
+			});
+			const provider = yield* parseProviderOrDefault(providerRaw);
+			const model = Option.getOrElse(base.aiOllamaModel, () => DEFAULT_OLLAMA_MODEL);
+
 			return {
 				defaultBranch,
 				workspace,
 				templatePath,
 				ghToken: base.ghToken,
+				provider,
 				model,
-				ollamaUrl,
 				branch: Option.getOrUndefined(base.branch),
 				howToTestDefault,
 			};

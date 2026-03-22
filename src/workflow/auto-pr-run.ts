@@ -1,7 +1,7 @@
 /**
  * Run the auto-PR pipeline locally (no GitHub Actions).
- * Requires: DEFAULT_BRANCH, GITHUB_WORKSPACE, PR_TEMPLATE_PATH, GH_TOKEN, OLLAMA_MODEL, OLLAMA_URL.
- * For 2+ commits: Ollama must be running (default: localhost:11434).
+ * Requires: DEFAULT_BRANCH, GITHUB_WORKSPACE, PR_TEMPLATE_PATH, GH_TOKEN.
+ * For 2+ commits: AUTO_PR_AI_PROVIDER (optional; default ollama), AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama). AI provider must be running (Ollama: localhost:11434).
  *
  * Run: npx tsx src/workflow/auto-pr-run.ts (or: node dist/workflow/auto-pr-run.js)
  */
@@ -38,7 +38,7 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 	return Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		const config = yield* RunAutoPrConfig;
-		const { workspace, defaultBranch, templatePath, branch, model, ollamaUrl, howToTestDefault } =
+		const { workspace, defaultBranch, templatePath, branch, provider, model, howToTestDefault } =
 			config;
 		const resolvedBranch =
 			branch !== undefined ? Effect.succeed(branch) : getCurrentBranch(workspace);
@@ -60,8 +60,8 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 			ghOutput,
 			workspace,
 			templatePath,
+			provider,
 			model,
-			ollamaUrl,
 			howToTestDefault,
 		});
 

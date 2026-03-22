@@ -49,7 +49,7 @@ function setupGitRepo(
 
 describe("get-commits → generate-pr-content pipeline", () => {
 	test("handoff: GITHUB_OUTPUT from get-commits feeds generate-pr-content", async () => {
-		await runEffect(
+		await runEffect(TestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("pipeline-");
 				const fs = yield* FileSystem.FileSystem;
@@ -76,8 +76,8 @@ describe("get-commits → generate-pr-content pipeline", () => {
 					ghOutput,
 					workspace: tmp.path,
 					templatePath,
+					provider: "ollama",
 					model: "llama3.1:8b",
-					ollamaUrl: "http://localhost:11434/api/generate",
 					howToTestDefault: "1. Run `npm run check`\n2. ",
 					fetch: createOllamaMockFetch(""),
 				});
@@ -93,7 +93,6 @@ describe("get-commits → generate-pr-content pipeline", () => {
 				const bodyContent = yield* fs.readFileString(bodyPath);
 				expect(bodyContent).toContain("feat: add feature");
 			}).pipe(Effect.scoped),
-			TestLayer,
 		);
 	});
 });

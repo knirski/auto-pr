@@ -14,14 +14,14 @@ on:
         description: "Package spec for npx (e.g. github:knirski/auto-pr#branch)"
         value: ${{ jobs.generate.outputs.auto_pr_pkg }}
     inputs:
-      ollama_model:
+      ai_provider:
+        required: false
+        type: string
+        default: "ollama"
+      ai_ollama_model:
         required: false
         type: string
         default: "llama3.1:8b"
-      ollama_url:
-        required: false
-        type: string
-        default: "http://localhost:11434/api/generate"
       pr_template_path:
         required: false
         type: string
@@ -100,16 +100,16 @@ jobs:
         run: bash scripts/auto-pr-run-command.sh get-commits
 
       - name: Setup Ollama
-        if: steps.commits.outputs.count != '1'
+        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'ollama'
         uses: ai-action/setup-ollama@71ea83e32be8721c648fa946c5da9853679a3803 # v2
 
       - name: Pull model
-        if: steps.commits.outputs.count != '1'
+        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'ollama'
         env:
-          OLLAMA_MODEL: ${{ inputs.ollama_model }}
+          OLLAMA_MODEL: ${{ inputs.ai_ollama_model }}
         run: |
           if [[ ! "$OLLAMA_MODEL" =~ ^[a-zA-Z0-9._:-]+$ ]]; then
-            echo "::error::Invalid ollama_model: must match ^[a-zA-Z0-9._:-]+$"
+            echo "::error::Invalid ai_ollama_model: must match ^[a-zA-Z0-9._:-]+$"
             exit 1
           fi
           ollama pull "$OLLAMA_MODEL"
@@ -121,8 +121,8 @@ jobs:
           FILES: ${{ steps.commits.outputs.files }}
           PR_TEMPLATE_PATH: ${{ inputs.pr_template_path }}
           AUTO_PR_HOW_TO_TEST: ${{ inputs.auto_pr_how_to_test }}
-          OLLAMA_MODEL: ${{ inputs.ollama_model }}
-          OLLAMA_URL: ${{ inputs.ollama_url }}
+          AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
+          AUTO_PR_AI_OLLAMA_MODEL: ${{ inputs.ai_ollama_model }}
           AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
           RUNNER: ${{ steps.setup.outputs.runner }}
           USE_WORKSPACE: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
