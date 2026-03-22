@@ -24,6 +24,7 @@ import {
 	parseCommits,
 	parseFilesContent,
 	renderBody as renderBodyCore,
+	validateTitleDescription,
 } from "#lib/fill-pr-template-core.js";
 import { runEffect } from "#test/run-effect.js";
 import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
@@ -653,6 +654,40 @@ describe("isValidConventionalTitle", () => {
 		expect(isValidConventionalTitle("  ")).toBe(false);
 		expect(isValidConventionalTitle(`feat: ${"a".repeat(67)}`)).toBe(false);
 		expect(isValidConventionalTitle(" : missing type")).toBe(false);
+	});
+});
+
+describe("validateTitleDescription", () => {
+	test("succeeds for valid title and description", () => {
+		Result.match(validateTitleDescription({ title: "feat: add X", description: "Summary here." }), {
+			onSuccess: (v) => {
+				expect(v.title).toBe("feat: add X");
+				expect(v.description).toBe("Summary here.");
+			},
+			onFailure: () => expect().fail("expected success"),
+		});
+	});
+	test("fails for blank title", () => {
+		Result.match(validateTitleDescription({ title: "", description: "Body" }), {
+			onSuccess: () => expect().fail("expected failure"),
+			onFailure: () => {},
+		});
+		Result.match(validateTitleDescription({ title: "  ", description: "Body" }), {
+			onSuccess: () => expect().fail("expected failure"),
+			onFailure: () => {},
+		});
+	});
+	test("fails for blank description", () => {
+		Result.match(validateTitleDescription({ title: "feat: x", description: "" }), {
+			onSuccess: () => expect().fail("expected failure"),
+			onFailure: () => {},
+		});
+	});
+	test("fails for non-conventional title", () => {
+		Result.match(validateTitleDescription({ title: "Add feature", description: "Body" }), {
+			onSuccess: () => expect().fail("expected failure"),
+			onFailure: () => {},
+		});
 	});
 });
 

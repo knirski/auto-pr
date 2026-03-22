@@ -15,10 +15,7 @@ import {
 	isMergeCommitSubject,
 	parseGhOutput,
 	parseSubjects,
-	parseTitleDescriptionResponse,
 	sanitizeForGhOutput,
-	trimOllamaResponse,
-	validateDescriptionResponse,
 	validateGenerateContentOutput,
 	validateGetCommitsOutput,
 } from "#auto-pr";
@@ -113,70 +110,11 @@ describe("auto-pr core", () => {
 		});
 	});
 
-	describe("trimOllamaResponse", () => {
-		test("trims quotes and whitespace", () => {
-			expect(trimOllamaResponse('"hello"')).toBe("hello");
-			expect(trimOllamaResponse("  x  ")).toBe("x");
-		});
-	});
-
 	describe("buildDescriptionPrompt", () => {
 		test("builds prompt with content", () => {
 			const out = buildDescriptionPrompt("Desc template", "commit content");
 			expect(out).toContain("Desc template");
 			expect(out).toContain("commit content");
-		});
-	});
-
-	describe("validateDescriptionResponse", () => {
-		test("succeeds for non-empty", () => {
-			Result.match(validateDescriptionResponse("some text"), {
-				onSuccess: (v) => expect(v).toBe("some text"),
-				onFailure: () => expect().fail("expected success"),
-			});
-		});
-		test("fails for empty", () => {
-			Result.match(validateDescriptionResponse(""), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
-			Result.match(validateDescriptionResponse("null"), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
-		});
-	});
-
-	describe("parseTitleDescriptionResponse", () => {
-		test("parses title and description", () => {
-			const input = "feat: add X\n\nSummary of changes here.";
-			Result.match(parseTitleDescriptionResponse(input), {
-				onSuccess: (v) => {
-					expect(v.title).toBe("feat: add X");
-					expect(v.description).toBe("Summary of changes here.");
-				},
-				onFailure: () => expect().fail("expected success"),
-			});
-		});
-		test("fails for empty or null", () => {
-			Result.match(parseTitleDescriptionResponse(""), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
-			Result.match(parseTitleDescriptionResponse("null"), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
-		});
-		test("fails when title or description missing", () => {
-			Result.match(parseTitleDescriptionResponse("feat: x"), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
-			Result.match(parseTitleDescriptionResponse("\n\nDescription only"), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
 		});
 	});
 
