@@ -9,7 +9,7 @@
 import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
 import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
 import type { Redacted } from "effect";
-import { Effect, Layer, Match } from "effect";
+import { Effect, Layer, Match, Redacted as RedactedValue } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { FetchHttpClient } from "effect/unstable/http";
 import type { AiProvider } from "#auto-pr/config.js";
@@ -47,7 +47,7 @@ export function aiProviderLayerFromConfig(
 			}),
 		),
 		Match.when("github-models", () => {
-			if (!config.ghToken || !config.model) {
+			if (!config.ghToken || RedactedValue.value(config.ghToken).trim() === "" || !config.model) {
 				return Layer.effect(
 					LanguageModel.LanguageModel,
 					Effect.fail(
@@ -65,7 +65,12 @@ export function aiProviderLayerFromConfig(
 			return modelLayer.pipe(Layer.provide(clientLayer));
 		}),
 		Match.when("openai-compat", () => {
-			if (!config.openaiCompatUrl || !config.openaiCompatApiKey || !config.openaiCompatModel) {
+			if (
+				!config.openaiCompatUrl ||
+				!config.openaiCompatApiKey ||
+				RedactedValue.value(config.openaiCompatApiKey).trim() === "" ||
+				!config.openaiCompatModel
+			) {
 				return Layer.effect(
 					LanguageModel.LanguageModel,
 					Effect.fail(

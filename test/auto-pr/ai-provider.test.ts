@@ -42,6 +42,29 @@ describe("aiProviderLayerFromConfig", () => {
 		);
 	});
 
+	test("github-models: fails with AutoPrConfigError when ghToken empty", async () => {
+		const layer = Layer.mergeAll(
+			BaseLayer,
+			aiProviderLayerFromConfig({
+				provider: "github-models",
+				model: "openai/gpt-4",
+				ghToken: Redacted.make("", { label: "GH_TOKEN" }),
+			}),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* LanguageModel.LanguageModel;
+			}).pipe(Effect.scoped, Effect.provide(layer), Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => expect(err).toBeInstanceOf(AutoPrConfigError),
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
+	});
+
 	test("github-models: fails with AutoPrConfigError when ghToken missing", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
@@ -80,6 +103,33 @@ describe("aiProviderLayerFromConfig", () => {
 				expect(model).toBeDefined();
 			}).pipe(Effect.scoped),
 		);
+	});
+
+	test("openai-compat: fails with AutoPrConfigError when apiKey empty", async () => {
+		const layer = Layer.mergeAll(
+			BaseLayer,
+			aiProviderLayerFromConfig({
+				provider: "openai-compat",
+				model: "gpt-4",
+				openaiCompatUrl: "https://api.example.com/v1",
+				openaiCompatApiKey: Redacted.make("", {
+					label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
+				}),
+				openaiCompatModel: "gpt-4",
+			}),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* LanguageModel.LanguageModel;
+			}).pipe(Effect.scoped, Effect.provide(layer), Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => expect(err).toBeInstanceOf(AutoPrConfigError),
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
 	});
 
 	test("openai-compat: fails with AutoPrConfigError when url missing", async () => {
