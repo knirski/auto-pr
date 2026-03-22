@@ -40,14 +40,13 @@ const GetCommitsLayer = Layer.mergeAll(
 
 describe("GetCommitsConfigLayer succeeds when all vars present", () => {
 	test("returns config with non-empty values", async () => {
-		await runEffect(
+		await runEffect(GetCommitsLayer)(
 			Effect.gen(function* () {
 				const config = yield* GetCommitsConfig;
 				expect(config.defaultBranch).toBe("main");
 				expect(config.workspace).toBe("/workspace");
 				expect(config.ghOutput).toBe("/tmp/gh-output");
 			}),
-			GetCommitsLayer,
 		);
 	});
 });
@@ -59,8 +58,7 @@ const GeneratePrContentConfigProviderLayer = ConfigProvider.layer(
 		GITHUB_OUTPUT: "/tmp/gh-output",
 		GITHUB_WORKSPACE: "/workspace",
 		PR_TEMPLATE_PATH: "/t/template.md",
-		OLLAMA_MODEL: "llama3.1:8b",
-		OLLAMA_URL: "http://localhost:11434/api/generate",
+		AUTO_PR_AI_OLLAMA_MODEL: "llama3.1:8b",
 		AUTO_PR_HOW_TO_TEST: "1. Run tests",
 	}),
 );
@@ -72,16 +70,16 @@ const GeneratePrContentLayer = Layer.mergeAll(
 
 describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 	test("returns config with non-empty values", async () => {
-		await runEffect(
+		await runEffect(GeneratePrContentLayer)(
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
 				expect(config.commits).toBe("/c/commits.txt");
 				expect(config.files).toBe("/c/files.txt");
 				expect(config.templatePath).toBe("/t/template.md");
+				expect(config.provider).toBe("ollama");
 				expect(config.model).toBe("llama3.1:8b");
 				expect(config.howToTestDefault).toBe("1. Run tests");
 			}),
-			GeneratePrContentLayer,
 		);
 	});
 });
@@ -104,7 +102,7 @@ const CreateOrUpdatePrLayer = Layer.mergeAll(
 
 describe("CreateOrUpdatePrConfigLayer succeeds when all vars present", () => {
 	test("returns config with ghToken redacted", async () => {
-		await runEffect(
+		await runEffect(CreateOrUpdatePrLayer)(
 			Effect.gen(function* () {
 				const config = yield* CreateOrUpdatePrConfig;
 				expect(config.branch).toBe("ai/feature");
@@ -112,7 +110,6 @@ describe("CreateOrUpdatePrConfigLayer succeeds when all vars present", () => {
 				expect(config.bodyFile).toBe("/tmp/body.md");
 				expect(Redacted.isRedacted(config.ghToken)).toBe(true);
 			}),
-			CreateOrUpdatePrLayer,
 		);
 	});
 });

@@ -204,7 +204,7 @@ default = pkgs.callPackage ./default.nix {
 
 ### 3.1 Create local Effect–Bun test adapter
 
-**Implemented:** `test/run-effect.ts` — minimal helper `runEffect(effect, layer)` that runs `Effect.runPromise(Effect.provide(effect.pipe(Effect.scoped), layer))`. No custom `test.effect` or `test.layer`; tests use `test("name", async () => await runEffect(effect, layer))` directly.
+**Implemented:** `test/run-effect.ts` — minimal helper `runEffect(layer)(effect)` (curried) that runs `Effect.runPromise(Effect.provide(effect.pipe(Effect.scoped), layer))`. No custom `test.effect` or `test.layer`; tests use `test("name", async () => await runEffect(layer)(effect))` directly.
 
 **Omitted:** `test.effect`, `test.layer`, `test.live`, `flakyTest`, `excludeTestServices`, `test.prop`, `addEqualityTesters`.
 
@@ -213,8 +213,8 @@ default = pkgs.callPackage ./default.nix {
 ### 3.2 Migrate test files
 
 - Replace `import { expect, layer, it } from "@effect/vitest"` with `import { describe, expect, test } from "bun:test"` and `import { runEffect } from "../run-effect.js"`
-- Replace `it.effect` → `test("name", async () => await runEffect(effect, layer))`
-- Replace `it.layer(L)("name", (it) => { it.effect(...) })` → `describe("name", () => { test(..., async () => runEffect(effect, L)) })`
+- Replace `it.effect` → `test("name", async () => await runEffect(layer)(effect))`
+- Replace `it.layer(L)("name", (it) => { it.effect(...) })` → `describe("name", () => { test(..., async () => runEffect(L)(effect)) })`
 - **Replace `it.prop` with direct FastCheck:** `test("name", () => { fc.assert(fc.property(arb, (x) => { ... })); })` using `effect/testing/FastCheck`
 - Remove vitest.setup.ts
 - Remove `@effect/vitest`, `vitest`, `@vitest/coverage-v8`, `@vitest/ui`, `vite-tsconfig-paths`

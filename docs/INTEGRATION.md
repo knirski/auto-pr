@@ -29,7 +29,7 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 ## Overview
 
 1. **AI agent** (or developer) pushes a branch (e.g. `ai/feature-x` or `ai/fix-y`)
-2. **Workflow** runs on push to `ai/**` branches (title from first commit subject; for 2+ commits: Ollama generates description)
+2. **Workflow** runs on push to `ai/**` branches (title from first commit subject; for 2+ commits: AI generates description)
 3. **GitHub App** creates or updates the PR using its token
 4. **PR** is opened by `your-app-name[bot]` → you approve it
 
@@ -85,7 +85,7 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 **No action copying required.** The reusable workflows fetch everything (including the setup-runtime action) from knirski/auto-pr. The `./` path would resolve to your repo; we use full paths so you don't need anything in `.github/actions/`.
 
-All inputs use sensible defaults (Ollama model, PR template path, generic "how to test" text). Override via `with:` only when needed. **Node projects:** add `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "` to the generate job for accurate PR instructions.
+All inputs use sensible defaults (AI model, PR template path, generic "how to test" text). Override via `with:` only when needed. **Node projects:** add `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "` to the generate job for accurate PR instructions.
 
 **Run checks first:** See [Running checks before PR creation](#running-checks-before-pr-creation) to add a check job before generate/create.
 
@@ -221,7 +221,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | Command | Required | Optional |
 |---------|----------|----------|
 | **auto-pr-get-commits** | `DEFAULT_BRANCH`, `GITHUB_WORKSPACE`, `GITHUB_OUTPUT` | — |
-| **auto-pr-generate-content** | `COMMITS`, `FILES`, `GITHUB_OUTPUT`, `GITHUB_WORKSPACE` | `PR_TEMPLATE_PATH` (default `.github/PULL_REQUEST_TEMPLATE.md`), `OLLAMA_MODEL` (default `llama3.1:8b`), `OLLAMA_URL`, `AUTO_PR_HOW_TO_TEST` (default generic) |
+| **auto-pr-generate-content** | `COMMITS`, `FILES`, `GITHUB_OUTPUT`, `GITHUB_WORKSPACE` | `PR_TEMPLATE_PATH` (default `.github/PULL_REQUEST_TEMPLATE.md`), `AUTO_PR_AI_PROVIDER` (optional; default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`), `AUTO_PR_HOW_TO_TEST` (default generic) |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `TITLE`, `BODY_FILE`, `GITHUB_WORKSPACE` | — |
 
 Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).
@@ -238,4 +238,4 @@ Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_h
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
 | "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |
 | PR already exists | Workflow updates the PR title and body from the latest commits |
-| Ollama returns invalid description | Retries 3×; description override may be empty on failure |
+| AI provider returns invalid description | Retries 3×; description override may be empty on failure |

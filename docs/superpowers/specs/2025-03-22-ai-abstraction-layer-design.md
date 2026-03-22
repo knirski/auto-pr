@@ -11,9 +11,10 @@
 ### Current State (as implemented)
 
 - For 2+ commits, `auto-pr-generate-content` uses `LanguageModel.generateObject` with `TitleDescriptionSchema`; `ollama-language-model.ts` adapts the official `ollama` package to Effect's `LanguageModel`.
-- `runGeneratePrContent` builds `ollamaLanguageModelLayer` from config and provides it to `generatePrContentFromValues`.
-- Config: `GeneratePrContentConfig` with `model`, `ollamaUrl`; `RunAutoPrConfig` mirrors that.
-- **Deferred:** `ai-provider.ts`, `AUTO_PR_AI_PROVIDER`, GitHub Models, openai-compat, ResilientHttpClient, workflow input renames.
+- `runGeneratePrContent` builds the AI layer via `aiProviderLayerFromConfig` (dispatches by `AUTO_PR_AI_PROVIDER`).
+- Config: `GeneratePrContentConfig` and `RunAutoPrConfig` with `provider` (AiProvider) and `model`; env vars `AUTO_PR_AI_PROVIDER` (optional, default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (optional, default `llama3.1:8b`).
+- Workflow inputs: `ai_provider`, `ai_ollama_model`; Ollama setup only when `ai_provider == 'ollama'`.
+- **Deferred:** GitHub Models, openai-compat implementations; ResilientHttpClient.
 
 ### Goals
 
@@ -258,7 +259,8 @@ Suggested phases: (1) Add `AiProviderError`, `DescriptionParseError`; update `fo
 
 ### Implementation complete when
 
-- [ ] All 6 phases done
-- [ ] ADR created or updated in `docs/adr/`
-- [ ] `bun run check` passes
-- [ ] `bun run check:ci` passes
+- [x] Phases 1–5: Config, ai-provider, workflows updated; Ollama path done
+- [ ] Phase 6: GitHub Models and openai-compat live implementations
+- [x] ADR created or updated in `docs/adr/` — see `docs/adr/ai-abstraction-layer.md`
+- [x] `bun run check` passes
+- [ ] `bun run check:ci` passes (optional verification)

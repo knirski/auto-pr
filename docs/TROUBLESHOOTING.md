@@ -36,6 +36,12 @@
 
 **Fix:** Ensure you're running in a GitHub Actions workflow. If running locally, set the env vars. See [README.md](../README.md#environment-variables).
 
+## Upgrading from OLLAMA_MODEL / OLLAMA_URL
+
+**Cause:** auto-pr now uses `AUTO_PR_AI_PROVIDER` and `AUTO_PR_AI_OLLAMA_MODEL`. The old env vars (`OLLAMA_MODEL`, `OLLAMA_URL`) are no longer supported.
+
+**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to get the latest workflow. If you pass workflow inputs: use `ai_provider` (default `ollama`) and `ai_ollama_model` (default `llama3.1:8b`) instead of `ollama_model` and `ollama_url`. The Ollama URL is fixed (`http://localhost:11434`); no config needed.
+
 ## Get commits / Generate content fails
 
 ### "No semantic commits" or "PR title is empty"
@@ -70,19 +76,19 @@
 
 **Fix:** Go to **Settings → Secrets and variables → Actions** and add both secrets. The private key is the full contents of the `.pem` file.
 
-## Ollama / 2+ commits
+## AI provider / 2+ commits
 
-### "Ollama HTTP 404" or connection refused
+### "Ollama HTTP 404" or connection refused (provider: ollama)
 
-**Cause:** For 2+ commits, auto-pr uses Ollama to generate the description. The workflow installs Ollama via `ai-action/setup-ollama`.
+**Cause:** For 2+ commits, auto-pr uses an AI provider to generate the description. When `AUTO_PR_AI_PROVIDER` is `ollama` (the default), the workflow installs Ollama via `ai-action/setup-ollama`. The URL is fixed (`http://localhost:11434`); no config needed.
 
-**Fix:** The action should install Ollama. If it fails, check the "Setup Ollama" step. Ensure `OLLAMA_URL` is set (e.g. `http://localhost:11434/api/generate` — in CI, Ollama runs on the runner).
+**Fix:** Check the "Setup Ollama" step. Ensure `ai_provider` is `ollama` (default) and "Setup Ollama" runs (only when 2+ commits). In CI, Ollama runs on the runner.
 
 ### Description is empty or "null"
 
-**Cause:** Ollama returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
+**Cause:** The AI provider returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
 
-**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. Try a different `OLLAMA_MODEL` (e.g. `llama3.1:8b`).
+**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. When using Ollama, try a different `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`). Ensure `AUTO_PR_AI_PROVIDER` is set correctly (optional; defaults to `ollama` when unset).
 
 ## Wrong runtime (Node vs Bun) or cache not working
 

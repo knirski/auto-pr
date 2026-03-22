@@ -25,19 +25,18 @@ function testLayer(responses: OllamaMockResponses) {
 
 describe("ollamaLanguageModelLayer", () => {
 	test("generateText returns text from Ollama response", async () => {
-		await runEffect(
+		await runEffect(testLayer(mockResponse))(
 			Effect.gen(function* () {
 				const response = yield* LanguageModel.generateText({
 					prompt: "Summarize these commits.",
 				});
 				expect(response.text).toBe("feat: add X\n\nOllama-generated summary.");
 			}).pipe(Effect.scoped),
-			testLayer(mockResponse),
 		);
 	});
 
 	test("streamText returns stream of text delta and finish", async () => {
-		await runEffect(
+		await runEffect(testLayer(mockResponse))(
 			Effect.gen(function* () {
 				const model = yield* LanguageModel.LanguageModel;
 				const stream = model.streamText({ prompt: "Say hello." });
@@ -51,18 +50,16 @@ describe("ollamaLanguageModelLayer", () => {
 				);
 				expect(chunks.join("")).toBe("feat: add X\n\nOllama-generated summary.");
 			}).pipe(Effect.scoped),
-			testLayer(mockResponse),
 		);
 	});
 
 	test("generateText fails with AiError when Ollama returns HTTP 500", async () => {
 		const layer = testLayer([{ response: "error", status: 500 }]);
 		await expect(
-			runEffect(
+			runEffect(layer)(
 				Effect.gen(function* () {
 					yield* LanguageModel.generateText({ prompt: "Hi" });
 				}).pipe(Effect.scoped),
-				layer,
 			),
 		).rejects.toMatchObject({
 			_tag: expect.any(String),
@@ -74,11 +71,10 @@ describe("ollamaLanguageModelLayer", () => {
 	test("generateText fails when Ollama returns empty response", async () => {
 		const layer = testLayer([{ response: "" }]);
 		await expect(
-			runEffect(
+			runEffect(layer)(
 				Effect.gen(function* () {
 					yield* LanguageModel.generateText({ prompt: "Hi" });
 				}).pipe(Effect.scoped),
-				layer,
 			),
 		).rejects.toMatchObject({
 			_tag: expect.any(String),
@@ -89,11 +85,10 @@ describe("ollamaLanguageModelLayer", () => {
 	test("generateText fails with UnknownError when fetch throws", async () => {
 		const layer = testLayer([{ fail: "network error" }]);
 		await expect(
-			runEffect(
+			runEffect(layer)(
 				Effect.gen(function* () {
 					yield* LanguageModel.generateText({ prompt: "Hi" });
 				}).pipe(Effect.scoped),
-				layer,
 			),
 		).rejects.toMatchObject({
 			_tag: expect.any(String),
@@ -104,6 +99,12 @@ describe("ollamaLanguageModelLayer", () => {
 
 	test("generateText returns usage when Ollama 0.17+ provides token counts", async () => {
 		await runEffect(
+			testLayer({
+				response: "Hello",
+				prompt_eval_count: 10,
+				eval_count: 5,
+			}),
+		)(
 			Effect.gen(function* () {
 				const response = yield* LanguageModel.generateText({
 					prompt: "Hi",
@@ -112,18 +113,13 @@ describe("ollamaLanguageModelLayer", () => {
 				expect(response.usage.inputTokens.total).toBe(10);
 				expect(response.usage.outputTokens.total).toBe(5);
 			}).pipe(Effect.scoped),
-			testLayer({
-				response: "Hello",
-				prompt_eval_count: 10,
-				eval_count: 5,
-			}),
 		);
 	});
 
 	test("generateObject with responseFormat json returns parsed value", async () => {
 		const Schema = await import("effect/Schema");
 		const TestSchema = Schema.Struct({ greeting: Schema.String });
-		await runEffect(
+		await runEffect(testLayer('{"greeting":"Hello"}'))(
 			Effect.gen(function* () {
 				const response = yield* LanguageModel.generateObject({
 					prompt: 'Respond with JSON: {"greeting":"Hello"}',
@@ -131,19 +127,17 @@ describe("ollamaLanguageModelLayer", () => {
 				});
 				expect(response.value.greeting).toBe("Hello");
 			}).pipe(Effect.scoped),
-			testLayer('{"greeting":"Hello"}'),
 		);
 	});
 
 	test("streamText fails with AiError when Ollama returns HTTP 500", async () => {
 		const layer = testLayer([{ response: "error", status: 500 }]);
 		await expect(
-			runEffect(
+			runEffect(layer)(
 				Effect.gen(function* () {
 					const model = yield* LanguageModel.LanguageModel;
 					yield* model.streamText({ prompt: "Hi" }).pipe(Stream.runDrain);
 				}).pipe(Effect.scoped),
-				layer,
 			),
 		).rejects.toMatchObject({
 			_tag: expect.any(String),
@@ -155,12 +149,11 @@ describe("ollamaLanguageModelLayer", () => {
 	test("streamText fails when Ollama returns empty response", async () => {
 		const layer = testLayer([{ response: "" }]);
 		await expect(
-			runEffect(
+			runEffect(layer)(
 				Effect.gen(function* () {
 					const model = yield* LanguageModel.LanguageModel;
 					yield* model.streamText({ prompt: "Hi" }).pipe(Stream.runDrain);
 				}).pipe(Effect.scoped),
-				layer,
 			),
 		).rejects.toMatchObject({
 			_tag: expect.any(String),
@@ -178,14 +171,13 @@ describe("ollamaLanguageModelLayer", () => {
 				fetch: createOllamaMockFetch(mockResponse),
 			}),
 		);
-		await runEffect(
+		await runEffect(layer)(
 			Effect.gen(function* () {
 				const response = yield* LanguageModel.generateText({
 					prompt: "Hi",
 				});
 				expect(response.text).toBe("feat: add X\n\nOllama-generated summary.");
 			}).pipe(Effect.scoped),
-			layer,
 		);
 	});
 });
