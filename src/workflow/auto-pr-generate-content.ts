@@ -314,8 +314,8 @@ export function runGeneratePrContent(config: {
 		const entriesResult = buildGenerateContentGhEntries(title, bodyPath);
 		const entries = yield* Effect.fromResult(entriesResult).pipe(
 			Effect.mapError(
-				(e) =>
-					new UnexpectedError({
+			(e) =>
+				new UnexpectedError({
 						cause: `GITHUB_OUTPUT: ${unknownToMessage(e)}`,
 					}),
 			),
