@@ -18,7 +18,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│  Functional Core (src/auto-pr/core.ts, src/lib/*.ts)            │
+│  Functional Core (src/core/*.ts)                                │
 │  Pure functions, no Effect, no I/O, returns Result              │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -33,11 +33,11 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 - **`src/workflow/*.ts`** — Main auto-PR workflow. get-commits, generate-content, create-or-update-pr, run-auto-pr.
 - **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init.
-- **`src/lib/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs.
+- **`src/core/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs, init-core, string, gh-output, errors.
 - **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Uses `@effect/platform-bun` for FileSystem, Path, ChildProcessSpawner, Runtime. Orchestrates I/O.
 - **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets. `getPrDescriptionPromptPath` resolves `dist/prompts/pr-description.txt` (relative to shared chunk in `dist/`).
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
-- **`src/auto-pr/core.ts`** — Pure helpers. filterSemanticSubjects, formatGhOutput, etc. No Effect, no I/O.
+- **`src/auto-pr/core.ts`** — Re-exports from `src/core/` for backward compatibility.
 - **`src/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).
 - **`src/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production. Per Effect idiom, layers are attached to services: `FillPrTemplate.Live`. Workflow-specific config layers (GetCommitsConfig, GeneratePrContentConfig, etc.) provide per-workflow env validation.
 
@@ -46,17 +46,17 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Where to Start
 
 - **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
-- **Core logic:** `src/auto-pr/core.ts`, `src/lib/fill-pr-template-core.ts`
+- **Core logic:** `src/core/*.ts` (fill-pr-template-core, gh-output, string, etc.)
 - **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **ollama** (`ollama-language-model.ts`), **github-models**, or **openai-compat** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateObject` for PR title/description
 - **Config:** `src/auto-pr/config.ts` — env schema and validation
 
 ## Dependency Direction
 
-`core.ts` and `fill-pr-template-core.ts` do not depend on shell or live interpreters. Shell and live depend on core and interfaces. `live/` does not depend on `tools/`; Effect wrappers like `renderBody` live in `auto-pr/live/`.
+`src/core/` does not depend on shell or live interpreters. Shell and live depend on core and interfaces. `live/` does not depend on `tools/`; Effect wrappers like `renderBody` live in `auto-pr/live/`.
 
 ## Error Handling
 
-Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/auto-pr/errors.ts`. The shell formats them via `formatError` and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. GITHUB_OUTPUT is only written on success.
+Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. GITHUB_OUTPUT is only written on success.
 
 ## Related
 

@@ -8,7 +8,7 @@
 import { Effect, FileSystem, Path } from "effect";
 import { Url } from "effect/unstable/http";
 import { AutoPrLoggerLayer, AutoPrPlatformLayer, redactPath, runMain } from "#auto-pr";
-import { getInitFileSpecs } from "#lib/init-core.js";
+import { getInitFileSpecs } from "#core/init-core.js";
 
 function copy(
 	fs: FileSystem.FileSystem,

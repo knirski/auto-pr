@@ -8,15 +8,14 @@ import { CommitParser } from "conventional-commits-parser";
 import { Option, pipe, Result } from "effect";
 import * as Arr from "effect/Array";
 import { render } from "micromustache";
-import { isBlank, isMergeCommitSubject, parseSubjects } from "#auto-pr/core.js";
+import { collapseProseParagraphs } from "#core/collapse-prose-paragraphs.js";
 import {
 	DescriptionParseError,
 	FillPrTemplateValidationError,
 	ParseError,
 	TemplateRenderError,
-} from "#auto-pr/errors.js";
-import { toError } from "#auto-pr/utils.js";
-import { collapseProseParagraphs } from "#lib/collapse-prose-paragraphs.js";
+} from "#core/errors.js";
+import { isBlank, isMergeCommitSubject, parseSubjects, toError } from "#core/string.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

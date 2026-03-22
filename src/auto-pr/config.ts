@@ -18,7 +18,7 @@ import {
 	Redacted as RedactedValue,
 	ServiceMap,
 } from "effect";
-import { AutoPrConfigError } from "#auto-pr/errors.js";
+import { AutoPrConfigError } from "#core/errors.js";
 
 /** Type guard for cause with message property. */
 function hasMessage(obj: unknown): obj is { message?: string } {

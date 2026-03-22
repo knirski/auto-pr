@@ -1,7 +1,7 @@
 /**
  * Auto-PR shared module. Core (pure) + shell (Effect).
  *
- * Path aliases: #auto-pr (this), #workflow/*, #tools/*, #lib/*
+ * Path aliases: #auto-pr (this), #core, #workflow/*, #tools/*
  */
 
 export type { AiProvider } from "#auto-pr/config.js";
@@ -76,4 +76,4 @@ export {
 	toError,
 	unknownToMessage,
 } from "#auto-pr/utils.js";
-export { validateTitleDescription } from "#lib/fill-pr-template-core.js";
+export { validateTitleDescription } from "#core/fill-pr-template-core.js";

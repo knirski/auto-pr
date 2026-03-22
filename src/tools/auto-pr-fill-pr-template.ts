@@ -33,7 +33,7 @@ import {
 	getDescriptionPromptText,
 	isValidConventionalTitle,
 	parseCommits,
-} from "#lib/fill-pr-template-core.js";
+} from "#core/fill-pr-template-core.js";
 import pkg from "../../package.json" with { type: "json" };
 
 // ─── Shell (Effect) ────────────────────────────────────────────────────────

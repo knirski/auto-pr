@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getInitFileSpecs } from "#lib/init-core.js";
+import { getInitFileSpecs } from "#core/init-core.js";
 
 describe("init-core", () => {
 	describe("getInitFileSpecs", () => {

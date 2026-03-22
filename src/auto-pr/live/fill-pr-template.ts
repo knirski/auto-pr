@@ -3,19 +3,19 @@
  */
 
 import { Effect, FileSystem, Layer, Path, pipe, ServiceMap } from "effect";
-import {
-	FillPrTemplateValidationError,
-	type ParseError,
-	PullRequestBodyBlankError,
-	PullRequestTitleBlankError,
-} from "#auto-pr/errors.js";
 import type {
 	FillPrTemplateParams,
 	FillPrTemplateService,
 } from "#auto-pr/interfaces/fill-pr-template.js";
 import type { FileSystemError } from "#auto-pr/utils.js";
 import { mapFsError, redactPath } from "#auto-pr/utils.js";
-import type { CommitInfo } from "#lib/fill-pr-template-core.js";
+import {
+	FillPrTemplateValidationError,
+	type ParseError,
+	PullRequestBodyBlankError,
+	PullRequestTitleBlankError,
+} from "#core/errors.js";
+import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
 	getTitle as getTitleFromCommits,
@@ -23,7 +23,7 @@ import {
 	parseCommits,
 	parseFilesContent,
 	renderBody as renderBodyCore,
-} from "#lib/fill-pr-template-core.js";
+} from "#core/fill-pr-template-core.js";
 
 /** Effect wrapper: calls pure renderBody, logs if unreplaced placeholders remain. */
 export const renderBody = Effect.fn("renderBody")(function* (
