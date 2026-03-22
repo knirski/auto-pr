@@ -129,6 +129,10 @@
     url = "https://registry.npmjs.org/@conventional-changelog/git-client/-/git-client-2.6.0.tgz";
     hash = "sha512-T+uPDciKf0/ioNNDpMGc8FDsehJClZP0yR3Q5MN6wE/Y/1QZ7F+80OgznnTCOlMEG4AV0LvH2UJi3C/nBnaBUg==";
   };
+  "@effect/ai-openai-compat@4.0.0-beta.36" = fetchurl {
+    url = "https://registry.npmjs.org/@effect/ai-openai-compat/-/ai-openai-compat-4.0.0-beta.36.tgz";
+    hash = "sha512-Z9TVdeYUoblgPvZrpZF4g87u26VEhMDZoqsrGpNN0vhHEipH5Lp0MMbVLrx90maVVVt8uCjdrLL7X4oIZzn17A==";
+  };
   "@effect/platform-bun@4.0.0-beta.36" = fetchurl {
     url = "https://registry.npmjs.org/@effect/platform-bun/-/platform-bun-4.0.0-beta.36.tgz";
     hash = "sha512-G8nB988Vdmc+y7Cf/T6vy5Qz6dU0B8K6YzDwjzI3CSCPt7mpKMAeekxFCORZv3Ll7yn+BoclXghByMdEkZq79A==";

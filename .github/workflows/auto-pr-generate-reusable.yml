@@ -1,5 +1,6 @@
 # Reusable workflow: generate PR content only (unprivileged).
-# Checkout of branch (untrusted) with contents: read only. No secrets.
+# Checkout of branch (untrusted) with contents: read only. Optional GH_TOKEN secret
+# when ai_provider is github-models (GitHub Models API).
 # Satisfies CodeQL "untrusted checkout in trusted context" — no privileged context.
 #
 # Call with create workflow: generate job → create job (needs: generate).
@@ -9,6 +10,10 @@ name: Auto-PR generate (reusable)
 
 on:
   workflow_call:
+    secrets:
+      GH_TOKEN:
+        description: "Token for GitHub Models API when ai_provider is github-models"
+        required: false
     outputs:
       auto_pr_pkg:
         description: "Package spec for npx (e.g. github:knirski/auto-pr#branch)"
@@ -22,6 +27,22 @@ on:
         required: false
         type: string
         default: "llama3.1:8b"
+      ai_github_model:
+        required: false
+        type: string
+        default: ""
+      ai_openai_compat_url:
+        required: false
+        type: string
+        default: ""
+      ai_openai_compat_api_key:
+        required: false
+        type: string
+        default: ""
+      ai_openai_compat_model:
+        required: false
+        type: string
+        default: ""
       pr_template_path:
         required: false
         type: string
@@ -123,6 +144,11 @@ jobs:
           AUTO_PR_HOW_TO_TEST: ${{ inputs.auto_pr_how_to_test }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OLLAMA_MODEL: ${{ inputs.ai_ollama_model }}
+          AUTO_PR_AI_GITHUB_MODEL: ${{ inputs.ai_github_model }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
+          GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && secrets.GH_TOKEN || '' }}
           AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
           RUNNER: ${{ steps.setup.outputs.runner }}
           USE_WORKSPACE: ${{ steps.auto-pr-pkg.outputs.use_workspace }}

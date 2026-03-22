@@ -31,6 +31,8 @@ jobs:
   generate:
     if: github.ref_name != github.event.repository.default_branch
     uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@d447e17772b5af6f8a8d2e55e5eb9cf8523da811
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
   create:
     needs: generate

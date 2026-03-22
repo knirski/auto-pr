@@ -13,6 +13,7 @@
  * Run: npx tsx src/workflow/auto-pr-generate-content.ts (or: node dist/workflow/auto-pr-generate-content.js)
  */
 
+import type { Redacted } from "effect";
 import { Duration, Effect, FileSystem, Layer, Option, Path, Schedule, Schema } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import {
@@ -253,6 +254,12 @@ export function runGeneratePrContent(config: {
 	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
 	howToTestDefault: string;
+	/** Required when `provider` is `github-models` (GitHub Models API). */
+	ghToken?: Redacted.Redacted<string>;
+	/** Required when `provider` is `openai-compat`. */
+	openaiCompatUrl?: string;
+	openaiCompatApiKey?: Redacted.Redacted<string>;
+	openaiCompatModel?: string;
 	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
 	retryDelayMs?: number;
 	/** Custom fetch for tests. Omit for production. */
@@ -272,6 +279,10 @@ export function runGeneratePrContent(config: {
 			model,
 			howToTestDefault,
 			retryDelayMs,
+			ghToken,
+			openaiCompatUrl,
+			openaiCompatApiKey,
+			openaiCompatModel,
 		} = config;
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
@@ -292,7 +303,18 @@ export function runGeneratePrContent(config: {
 		const generateLayer = Layer.mergeAll(
 			AutoPrPlatformLayer,
 			aiProviderLayerFromConfig(
-				{ provider, model },
+				{
+					provider,
+					model,
+					...(ghToken !== undefined ? { ghToken } : {}),
+					...(provider === "openai-compat"
+						? {
+								openaiCompatUrl,
+								openaiCompatApiKey,
+								openaiCompatModel,
+							}
+						: {}),
+				},
 				config.fetch !== undefined ? { fetch: config.fetch } : undefined,
 			),
 		);
@@ -353,6 +375,14 @@ const program = Effect.gen(function* () {
 		provider: config.provider,
 		model: config.model,
 		howToTestDefault: config.howToTestDefault,
+		...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
+		...(config.provider === "openai-compat"
+			? {
+					openaiCompatUrl: config.openaiCompatUrl,
+					openaiCompatApiKey: config.openaiCompatApiKey,
+					openaiCompatModel: config.openaiCompatModel,
+				}
+			: {}),
 	};
 	yield* runGeneratePrContent(params).pipe(Effect.provide(GeneratePrContentLayer));
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));

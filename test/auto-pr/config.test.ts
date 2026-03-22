@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigProvider, Effect, Exit, Layer, Redacted } from "effect";
+import { Cause, ConfigProvider, Effect, Exit, Layer, Redacted, Result } from "effect";
 import {
+	AutoPrConfigError,
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
 	GeneratePrContentConfig,
@@ -81,6 +82,135 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 				expect(config.howToTestDefault).toBe("1. Run tests");
 			}),
 		);
+	});
+});
+
+const generatePrContentBaseEnv = {
+	COMMITS: "/c/commits.txt",
+	FILES: "/c/files.txt",
+	GITHUB_OUTPUT: "/tmp/gh-output",
+	GITHUB_WORKSPACE: "/workspace",
+	PR_TEMPLATE_PATH: "/t/template.md",
+	AUTO_PR_HOW_TO_TEST: "1. Run tests",
+};
+
+describe("GeneratePrContentConfigLayer for github-models", () => {
+	test("succeeds with GH_TOKEN and AUTO_PR_AI_GITHUB_MODEL", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...generatePrContentBaseEnv,
+				AUTO_PR_AI_PROVIDER: "github-models",
+				GH_TOKEN: "ghp_test_github_models",
+				AUTO_PR_AI_GITHUB_MODEL: "openai/gpt-4.1",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.provider).toBe("github-models");
+				expect(config.model).toBe("openai/gpt-4.1");
+				expect(config.githubModel).toBe("openai/gpt-4.1");
+				expect(config.ghToken).toBeDefined();
+				expect(Redacted.isRedacted(config.ghToken)).toBe(true);
+			}),
+		);
+	});
+
+	test("fails when GH_TOKEN missing", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...generatePrContentBaseEnv,
+				AUTO_PR_AI_PROVIDER: "github-models",
+				AUTO_PR_AI_GITHUB_MODEL: "openai/gpt-4.1",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain("GH_TOKEN");
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
+	});
+});
+
+describe("GeneratePrContentConfigLayer for openai-compat", () => {
+	test("succeeds with all AUTO_PR_AI_OPENAI_COMPAT_* vars", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...generatePrContentBaseEnv,
+				AUTO_PR_AI_PROVIDER: "openai-compat",
+				AUTO_PR_AI_OPENAI_COMPAT_URL: "https://api.openrouter.ai/v1",
+				AUTO_PR_AI_OPENAI_COMPAT_API_KEY: "sk-or-test",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "meta-llama/llama-3.1-8b-instruct",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.provider).toBe("openai-compat");
+				expect(config.model).toBe("meta-llama/llama-3.1-8b-instruct");
+				expect(config.openaiCompatUrl).toBe("https://api.openrouter.ai/v1");
+				expect(config.openaiCompatModel).toBe("meta-llama/llama-3.1-8b-instruct");
+				expect(Redacted.isRedacted(config.openaiCompatApiKey)).toBe(true);
+			}),
+		);
+	});
+
+	test("fails when AUTO_PR_AI_OPENAI_COMPAT_URL missing", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...generatePrContentBaseEnv,
+				AUTO_PR_AI_PROVIDER: "openai-compat",
+				AUTO_PR_AI_OPENAI_COMPAT_API_KEY: "sk-test",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-4",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+						"AUTO_PR_AI_OPENAI_COMPAT_URL",
+					);
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
 	});
 });
 

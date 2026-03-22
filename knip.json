@@ -3,5 +3,6 @@
 	"entry": ["src/auto-pr/index.ts"],
 	"project": ["src/**/*.ts", "test/**/*.ts"],
 	"ignoreExportsUsedInFile": { "interface": true, "type": true },
-	"ignoreBinaries": ["scripts/nix-run-if-missing.sh"]
+	"ignoreBinaries": ["scripts/nix-run-if-missing.sh"],
+	"ignoreDependencies": ["@effect/ai-openai-compat"]
 }
