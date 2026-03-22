@@ -3,10 +3,5 @@
 	"entry": ["src/auto-pr/index.ts"],
 	"project": ["src/**/*.ts", "test/**/*.ts"],
 	"ignoreExportsUsedInFile": { "interface": true, "type": true },
-	"ignoreBinaries": [
-		"auto-pr-get-commits",
-		"auto-pr-generate-content",
-		"auto-pr-create-or-update-pr",
-		"scripts/nix-run-if-missing.sh"
-	]
+	"ignoreBinaries": ["scripts/nix-run-if-missing.sh"]
 }

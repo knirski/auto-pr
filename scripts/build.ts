@@ -22,7 +22,6 @@ const result = await Bun.build({
 	format: "esm",
 	target: "node",
 	minify: true,
-	production: true,
 	sourcemap: "linked",
 	splitting: true,
 	banner: "#!/usr/bin/env node\n",
