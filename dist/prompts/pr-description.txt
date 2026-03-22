@@ -1,0 +1,4 @@
+Summarize these commits into a PR title and description. Respond with JSON only: {"title": "...", "description": "..."}.
+
+title: Conventional commit format. Must be TYPE: SUBJECT (e.g. feat: add user auth, fix: resolve login bug, docs: update README). Use feat, fix, docs, chore, or refactor. Max 72 chars. Always include colon and subject. Never output only the type (WRONG: feat. CORRECT: feat: add X).
+description: Prose paragraph(s). Summarize changes with emphasis on why they were made, what they relate to, and high-level how. Separate paragraphs with blank lines. No preamble, no "This PR introduces". No function names or implementation details. No markdown (** or `).
