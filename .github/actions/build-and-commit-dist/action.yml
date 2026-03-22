@@ -59,6 +59,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
+        PUSH_BRANCH: ${{ inputs.push_branch }}
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -66,5 +67,5 @@ runs:
         git add -f dist/
         if ! git diff --staged --quiet; then
           git commit -m "chore: update dist"
-          git push origin HEAD:"${{ inputs.push_branch }}"
+          git push origin HEAD:"$PUSH_BRANCH"
         fi
