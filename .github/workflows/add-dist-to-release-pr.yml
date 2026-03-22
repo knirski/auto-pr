@@ -1,0 +1,44 @@
+# Adds dist/ to release-please PRs before merge so the tagged release commit includes it.
+# Fixes: npx -p github:knirski/auto-pr#v0.1.2 would otherwise get a commit without dist.
+# Runs when a PR touching .release-please-manifest.json is opened or updated.
+# Loop prevention: only pushes when dist changes; re-run finds no diff.
+
+name: Add dist to release PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.release-please-manifest.json'
+      - 'package.json'
+      - 'CHANGELOG.md'
+
+concurrency:
+  group: add-dist-to-release-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  add-dist:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Build and commit dist
+        uses: ./.github/actions/build-and-commit-dist
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch_depth: "1"
+          push_branch: ${{ github.event.pull_request.head.ref }}

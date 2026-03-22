@@ -1,0 +1,48 @@
+# Builds dist/ and commits it to main when source changes.
+# Ensures npx -p github:knirski/auto-pr works for Node-only users (no Bun).
+# Runs on push to main when src/pkg/build/bun.lock change, or workflow_dispatch.
+# Loop prevention: skips when commit message starts with "chore: update dist".
+# Only runs in knirski/auto-pr (skips forks).
+#
+# dist/ is in .gitignore so local PRs stay clean. Uses build-and-commit-dist action.
+
+name: Update dist
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'scripts/build.ts'
+      - 'bun.lock'
+  workflow_dispatch:
+
+concurrency:
+  group: update-dist-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  update-dist:
+    if: |
+      github.repository == 'knirski/auto-pr' &&
+      (github.event_name != 'push' || github.event.head_commit == null || !startsWith(github.event.head_commit.message, 'chore: update dist'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Build and commit dist
+        uses: ./.github/actions/build-and-commit-dist
+        with:
+          ref: ${{ github.sha }}
+          token: ${{ steps.app-token.outputs.token }}
