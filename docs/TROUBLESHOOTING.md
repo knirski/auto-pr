@@ -84,11 +84,17 @@
 
 **Fix:** Check the "Setup Ollama" step. Ensure `ai_provider` is `ollama` (default) and "Setup Ollama" runs (only when 2+ commits). In CI, Ollama runs on the runner.
 
+### GitHub Models or OpenAI-compat: "not yet implemented"
+
+**Cause:** `github-models` and `openai-compat` providers are deferred. Setting `AUTO_PR_AI_PROVIDER` to either returns `AutoPrConfigError` with "not yet implemented".
+
+**Fix:** Use `ollama` (the default) for now. When github-models and openai-compat are implemented, they will require `GH_TOKEN` (GitHub Models) or `OPENAI_API_KEY` (openai-compat); the workflow will need to pass these via secrets.
+
 ### Description is empty or "null"
 
 **Cause:** The AI provider returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
 
-**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. When using Ollama, try a different `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`). Ensure `AUTO_PR_AI_PROVIDER` is set correctly (optional; defaults to `ollama` when unset).
+**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. When using Ollama, try a different `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`). For other providers, verify model ID and API URL. Ensure `AUTO_PR_AI_PROVIDER` is set correctly (optional; defaults to `ollama` when unset).
 
 ## Wrong runtime (Node vs Bun) or cache not working
 

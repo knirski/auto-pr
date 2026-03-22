@@ -1,6 +1,6 @@
 # AI Abstraction Layer Design
 
-**Date:** 2025-03-22  
+**Date:** 2026-03-22  
 **Status:** Partially implemented (Ollama path done; multi-provider deferred)  
 **Summary:** Add a pluggable AI abstraction using Effect's `LanguageModel` so auto-pr can use Ollama, GitHub Models, or any OpenAI-compatible API for PR title/description generation.
 
@@ -188,7 +188,7 @@ Config layer reads `AUTO_PR_AI_PROVIDER`; if missing/empty, defaults to `ollama`
 | `docs/INTEGRATION.md` | Overview: "Ollama generates" → "AI generates"; Environment variables reference (note `AUTO_PR_AI_PROVIDER` fallback); Troubleshooting table (Ollama returns invalid → provider-agnostic) |
 | `docs/TROUBLESHOOTING.md` | Section "Ollama / 2+ commits" → "AI provider / 2+ commits"; replace `OLLAMA_MODEL` with `AUTO_PR_AI_OLLAMA_MODEL` (default); no URL; document `AUTO_PR_AI_PROVIDER` fallback; add GitHub Models and openai-compat failure modes |
 | `docs/ARCHITECTURE.md` | Pipeline flow: "Ollama summarize" → "AI summarize"; Where to Start: "Ollama integration" → "AI integration" (`src/auto-pr/live/ai-provider.ts`, `ollama-language-model.ts`) |
-| `docs/adr/ai-abstraction-layer.md` | Create ADR documenting this design (per AGENTS.md ADR workflow for significant architectural changes) |
+| `docs/adr/0007-ai-abstraction-layer.md` | Create ADR documenting this design (per AGENTS.md ADR workflow for significant architectural changes) |
 | `AGENTS.md` | Update "Where to Put X" if it references Ollama integration; point to `ai-provider.ts` and `ollama-language-model.ts` for AI integration |
 | `src/auto-pr/prompts/pr-description.txt` | Generalize and improve prompt for effectiveness across all providers (Ollama, GitHub Models, openai-compat) |
 | `docs/PR_TEMPLATE.md` | "Ollama" → "AI" in Usage, `{{description}}` source, `--description-file`, `--output-description-prompt`, `--format title-body`, Behavior, Implementation notes |
@@ -261,6 +261,6 @@ Suggested phases: (1) Add `AiProviderError`, `DescriptionParseError`; update `fo
 
 - [x] Phases 1–5: Config, ai-provider, workflows updated; Ollama path done
 - [ ] Phase 6: GitHub Models and openai-compat live implementations
-- [x] ADR created or updated in `docs/adr/` — see `docs/adr/ai-abstraction-layer.md`
+- [x] ADR created or updated in `docs/adr/` — see `docs/adr/0007-ai-abstraction-layer.md`
 - [x] `bun run check` passes
 - [ ] `bun run check:ci` passes (optional verification)

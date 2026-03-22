@@ -1,4 +1,4 @@
-# AI Abstraction Layer
+# Config-Driven AI Provider Abstraction
 
 ## Context and Problem Statement
 
@@ -25,5 +25,6 @@ Chosen option: **Config-driven provider abstraction**, because it meets the goal
 
 ## References
 
-* Design spec: [docs/superpowers/specs/2025-03-22-ai-abstraction-layer-design.md](../superpowers/specs/2025-03-22-ai-abstraction-layer-design.md)
+* Design spec: [docs/superpowers/specs/2026-03-22-ai-abstraction-layer-design.md](../superpowers/specs/2026-03-22-ai-abstraction-layer-design.md)
+* See also: [0001-functional-core-imperative-shell.md](0001-functional-core-imperative-shell.md) (Effect/Tagless Final context)
 * Implementation: `src/auto-pr/live/ai-provider.ts`, `src/auto-pr/config.ts`
