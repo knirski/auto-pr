@@ -12,4 +12,4 @@ Builds `dist/` with Bun and commits it (using `git add -f` to override `.gitigno
 - `fetch_depth` — Optional, default `1`
 - `push_branch` — Optional, default `main` (branch to push to)
 
-**Pins:** `actions/checkout`, `oven-sh/setup-bun`, and `actions/cache` are SHA-pinned. Update manually when new versions release (update-workflow-pins only updates knirski/auto-pr refs).
+**Pins:** `actions/checkout`, `oven-sh/setup-bun`, and `actions/cache` (v5+) are SHA-pinned. Update manually when new versions release (update-workflow-pins only updates knirski/auto-pr refs).
