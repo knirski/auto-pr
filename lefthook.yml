@@ -2,12 +2,7 @@
 
 pre-commit:
   jobs:
-    - run: |
-        if git diff --cached --name-only --diff-filter=ACMR | grep -q '^dist/'; then
-          echo "Error: dist/ must not be committed."
-          echo "Unstage with: git reset HEAD dist/"
-          exit 1
-        fi
+    - run: scripts/check-no-dist-staged.sh
     - run: bun x lint-staged
     - glob: "*.nix"
       run: bun run check:nix
