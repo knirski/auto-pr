@@ -599,7 +599,7 @@ const RENDER_HOW_TO_TEST = "1. Run `npm run check`\n2. ";
 
 describe("renderBody", () => {
 	test("returns rendered body when all placeholders replaced", async () => {
-		await runEffect(
+		await runEffect(SilentLoggerLayer)(
 			Effect.gen(function* () {
 				const commits = [commit("feat: add x", "Description here", { type: "feat" })];
 				const files = ["src/foo.ts"];
@@ -614,12 +614,11 @@ describe("renderBody", () => {
 				expect(body).toContain("Description here");
 				expect(body).not.toContain("{{description}}");
 			}),
-			SilentLoggerLayer,
 		);
 	});
 
 	test("returns body and logs warning when output contains {{", async () => {
-		await runEffect(
+		await runEffect(SilentLoggerLayer)(
 			Effect.gen(function* () {
 				const commits = [commit("feat: add x", "Use {{ and }} in your code", { type: "feat" })];
 				const files = ["src/foo.ts"];
@@ -633,7 +632,6 @@ describe("renderBody", () => {
 				expect(body).toContain("Use {{ and }} in your code");
 				expect(body).toContain("{{");
 			}),
-			SilentLoggerLayer,
 		);
 	});
 });
@@ -731,7 +729,7 @@ const RunFillBodyTestLayer = Layer.mergeAll(TestBaseLayer, FillPrTemplate.Live);
 
 describe("runFillBody", () => {
 	test("produces full PR body from log and files", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent({ subject: "feat: add foo", body: "This adds the foo module." });
 				const output = yield* runWithLogAndFilesEffect(log, "src/foo.ts\n");
@@ -743,11 +741,10 @@ describe("runFillBody", () => {
 				expect(output).toContain("This adds the foo module");
 				expect(output).toContain("npm run check");
 			}),
-			RunFillBodyTestLayer,
 		));
 
 	test("title-body format: first line is title (first commit subject)", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent({ subject: "feat(ci): add PR title generation", body: "" });
 				const output = yield* runWithLogAndFilesEffect(log, "src/ci.ts\n", {
@@ -758,11 +755,10 @@ describe("runFillBody", () => {
 				expect(lines[1]).toBe("");
 				expect(output).toContain("## Description");
 			}),
-			RunFillBodyTestLayer,
 		));
 
 	test("multi-commit: body includes all commits, title from first (newest)", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent(
 					{ subject: "feat: add module B", body: "" },
@@ -776,11 +772,10 @@ describe("runFillBody", () => {
 				expect(output).toContain("feat: add module B");
 				expect(output).toContain("## Changes made");
 			}),
-			RunFillBodyTestLayer,
 		));
 
 	test("multi-commit: description concatenates all commit bodies", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent(
 					{ subject: "feat: add A", body: "Adds module A." },
@@ -791,11 +786,10 @@ describe("runFillBody", () => {
 				expect(output).toContain("Fixes bug in B.");
 				expect(output).toContain("## Description");
 			}),
-			RunFillBodyTestLayer,
 		));
 
 	test("--description-file overrides computed description", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("fill-pr-template-");
 				return yield* Effect.gen(function* () {
@@ -817,11 +811,10 @@ describe("runFillBody", () => {
 					return output;
 				}).pipe(Effect.ensuring(tmp.remove()));
 			}).pipe(Effect.scoped),
-			RunFillBodyTestLayer,
 		));
 
 	test("filters merge commits, includes non-conventional", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent(
 					{ subject: "feat: add foo", body: "" },
@@ -837,11 +830,10 @@ describe("runFillBody", () => {
 				expect(output).toContain("feat: add y");
 				expect(output).not.toContain("Merge branch");
 			}),
-			RunFillBodyTestLayer,
 		));
 
 	test("extracts Closes #42, docs-only → howToTest N/A", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent({ subject: "docs: update guide", body: "Closes #42" });
 				const output = yield* runWithLogAndFilesEffect(log, "docs/guide.md\n");
@@ -849,11 +841,10 @@ describe("runFillBody", () => {
 				expect(output).toContain("Documentation update");
 				expect(output).toContain("N/A");
 			}),
-			RunFillBodyTestLayer,
 		));
 
 	test("uses custom template when path provided", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("fill-pr-template-");
 				return yield* Effect.gen(function* () {
@@ -877,11 +868,10 @@ describe("runFillBody", () => {
 					return output;
 				}).pipe(Effect.ensuring(tmp.remove()));
 			}).pipe(Effect.scoped),
-			RunFillBodyTestLayer,
 		));
 
 	test("fails when log file not found", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("fill-pr-template-");
 				return yield* Effect.gen(function* () {
@@ -903,11 +893,10 @@ describe("runFillBody", () => {
 					return err;
 				}).pipe(Effect.ensuring(tmp.remove()));
 			}).pipe(Effect.scoped),
-			RunFillBodyTestLayer,
 		));
 
 	test("fails when no commits (empty title in title-body format)", async () =>
-		runEffect(
+		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const err = yield* runWithLogAndFilesEffect("", "", { format: "title-body" }).pipe(
 					Effect.flip,
@@ -915,7 +904,6 @@ describe("runFillBody", () => {
 				const msg = err instanceof Error ? err.message : String(err);
 				expect(msg).toContain("PR title is empty");
 			}),
-			RunFillBodyTestLayer,
 		));
 });
 
@@ -925,23 +913,22 @@ const HandleValidateTitleLayer = Layer.mergeAll(TestBaseLayer);
 
 describe("handleValidateTitle", () => {
 	test("succeeds for valid conventional title", async () =>
-		runEffect(handleValidateTitle("feat: add x"), HandleValidateTitleLayer));
+		runEffect(HandleValidateTitleLayer)(handleValidateTitle("feat: add x")));
 	test("succeeds for valid scoped title", async () =>
-		runEffect(handleValidateTitle("fix(ci): resolve bug"), HandleValidateTitleLayer));
+		runEffect(HandleValidateTitleLayer)(handleValidateTitle("fix(ci): resolve bug")));
 	test("fails for invalid title", async () =>
-		runEffect(
+		runEffect(HandleValidateTitleLayer)(
 			Effect.gen(function* () {
 				const err = yield* handleValidateTitle("not conventional").pipe(Effect.flip);
 				expect(err).toBeInstanceOf(Error);
 				expect((err as Error).message).toBe("Invalid conventional commit title");
 			}),
-			HandleValidateTitleLayer,
 		));
 });
 
 describe("handleOutputDescriptionPrompt", () => {
 	test("outputs description prompt from log file", async () =>
-		runEffect(
+		runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("fill-pr-output-prompt-");
 				const log = logContent(
@@ -954,7 +941,6 @@ describe("handleOutputDescriptionPrompt", () => {
 				);
 				return yield* tmp.remove();
 			}).pipe(Effect.scoped),
-			TestBaseLayer,
 		));
 });
 

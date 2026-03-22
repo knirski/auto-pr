@@ -54,6 +54,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | New tagged error | `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
 | New live interpreter | `src/auto-pr/live/`. Layer: `static readonly Live = Layer.effect(...)` |
+| AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher), `ollama-language-model.ts`; new providers in `live/` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Composite action | `.github/actions/<name>/` |

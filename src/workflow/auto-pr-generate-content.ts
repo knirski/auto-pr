@@ -2,31 +2,37 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: COMMITS (path), FILES (path), GITHUB_OUTPUT, GITHUB_WORKSPACE,
- * PR_TEMPLATE_PATH, OLLAMA_MODEL, OLLAMA_URL (for 2+ commits)
- * Requires env: AUTO_PR_HOW_TO_TEST
+ * PR_TEMPLATE_PATH, AUTO_PR_HOW_TO_TEST. For 2+ commits: AUTO_PR_AI_PROVIDER (optional),
+ * AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only.
- * For 2+: Ollama generates title and description, then FillPrTemplate with override.
+ * For 2+: LanguageModel (AI provider) generates title and description via generateObject, then FillPrTemplate with override.
  *
  * Outputs to GITHUB_OUTPUT: title, body_file (path to filled template)
  *
  * Run: npx tsx src/workflow/auto-pr-generate-content.ts (or: node dist/workflow/auto-pr-generate-content.js)
  */
 
-import { Duration, Effect, FileSystem, Layer, Path, Schedule, Schema } from "effect";
-import * as Http from "effect/unstable/http";
+import { Duration, Effect, FileSystem, Layer, Option, Path, Schedule, Schema } from "effect";
+import { LanguageModel } from "effect/unstable/ai";
 import {
+	type AutoPrConfigError,
 	AutoPrPlatformLayer,
+	aiProviderLayerFromConfig,
 	appendGhOutput,
 	buildDescriptionPrompt,
 	buildGenerateContentGhEntries,
+	FillPrTemplateValidationError,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
-	isHttpError,
 	NoSemanticCommitsError,
-	OllamaHttpError,
+	ParseError,
 	runMain,
+	TemplateRenderError,
+	toError,
+	UnexpectedError,
+	unknownToMessage,
 } from "#auto-pr";
 import type { CommitInfo } from "#lib/fill-pr-template-core.js";
 import {
@@ -41,69 +47,27 @@ import {
 	validateTitleDescription,
 } from "#lib/fill-pr-template-core.js";
 
+// ─── Schema ──────────────────────────────────────────────────────────────────
+
+/** Schema for structured AI output: PR title and description. */
+const TitleDescriptionSchema = Schema.Struct({
+	title: Schema.String,
+	description: Schema.String,
+});
+
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const BODY_FILE_NAME = "pr-body.md";
-const MAX_OLLAMA_ATTEMPTS = 5;
+const MAX_AI_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
 
-const OllamaResponseSchema = Schema.Struct({
-	response: Schema.optional(Schema.String),
-});
-
-/** Parse raw AI response: line 1 = title, line 2 = blank, line 3+ = description. */
-function parseRawTitleDescription(raw: string): { title: string; description: string } | null {
-	const t = raw.replace(/^"|"$/g, "").replace(/^\s+|\s+$/g, "");
-	if (!t || t === "null") return null;
-	const lines = t.split("\n");
-	const title = lines[0]?.trim();
-	const description = lines.slice(2).join("\n").trim();
-	if (!title || !description) return null;
-	return { title, description };
-}
-
-// ─── Ollama (2+ commits only) ──────────────────────────────────────────────
-
-function callOllama(
-	ollamaUrl: string,
-	model: string,
-	prompt: string,
-): Effect.Effect<string, Error, Http.HttpClient.HttpClient> {
-	return Effect.gen(function* () {
-		const client = yield* Http.HttpClient.HttpClient;
-		const req = Http.HttpClientRequest.post(ollamaUrl, {
-			body: Http.HttpBody.jsonUnsafe({ model, prompt, stream: false }),
-		});
-		const res = yield* client
-			.execute(req)
-			.pipe(
-				Effect.flatMap((r) =>
-					isHttpError(r.status)
-						? Effect.fail(new OllamaHttpError({ status: r.status, cause: `HTTP ${r.status}` }))
-						: Effect.succeed(r),
-				),
-			);
-		const raw = yield* res.json;
-		const decoded = yield* Schema.decodeUnknownEffect(OllamaResponseSchema)(raw).pipe(
-			Effect.mapError((e) => new OllamaHttpError({ cause: `response: ${String(e)}` })),
-		);
-		const response = decoded.response;
-		if (response === undefined || response.trim() === "") {
-			return yield* Effect.fail(
-				new OllamaHttpError({ cause: "Ollama response is absent or empty" }),
-			);
-		}
-		return response.replace(/^"|"$/g, "").replace(/^\s+|\s+$/g, "");
-	});
-}
-
 function makeRetrySchedule(delayMs: number) {
-	return Schedule.recurs(MAX_OLLAMA_ATTEMPTS - 1).pipe(
+	return Schedule.recurs(MAX_AI_ATTEMPTS - 1).pipe(
 		Schedule.addDelay(() =>
 			Effect.logWarning({
 				event: "generate_pr_content",
-				status: "ollama_retry",
-				message: "Title invalid or Ollama failed, retrying in 3s...",
+				status: "ai_retry",
+				message: "Title invalid or AI failed, retrying in 3s...",
 			}).pipe(Effect.as(Duration.millis(delayMs))),
 		),
 	);
@@ -119,22 +83,16 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 	return { title, description };
 }
 
+/** Generate title and description via LanguageModel.generateObject. Requires LanguageModel in context. */
 function generateTitleAndDescription(
-	ollamaUrl: string,
-	model: string,
 	prompt: string,
 	filtered: readonly CommitInfo[],
-	retryDelayMs: number = RETRY_DELAY_MS,
-): Effect.Effect<{ title: string; description: string }, Error, Http.HttpClient.HttpClient> {
-	const attempt = callOllama(ollamaUrl, model, prompt).pipe(
-		Effect.flatMap((raw) => {
-			const parsed = parseRawTitleDescription(raw);
-			if (!parsed) {
-				return Effect.fail(new Error("title or description missing in response"));
-			}
-			return Effect.fromResult(validateTitleDescription(parsed));
-		}),
-	);
+	retryDelayMs: number,
+): Effect.Effect<{ title: string; description: string }, unknown, LanguageModel.LanguageModel> {
+	const attempt = LanguageModel.generateObject({
+		prompt,
+		schema: TitleDescriptionSchema,
+	}).pipe(Effect.flatMap((res) => Effect.fromResult(validateTitleDescription(res.value))));
 	return attempt.pipe(
 		Effect.retry(makeRetrySchedule(retryDelayMs)),
 		Effect.catch(() =>
@@ -160,22 +118,39 @@ export type GeneratePrContentFromValuesParams = {
 	templateContent: string;
 	descriptionPromptText: string;
 	howToTestDefault: string;
+	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
-	ollamaUrl: string;
 	/** Retry delay in ms. Use 0 for tests. Default 3000. */
 	retryDelayMs?: number;
+	/** Custom fetch for tests. Omit for production. */
+	fetch?: typeof fetch;
 };
 
-/**
- * Generate PR title and body from content. No file I/O.
- * Use for tests or when content is already in memory.
- */
+/** Schema union for value-based errors (single source of truth). No UnexpectedError. */
+export const GeneratePrContentFromValuesErrorSchema = Schema.Union([
+	NoSemanticCommitsError,
+	ParseError,
+	TemplateRenderError,
+	FillPrTemplateValidationError,
+]);
+
+/** Errors from generatePrContentFromValues (value-based, no file I/O). */
+export type GeneratePrContentFromValuesError = Schema.Schema.Type<
+	typeof GeneratePrContentFromValuesErrorSchema
+>;
+
+/** Errors from runGeneratePrContent (includes file I/O, AI provider config). */
+export type GeneratePrContentError =
+	| GeneratePrContentFromValuesError
+	| UnexpectedError
+	| AutoPrConfigError;
+
 export function generatePrContentFromValues(
 	params: GeneratePrContentFromValuesParams,
 ): Effect.Effect<
 	{ title: string; body: string; count: number },
-	Error | NoSemanticCommitsError,
-	Http.HttpClient.HttpClient
+	GeneratePrContentFromValuesError,
+	LanguageModel.LanguageModel
 > {
 	return Effect.gen(function* () {
 		const {
@@ -184,8 +159,6 @@ export function generatePrContentFromValues(
 			templateContent,
 			descriptionPromptText,
 			howToTestDefault,
-			model,
-			ollamaUrl,
 			retryDelayMs,
 		} = params;
 
@@ -212,8 +185,6 @@ export function generatePrContentFromValues(
 			const commitContent = getDescriptionPromptText(filtered);
 			const prompt = buildDescriptionPrompt(descriptionPromptText, commitContent);
 			const result = yield* generateTitleAndDescription(
-				ollamaUrl,
-				model,
 				prompt,
 				filtered,
 				retryDelayMs ?? RETRY_DELAY_MS,
@@ -234,7 +205,41 @@ export function generatePrContentFromValues(
 		);
 		const body = yield* Effect.fromResult(bodyResult);
 		return { title, body, count };
-	});
+	}).pipe(
+		// Defects (unexpected throws) → TemplateRenderError at boundary. Log before converting.
+		Effect.catchDefect((defect) =>
+			Effect.logError({
+				event: "generate_pr_content",
+				status: "defect",
+				cause: unknownToMessage(defect),
+			}).pipe(Effect.flatMap(() => Effect.fail(normalizeUnknownToGeneratePrContentError(defect)))),
+		),
+		// Exhaustive tag handling: known domain errors pass through; unknown normalized via Schema or fallback.
+		Effect.catchTags(
+			{
+				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
+				ParseError: (e: ParseError) => Effect.fail(e),
+				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
+				FillPrTemplateValidationError: (e: FillPrTemplateValidationError) => Effect.fail(e),
+			},
+			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
+		),
+	);
+}
+
+/** Normalize unknown (defect or non-tagged failure) to GeneratePrContentFromValuesError. Exported for tests. */
+export function normalizeUnknownToGeneratePrContentError(
+	e: unknown,
+): GeneratePrContentFromValuesError {
+	const decoded = Schema.decodeUnknownOption(GeneratePrContentFromValuesErrorSchema)(e);
+	return Option.getOrElse(
+		decoded,
+		() =>
+			new TemplateRenderError({
+				message: "Unexpected failure",
+				cause: toError(e),
+			}),
+	);
 }
 
 // ─── Main pipeline ───────────────────────────────────────────────────────
@@ -245,16 +250,17 @@ export function runGeneratePrContent(config: {
 	ghOutput: string;
 	workspace: string;
 	templatePath: string;
+	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
-	ollamaUrl: string;
 	howToTestDefault: string;
 	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
 	retryDelayMs?: number;
-}): Effect.Effect<
-	void,
-	Error | NoSemanticCommitsError,
-	FileSystem.FileSystem | Path.Path | Http.HttpClient.HttpClient
-> {
+	/** Custom fetch for tests. Omit for production. */
+	fetch?: typeof fetch;
+}): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
+	const toUnexpected = (ctx: string) => (e: unknown) =>
+		new UnexpectedError({ cause: `${ctx}: ${unknownToMessage(e)}` });
+
 	return Effect.gen(function* () {
 		const {
 			commits,
@@ -262,8 +268,8 @@ export function runGeneratePrContent(config: {
 			ghOutput,
 			workspace,
 			templatePath,
+			provider,
 			model,
-			ollamaUrl,
 			howToTestDefault,
 			retryDelayMs,
 		} = config;
@@ -272,51 +278,69 @@ export function runGeneratePrContent(config: {
 
 		const [commitsContent, filesContent, templateContent, descriptionPromptText] =
 			yield* Effect.all([
-				fs.readFileString(commits).pipe(Effect.mapError((e) => new Error(`commits: ${String(e)}`))),
-				fs.readFileString(files).pipe(Effect.mapError((e) => new Error(`files: ${String(e)}`))),
-				fs
-					.readFileString(templatePath)
-					.pipe(Effect.mapError((e) => new Error(`template: ${String(e)}`))),
+				fs.readFileString(commits).pipe(Effect.mapError(toUnexpected("commits"))),
+				fs.readFileString(files).pipe(Effect.mapError(toUnexpected("files"))),
+				fs.readFileString(templatePath).pipe(Effect.mapError(toUnexpected("template"))),
 				getPrDescriptionPromptPath().pipe(
+					Effect.mapError(toUnexpected("getPrDescriptionPromptPath")),
 					Effect.flatMap((p) =>
-						fs
-							.readFileString(p)
-							.pipe(Effect.mapError((e) => new Error(`pr-description.txt: ${String(e)}`))),
+						fs.readFileString(p).pipe(Effect.mapError(toUnexpected("pr-description.txt"))),
 					),
 				),
 			]);
 
+		const generateLayer = Layer.mergeAll(
+			AutoPrPlatformLayer,
+			aiProviderLayerFromConfig(
+				{ provider, model },
+				config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+			),
+		);
 		const { title, body, count } = yield* generatePrContentFromValues({
 			commitsContent,
 			filesContent,
 			templateContent,
 			descriptionPromptText,
 			howToTestDefault,
+			provider,
 			model,
-			ollamaUrl,
 			...(retryDelayMs !== undefined && { retryDelayMs }),
-		});
+			...(config.fetch !== undefined && { fetch: config.fetch }),
+		}).pipe(Effect.provide(generateLayer));
 
 		const bodyPath = pathApi.join(workspace, BODY_FILE_NAME);
-		yield* fs
-			.writeFileString(bodyPath, body)
-			.pipe(Effect.mapError((e) => new Error(`write body: ${String(e)}`)));
+		yield* fs.writeFileString(bodyPath, body).pipe(Effect.mapError(toUnexpected("write body")));
 
 		const entriesResult = buildGenerateContentGhEntries(title, bodyPath);
-		const entries = yield* Effect.fromResult(entriesResult);
-		yield* appendGhOutput(ghOutput, entries);
+		const entries = yield* Effect.fromResult(entriesResult).pipe(
+			Effect.mapError(
+				(e) =>
+					new UnexpectedError({
+						cause: `GITHUB_OUTPUT: ${unknownToMessage(e)}`,
+					}),
+			),
+		);
+		yield* appendGhOutput(ghOutput, entries).pipe(Effect.mapError(toUnexpected("append GhOutput")));
 		yield* Effect.log({
 			event: "generate_pr_content",
 			status: "success",
 			count,
-			mode: count >= 2 ? "ollama" : "single_commit",
+			mode: count >= 2 ? "ai" : "single_commit",
 		});
-	});
+	}).pipe(
+		Effect.catchDefect((defect) =>
+			Effect.logError({
+				event: "generate_pr_content",
+				status: "defect",
+				cause: unknownToMessage(defect),
+			}).pipe(Effect.flatMap(() => Effect.fail(toUnexpected("defect")(defect)))),
+		),
+	);
 }
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const GeneratePrContentLayer = Layer.mergeAll(AutoPrPlatformLayer, Http.FetchHttpClient.layer);
+const GeneratePrContentLayer = AutoPrPlatformLayer;
 
 const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;
@@ -326,8 +350,8 @@ const program = Effect.gen(function* () {
 		ghOutput: config.ghOutput,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
+		provider: config.provider,
 		model: config.model,
-		ollamaUrl: config.ollamaUrl,
 		howToTestDefault: config.howToTestDefault,
 	};
 	yield* runGeneratePrContent(params).pipe(Effect.provide(GeneratePrContentLayer));

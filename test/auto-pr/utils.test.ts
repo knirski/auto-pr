@@ -5,6 +5,7 @@ import {
 	FileSystemError,
 	formatFileSystemError,
 	redactPath,
+	toError,
 	unknownToMessage,
 } from "#auto-pr/utils.js";
 
@@ -25,6 +26,19 @@ describe("utils", () => {
 
 		test("returns last segment for trailing slash", () => {
 			expect(redactPath("a/b/")).toBe("");
+		});
+	});
+
+	describe("toError", () => {
+		test("returns same Error when already Error", () => {
+			const err = new Error("fail");
+			expect(toError(err)).toBe(err);
+		});
+
+		test("wraps non-Error in new Error", () => {
+			const err = toError("oops");
+			expect(err).toBeInstanceOf(Error);
+			expect(err.message).toBe("oops");
 		});
 	});
 

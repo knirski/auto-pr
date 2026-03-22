@@ -20,7 +20,7 @@ const UpdatePathLayer = Layer.mergeAll(
 
 describe("runCreateOrUpdatePr", () => {
 	test("fails when body file missing", async () => {
-		await runEffect(
+		await runEffect(TestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("create-pr-");
 				const exit = yield* runCreateOrUpdatePr({
@@ -32,12 +32,11 @@ describe("runCreateOrUpdatePr", () => {
 				}).pipe(Effect.exit);
 				expect(exit._tag).toBe("Failure");
 			}).pipe(Effect.scoped),
-			TestLayer,
 		);
 	});
 
 	test("succeeds when title and body file provided (update path: gh pr edit)", async () => {
-		await runEffect(
+		await runEffect(UpdatePathLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("create-pr-");
 				const bodyPath = tmp.join("pr-body.md");
@@ -51,7 +50,6 @@ describe("runCreateOrUpdatePr", () => {
 					workspace: tmp.path,
 				});
 			}).pipe(Effect.scoped),
-			UpdatePathLayer,
 		);
 	});
 });
@@ -64,7 +62,7 @@ const CreatePathLayer = Layer.mergeAll(
 
 describe("runCreateOrUpdatePr integration (create path)", () => {
 	test("succeeds when body exists and no PR yet (gh pr create path)", async () => {
-		await runEffect(
+		await runEffect(CreatePathLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("create-pr-create-");
 				const bodyPath = tmp.join("pr-body.md");
@@ -78,7 +76,6 @@ describe("runCreateOrUpdatePr integration (create path)", () => {
 					workspace: tmp.path,
 				});
 			}).pipe(Effect.scoped),
-			CreatePathLayer,
 		);
 	});
 });
