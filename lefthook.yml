@@ -2,6 +2,7 @@
 
 pre-commit:
   jobs:
+    - run: scripts/check-no-dist-staged.sh
     - run: bun x lint-staged
     - glob: "*.nix"
       run: bun run check:nix
