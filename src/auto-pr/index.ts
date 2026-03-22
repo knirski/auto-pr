@@ -39,19 +39,21 @@ export {
 	AutoPrConfigError,
 	BodyFileNotFoundError,
 	DescriptionParseError,
+	FillPrTemplateValidationError,
 	formatError,
 	NoSemanticCommitsError,
-	OllamaHttpError,
 	ParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
 	TemplateRenderError,
+	UnexpectedError,
 } from "#auto-pr/errors.js";
 
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
+export { ollamaLanguageModelLayer } from "#auto-pr/live/ollama-language-model.js";
 export { getPrDescriptionPromptPath } from "#auto-pr/paths.js";
 export {
 	AutoPrLoggerLayer,
@@ -62,5 +64,5 @@ export {
 	runCommand,
 	runMain,
 } from "#auto-pr/shell.js";
-export { type FileSystemError, mapFsError, redactPath } from "#auto-pr/utils.js";
+export { type FileSystemError, mapFsError, redactPath, unknownToMessage } from "#auto-pr/utils.js";
 export { validateTitleDescription } from "#lib/fill-pr-template-core.js";
