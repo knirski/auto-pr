@@ -1,6 +1,6 @@
 /**
  * AI provider layer factory. Builds Layer<LanguageModel> from config.
- * Dispatches by AUTO_PR_AI_PROVIDER: ollama, github-models (OpenAI-compat), openai-compat (deferred).
+ * Dispatches by AUTO_PR_AI_PROVIDER: ollama, github-models, openai-compat (OpenAI-compatible APIs).
  *
  * Spec: docs/superpowers/specs/2026-03-22-ai-abstraction-layer-design.md
  * ADR: docs/adr/0007-ai-abstraction-layer.md
@@ -19,27 +19,21 @@ import { ollamaLanguageModelLayer } from "#auto-pr/live/ollama-language-model.js
 const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 const GITHUB_MODELS_INFERENCE_URL = "https://models.github.ai/inference";
 
-const notImplemented = (provider: string) =>
-	Layer.effect(
-		LanguageModel.LanguageModel,
-		Effect.fail(
-			new AutoPrConfigError({
-				missing: [`AUTO_PR_AI_PROVIDER=${provider} not yet implemented. Use ollama.`],
-			}),
-		),
-	);
-
 /** Config for AI provider layer (provider, model, and provider-specific fields). */
 export interface AiProviderConfig {
 	readonly provider: AiProvider;
 	readonly model: string;
 	/** Required when `provider` is `github-models`. */
 	readonly ghToken?: Redacted.Redacted<string>;
+	/** Required when `provider` is `openai-compat`. */
+	readonly openaiCompatUrl?: string;
+	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+	readonly openaiCompatModel?: string;
 }
 
 /**
  * Build Layer<LanguageModel> from provider config.
- * Ollama and github-models are supported; openai-compat is not yet implemented.
+ * Supports ollama, github-models, and openai-compat.
  */
 export function aiProviderLayerFromConfig(
 	config: AiProviderConfig,
@@ -70,7 +64,26 @@ export function aiProviderLayerFromConfig(
 			const modelLayer = OpenAiLanguageModel.model(config.model);
 			return modelLayer.pipe(Layer.provide(clientLayer));
 		}),
-		Match.when("openai-compat", () => notImplemented("openai-compat")),
+		Match.when("openai-compat", () => {
+			if (!config.openaiCompatUrl || !config.openaiCompatApiKey || !config.openaiCompatModel) {
+				return Layer.effect(
+					LanguageModel.LanguageModel,
+					Effect.fail(
+						new AutoPrConfigError({
+							missing: [
+								"AUTO_PR_AI_OPENAI_COMPAT_URL, AUTO_PR_AI_OPENAI_COMPAT_API_KEY, AUTO_PR_AI_OPENAI_COMPAT_MODEL required for openai-compat",
+							],
+						}),
+					),
+				);
+			}
+			const clientLayer = OpenAiClient.layer({
+				apiUrl: config.openaiCompatUrl,
+				apiKey: config.openaiCompatApiKey,
+			}).pipe(Layer.provide(FetchHttpClient.layer));
+			const modelLayer = OpenAiLanguageModel.model(config.openaiCompatModel);
+			return modelLayer.pipe(Layer.provide(clientLayer));
+		}),
 		Match.exhaustive,
 	);
 }

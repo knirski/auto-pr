@@ -64,6 +64,13 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 			model,
 			howToTestDefault,
 			...(provider === "github-models" ? { ghToken: config.ghToken } : {}),
+			...(provider === "openai-compat"
+				? {
+						openaiCompatUrl: config.openaiCompatUrl,
+						openaiCompatApiKey: config.openaiCompatApiKey,
+						openaiCompatModel: config.openaiCompatModel,
+					}
+				: {}),
 		});
 
 		const content2 = yield* fs.readFileString(ghOutput);

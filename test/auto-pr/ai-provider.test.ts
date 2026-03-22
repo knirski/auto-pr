@@ -61,10 +61,38 @@ describe("aiProviderLayerFromConfig", () => {
 		}
 	});
 
-	test("openai-compat: layer fails with AutoPrConfigError", async () => {
+	test("openai-compat: builds layer when url, apiKey, and model provided", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
-			aiProviderLayerFromConfig({ provider: "openai-compat", model: "gpt-4" }),
+			aiProviderLayerFromConfig({
+				provider: "openai-compat",
+				model: "gpt-4",
+				openaiCompatUrl: "https://api.example.com/v1",
+				openaiCompatApiKey: Redacted.make("sk-test", {
+					label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
+				}),
+				openaiCompatModel: "gpt-4",
+			}),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const model = yield* LanguageModel.LanguageModel;
+				expect(model).toBeDefined();
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("openai-compat: fails with AutoPrConfigError when url missing", async () => {
+		const layer = Layer.mergeAll(
+			BaseLayer,
+			aiProviderLayerFromConfig({
+				provider: "openai-compat",
+				model: "gpt-4",
+				openaiCompatApiKey: Redacted.make("sk-test", {
+					label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
+				}),
+				openaiCompatModel: "gpt-4",
+			}),
 		);
 		const exit = await Effect.runPromise(
 			Effect.gen(function* () {
