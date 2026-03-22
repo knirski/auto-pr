@@ -1,11 +1,11 @@
 ---
-description: Run bun run check before claiming completion; evidence before assertions
+description: Run bun run check before claiming completion; evidence before assertions (Superpowers verification-before-completion)
 alwaysApply: true
 ---
 
 # Verification Before Completion
 
-**Do not claim work is complete without verification evidence.**
+Per [Superpowers](https://github.com/obra/superpowers) — evidence before claims, always.
 
 1. **Run** `bun run check` (full) or `bun run check:code` (code only)
 2. **Read** the output — confirm exit code 0, no failures

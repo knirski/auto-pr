@@ -1,0 +1,23 @@
+---
+description: Branch, commit, checkout policy aligned with Superpowers (using-git-worktrees, finishing-a-development-branch)
+alwaysApply: true
+---
+
+# Branch, commit, and checkout
+
+Per [Superpowers](https://github.com/obra/superpowers).
+
+## Branches
+
+- **Use `ai/` prefix** — e.g. `ai/feature-name` (triggers auto-PR workflow).
+- **Feature work needing isolation:** Use **using-git-worktrees** — create worktree with branch `ai/<feature>`, verify `.worktrees/` is gitignored.
+
+## Commits
+
+- Conventional format: `feat:`, `fix:`, `docs:`, `chore:`. Add `Closes #<issue>` in body when addressing an issue.
+- **Frequent commits** — one per logical step; commit after each green (per writing-plans).
+
+## Checkout and completion
+
+- **Implementation complete:** Use **finishing-a-development-branch** — verify tests, present 4 options, execute, cleanup worktree.
+- **After PR or merge:** `git checkout main && git pull`. Leave workspace on `main`.
