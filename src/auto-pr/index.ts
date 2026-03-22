@@ -38,8 +38,10 @@ export {
 	validateGetCommitsOutput,
 } from "#auto-pr/core.js";
 export {
+	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
+	DescriptionParseError,
 	formatError,
 	NoSemanticCommitsError,
 	OllamaHttpError,
