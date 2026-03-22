@@ -166,7 +166,7 @@ default = pkgs.callPackage ./default.nix {
 - Add `update-bun-nix` app: `bun install && bun2nix -o bun.nix`
 - Expose `bun2nix` for `nix run .#bun2nix`
 - Dev shell: `bun` instead of `nodejs_24` + `nodePackages.npm`
-- Apps.default: `bun run src/workflow/run-auto-pr.ts` instead of `npx tsx`
+- Apps.default: `bun run src/workflow/auto-pr-run.ts` instead of `npx tsx`
 
 ### 2.4 Replace check-nix-hash.sh
 
@@ -180,7 +180,7 @@ default = pkgs.callPackage ./default.nix {
 - Delete `src/lib/update-nix-hash-core.ts`
 - Delete `test/lib/update-nix-hash-core.test.ts`
 - Delete `test/tools/update-nix-hash.test.ts`
-- [test/schemas.test.ts](../../../test/schemas.test.ts): remove `Sha256HashSchema` describe block
+- [test/auto-pr/schemas.test.ts](../../../test/auto-pr/schemas.test.ts): remove `Sha256HashSchema` describe block
 - [src/auto-pr/errors.ts](../../../src/auto-pr/errors.ts): remove `UpdateNixHashNotFoundError`, `UpdateNixHashUsageError`
 - Remove `update-nix-hash` script from package.json
 

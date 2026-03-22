@@ -18,9 +18,9 @@ import {
 	sanitizeForGhOutput,
 	validateGenerateContentOutput,
 	validateGetCommitsOutput,
-} from "#auto-pr";
+} from "#core/index.js";
 
-describe("auto-pr core", () => {
+describe("core", () => {
 	describe("isMergeCommitSubject", () => {
 		test("matches merge commit", () => {
 			expect(isMergeCommitSubject("Merge branch 'main' into feature")).toBe(true);

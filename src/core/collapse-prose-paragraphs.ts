@@ -6,7 +6,7 @@
 import type { PhrasingContent, Root, Text } from "mdast";
 import { remark } from "remark";
 import { visit } from "unist-util-visit";
-import { isBlank } from "#auto-pr/core.js";
+import { isBlank } from "#core/string.js";
 
 /** Fallback when remark parsing fails: collapse newlines within paragraphs. Exported for tests. */
 export function fallbackWhenParseFails(text: string): string {

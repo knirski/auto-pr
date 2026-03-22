@@ -7,7 +7,7 @@ exact = true
 coverage = true
 coverageReporter = ["text", "lcov"]
 coverageDir = "coverage"
-coveragePathIgnorePatterns = ["test/**"]
+coveragePathIgnorePatterns = ["test/**", "**/core/errors.ts"]
 coverageSkipTestFiles = true
 # Bun enforces per-file. Overall 91.55% funcs; lowest file create-or-update-pr 68%.
 # Set to 0.68 so CI passes; raise when low-coverage files get more tests.

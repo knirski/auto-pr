@@ -9,8 +9,8 @@
 import { Effect, Layer, Match, Option, pipe, Stream } from "effect";
 import { AiError, LanguageModel, type Response } from "effect/unstable/ai";
 import { Ollama } from "ollama";
-import { AiProviderError } from "#auto-pr/errors.js";
-import { unknownToMessage } from "#auto-pr/utils.js";
+import { AiProviderError } from "#core/errors.js";
+import { unknownToMessage } from "#core/string.js";
 
 const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 

@@ -10,7 +10,7 @@ auto-pr was extracted from paperless-ingestion-bot and needed a clear separation
 
 * **Single-layer monolithic** — All logic in workflow scripts with inline I/O. Simple but untestable without mocks; hard to reuse.
 * **Service layer with mocks** — Extract services, mock in tests. Common pattern but often leads to integration-heavy tests.
-* **Functional Core / Imperative Shell (FC/IS)** — Pure core (`src/lib/*.ts`, `src/auto-pr/core.ts`) returns `Result`; no Effect, no I/O. Shell (`src/auto-pr/shell.ts`) orchestrates I/O and bridges via `Effect.fromResult`. Tagless Final interfaces in `interfaces/`; live interpreters in `live/`.
+* **Functional Core / Imperative Shell (FC/IS)** — Pure core (`src/core/*.ts`) returns `Result`; no Effect, no I/O. Shell (`src/auto-pr/shell.ts`) orchestrates I/O and bridges via `Effect.fromResult`. Tagless Final interfaces in `interfaces/`; live interpreters in `live/`.
 * **Full Effect throughout** — Use Effect in core. Tighter coupling to Effect; core becomes Effect-specific.
 
 ## Decision Outcome
@@ -19,7 +19,7 @@ Chosen option: **"Functional Core / Imperative Shell (FC/IS)"**, because it meet
 
 ### Consequences
 
-* Good: Core (`core.ts`, `fill-pr-template-core.ts`) is pure — no Effect, no I/O; unit tests run without runtime.
+* Good: Core (`src/core/*.ts`) is pure — no Effect, no I/O; unit tests run without runtime.
 * Good: Shell depends on core; live interpreters implement interfaces. Dependency direction: core ← interfaces ← shell, live.
 * Good: Tagless Final (FillPrTemplate, config layers) allows test doubles; production uses `FillPrTemplate.Live`.
 * Good: Effect's `Layer` and `Effect.provide` compose cleanly for workflow-specific config and services.

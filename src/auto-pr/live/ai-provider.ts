@@ -13,8 +13,8 @@ import { Effect, Layer, Match, Redacted as RedactedValue } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { FetchHttpClient } from "effect/unstable/http";
 import type { AiProvider } from "#auto-pr/config.js";
-import { AutoPrConfigError } from "#auto-pr/errors.js";
 import { ollamaLanguageModelLayer } from "#auto-pr/live/ollama-language-model.js";
+import { AutoPrConfigError } from "#core/errors.js";
 
 const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 const GITHUB_MODELS_INFERENCE_URL = "https://models.github.ai/inference";

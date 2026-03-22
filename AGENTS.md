@@ -49,9 +49,9 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 
 | Adding… | Put in |
 |---------|--------|
-| Pure validation, helpers | `src/auto-pr/core.ts` or `src/lib/fill-pr-template-core.ts` |
+| Pure validation, helpers | `src/core/*.ts` (fill-pr-template-core, string, gh-output, etc.) |
 | New config/env | `src/auto-pr/config.ts` |
-| New tagged error | `src/auto-pr/errors.ts` |
+| New tagged error class | `src/core/errors.ts`; add `formatError` branch in `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
 | New live interpreter | `src/auto-pr/live/`. Layer: `static readonly Live = Layer.effect(...)` |
 | AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher), `ollama-language-model.ts`; new providers in `live/` |
@@ -68,7 +68,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | No `any`/`!`/`enum` | `unknown`, no non-null asserts, string literal unions |
 | No `console.log` | Use `Effect.log` |
 | Core pure | No Effect/I/O in `*-core.ts`; bridge with `Effect.fromResult` |
-| Domain errors | `Schema.TaggedErrorClass` in `errors.ts` |
+| Domain errors | `Schema.TaggedErrorClass` in `core/errors.ts` |
 | Optionals | `Option<T>`, not `T \| null` |
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
@@ -83,10 +83,10 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 ```
 .github/actions/   — composite actions. Workflows use full path (knirski/auto-pr/...)
 .github/workflows/ — ci, release-please, auto-pr, auto-pr-*-reusable
-src/auto-pr/       — config, core, errors, interfaces, live, paths, shell, utils
+src/auto-pr/       — config, core (re-exports), errors (formatError; classes in core/errors), interfaces, live, paths, shell, utils
 src/workflow/      — get-commits, generate-content, create-or-update-pr, run
 src/tools/         — fill-pr-template, init
-src/lib/           — pure core (fill-pr-template-core, collapse-prose-paragraphs, init-core)
+src/core/          — pure core (fill-pr-template-core, collapse-prose-paragraphs, init-core, string, gh-output, errors)
 scripts/           — shell only
 test/              — mirrors src/ layout
 ```
