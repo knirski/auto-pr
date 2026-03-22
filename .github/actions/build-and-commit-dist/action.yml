@@ -40,12 +40,15 @@ runs:
         key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
     - name: Install dependencies
+      shell: bash
       run: bun install --frozen-lockfile
 
     - name: Build
+      shell: bash
       run: bun run build
 
     - name: Smoke test built dist
+      shell: bash
       run: |
         tmp=".dist-smoke-$$"
         mkdir -p "$tmp" && cd "$tmp"
@@ -53,6 +56,7 @@ runs:
         cd .. && rm -rf "$tmp"
 
     - name: Commit and push
+      shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
       run: |
