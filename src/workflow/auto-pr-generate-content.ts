@@ -26,9 +26,7 @@ import {
 	isHttpError,
 	NoSemanticCommitsError,
 	OllamaHttpError,
-	parseTitleDescriptionResponse,
 	runMain,
-	trimOllamaResponse,
 } from "#auto-pr";
 import type { CommitInfo } from "#lib/fill-pr-template-core.js";
 import {
@@ -40,6 +38,7 @@ import {
 	parseCommits,
 	parseFilesContent,
 	renderBody as renderBodyCore,
+	validateTitleDescription,
 } from "#lib/fill-pr-template-core.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -51,6 +50,17 @@ const RETRY_DELAY_MS = 3000;
 const OllamaResponseSchema = Schema.Struct({
 	response: Schema.optional(Schema.String),
 });
+
+/** Parse raw AI response: line 1 = title, line 2 = blank, line 3+ = description. */
+function parseRawTitleDescription(raw: string): { title: string; description: string } | null {
+	const t = raw.replace(/^"|"$/g, "").replace(/^\s+|\s+$/g, "");
+	if (!t || t === "null") return null;
+	const lines = t.split("\n");
+	const title = lines[0]?.trim();
+	const description = lines.slice(2).join("\n").trim();
+	if (!title || !description) return null;
+	return { title, description };
+}
 
 // ─── Ollama (2+ commits only) ──────────────────────────────────────────────
 
@@ -83,7 +93,7 @@ function callOllama(
 				new OllamaHttpError({ cause: "Ollama response is absent or empty" }),
 			);
 		}
-		return trimOllamaResponse(response);
+		return response.replace(/^"|"$/g, "").replace(/^\s+|\s+$/g, "");
 	});
 }
 
@@ -117,12 +127,13 @@ function generateTitleAndDescription(
 	retryDelayMs: number = RETRY_DELAY_MS,
 ): Effect.Effect<{ title: string; description: string }, Error, Http.HttpClient.HttpClient> {
 	const attempt = callOllama(ollamaUrl, model, prompt).pipe(
-		Effect.flatMap((raw) => Effect.fromResult(parseTitleDescriptionResponse(raw))),
-		Effect.flatMap(({ title, description }) =>
-			isValidConventionalTitle(title)
-				? Effect.succeed({ title, description })
-				: Effect.fail(new Error(`Title not in conventional format: "${title}"`)),
-		),
+		Effect.flatMap((raw) => {
+			const parsed = parseRawTitleDescription(raw);
+			if (!parsed) {
+				return Effect.fail(new Error("title or description missing in response"));
+			}
+			return Effect.fromResult(validateTitleDescription(parsed));
+		}),
 	);
 	return attempt.pipe(
 		Effect.retry(makeRetrySchedule(retryDelayMs)),
