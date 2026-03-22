@@ -127,7 +127,7 @@ bun run src/workflow/run-auto-pr.ts
 
 When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
 
-When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `AUTO_PR_AI_PROVIDER`, `AUTO_PR_AI_OLLAMA_MODEL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration). Authoritative schema: [src/auto-pr/config.ts](src/auto-pr/config.ts).
+When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `AUTO_PR_AI_PROVIDER`, provider-specific model settings, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration). Authoritative schema: [src/auto-pr/config.ts](src/auto-pr/config.ts).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -137,10 +137,14 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 | `COMMITS` | generate-content | Path to commits.txt |
 | `FILES` | generate-content | Path to files.txt |
 | `PR_TEMPLATE_PATH` | generate-content | Path to PR template (default `.github/PULL_REQUEST_TEMPLATE.md`) |
-| `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `ollama`) |
-| `AUTO_PR_AI_OLLAMA_MODEL` | generate-content | Ollama model when provider is ollama (default `llama3.1:8b`) |
+| `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `ollama`): `ollama`, `github-models`, or `openai-compat` |
+| `AUTO_PR_AI_OLLAMA_MODEL` | generate-content | **Ollama** — model id when `AUTO_PR_AI_PROVIDER` is `ollama` (default `llama3.1:8b`) |
+| `AUTO_PR_AI_GITHUB_MODEL` | generate-content | **GitHub Models** — model id (e.g. `openai/gpt-4.1`) when provider is `github-models`; requires `GH_TOKEN` for the Models API |
+| `AUTO_PR_AI_OPENAI_COMPAT_URL` | generate-content | **OpenAI-compatible** — base URL of the API (e.g. Azure OpenAI, OpenRouter) when provider is `openai-compat` |
+| `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | generate-content | **OpenAI-compatible** — API key (redacted in logs) when provider is `openai-compat` |
+| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | generate-content | **OpenAI-compatible** — model name/id for the remote endpoint when provider is `openai-compat` |
 | `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; Node projects: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`; Python: `"1. Run \`pytest\`\n2. "`) |
-| `GH_TOKEN` | create-or-update-pr | GitHub token |
+| `GH_TOKEN` | create-or-update-pr; generate-content (github-models) | GitHub token for PR create/update; for **GitHub Models**, also used as the API credential when `AUTO_PR_AI_PROVIDER` is `github-models` |
 | `BRANCH` | create-or-update-pr | Current branch |
 | `TITLE` | create-or-update-pr | PR title |
 | `BODY_FILE` | create-or-update-pr | Path to filled body |

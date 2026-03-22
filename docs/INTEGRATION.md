@@ -213,6 +213,33 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
 | Use a custom PR template path | `pr_template_path` (default `.github/PULL_REQUEST_TEMPLATE.md`) |
 
+## AI providers (ollama, github-models, openai-compat)
+
+For branches with **2+ commits**, auto-pr generates the PR description via an AI backend. Choose a provider with `ai_provider` on the generate reusable workflow (maps to `AUTO_PR_AI_PROVIDER`), or set env when running locally.
+
+### Ollama (default)
+
+- **Workflow:** `ai_provider: ollama` (default), optional `ai_ollama_model` (default `llama3.1:8b`).
+- **CI:** The reusable workflow runs Ollama on the runner when needed; URL is fixed (`http://localhost:11434`).
+- **Local:** Run Ollama locally when using `run-auto-pr` with 2+ commits.
+
+### GitHub Models (`github-models`)
+
+Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`https://models.github.ai/inference`) with an OpenAI-compatible client.
+
+- **Token:** Set **`GH_TOKEN`** to a token allowed to call GitHub Models (e.g. fine-grained or classic PAT with Models access, or in Actions pass the secret into the generate job).
+- **Workflow:** Set `ai_provider: github-models`, `ai_github_model` to a model id such as `openai/gpt-4.1`, and pass **`secrets: GH_TOKEN: ${{ secrets.GH_TOKEN }}`** (or another secret containing the token) on the `uses:` of [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml). The reusable workflow forwards it only when `ai_provider` is `github-models`.
+- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_GITHUB_MODEL=...`, `GH_TOKEN=...`.
+
+### OpenAI-compatible (`openai-compat`)
+
+Use any OpenAI-compatible HTTP API (Azure OpenAI, OpenRouter, local gateways, etc.).
+
+- **Workflow:** `ai_provider: openai-compat` and set `ai_openai_compat_url`, `ai_openai_compat_api_key`, and `ai_openai_compat_model` to match your provider.
+- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=openai-compat`, `AUTO_PR_AI_OPENAI_COMPAT_URL`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common failures.
+
 ## Verification
 
 1. Create and push a branch:
@@ -231,7 +258,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | Command | Required | Optional |
 |---------|----------|----------|
 | **auto-pr-get-commits** | `DEFAULT_BRANCH`, `GITHUB_WORKSPACE`, `GITHUB_OUTPUT` | — |
-| **auto-pr-generate-content** | `COMMITS`, `FILES`, `GITHUB_OUTPUT`, `GITHUB_WORKSPACE` | `PR_TEMPLATE_PATH` (default `.github/PULL_REQUEST_TEMPLATE.md`), `AUTO_PR_AI_PROVIDER` (optional; default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`), `AUTO_PR_HOW_TO_TEST` (default generic) |
+| **auto-pr-generate-content** | `COMMITS`, `FILES`, `GITHUB_OUTPUT`, `GITHUB_WORKSPACE` | `PR_TEMPLATE_PATH` (default `.github/PULL_REQUEST_TEMPLATE.md`), `AUTO_PR_AI_PROVIDER` (optional; default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (ollama), `AUTO_PR_AI_GITHUB_MODEL` + `GH_TOKEN` (github-models), `AUTO_PR_AI_OPENAI_COMPAT_*` (openai-compat), `AUTO_PR_HOW_TO_TEST` (default generic) |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `TITLE`, `BODY_FILE`, `GITHUB_WORKSPACE` | — |
 
 Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).

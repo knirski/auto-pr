@@ -260,7 +260,7 @@ Suggested phases: (1) Add `AiProviderError`, `DescriptionParseError`; update `fo
 ### Implementation complete when
 
 - [x] Phases 1–5: Config, ai-provider, workflows updated; Ollama path done
-- [ ] Phase 6: GitHub Models and openai-compat live implementations
+- [x] Phase 6: GitHub Models and openai-compat live implementations
 - [x] ADR created or updated in `docs/adr/` — see `docs/adr/0007-ai-abstraction-layer.md`
 - [x] `bun run check` passes
 - [ ] `bun run check:ci` passes (optional verification)
