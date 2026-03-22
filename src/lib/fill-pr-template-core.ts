@@ -15,6 +15,7 @@ import {
 	ParseError,
 	TemplateRenderError,
 } from "#auto-pr/errors.js";
+import { toError } from "#auto-pr/utils.js";
 import { collapseProseParagraphs } from "#lib/collapse-prose-paragraphs.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -90,10 +91,6 @@ const TYPE_MAP: Record<ConventionalType, TypeOfChange> = {
 const parser = new CommitParser();
 
 // ─── Pure functions ────────────────────────────────────────────────────────
-
-function toError(e: unknown): Error {
-	return e instanceof Error ? e : new Error(String(e));
-}
 
 function isConventionalType(s: string): s is ConventionalType {
 	return CONVENTIONAL_TYPES.some((t) => t === s);
@@ -352,7 +349,7 @@ function buildSubstitutionScope(data: TemplateData): Record<string, string> {
 		checklistDocs: docs,
 		checklistTests: tests,
 		relatedIssues: data.relatedIssues.length ? data.relatedIssues.join("\n") : "",
-		breakingChanges: data.breakingChanges || "",
+		breakingChanges: data.breakingChanges ?? "",
 		placeholder: "placeholder",
 	};
 }

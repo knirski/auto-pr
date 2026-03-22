@@ -10,6 +10,7 @@ import { Effect, Layer, Match, Option, pipe, Stream } from "effect";
 import { AiError, LanguageModel, type Response } from "effect/unstable/ai";
 import { Ollama } from "ollama";
 import { AiProviderError } from "#auto-pr/errors.js";
+import { unknownToMessage } from "#auto-pr/utils.js";
 
 const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
 
@@ -84,7 +85,7 @@ function toAiError(e: unknown, method: "generateText" | "streamText"): AiError.A
 				module: "Ollama",
 				method,
 				reason: new AiError.UnknownError({
-					description: err instanceof Error ? err.message : String(err),
+					description: unknownToMessage(err),
 				}),
 			}),
 		),
