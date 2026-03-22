@@ -28,7 +28,11 @@ permissions:
 
 jobs:
   dependency-review:
-    if: github.event_name == 'pull_request'
+    # Skip for Dependabot Bun PRs: GitHub's dependency graph may not support bun.lock yet.
+    # Vulnerability detection is covered by bun audit in the check job.
+    if: |
+      github.event_name == 'pull_request' &&
+      !(github.actor == 'dependabot[bot]' && startsWith(github.event.pull_request.head.ref, 'dependabot/bun-'))
     runs-on: ubuntu-24.04
     permissions:
       contents: read

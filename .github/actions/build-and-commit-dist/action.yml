@@ -1,0 +1,71 @@
+# Builds dist/ and commits it. Uses git add -f to override .gitignore.
+# Used by update-dist and add-dist-to-release-pr workflows.
+
+name: Build and commit dist
+description: Build dist/ with Bun and commit+push if changed
+
+inputs:
+  ref:
+    description: "Git ref to checkout (e.g. github.sha or PR head sha)"
+    required: true
+  token:
+    description: "Token for checkout and push (GitHub App or PAT)"
+    required: true
+  fetch_depth:
+    description: "Fetch depth for checkout"
+    required: false
+    default: "1"
+  push_branch:
+    description: "Branch to push to (default main)"
+    required: false
+    default: "main"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: ${{ inputs.ref }}
+        token: ${{ inputs.token }}
+        fetch-depth: ${{ inputs.fetch_depth }}
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+    - name: Cache Bun dependencies
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
+
+    - name: Build
+      shell: bash
+      run: bun run build
+
+    - name: Smoke test built dist
+      shell: bash
+      run: |
+        tmp=".dist-smoke-$$"
+        mkdir -p "$tmp" && cd "$tmp"
+        node ../dist/tools/auto-pr-init.js
+        cd .. && rm -rf "$tmp"
+
+    - name: Commit and push
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PUSH_BRANCH: ${{ inputs.push_branch }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+        git add -f dist/
+        if ! git diff --staged --quiet; then
+          git commit -m "chore: update dist"
+          git push origin HEAD:"$PUSH_BRANCH"
+        fi
