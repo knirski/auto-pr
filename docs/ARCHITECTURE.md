@@ -53,3 +53,14 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Dependency Direction
 
 `core.ts` and `fill-pr-template-core.ts` do not depend on shell or live interpreters. Shell and live depend on core and interfaces. `live/` does not depend on `tools/`; Effect wrappers like `renderBody` live in `auto-pr/live/`.
+
+## Error Handling
+
+Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/auto-pr/errors.ts`. The shell formats them via `formatError` and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. GITHUB_OUTPUT is only written on success.
+
+## Related
+
+- [ADR 0001: Functional Core / Imperative Shell](adr/0001-functional-core-imperative-shell.md)
+- [ADR 0002: Two-phase auto-PR workflow](adr/0002-two-phase-auto-pr-workflow.md)
+- [ADR 0007: AI provider abstraction](adr/0007-ai-abstraction-layer.md)
+- [CONCEPTS.md](CONCEPTS.md) — Glossary of terms

@@ -1,4 +1,4 @@
-# ADR: Two Workflow Files for Auto-PR (CodeQL Without Suppression)
+# Two-Phase Auto-PR Workflow (CodeQL Without Suppression)
 
 ## Context and Problem Statement
 

@@ -146,12 +146,12 @@ The alternative avoids “build twice” and keeps the “fix first, then build�
 - State that Nix workflows use Determinate Nix.
 - Note that `determinate-nixd fix hashes` replaces the previous hash-update script in CI.
 
-### 3.4 docs/adr/nix-ci-research.md
+### 3.4 docs/adr/supporting/nix-ci-research.md
 
 - Update “Current Setup Summary” to list Determinate Nix.
 - Mark migration as done in the summary table.
 
-### 3.5 docs/adr/nix-workflow-upstream-actions.md
+### 3.5 docs/adr/supporting/nix-workflow-upstream-actions.md
 
 - Update npmDepsHash section: we now use `determinate-nixd fix hashes` instead of the custom script.
 

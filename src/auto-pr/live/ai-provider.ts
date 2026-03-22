@@ -2,7 +2,8 @@
  * AI provider layer factory. Builds Layer<LanguageModel> from config.
  * Dispatches by AUTO_PR_AI_PROVIDER; only ollama implemented (github-models, openai-compat deferred).
  *
- * Spec: docs/superpowers/specs/2025-03-22-ai-abstraction-layer-design.md
+ * Spec: docs/superpowers/specs/2026-03-22-ai-abstraction-layer-design.md
+ * ADR: docs/adr/0007-ai-abstraction-layer.md
  */
 
 import { Effect, Layer, Match } from "effect";

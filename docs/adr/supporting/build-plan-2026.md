@@ -90,7 +90,7 @@
 
 7. **Commit `dist/`**
    - Required for `npx -p github:knirski/auto-pr#branch` — tarball includes repo contents
-   - **Implementation note:** We add `dist/` to `.gitignore` and use [update-dist.yml](../../.github/workflows/update-dist.yml) to build and commit it via `git add -f`; contributors do not commit dist. See [docs/CI.md](../CI.md#dist-and-gitignore).
+   - **Implementation note:** We add `dist/` to `.gitignore` and use [update-dist.yml](../../../.github/workflows/update-dist.yml) to build and commit it via `git add -f`; contributors do not commit dist. See [docs/CI.md](../../CI.md#dist-and-gitignore).
 
 8. **Update `check:code`**
 

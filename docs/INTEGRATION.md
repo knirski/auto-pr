@@ -203,6 +203,16 @@ Adjust the install step for your project (e.g. `pip install -r requirements.txt`
 
 Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (Node: `"1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).
 
+## Common customizations
+
+| I want to… | Set |
+|------------|-----|
+| Use my project's check command in "How to test" | `auto_pr_how_to_test` in generate job (e.g. `"1. Run \`npm run check\`\n2. "` for Node) |
+| Use a different AI model (Ollama) | `ai_ollama_model` (e.g. `llama3.2:3b`) |
+| Use GitHub Models or OpenAI-compatible API | `ai_provider` to `github-models` or `openai-compat`; add secrets if required |
+| Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
+| Use a custom PR template path | `pr_template_path` (default `.github/PULL_REQUEST_TEMPLATE.md`) |
+
 ## Verification
 
 1. Create and push a branch:

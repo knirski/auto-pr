@@ -1,4 +1,4 @@
-# ADR: Automated Update of Self-Referential Workflow Pins
+# Automated Update of Self-Referential Workflow Pins
 
 ## Context and Problem Statement
 
