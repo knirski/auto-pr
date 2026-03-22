@@ -2,93 +2,50 @@
 
 auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Effect v4 beta, Tagless Final, FC/IS.
 
-When editing this project, apply these rules. Workflow: apply rules → make changes → run `bun run check` → fix until pass.
+**Execution order:** apply rules → make changes → run `bun run check` → fix until pass.
 
-## Skills
+---
 
-**Use the ts-scripting skill** when analyzing or editing TypeScript code. It provides canonical patterns for Effect v4, FC/IS, Tagless Final, config, testing, and guardrails. Compare against its checklist and common mistakes; apply its suggestions where applicable (some patterns like ConfigTest or TOML merge may not apply to env-only workflows).
+## Before any task
 
-**When to use which skill:**
+### Skills
+
+[Superpowers](https://github.com/obra/superpowers). **Invoke relevant skills before any task** — if a skill might apply (even 1%), use it. User instructions override skills.
 
 | Situation | Skill |
 |-----------|-------|
-| Editing TypeScript | ts-scripting |
-| New features, non-trivial changes | brainstorming — design before implementation |
-| Before claiming completion | verification-before-completion — run `bun run check`, show output |
-| Creating or editing rules | create-rule |
+| New features | brainstorming — design, get approval before coding |
+| Approved design | writing-plans — plan in `docs/superpowers/plans/` |
+| Feature isolation | using-git-worktrees |
+| Features/bugfixes | test-driven-development — RED-GREEN-REFACTOR |
+| Bugs/failures | systematic-debugging — root cause first |
+| Before completion | verification-before-completion — run `bun run check` |
+| Implementation done | finishing-a-development-branch — verify, present options |
+| Between tasks | requesting-code-review |
 
-**For new features or non-trivial changes:** Invoke the brainstorming skill before implementation. Present design and get approval before coding.
+**Project-specific:** ts-scripting (TypeScript, Effect v4, FC/IS), create-rule (Cursor rules). **Philosophy:** TDD, systematic over ad-hoc, evidence over claims.
 
-## Research and Decision-Making
+---
 
-When unsure about how to implement something or when multiple approaches exist:
+## Reference (lookup during tasks)
 
-**Use GitHub MCP (or other relevant MCP) first when available** — Prefer MCP tools over web search or manual lookup. Fall back to web fetch or CLI only when MCP has no matching capability.
-
-1. **Check official documentation first** — Use the primary source (library docs, GitHub Actions docs, etc.).
-2. **Effect sources** — For Effect, use the LLM-oriented docs at `https://github.com/Effect-TS/effect-smol/blob/effect%404.0.0-beta.XX/LLMS.md`. Replace the version segment (`effect%404.0.0-beta.XX`) with the `effect` version from `package.json` dependencies (e.g. `4.0.0-beta.31` → `effect%404.0.0-beta.31`).
-3. **When still uncertain, check popular and respectable public repos** — Look at how active, well-maintained projects handle the same problem. Mandatory when there are different valid options or no obvious solution.
-
-## Setup
-
-- Install: `bun install` then `bun x lefthook install` (Lefthook is a devDependency; the second step enables pre-commit/pre-push hooks)
-- Verify: `bun run check` (audit, test, lint, knip, typecheck, docs, actionlint, shellcheck, shfmt). Pre-push runs `check:code` automatically.
-- **Build/typecheck:** Uses `bun run scripts/build.ts` (Bun.build) to build `dist/`; entrypoints derived from `package.json` bin. `tsgo --noEmit` for typecheck. No declaration emit.
-
-## Commands
+### Commands
 
 | Command | Purpose |
 |---------|---------|
-| `bun run check` | Full check: test, lint, knip, typecheck, docs, actionlint, shellcheck. Run before committing. |
-| `bun run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
-| `bun run check:ci` | Full CI parity in Docker (`gh act` or `act`). **Prefer for local workflow testing** over pushing to trigger CI. |
-| `bun run check:with-links` | Full check + lychee link verification. Can fail on broken external URLs. |
-| `bun run check:just-links` | Lychee link check only. Requires lychee or Nix. |
+| `bun run check` | Full check. Run before committing. |
+| `bun run check:code` | Code only. Runs on pre-push. |
+| `bun run check:ci` | CI parity in Docker. Prefer for workflow testing. |
+| `bun run check:with-links` | Full check + lychee |
+| `bun run check:just-links` | Lychee only |
 | `bun test` | Unit tests with coverage |
-| `bun run lint` | Lint (Biome) |
-| `bun run lint:fix` | Lint and fix |
-| `bun run lint:scripts` | Shellcheck + shfmt format check |
-| `bun run format:scripts` | Format shell scripts (shfmt -w) |
+| `bun run lint` / `lint:fix` | Lint (Biome) |
+| `bun run lint:scripts` | Shellcheck + shfmt check |
+| `bun run format:scripts` | Format shell scripts |
 | `bun run typecheck` | TypeScript check |
 | `bun run knip` | Unused code detection |
 
-## Design Principles
-
-- **Functional Core / Imperative Shell:** Core is pure (no Effect, no I/O, returns `Result`). Shell orchestrates I/O and calls core. Bridge with `Effect.fromResult` at the boundary.
-- **Tagless Final:** Services are interfaces + Tags; live interpreters in `live/`, tests swap mocks. Programs declare `R`; shell provides via `Effect.provide(layer)`.
-- **Effect ecosystem first:** Prefer `effect` and `@effect/*` when adding dependencies.
-- **Config as service:** Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load; no Option for required fields.
-- **ADTs and pattern matching:** Prefer tagged unions over ad-hoc state; use `Match.exhaustive` for exhaustive handling.
-- **Dependency direction:** `src/auto-pr/core.ts` and `src/lib/fill-pr-template-core.ts` do not depend on shell or live interpreters.
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for high-level structure, pipeline flow, and FC/IS layout.
-
-## Project Structure
-
-```
-.github/
-  actions/          — composite actions (setup-runtime). Reusable workflows use full path (knirski/auto-pr/...) so callers don't need them.
-  PULL_REQUEST_TEMPLATE.md
-  workflows/        — ci, release-please, ci-release-please, auto-pr, auto-pr-generate-reusable, auto-pr-create-reusable
-src/
-  auto-pr/          — config, core, errors, interfaces, live, paths, shell, utils
-  workflow/         — main auto-PR pipeline (auto-pr-get-commits, auto-pr-generate-content, auto-pr-create-or-update-pr, auto-pr-run)
-  tools/            — standalone (auto-pr-fill-pr-template, auto-pr-init)
-  lib/              — pure core (fill-pr-template-core, collapse-prose-paragraphs, init-core)
-scripts/             — shell scripts only (.sh)
-  check-nix-hash.sh
-  nix-run-if-missing.sh
-  run-check-ci.sh
-test/
-  auto-pr/          — unit tests for src/auto-pr
-  workflow/         — unit tests for src/workflow
-  tools/            — unit tests for src/tools
-  lib/              — unit tests for src/lib
-```
-
-## Where to Put X
+### Where to Put X
 
 | Adding… | Put in |
 |---------|--------|
@@ -96,95 +53,90 @@ test/
 | New config/env | `src/auto-pr/config.ts` |
 | New tagged error | `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
-| New live interpreter | `src/auto-pr/live/`. Attach layer to service: `static readonly Live = Layer.effect(...)` |
+| New live interpreter | `src/auto-pr/live/`. Layer: `static readonly Live = Layer.effect(...)` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
-| Composite action (workflow) | `.github/actions/<name>/` |
+| Composite action | `.github/actions/<name>/` |
 | New prompt | `src/auto-pr/prompts/` |
 
-## Key Rules
+### Key Rules
 
 | Rule | Requirement |
-|------|--------------|
-| Effect first | Use `effect` and `@effect/*` |
-| No `any` | Use `unknown`; Biome enforces `noExplicitAny` |
-| No `!` | No non-null assertions |
-| No `enum` | Use string literal unions |
+|------|-------------|
+| Effect first | `effect` and `@effect/*` |
+| No `any`/`!`/`enum` | `unknown`, no non-null asserts, string literal unions |
 | No `console.log` | Use `Effect.log` |
-| Core pure | No Effect, no I/O in `*-core.ts` |
+| Core pure | No Effect/I/O in `*-core.ts`; bridge with `Effect.fromResult` |
 | Domain errors | `Schema.TaggedErrorClass` in `errors.ts` |
-| Optional returns | Use `Option<T>`; avoid `T \| null` or `T \| undefined` |
-| File names | kebab-case for multi-word |
-| Workflow testing | Prefer `check:ci` (act) locally; update all `@SHA` refs (auto-pr.yml, setup-runtime in generate/check) to `git rev-parse HEAD` when testing on new branches |
+| Optionals | `Option<T>`, not `T \| null` |
+| File names | kebab-case |
+| Secrets | Never `Redacted.value()` for logging |
+| Workflow testing | `check:ci` locally; update `@SHA` refs to `git rev-parse HEAD` |
 
-## Avoid
+---
 
-- I/O or Effect in `*-core.ts` — core must stay pure
-- `any`, `as` type assertions — use `unknown`, Schema, or narrowing
-- Forgetting `Effect.fromResult` when calling core from shell
-- `console.log` — use `Effect.log`
-- Logging secrets — never call `Redacted.value()` for logging
+## Project layout
 
-## Commits
+**Setup:** `bun install` then `bun x lefthook install`. Build: `scripts/build.ts` → `dist/`; typecheck: `tsgo --noEmit`.
 
-[Conventional Commits](https://www.conventionalcommits.org/). Examples: `feat: add X`, `fix: resolve Y`, `docs: update README`, `chore: bump dependency`. Enforced by commitlint in CI.
-
-Create small, focused commits. If changes span many files or concerns, propose splitting into separate branches or PRs.
-
-## GitHub Operations
-
-**Use GitHub MCP first.** Check `mcps/user-github/tools/` before using `gh` CLI.
-
-- PRs: `create_pull_request`, `update_pull_request`, `merge_pull_request`, `pull_request_read`
-- Issues: `issue_write`, `add_issue_comment`, `issue_read`
-- Fallback to `gh` only when MCP has no matching tool.
-
-## Post-merge: Automated updates
-
-**Workflow pins:** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) runs on push to main when workflows/actions change and updates self-referential pins. No manual step needed. If it didn't run: **Actions → Update workflow pins**, or update pins yourself per [docs/CI.md](docs/CI.md#workflow-pin-automation).
-
-**Dist:** [update-dist.yml](.github/workflows/update-dist.yml) runs on push to main when `src/`, `package.json`, `scripts/build.ts`, or `bun.lock` change. Builds `dist/` and commits it (uses `git add -f` to override `.gitignore`). Enables `npx -p github:knirski/auto-pr` for Node-only users. See [docs/CI.md](docs/CI.md#dist-and-gitignore). Do not commit `dist/` in PRs.
-
-## Verification
-
-```bash
-bun run check
+```
+.github/actions/   — composite actions. Workflows use full path (knirski/auto-pr/...)
+.github/workflows/ — ci, release-please, auto-pr, auto-pr-*-reusable
+src/auto-pr/       — config, core, errors, interfaces, live, paths, shell, utils
+src/workflow/      — get-commits, generate-content, create-or-update-pr, run
+src/tools/         — fill-pr-template, init
+src/lib/           — pure core (fill-pr-template-core, collapse-prose-paragraphs, init-core)
+scripts/           — shell only
+test/              — mirrors src/ layout
 ```
 
-Runs: check-nix-hash, check:code (audit, test, lint, knip, typecheck), check:docs (rumdl, typos), lint:workflows (actionlint), lint:scripts (shellcheck, shfmt). **Do not finish until all pass.**
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) — pipeline flow, FC/IS layout.
 
-- Add or update tests for the code you change, even if nobody asked.
-- **Coverage policy:** Current coverage (~85%) meets thresholds. Do not chase coverage for its own sake. Add tests when: fixing a bug (add a regression test), adding a feature, or changing risky code. Skip tests for trivial branches, CLI entry points, or code that would require heavy mocking for little benefit.
-- Before committing: run `bun run check`; ensure all tests pass.
-- Pre-push runs `check:code` automatically (Lefthook). Run `bun x lefthook install` after cloning. Use `git push --no-verify` only when necessary.
-- For full CI parity locally (e.g. debugging CI): `bun run check:ci` (requires Docker + act or gh-act).
-- **Workflow testing:** Prefer `bun run check:ci` (act) for local workflow testing over pushing to trigger CI. When creating a new branch to test workflow changes, update all `@SHA` refs (auto-pr.yml, setup-runtime in generate/check) to `git rev-parse HEAD` so the workflow runs with the branch code.
+---
 
-## Documentation
+## Development
 
-- [docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) — Template placeholders and fill-pr-template CLI
-- [docs/INTEGRATION.md](docs/INTEGRATION.md) — How to add auto-pr to any repo
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
-- [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
-- [docs/CI.md](docs/CI.md) — Workflows, branch protection, fork PRs
-- [docs/WORKFLOW_SECURITY.md](docs/WORKFLOW_SECURITY.md) — Auto-PR workflow security model (two-phase, CWE-829)
-- [docs/CII.md](docs/CII.md) — CII Best Practices badge progress
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
-- [docs/adr/](docs/adr/) — Architecture Decision Records. See ADR workflow below.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — CHANGELOG is auto-generated by release-please; do not edit manually
+### Design Principles
 
-## ADR Workflow
+- **FC/IS:** Core pure (no Effect, no I/O, returns `Result`). Shell orchestrates I/O, bridges with `Effect.fromResult`.
+- **Tagless Final:** Interfaces + Tags; live in `live/`, tests swap mocks. `Effect.provide(layer)`.
+- **Effect first**, config as service, ADTs with `Match.exhaustive`. Core files do not depend on shell.
 
-**When creating or updating an ADR:**
+### Research and Decision-Making
 
-1. Add or update the ADR in `docs/adr/` using the [template](docs/adr/adr-template.md).
-2. Update this AGENTS.md if the decision affects agent instructions: add to "Where to Put X" or Key Rules as appropriate.
-3. Update [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) if the decision changes high-level structure or flows.
+**GitHub MCP first.** Otherwise: (1) Official docs (2) Effect: `effect-smol` LLMS.md — replace `effect%404.0.0-beta.XX` with `package.json` version (3) Popular repos when options exist.
 
-**When making a significant architectural change (or planning one):**
+### Branch, commit, checkout
 
-1. Follow [Research and Decision-Making](#research-and-decision-making): check official docs, then how popular repos handle similar decisions.
-2. Create or update an ADR in `docs/adr/` documenting the decision, context, alternatives, and consequences.
-3. Update AGENTS.md and ARCHITECTURE.md as above.
+[Superpowers](https://github.com/obra/superpowers): using-git-worktrees, writing-plans, finishing-a-development-branch.
 
-**Significant** means: affects multiple modules, is hard to reverse, changes design principles, or introduces new patterns. Minor refactors or dependency bumps do not require ADRs.
+- **Branches:** `ai/` prefix. Isolation: worktree at `.worktrees/<branch>` with `-b ai/<feature>`; `.worktrees/` in `.gitignore`.
+- **Commits:** Conventional (`feat:`, `fix:`, `docs:`, `chore:`). Frequent, one per step. Add `Closes #<issue>` when fixing.
+- **Completion:** finishing-a-development-branch (verify → 4 options → execute → cleanup). After PR/merge: `git checkout main && git pull`.
+
+---
+
+## Before completion (gate)
+
+**verification-before-completion** — run `bun run check`, read output, state result. Do not finish until pass.
+
+- Add tests when fixing bugs, adding features, or changing risky code. Skip for trivial branches/CLI.
+- Coverage ~85%; don't chase for its own sake. Pre-push: `check:code` (Lefthook). `bun x lefthook install` after clone.
+
+---
+
+## Operations
+
+**GitHub:** MCP first (`mcps/user-github/tools/`). PRs: create/update/merge/read. Issues: write/comment/read. Fallback to `gh` when MCP lacks capability.
+
+**Post-merge:** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) — auto-updates self-refs. [update-dist.yml](.github/workflows/update-dist.yml) — builds `dist/` on main. Do not commit `dist/` in PRs. [CI.md](docs/CI.md#dist-and-gitignore)
+
+---
+
+## Documentation & ADR
+
+[docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) · [INTEGRATION.md](docs/INTEGRATION.md) · [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · [ORIGIN.md](docs/ORIGIN.md) · [CI.md](docs/CI.md) · [WORKFLOW_SECURITY.md](docs/WORKFLOW_SECURITY.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/adr/](docs/adr/) · [CONTRIBUTING.md](CONTRIBUTING.md) (CHANGELOG auto-generated)
+
+### ADR workflow {#adr-workflow}
+
+Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md and ARCHITECTURE.md if needed. *Significant* change: Research first, document in ADR, update both. Significant = multi-module, hard to reverse, new patterns. Minor refactors: no ADR.
