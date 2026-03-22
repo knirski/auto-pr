@@ -1,5 +1,5 @@
 # Auto-PR — uses two reusable workflows (generate + create). Push to ai/* to auto-create a PR.
-# No package.json required. Run: npx auto-pr-init (creates this file, template, .nvmrc)
+# No package.json required. Run: npx -p github:knirski/auto-pr auto-pr-init (creates this file, template, .nvmrc)
 #
 # Two workflows: generate (unprivileged, checkout branch) + create (privileged, checkout default).
 # Satisfies CodeQL "untrusted checkout in trusted context" — no suppression.
@@ -29,11 +29,12 @@ concurrency:
 
 jobs:
   generate:
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@f49b41fbdd1397689d6cafc1e579807447e1af04
+    if: github.ref_name != github.event.repository.default_branch
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@f7c745499fb3b38a6de1fd041ee678a0f327fc91
 
   create:
     needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@f49b41fbdd1397689d6cafc1e579807447e1af04
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@f7c745499fb3b38a6de1fd041ee678a0f327fc91
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit

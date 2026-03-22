@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { Redacted } from "effect";
 import {
+	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
+	DescriptionParseError,
 	FillPrTemplateValidationError,
 	formatError,
 	NoSemanticCommitsError,
@@ -28,6 +30,22 @@ test("formatError formats OllamaHttpError with status", () => {
 
 test("formatError formats OllamaHttpError without status", () => {
 	expect(formatError(new OllamaHttpError({ cause: "timeout" }))).toBe("timeout");
+});
+
+test("formatError formats AiProviderError with status", () => {
+	expect(formatError(new AiProviderError({ status: 500, cause: "server error" }))).toBe(
+		"AI provider HTTP 500: server error",
+	);
+});
+
+test("formatError formats AiProviderError without status", () => {
+	expect(formatError(new AiProviderError({ cause: "timeout" }))).toBe("timeout");
+});
+
+test("formatError formats DescriptionParseError", () => {
+	expect(formatError(new DescriptionParseError({ cause: "invalid schema" }))).toBe(
+		"invalid schema",
+	);
 });
 
 test("formatError formats AutoPrConfigError", () => {

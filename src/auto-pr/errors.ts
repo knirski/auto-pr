@@ -43,17 +43,31 @@ export class BodyFileNotFoundError extends Schema.TaggedErrorClass<BodyFileNotFo
 	{ path: Schema.String },
 ) {}
 
-// ─── Ollama ──────────────────────────────────────────────────────────────────
+// ─── Ollama (legacy, to be removed) ───────────────────────────────────────────
 
-/** Ollama HTTP request failed (timeout, 5xx, etc.). */
+/** Ollama HTTP request failed (timeout, 5xx, etc.). @deprecated Use AiProviderError. */
 export class OllamaHttpError extends Schema.TaggedErrorClass<OllamaHttpError>()("OllamaHttpError", {
 	status: Schema.optional(Schema.Number),
 	cause: Schema.String,
 }) {}
 
-/** Ollama description response empty or invalid. */
+/** Ollama description response empty or invalid. @deprecated Use DescriptionParseError. */
 export class OllamaDescriptionInvalidError extends Schema.TaggedErrorClass<OllamaDescriptionInvalidError>()(
 	"OllamaDescriptionInvalidError",
+	{ cause: Schema.String },
+) {}
+
+// ─── AI provider (Ollama, GitHub Models, openai-compat) ──────────────────────
+
+/** Transport/API failures from any AI provider. Replaces OllamaHttpError. */
+export class AiProviderError extends Schema.TaggedErrorClass<AiProviderError>()("AiProviderError", {
+	status: Schema.optional(Schema.Number),
+	cause: Schema.String,
+}) {}
+
+/** Schema decode or validateTitleDescription failures. Replaces OllamaDescriptionInvalidError. */
+export class DescriptionParseError extends Schema.TaggedErrorClass<DescriptionParseError>()(
+	"DescriptionParseError",
 	{ cause: Schema.String },
 ) {}
 
@@ -90,11 +104,13 @@ export function formatError(e: unknown): string {
 	if (
 		e instanceof PullRequestFailedError ||
 		e instanceof OllamaHttpError ||
+		e instanceof AiProviderError ||
 		e instanceof AutoPrConfigError ||
 		e instanceof PullRequestTitleBlankError ||
 		e instanceof PullRequestBodyBlankError ||
 		e instanceof BodyFileNotFoundError ||
 		e instanceof OllamaDescriptionInvalidError ||
+		e instanceof DescriptionParseError ||
 		e instanceof ParseError ||
 		e instanceof NoSemanticCommitsError ||
 		e instanceof TemplateRenderError ||
@@ -104,6 +120,9 @@ export function formatError(e: unknown): string {
 			Match.tag("PullRequestFailedError", ({ cause }) => cause),
 			Match.tag("OllamaHttpError", ({ status, cause }) =>
 				status == null ? cause : `Ollama HTTP ${status}: ${cause}`,
+			),
+			Match.tag("AiProviderError", ({ status, cause }) =>
+				status == null ? cause : `AI provider HTTP ${status}: ${cause}`,
 			),
 			Match.tag(
 				"AutoPrConfigError",
@@ -124,6 +143,7 @@ export function formatError(e: unknown): string {
 					`BODY_FILE does not exist: ${path}. Check generate-content step succeeded. See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md#troubleshooting`,
 			),
 			Match.tag("OllamaDescriptionInvalidError", ({ cause }) => cause),
+			Match.tag("DescriptionParseError", ({ cause }) => cause),
 			Match.tag("ParseError", ({ message, cause }) =>
 				cause == null ? message : `${message}: ${String(cause)}`,
 			),

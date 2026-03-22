@@ -11,7 +11,7 @@
 
 Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses [Ollama](https://ollama.com/) to generate descriptions for multi-commit PRs.
 
-**Convention over configuration.** Run `npx auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
+**Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
 
 **Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying—workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
 
@@ -39,7 +39,7 @@ Merge commits are filtered out. Non-conventional commits are included; type fall
 
 Add auto-pr to any repo in 6 steps:
 
-1. **Init** — `npx auto-pr-init` (creates workflow, PR template, `.nvmrc`)
+1. **Init** — `npx -p github:knirski/auto-pr auto-pr-init` (creates workflow, PR template, `.nvmrc`)
 2. **Create** — [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
 3. **Generate** — Private key in app settings → save `.pem`
 4. **Install** — Install the app on your repository
@@ -69,11 +69,13 @@ bun run check
 **As a dependency (optional; for local runs or when pinning a version):**
 
 ```bash
-npm install auto-pr
-# or: npm install github:knirski/auto-pr
+npm install github:knirski/auto-pr
+# or: bun add github:knirski/auto-pr
 ```
 
-**From source:**
+Install from GitHub; the package is not published to npm. `dist/` is pre-built and committed by CI (see [docs/CI.md](docs/CI.md#dist-and-gitignore)). With Bun, `prepare` also builds it on install. No manual build needed.
+
+**From source (contributors):**
 
 ```bash
 git clone https://github.com/knirski/auto-pr.git
@@ -92,6 +94,8 @@ bun x lefthook install
 | `npx auto-pr-create-or-update-pr` | Create or update PR via `gh` |
 | `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
 | `npx auto-pr-init` | Create workflow, PR template, and .nvmrc in current repo |
+
+Use `npx -p github:knirski/auto-pr <command>` for one-off runs without adding a dependency.
 
 ## Nix flake (contributors only, optional)
 

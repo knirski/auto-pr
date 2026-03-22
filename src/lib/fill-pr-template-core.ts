@@ -9,7 +9,12 @@ import { Option, pipe, Result } from "effect";
 import * as Arr from "effect/Array";
 import { render } from "micromustache";
 import { isBlank, isMergeCommitSubject, parseSubjects } from "#auto-pr/core.js";
-import { FillPrTemplateValidationError, ParseError, TemplateRenderError } from "#auto-pr/errors.js";
+import {
+	DescriptionParseError,
+	FillPrTemplateValidationError,
+	ParseError,
+	TemplateRenderError,
+} from "#auto-pr/errors.js";
 import { collapseProseParagraphs } from "#lib/collapse-prose-paragraphs.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -164,6 +169,31 @@ const CONVENTIONAL_HEADER_PATTERN = /^(\w+)(?:\([^)]*\))?!?: .+$/;
 export function isValidConventionalTitle(s: string): boolean {
 	if (isBlank(s) || s.trim().length > 72) return false;
 	return CONVENTIONAL_HEADER_PATTERN.test(s.trim());
+}
+
+/**
+ * Validate title and description for PR. Fails if title/description blank or title not conventional.
+ * Used after AI provider returns structured output or after parsing raw response.
+ */
+export function validateTitleDescription(value: {
+	title: string;
+	description: string;
+}): Result.Result<{ title: string; description: string }, DescriptionParseError> {
+	const { title, description } = value;
+	if (isBlank(title)) {
+		return Result.fail(new DescriptionParseError({ cause: "title is empty" }));
+	}
+	if (isBlank(description)) {
+		return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
+	}
+	if (!isValidConventionalTitle(title)) {
+		return Result.fail(
+			new DescriptionParseError({
+				cause: `title not conventional format: "${title}"`,
+			}),
+		);
+	}
+	return Result.succeed({ title, description });
 }
 
 export function getDescription(first: CommitInfo): string {

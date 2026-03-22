@@ -49,7 +49,7 @@ The script tries `gh act` first, then falls back to `act`.
 
 Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, test, lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
 
-**When changing `src/`:** Run `bun run build`; commit `dist/` if it changed (required for GitHub installs).
+**When changing `src/`:** Run `bun run build` before tests if needed (`check:code` does this automatically). `dist/` is gitignored—you don't commit it; the [update-dist](docs/CI.md#dist-and-gitignore) workflow builds and commits it after merge so `npx -p github:knirski/auto-pr` works for Node-only users.
 
 If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 
@@ -84,7 +84,7 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 **AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
 
-- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run check:ci` (act) for local testing. (2) If pushing to CI, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): auto-pr.yml (both workflow refs), and the setup-runtime ref in auto-pr-generate-reusable.yml and check.yml. **After merging:** Update all pins to the merge commit SHA on main. See [docs/CI.md](docs/CI.md#workflow-pin-maintenance-sha-updates).
+- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run check:ci` (act) for local testing. (2) If pushing to CI, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): auto-pr.yml (both workflow refs), and the setup-runtime ref in auto-pr-generate-reusable.yml and check.yml. **After merging:** Pins are updated automatically by update-workflow-pins. See [docs/CI.md](docs/CI.md#workflow-pin-automation).
 - **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
 1. Run `bun run check` before submitting.

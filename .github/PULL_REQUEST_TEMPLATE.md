@@ -1,6 +1,6 @@
 <!--
   Creating manually? Replace each {{placeholder}} below with your content.
-  Using fill-pr-template? Run via auto-pr workflow or: npx auto-pr-fill-pr-template --log-file <path> --files-file <path>
+  Using fill-pr-template? Run via auto-pr workflow or: npx -p github:knirski/auto-pr auto-pr-fill-pr-template --log-file <path> --files-file <path>
   See [docs/PR_TEMPLATE.md](https://github.com/knirski/auto-pr/blob/main/docs/PR_TEMPLATE.md)
 -->
 
@@ -34,7 +34,6 @@
 - [ ] I have run `bun run check` and fixed any issues
 - [{{checklistDocs}}] I have updated the documentation if needed
 - [{{checklistTests}}] I have added or updated tests for my changes
-- [ ] If this PR touches `.github/workflows/auto-pr*.yml` or `.github/actions/setup-runtime/`, I will update workflow pins on main after merge (see [docs/CI.md](../docs/CI.md#workflow-pin-maintenance-sha-updates))
 
 ## Related issues
 

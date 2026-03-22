@@ -1,16 +1,17 @@
 ---
-description: PR creation workflow — split changes logically, use ai/ prefix, follow template, checkout main and pull
+description: PR creation (Option 2 of finishing-a-development-branch) — split logically, ai/ prefix, template, checkout main
 alwaysApply: true
 ---
 
 # PR Creation Workflow
 
-When creating a pull request (GitHub MCP or `gh pr create`):
+When creating a pull request (Option 2 of **finishing-a-development-branch**):
 
-1. **Assess changes** — Inspect uncommitted and committed-but-not-pushed changes. Divide and group them logically (e.g. feature vs docs vs chore). Create separate branches and separate PRs for each logical group.
-2. Create branch, commit, push — **Use `ai/` prefix** (e.g. `ai/feature-name`) so the auto-PR workflow creates the PR with title and body from conventional commits.
+1. **Assess changes** — Inspect uncommitted and committed-but-not-pushed changes. Divide logically (feature vs docs vs chore). Separate branches and PRs per group.
+2. Create branch, commit, push — **Use `ai/` prefix** (e.g. `ai/feature-name`) so the auto-PR workflow creates the PR from conventional commits.
 3. Create PR — follow [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)
 4. **Checkout main and pull** — `git checkout main && git pull`
-5. **Workflow pins (if merged PR touched workflows)** — If the merged PR changed `.github/workflows/auto-pr*.yml` or `.github/actions/setup-runtime/`, update all `@SHA` refs to the merge commit. See [AGENTS.md](AGENTS.md#post-merge-workflow-sha-updates).
 
-Do not finish until step 4 is done. If step 5 applies, complete it before finishing. The workspace must be left on `main`.
+Workflow pins are automated: [update-workflow-pins](.github/workflows/update-workflow-pins.yml) runs on push to main when workflows/actions change. No manual step.
+
+Do not finish until step 4 is done. Workspace must be left on `main`.
