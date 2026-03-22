@@ -90,7 +90,7 @@ Replaced `@effect/platform-node` with `@effect/platform-bun` for semantic alignm
 - Run `bun install` (reads `package-lock.json`, creates `bun.lock`)
 - Verify: `bun run build`, `bun run test` (Bun test runner)
 - Remove `package-lock.json`; add `bun.lock` to git
-- Update [package.json](../../package.json): `"packageManager": "bun@1.3.10"` (or omit)
+- Update [package.json](../../../package.json): `"packageManager": "bun@1.3.10"` (or omit)
 
 ### 1.2 Update package.json scripts
 
@@ -107,7 +107,7 @@ Replaced `@effect/platform-node` with `@effect/platform-bun` for semantic alignm
 
 ### 1.3 Lefthook configuration
 
-Update [lefthook.yml](../../lefthook.yml):
+Update [lefthook.yml](../../../lefthook.yml):
 
 - `npx lint-staged` → `bunx lint-staged`
 - `npx --no -- commitlint --edit {1}` → `bunx --bun commitlint --edit {1}`
@@ -119,7 +119,7 @@ Update [lefthook.yml](../../lefthook.yml):
 
 ### 2.1 Add bun2nix and generate bun.nix
 
-Add flake input in [flake.nix](../../flake.nix):
+Add flake input in [flake.nix](../../../flake.nix):
 
 ```nix
 bun2nix.url = "github:nix-community/bun2nix?tag=2.0.8";
@@ -131,7 +131,7 @@ bun2nix.inputs.nixpkgs.follows = "nixpkgs";
 
 ### 2.2 Replace default.nix
 
-Replace [default.nix](../../default.nix) `buildNpmPackage` with `stdenv.mkDerivation` + bun2nix hook:
+Replace [default.nix](../../../default.nix) `buildNpmPackage` with `stdenv.mkDerivation` + bun2nix hook:
 
 ```nix
 { pkgs, bun2nix, ... }:
@@ -180,8 +180,8 @@ default = pkgs.callPackage ./default.nix {
 - Delete `src/lib/update-nix-hash-core.ts`
 - Delete `test/lib/update-nix-hash-core.test.ts`
 - Delete `test/tools/update-nix-hash.test.ts`
-- [test/schemas.test.ts](../../test/schemas.test.ts): remove `Sha256HashSchema` describe block
-- [src/auto-pr/errors.ts](../../src/auto-pr/errors.ts): remove `UpdateNixHashNotFoundError`, `UpdateNixHashUsageError`
+- [test/schemas.test.ts](../../../test/schemas.test.ts): remove `Sha256HashSchema` describe block
+- [src/auto-pr/errors.ts](../../../src/auto-pr/errors.ts): remove `UpdateNixHashNotFoundError`, `UpdateNixHashUsageError`
 - Remove `update-nix-hash` script from package.json
 
 ### 2.6 Update nix.yml workflow
@@ -240,7 +240,7 @@ junit = "test-report.junit.xml"
 
 ### 3.4 Test utilities
 
-- [test/test-utils.ts](../../test/test-utils.ts): keep as-is; remove `excludeTestServices` from JSDoc
+- [test/test-utils.ts](../../../test/test-utils.ts): keep as-is; remove `excludeTestServices` from JSDoc
 
 ---
 
@@ -265,12 +265,12 @@ See Phase 2.6. Cache: `bun.lock`, `bun.nix`.
 
 ## Phase 5: Documentation and Cleanup
 
-- [AGENTS.md](../../AGENTS.md): install (`bun install`), verify (`bun run check`), commands
-- [docs/INTEGRATION.md](../INTEGRATION.md): no change (consumers use `npx`)
-- [.nvmrc](../../.nvmrc): keep for consumer Node version
+- [AGENTS.md](../../../AGENTS.md): install (`bun install`), verify (`bun run check`), commands
+- [docs/INTEGRATION.md](../../INTEGRATION.md): no change (consumers use `npx`)
+- [.nvmrc](../../../.nvmrc): keep for consumer Node version
 - Add `.bun-version` (e.g. `1.3.10`) or document in README
 - Track `bun.lock`; remove `package-lock.json` from git if present
-- [scripts/run-check-ci.sh](../../scripts/run-check-ci.sh): no change
+- [scripts/run-check-ci.sh](../../../scripts/run-check-ci.sh): no change
 
 ---
 
@@ -284,7 +284,7 @@ See Phase 2.6. Cache: `bun.lock`, `bun.nix`.
 ## Rollback
 
 1. Restore `package-lock.json` via `bun pm migrate npm` or backup
-2. Revert [flake.nix](../../flake.nix) and [default.nix](../../default.nix) to `buildNpmPackage` + `prefetch-npm-deps`
+2. Revert [flake.nix](../../../flake.nix) and [default.nix](../../../default.nix) to `buildNpmPackage` + `prefetch-npm-deps`
 3. Revert test changes; restore Vitest and `@effect/vitest`
 4. Revert CI workflows and lefthook
 

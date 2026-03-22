@@ -15,7 +15,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | Situation | Skill |
 |-----------|-------|
 | New features | brainstorming — design, get approval before coding |
-| Approved design | writing-plans — plan in `docs/superpowers/plans/` |
+| Approved design | writing-plans — plan in `docs/superpowers/plans/` (or specs in `docs/superpowers/specs/`) |
 | Feature isolation | using-git-worktrees |
 | Features/bugfixes | test-driven-development — RED-GREEN-REFACTOR |
 | Bugs/failures | systematic-debugging — root cause first |

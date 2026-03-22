@@ -54,6 +54,6 @@ CodeQL does not fully model cross-workflow permission separation, so it may repo
 
 ## Related
 
-- [ADR: Two Workflow Files for Auto-PR](adr/two-phase-auto-pr-workflow.md) — Design decision and alternatives
+- [ADR 0002: Two-Phase Auto-PR Workflow](adr/0002-two-phase-auto-pr-workflow.md) — Design decision and alternatives
 - [docs/CI.md](CI.md) — Workflow overview
 - [GitHub: Keeping your GitHub Actions and workflows secure](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/)

@@ -127,7 +127,7 @@ bun run src/workflow/run-auto-pr.ts
 
 When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
 
-When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `AUTO_PR_AI_PROVIDER`, `AUTO_PR_AI_OLLAMA_MODEL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration).
+When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `AUTO_PR_AI_PROVIDER`, `AUTO_PR_AI_OLLAMA_MODEL`, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration). Authoritative schema: [src/auto-pr/config.ts](src/auto-pr/config.ts).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -154,12 +154,14 @@ This repo uses [release-please](https://github.com/googleapis/release-please) fo
 
 ## Documentation
 
+- [docs/](docs/) — Documentation index
 - [docs/INTEGRATION.md](docs/INTEGRATION.md) — Integration guide (GitHub App, workflow)
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
 - [docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) — Template placeholders and behavior
 - [docs/CI.md](docs/CI.md) — Workflows, branch protection, first-time setup
 - [.github/actions/setup-runtime/README.md](.github/actions/setup-runtime/README.md) — Runtime detection (contributors)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
+- [docs/CONCEPTS.md](docs/CONCEPTS.md) — Glossary (FC/IS, Tagless Final, etc.)
 - [docs/adr/](docs/adr/) — Architecture Decision Records
 - [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
 - [docs/CII.md](docs/CII.md) — CII Best Practices badge progress
