@@ -14,6 +14,11 @@ export function unknownToMessage(e: unknown): string {
 	return e instanceof Error ? e.message : String(e);
 }
 
+/** Ensure unknown is an Error (pass through or wrap). Use for cause fields. */
+export function toError(e: unknown): Error {
+	return e instanceof Error ? e : new Error(String(e));
+}
+
 /** Wrap value for log-safe display. In formatters use r.label ?? "<redacted>". */
 function redactedForLog<T extends string>(
 	value: T,

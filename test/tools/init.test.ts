@@ -6,7 +6,7 @@ import { runInit } from "#tools/auto-pr-init.js";
 
 describe("runInit", () => {
 	test("creates workflow, PR template, and .nvmrc in target directory", async () => {
-		await runEffect(
+		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-init-");
 
@@ -32,12 +32,11 @@ describe("runInit", () => {
 				const nvmrcContent = yield* fs.readFileString(tmp.join(".nvmrc"));
 				expect(nvmrcContent.trim()).toMatch(/^\d+$/);
 			}).pipe(Effect.scoped),
-			TestBaseLayer,
 		);
 	});
 
 	test("skips existing files on second run", async () => {
-		await runEffect(
+		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-init-skip-");
 
@@ -51,7 +50,6 @@ describe("runInit", () => {
 
 				expect(contentAfterSecond).toBe(contentAfterFirst);
 			}).pipe(Effect.scoped),
-			TestBaseLayer,
 		);
 	});
 });

@@ -70,7 +70,7 @@ function setupGitRepoWithFiles(
 
 describe("runAutoPrGetCommits", () => {
 	test("writes output files and GITHUB_OUTPUT for single semantic commit", async () => {
-		await runEffect(
+		await runEffect(TestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-get-commits-");
 				yield* setupGitRepo(tmp.path, [{ message: "feat: add feature" }]);
@@ -88,12 +88,11 @@ describe("runAutoPrGetCommits", () => {
 				const commitsContent = yield* fs.readFileString(commitsPath);
 				expect(commitsContent).toContain("feat: add feature");
 			}).pipe(Effect.scoped),
-			TestLayer,
 		);
 	});
 
 	test("writes correct count and files for multiple semantic commits", async () => {
-		await runEffect(
+		await runEffect(TestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-get-commits-multi-");
 				yield* setupGitRepo(tmp.path, [{ message: "feat: add x" }, { message: "fix: resolve y" }]);
@@ -113,12 +112,11 @@ describe("runAutoPrGetCommits", () => {
 				expect(semanticContent).toContain("feat: add x");
 				expect(semanticContent).toContain("fix: resolve y");
 			}).pipe(Effect.scoped),
-			TestLayer,
 		);
 	});
 
 	test("fails when no semantic commits", async () => {
-		await runEffect(
+		await runEffect(TestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-get-commits-empty-");
 				yield* setupGitRepo(tmp.path, [{ message: "Merge branch 'x'" }]);
@@ -129,12 +127,11 @@ describe("runAutoPrGetCommits", () => {
 
 				expect(exit._tag).toBe("Failure");
 			}).pipe(Effect.scoped),
-			TestLayer,
 		);
 	});
 
 	test("writes files.txt with changed file paths when commits touch files", async () => {
-		await runEffect(
+		await runEffect(TestLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-get-commits-files-");
 				yield* setupGitRepoWithFiles(tmp.path, [
@@ -158,7 +155,6 @@ describe("runAutoPrGetCommits", () => {
 				const ghContent = yield* fs.readFileString(ghOutput);
 				expect(ghContent).toContain("count=1");
 			}).pipe(Effect.scoped),
-			TestLayer,
 		);
 	});
 });

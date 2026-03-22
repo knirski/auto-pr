@@ -24,7 +24,7 @@ The auto-pr flow is split into two reusable workflows:
 ### Generate (Unprivileged)
 
 - **Checkout:** The pushed branch — untrusted, but acceptable because the workflow has no privileged permissions.
-- **Runs:** `auto-pr-get-commits`, `auto-pr-generate-content` (Ollama), artifact preparation.
+- **Runs:** `auto-pr-get-commits`, `auto-pr-generate-content` (AI), artifact preparation.
 - **Output:** Artifact `pr-content` (title, body, branch, default_branch).
 - **Risk:** Limited. Even if the checked-out code is malicious, it cannot write to the repo or access secrets.
 

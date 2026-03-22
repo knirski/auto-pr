@@ -40,6 +40,10 @@ import pkg from "../../package.json" with { type: "json" };
 
 type OutputFormat = "body" | "title-body";
 
+function isOutputFormat(s: string): s is OutputFormat {
+	return s === "body" || s === "title-body";
+}
+
 /** Run fill using FillPrTemplate service. */
 export function runFillBody(
 	logFilePath: string,
@@ -231,8 +235,8 @@ export const fillCommand = Command.make(
 		const formatVal = yield* Option.match(format, {
 			onNone: () => Effect.fail(new Error("--format is required")),
 			onSome: (f) =>
-				f === "body" || f === "title-body"
-					? Effect.succeed(f as OutputFormat)
+				isOutputFormat(f)
+					? Effect.succeed(f)
 					: Effect.fail(new Error("--format must be 'body' or 'title-body'")),
 		});
 
