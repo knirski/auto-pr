@@ -22,8 +22,6 @@ export const FillPrTemplateParamsSchema = Schema.Struct({
 	filesFilePath: Schema.String,
 	templatePath: Schema.String,
 	descriptionFilePath: Schema.optionalKey(Schema.String),
-	/** Required for {{howToTest}} when not docs-only. Set via AUTO_PR_HOW_TO_TEST env. */
-	howToTestDefault: Schema.String,
 });
 
 /** Parameters for loading commit log and files. */

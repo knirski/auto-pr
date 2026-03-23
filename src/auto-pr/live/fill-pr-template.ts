@@ -31,15 +31,8 @@ export const renderBody = Effect.fn("renderBody")(function* (
 	files: Parameters<typeof renderBodyCore>[1],
 	template: Parameters<typeof renderBodyCore>[2],
 	descriptionOverride?: Parameters<typeof renderBodyCore>[3],
-	howToTestDefault?: Parameters<typeof renderBodyCore>[4],
 ) {
-	const bodyResult = renderBodyCore(
-		commits,
-		files,
-		template,
-		descriptionOverride,
-		howToTestDefault,
-	);
+	const bodyResult = renderBodyCore(commits, files, template, descriptionOverride);
 	const body = yield* Effect.fromResult(bodyResult);
 	return hasUnreplacedPlaceholders(body)
 		? yield* Effect.gen(function* () {
@@ -88,7 +81,6 @@ type LoadedTemplateParams = {
 	readonly commits: readonly CommitInfo[];
 	readonly files: readonly string[];
 	readonly descriptionOverride: string | undefined;
-	readonly howToTestDefault: string | undefined;
 };
 
 function loadTemplateAndParams(
@@ -127,7 +119,6 @@ function loadTemplateAndParams(
 			commits,
 			files,
 			descriptionOverride,
-			howToTestDefault: params.howToTestDefault,
 		};
 	});
 }
@@ -185,16 +176,10 @@ export class FillPrTemplate extends ServiceMap.Service<FillPrTemplate, FillPrTem
 					templatePath: redactPath(resolvedPath),
 				});
 
-				const { template, commits, files, descriptionOverride, howToTestDefault } =
+				const { template, commits, files, descriptionOverride } =
 					yield* loadTemplateAndParams(params);
 
-				const body = yield* renderBody(
-					commits,
-					files,
-					template,
-					descriptionOverride,
-					howToTestDefault,
-				);
+				const body = yield* renderBody(commits, files, template, descriptionOverride);
 				if (!body.trim()) {
 					return yield* Effect.fail(
 						new PullRequestBodyBlankError({

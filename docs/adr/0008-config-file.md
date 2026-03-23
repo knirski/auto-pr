@@ -8,7 +8,7 @@ The sections under [Deferred: optional config file (future)](#deferred-optional-
 
 ## Context and Problem Statement
 
-auto-pr uses many env vars in CI (pipeline plumbing: `COMMITS`, `FILES`, `GITHUB_OUTPUT`, etc.)—those stay. **User-facing preferences** for AI are small: about **five** keys (`AUTO_PR_AI_PROVIDER` plus provider-specific model/URL fields; secrets stay in env). That surface is manageable.
+auto-pr uses many env vars in CI (pipeline plumbing: `GITHUB_OUTPUT`, paths implied by `GITHUB_WORKSPACE`, etc.)—those stay. **User-facing preferences** for AI are small: about **five** keys (`AUTO_PR_AI_PROVIDER` plus provider-specific model/URL fields; secrets stay in env). That surface is manageable.
 
 We considered centralizing AI settings in a JSON file (commit defaults, Effect Schema validation, less repeated `env:` in workflows). **For now**, env-only is enough.
 
@@ -33,9 +33,11 @@ PR template path and “how to test” wording are **not** solved by extra env o
 
 ## Convention: PR template and how to test
 
-**PR template path:** `.github/PULL_REQUEST_TEMPLATE.md` (GitHub standard). Document in INTEGRATION.md / README.
+**PR template path:** `.github/PULL_REQUEST_TEMPLATE.md` relative to the repo root (GitHub standard). In code this is always `join(GITHUB_WORKSPACE, ".github/PULL_REQUEST_TEMPLATE.md")`—no env var, no shared constant; the path is documented here and in INTEGRATION.md / README.
 
-**“How to test”:** Prefer documenting that users **edit** `.github/PULL_REQUEST_TEMPLATE.md` for project-specific steps (static copy or keep `{{howToTest}}` for automation). A separate ADR or implementation may remove `AUTO_PR_HOW_TO_TEST` / workflow `auto_pr_how_to_test` in favor of template edits + a single built-in default when the placeholder is filled—see historical notes in the deferred section below.
+**Generated title and body files:** `generate-content` writes `join(GITHUB_WORKSPACE, "pr-title.txt")` and `join(GITHUB_WORKSPACE, "pr-body.md")`. `create-or-update-pr` reads those paths (no `TITLE` / `BODY_FILE` env).
+
+**“How to test”:** Users **edit** `.github/PULL_REQUEST_TEMPLATE.md` for project-specific steps (static markdown in the **How to test** section). **`AUTO_PR_HOW_TO_TEST` / workflow `auto_pr_how_to_test` are removed**; the stock template ships a generic scaffold; nothing is injected from code.
 
 ---
 
@@ -97,7 +99,7 @@ Validate file + merged config with **Effect Schema** (`Schema.Struct` / `Schema.
 
 #### What would not go into a future config file
 
-Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`COMMITS`, `FILES`, …), runtime (`NO_COLOR`, `AUTO_PR_DEBUG`), internal script vars (`AUTO_PR_PKG`, …). See earlier drafts for full tables.
+Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`GITHUB_OUTPUT`, workspace-relative files from `get-commits`, …), runtime (`NO_COLOR`, `AUTO_PR_DEBUG`), internal script vars (`AUTO_PR_PKG`, …). See earlier drafts for full tables.
 
 #### Env keys mirrored by a future file
 
@@ -120,8 +122,6 @@ Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`CO
 #### Future migration (if the file is added)
 
 * Phase 1: Add file support; env continues to work.
-* Optional: fixed PR template path; remove `PR_TEMPLATE_PATH` / `pr_template_path` input.
-* Optional: remove `AUTO_PR_HOW_TO_TEST` / `auto_pr_how_to_test` per template-edit convention.
 
 ## References
 

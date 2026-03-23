@@ -3,7 +3,6 @@ import { Result } from "effect";
 import * as FastCheck from "effect/testing/FastCheck";
 import {
 	buildDescriptionPrompt,
-	buildGenerateContentGhEntries,
 	buildGetCommitsGhEntries,
 	decodeGhOutputTitle,
 	filterSemanticSubjects,
@@ -16,7 +15,6 @@ import {
 	parseGhOutput,
 	parseSubjects,
 	sanitizeForGhOutput,
-	validateGenerateContentOutput,
 	validateGetCommitsOutput,
 } from "#core/index.js";
 
@@ -222,22 +220,6 @@ describe("core", () => {
 		});
 	});
 
-	describe("validateGenerateContentOutput", () => {
-		test("succeeds when title and body_file present", () => {
-			const r = validateGenerateContentOutput({ title: "feat: x", body_file: "/b" });
-			Result.match(r, {
-				onSuccess: (v) => expect(v).toEqual({ title: "feat: x", bodyFile: "/b" }),
-				onFailure: () => expect().fail("expected success"),
-			});
-		});
-		test("fails when missing", () => {
-			Result.match(validateGenerateContentOutput({}), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: () => {},
-			});
-		});
-	});
-
 	describe("buildGetCommitsGhEntries", () => {
 		test("returns entries with count", () => {
 			const entries = buildGetCommitsGhEntries("/c", "/f", 3);
@@ -246,19 +228,6 @@ describe("core", () => {
 				{ key: "files", value: "/f" },
 				{ key: "count", value: "3" },
 			]);
-		});
-	});
-
-	describe("buildGenerateContentGhEntries", () => {
-		test("returns entries with sanitized title", () => {
-			Result.match(buildGenerateContentGhEntries("feat: add x", "/body.md"), {
-				onSuccess: (entries) => {
-					expect(entries[0]?.key).toBe("title");
-					expect(entries[0]?.value).toBe("feat: add x");
-					expect(entries[1]).toEqual({ key: "body_file", value: "/body.md" });
-				},
-				onFailure: () => expect().fail("expected success"),
-			});
 		});
 	});
 

@@ -8,8 +8,6 @@ export type { AiProvider } from "#auto-pr/config.js";
 export {
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
-	FillPrTemplateConfig,
-	FillPrTemplateConfigLayer,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	GetCommitsConfig,
@@ -20,7 +18,6 @@ export {
 export type { GhOutputValue } from "#auto-pr/core.js";
 export {
 	buildDescriptionPrompt,
-	buildGenerateContentGhEntries,
 	buildGetCommitsGhEntries,
 	decodeGhOutputTitle,
 	filterSemanticSubjects,
@@ -32,7 +29,6 @@ export {
 	parseGhOutput,
 	parseSubjects,
 	sanitizeForGhOutput,
-	validateGenerateContentOutput,
 	validateGetCommitsOutput,
 } from "#auto-pr/core.js";
 export {
@@ -59,7 +55,11 @@ export {
 } from "#auto-pr/live/ai-provider.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
 export { ollamaLanguageModelLayer } from "#auto-pr/live/ollama-language-model.js";
-export { getPrDescriptionPromptPath } from "#auto-pr/paths.js";
+export {
+	getPrDescriptionPromptPath,
+	PR_BODY_FILE_NAME,
+	PR_TITLE_FILE_NAME,
+} from "#auto-pr/paths.js";
 export {
 	AutoPrLoggerLayer,
 	appendGhOutput,

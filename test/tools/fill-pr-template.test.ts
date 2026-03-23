@@ -14,9 +14,6 @@ import {
 } from "#tools/auto-pr-fill-pr-template.js";
 import pkg from "../../package.json" with { type: "json" };
 
-// Required by FillPrTemplateConfigLayer when running CLI in-process
-process.env.AUTO_PR_HOW_TO_TEST ??= "1. Run tests";
-
 const TEST_TEMPLATE = `## Description
 {{description}}
 
@@ -27,7 +24,9 @@ const TEST_TEMPLATE = `## Description
 {{changes}}
 
 ## How to test
-{{howToTest}}
+
+1. Run \`npm run check\`
+2. 
 
 ## Checklist
 - [{{checklistConventional}}] My commits follow [Conventional Commits](https://www.conventionalcommits.org/)
@@ -61,8 +60,6 @@ function logContent(...blocks: Array<{ subject: string; body: string }>): string
 	return `---COMMIT---\n${formatted.join("\n---COMMIT---\n")}`;
 }
 
-const DEFAULT_HOW_TO_TEST = "1. Run `npm run check`\n2. ";
-
 /** Write log and files to temp dir, run runFillBody, return output. No git. */
 function runWithLogAndFilesEffect(
 	logStr: string,
@@ -70,7 +67,6 @@ function runWithLogAndFilesEffect(
 	opts?: {
 		templatePath?: string;
 		format?: "body" | "title-body";
-		howToTestDefault?: string;
 	},
 ): Effect.Effect<string, Error> {
 	return Effect.gen(function* () {
@@ -87,7 +83,6 @@ function runWithLogAndFilesEffect(
 				tmp.join("files.txt"),
 				templatePath,
 				opts?.format ?? "body",
-				opts?.howToTestDefault ?? DEFAULT_HOW_TO_TEST,
 			);
 		}).pipe(Effect.ensuring(tmp.remove()));
 	}).pipe(Effect.provide(TestBaseLayer), Effect.provide(FillPrTemplate.Live));
@@ -95,21 +90,13 @@ function runWithLogAndFilesEffect(
 
 // ─── renderBody (Effect wrapper) ─────────────────────────────────────────────
 
-const RENDER_HOW_TO_TEST = "1. Run `npm run check`\n2. ";
-
 describe("renderBody", () => {
 	test("returns rendered body when all placeholders replaced", async () => {
 		await runEffect(SilentLoggerLayer)(
 			Effect.gen(function* () {
 				const commits = [commit("feat: add x", "Description here", { type: "feat" })];
 				const files = ["src/foo.ts"];
-				const body = yield* renderBody(
-					commits,
-					files,
-					TEST_TEMPLATE,
-					undefined,
-					RENDER_HOW_TO_TEST,
-				);
+				const body = yield* renderBody(commits, files, TEST_TEMPLATE, undefined);
 				expect(body).toContain("## Description");
 				expect(body).toContain("Description here");
 				expect(body).not.toContain("{{description}}");
@@ -122,13 +109,7 @@ describe("renderBody", () => {
 			Effect.gen(function* () {
 				const commits = [commit("feat: add x", "Use {{ and }} in your code", { type: "feat" })];
 				const files = ["src/foo.ts"];
-				const body = yield* renderBody(
-					commits,
-					files,
-					TEST_TEMPLATE,
-					undefined,
-					RENDER_HOW_TO_TEST,
-				);
+				const body = yield* renderBody(commits, files, TEST_TEMPLATE, undefined);
 				expect(body).toContain("Use {{ and }} in your code");
 				expect(body).toContain("{{");
 			}),
@@ -214,7 +195,6 @@ describe("runFillBody", () => {
 						tmp.join("files.txt"),
 						tmp.join("template.md"),
 						"body",
-						DEFAULT_HOW_TO_TEST,
 						tmp.join("description.txt"),
 					);
 					expect(output).toContain("Ollama-generated summary.");
@@ -243,14 +223,14 @@ describe("runFillBody", () => {
 			}),
 		));
 
-	test("extracts Closes #42, docs-only → howToTest N/A", async () =>
+	test("extracts Closes #42, docs-only → type Documentation update", async () =>
 		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
 				const log = logContent({ subject: "docs: update guide", body: "Closes #42" });
 				const output = yield* runWithLogAndFilesEffect(log, "docs/guide.md\n");
 				expect(output).toContain("Closes #42");
 				expect(output).toContain("Documentation update");
-				expect(output).toContain("N/A");
+				expect(output).toContain("npm run check");
 			}),
 		));
 
@@ -271,7 +251,6 @@ describe("runFillBody", () => {
 						tmp.join("files.txt"),
 						tmp.join("custom.md"),
 						"body",
-						DEFAULT_HOW_TO_TEST,
 					);
 					expect(output).toContain("Custom: Bar feature here.");
 					expect(output).toContain("Type: New feature");
@@ -293,7 +272,6 @@ describe("runFillBody", () => {
 						tmp.join("files.txt"),
 						tmp.join("template.md"),
 						"body",
-						DEFAULT_HOW_TO_TEST,
 					).pipe(Effect.flip);
 					const msg = err instanceof Error ? err.message : String(err);
 					expect(

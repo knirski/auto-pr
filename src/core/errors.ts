@@ -31,7 +31,7 @@ export class PullRequestBodyBlankError extends Schema.TaggedErrorClass<PullReque
 	{ message: Schema.String },
 ) {}
 
-/** BODY_FILE path does not exist. Check generate-content step succeeded. */
+/** `pr-body.md` path does not exist. Check generate-content step succeeded. */
 export class BodyFileNotFoundError extends Schema.TaggedErrorClass<BodyFileNotFoundError>()(
 	"BodyFileNotFoundError",
 	{ path: Schema.String },

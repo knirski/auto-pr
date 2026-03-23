@@ -1,7 +1,7 @@
 /**
  * Create or update a PR. Thin gh wrapper.
  *
- * Requires env: GH_TOKEN, BRANCH, DEFAULT_BRANCH, TITLE, BODY_FILE
+ * Requires env: GH_TOKEN, BRANCH, DEFAULT_BRANCH, GITHUB_WORKSPACE. Reads `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
  * Validates required env at startup, then calls gh pr view --json → gh pr edit or gh pr create.
  * Uses --json number,url for reliable PR existence check (avoids exit-code ambiguity).
@@ -13,7 +13,6 @@
 import { Duration, Effect, FileSystem, Option, Schedule, Schema } from "effect";
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
-	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
 	BodyFileNotFoundError,
 	ChildProcessSpawnerLayer,
@@ -203,7 +202,6 @@ const program = Effect.gen(function* () {
 	Effect.provide(CreateOrUpdatePrConfigLayer),
 	Effect.provide(AutoPrPlatformLayer),
 	Effect.provide(ChildProcessSpawnerLayer),
-	Effect.provide(AutoPrLoggerLayer),
 );
 
 if (import.meta.main) {

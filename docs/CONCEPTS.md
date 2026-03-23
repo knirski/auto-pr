@@ -7,7 +7,7 @@ Glossary of terms used in auto-pr documentation and code.
 | **FC/IS** | Functional Core / Imperative Shell. The core (`src/core/*.ts`) contains pure functions returning `Result`; no Effect, no I/O. The shell (`src/auto-pr/shell.ts`) orchestrates I/O and bridges via `Effect.fromResult`. |
 | **Tagless Final** | Effect idiom: define service interfaces (e.g. `FillPrTemplate`); implement as live interpreters in `live/`; tests swap mocks. |
 | **Conventional commits** | Commit message format: `type(scope): subject` (e.g. `feat: add X`, `fix(scope): resolve Y`). See [conventionalcommits.org](https://www.conventionalcommits.org/). |
-| **GITHUB_OUTPUT** | GitHub Actions mechanism for passing data between steps. Key-value pairs written to a file; subsequent steps read via `${{ steps.id.outputs.key }}`. |
+| **GITHUB_OUTPUT** | GitHub Actions mechanism for passing data between steps. Key-value pairs appended to a file; later steps read via `${{ steps.id.outputs.key }}`. auto-pr’s **get-commits** step writes `commits`, `files`, and `count` here. Title/body for the PR use workspace files (`pr-title.txt`, `pr-body.md`), not `GITHUB_OUTPUT`. |
 | **GitHub App** | OAuth app for GitHub; creates tokens with repository permissions. auto-pr uses it for PR creation (not `GITHUB_TOKEN`) so PRs are attributed to the app. |
 | **Two-phase workflow** | Split into generate (unprivileged checkout) and create (trusted checkout, PR write). Satisfies CodeQL/CWE-829; see [WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). |
 | **ai/* branch** | Branch name pattern that triggers the auto-pr workflow. Push to `ai/feature-x` → workflow creates/updates PR. |
