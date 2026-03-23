@@ -9,12 +9,7 @@ import { Option, pipe, Result } from "effect";
 import * as Arr from "effect/Array";
 import { render } from "micromustache";
 import { collapseProseParagraphs } from "#core/collapse-prose-paragraphs.js";
-import {
-	DescriptionParseError,
-	FillPrTemplateValidationError,
-	ParseError,
-	TemplateRenderError,
-} from "#core/errors.js";
+import { DescriptionParseError, ParseError, TemplateRenderError } from "#core/errors.js";
 import { isBlank, isMergeCommitSubject, parseSubjects, toError } from "#core/string.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -34,7 +29,6 @@ export interface TemplateData {
 	readonly description: string;
 	readonly typeOfChange: TypeOfChange;
 	readonly changes: readonly string[];
-	readonly howToTest: string;
 	readonly commitsConventional: boolean;
 	readonly docsUpdated: boolean;
 	readonly testsAdded: boolean;
@@ -286,53 +280,32 @@ export function getBreakingChanges(commits: readonly CommitInfo[]): Option.Optio
 	);
 }
 
-function getHowToTest(
-	files: readonly string[],
-	howToTestDefault?: string,
-): Result.Result<string, FillPrTemplateValidationError> {
-	if (isDocsOnly(files)) return Result.succeed("N/A");
-	if (howToTestDefault !== undefined && howToTestDefault.trim() !== "") {
-		return Result.succeed(howToTestDefault);
-	}
-	return Result.fail(
-		new FillPrTemplateValidationError({
-			message: "howToTestDefault is required when not docs-only",
-		}),
-	);
-}
-
+/** Builds substitution data from commits and files. Does not fail; rendering is separate (see {@link renderBody}). */
 export function fillTemplate(
 	commits: readonly CommitInfo[],
 	files: readonly string[],
 	descriptionOverride?: string,
-	howToTestDefault?: string,
-): Result.Result<TemplateData, FillPrTemplateValidationError> {
-	return pipe(
-		getHowToTest(files, howToTestDefault),
-		Result.map((howToTest) => {
-			const typeOfChange = inferTypeOfChange(commits);
-			const description =
-				descriptionOverride !== undefined && descriptionOverride !== ""
-					? descriptionOverride
-					: getDescriptionFromCommits(commits);
-			const changes = commits.length ? getChanges(commits) : ["- "];
-			const breaking = pipe(
-				getBreakingChanges(commits),
-				Option.getOrElse(() => ""),
-			);
-			return {
-				description,
-				typeOfChange,
-				changes,
-				howToTest,
-				commitsConventional: commits.length > 0 && commits.every(isConventional),
-				docsUpdated: hasDocsFiles(files),
-				testsAdded: hasTestFiles(files),
-				relatedIssues: getRelatedIssues(commits),
-				breakingChanges: typeOfChange === "Breaking change" ? breaking : "",
-			};
-		}),
+): TemplateData {
+	const typeOfChange = inferTypeOfChange(commits);
+	const description =
+		descriptionOverride !== undefined && descriptionOverride !== ""
+			? descriptionOverride
+			: getDescriptionFromCommits(commits);
+	const changes = commits.length ? getChanges(commits) : ["- "];
+	const breaking = pipe(
+		getBreakingChanges(commits),
+		Option.getOrElse(() => ""),
 	);
+	return {
+		description,
+		typeOfChange,
+		changes,
+		commitsConventional: commits.length > 0 && commits.every(isConventional),
+		docsUpdated: hasDocsFiles(files),
+		testsAdded: hasTestFiles(files),
+		relatedIssues: getRelatedIssues(commits),
+		breakingChanges: typeOfChange === "Breaking change" ? breaking : "",
+	};
 }
 
 function buildSubstitutionScope(data: TemplateData): Record<string, string> {
@@ -343,7 +316,6 @@ function buildSubstitutionScope(data: TemplateData): Record<string, string> {
 		description: data.description,
 		typeOfChange: data.typeOfChange,
 		changes: data.changes.length ? data.changes.join("\n") : "- ",
-		howToTest: data.howToTest,
 		checklistConventional: conv,
 		checklistDocs: docs,
 		checklistTests: tests,
@@ -362,19 +334,14 @@ export function renderBody(
 	files: readonly string[],
 	template: string,
 	descriptionOverride?: string,
-	howToTestDefault?: string,
-): Result.Result<string, TemplateRenderError | FillPrTemplateValidationError> {
-	return pipe(
-		fillTemplate(commits, files, descriptionOverride, howToTestDefault),
-		Result.flatMap((data) =>
-			Result.try({
-				try: () => render(template, buildSubstitutionScope(data)),
-				catch: (e) =>
-					new TemplateRenderError({
-						message: "Failed to render template",
-						cause: toError(e),
-					}),
+): Result.Result<string, TemplateRenderError> {
+	const data = fillTemplate(commits, files, descriptionOverride);
+	return Result.try({
+		try: () => render(template, buildSubstitutionScope(data)),
+		catch: (e) =>
+			new TemplateRenderError({
+				message: "Failed to render template",
+				cause: toError(e),
 			}),
-		),
-	);
+	});
 }

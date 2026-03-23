@@ -85,7 +85,7 @@ These secrets are used by both the auto-pr workflow and release-please (if you u
 
 **No action copying required.** The reusable workflows fetch everything (including the setup-runtime action) from knirski/auto-pr. The `./` path would resolve to your repo; we use full paths so you don't need anything in `.github/actions/`.
 
-All inputs use sensible defaults (AI model, PR template path, generic "how to test" text). Override via `with:` only when needed. **Node projects:** add `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "` to the generate job for accurate PR instructions.
+All inputs use sensible defaults for the AI model. The PR template path is always `.github/PULL_REQUEST_TEMPLATE.md` at the repo root. Edit the **How to test** section in that file directly for project-specific steps (for example `npm run check` or `pytest`). Override other options via `with:` when needed.
 
 **Run checks first:** See [Running checks before PR creation](#running-checks-before-pr-creation) to add a check job before generate/create.
 
@@ -201,17 +201,16 @@ Adjust the install step for your project (e.g. `pip install -r requirements.txt`
       - run: cargo test
 ```
 
-Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/workflows/auto-pr.yml). Override `auto_pr_how_to_test` in the generate call if your "how to test" steps differ (Node: `"1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).
+Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/workflows/auto-pr.yml).
 
 ## Common customizations
 
 | I want to… | Set |
 |------------|-----|
-| Use my project's check command in "How to test" | `auto_pr_how_to_test` in generate job (e.g. `"1. Run \`npm run check\`\n2. "` for Node) |
+| Use my project's check command in "How to test" | Edit the **How to test** section in `.github/PULL_REQUEST_TEMPLATE.md` |
 | Use a different AI model (Ollama) | `ai_ollama_model` (e.g. `llama3.2:3b`) |
 | Use GitHub Models or OpenAI-compatible API | `ai_provider` to `github-models` or `openai-compat`; add secrets if required |
 | Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
-| Use a custom PR template path | `pr_template_path` (default `.github/PULL_REQUEST_TEMPLATE.md`) |
 
 ## AI providers (ollama, github-models, openai-compat)
 
@@ -258,10 +257,10 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common f
 | Command | Required | Optional |
 |---------|----------|----------|
 | **auto-pr-get-commits** | `DEFAULT_BRANCH`, `GITHUB_WORKSPACE`, `GITHUB_OUTPUT` | — |
-| **auto-pr-generate-content** | `COMMITS`, `FILES`, `GITHUB_OUTPUT`, `GITHUB_WORKSPACE` | `PR_TEMPLATE_PATH` (default `.github/PULL_REQUEST_TEMPLATE.md`), `AUTO_PR_AI_PROVIDER` (optional; default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (ollama), `AUTO_PR_AI_GITHUB_MODEL` + `GH_TOKEN` (github-models), `AUTO_PR_AI_OPENAI_COMPAT_*` (openai-compat), `AUTO_PR_HOW_TO_TEST` (default generic) |
-| **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `TITLE`, `BODY_FILE`, `GITHUB_WORKSPACE` | — |
+| **auto-pr-generate-content** | `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (ollama), `AUTO_PR_AI_GITHUB_MODEL` + `GH_TOKEN` (github-models), `AUTO_PR_AI_OPENAI_COMPAT_*` (openai-compat). Reads `{GITHUB_WORKSPACE}/commits.txt` and `files.txt` from `get-commits`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
+| **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `GITHUB_WORKSPACE` | — (reads `{GITHUB_WORKSPACE}/pr-title.txt` and `pr-body.md`) |
 
-Override defaults via workflow `with:` inputs when needed (e.g. Node: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`, Python: `"1. Run \`pytest\`\n2. "`).
+Override AI-related defaults via workflow `with:` inputs when needed.
 
 ## Troubleshooting
 

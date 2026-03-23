@@ -2,6 +2,7 @@
  * Integration tests for the full auto-PR pipeline: get-commits → generate-pr-content.
  */
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
@@ -62,23 +63,19 @@ describe("get-commits → generate-pr-content pipeline", () => {
 
 				const ghAfterGetCommits = yield* fs.readFileString(ghOutput);
 				const parsed = parseGhOutput(ghAfterGetCommits);
-				const commitsPath = parsed.commits;
-				const filesPath = parsed.files;
-				expect(commitsPath).toBeDefined();
-				expect(filesPath).toBeDefined();
+				expect(parsed.commits).toBe(join(tmp.path, "commits.txt"));
+				expect(parsed.files).toBe(join(tmp.path, "files.txt"));
 
 				const templatePath = pathApi.join(tmp.path, "template.md");
 				yield* fs.writeFileString(templatePath, "# PR\n\n{{description}}\n\n{{changes}}");
 
 				yield* runGeneratePrContent({
-					commits: commitsPath ?? "",
-					files: filesPath ?? "",
-					ghOutput,
+					commits: join(tmp.path, "commits.txt"),
+					files: join(tmp.path, "files.txt"),
 					workspace: tmp.path,
 					templatePath,
 					provider: "ollama",
 					model: "llama3.1:8b",
-					howToTestDefault: "1. Run `npm run check`\n2. ",
 					fetch: createOllamaMockFetch(""),
 				});
 
@@ -86,8 +83,9 @@ describe("get-commits → generate-pr-content pipeline", () => {
 				expect(ghAfterGenerate).toContain("commits=");
 				expect(ghAfterGenerate).toContain("files=");
 				expect(ghAfterGenerate).toContain("count=1");
-				expect(ghAfterGenerate).toContain("title=");
-				expect(ghAfterGenerate).toContain("body_file=");
+
+				const titleContent = yield* fs.readFileString(pathApi.join(tmp.path, "pr-title.txt"));
+				expect(titleContent).toContain("feat: add feature");
 
 				const bodyPath = pathApi.join(tmp.path, "pr-body.md");
 				const bodyContent = yield* fs.readFileString(bodyPath);

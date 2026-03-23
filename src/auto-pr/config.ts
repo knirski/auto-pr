@@ -13,14 +13,8 @@
  * |----------|----------|--------|--------------|
  * | DEFAULT_BRANCH | ✓ | GetCommits, CreateOrUpdatePr, RunAutoPr | Base branch (e.g. main) |
  * | GITHUB_WORKSPACE | ✓ | All | Repo root path |
- * | GITHUB_OUTPUT | ✓ | GetCommits, GeneratePrContent | Path to write outputs |
- * | COMMITS | ✓ | GeneratePrContent | Path to commits file |
- * | FILES | ✓ | GeneratePrContent | Path to changed files list |
- * | PR_TEMPLATE_PATH | ✓ | GeneratePrContent, RunAutoPr | Path to PR template |
- * | AUTO_PR_HOW_TO_TEST | ✓ | GeneratePrContent, RunAutoPr, FillPrTemplate | Default for {{howToTest}} |
+ * | GITHUB_OUTPUT | ✓ | GetCommits | Append target for step outputs; **Actions assigns a unique path per step** (don’t reuse across steps) |
  * | BRANCH | ✓* | CreateOrUpdatePr | Current branch (*optional in RunAutoPr) |
- * | TITLE | ✓ | CreateOrUpdatePr | PR title |
- * | BODY_FILE | ✓ | CreateOrUpdatePr | Path to PR body markdown |
  * | GH_TOKEN | ✓* | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | GitHub token (*required for github-models) |
  * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | ollama \| github-models \| openai-compat (default: ollama) |
  * | AUTO_PR_AI_OLLAMA_MODEL | | GeneratePrContent, RunAutoPr | Model when provider=ollama (default: llama3.1:8b) |
@@ -30,18 +24,24 @@
  * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | ✓* | GeneratePrContent, RunAutoPr | Model when provider=openai-compat |
  * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
+ *
+ * **Convention (not env):** `generate-content` reads `{GITHUB_WORKSPACE}/commits.txt` and `{GITHUB_WORKSPACE}/files.txt` (same paths `get-commits` writes). It writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`. `create-or-update-pr` reads those paths (after `generate-content` or after restoring the artifact that copies them into the workspace). PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` (see ADR 0008).
+ * Edit that file for project-specific “how to test” steps (static markdown; not filled from code).
  */
 
+import { join } from "node:path";
 import type { Redacted } from "effect";
 import {
 	Config,
 	Effect,
+	FileSystem,
 	Layer,
 	Match,
 	Option,
 	Redacted as RedactedValue,
 	ServiceMap,
 } from "effect";
+import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
 import { AutoPrConfigError } from "#core/errors.js";
 
 /** Type guard for cause with message property. */
@@ -143,12 +143,10 @@ export type AiProvider = "ollama" | "github-models" | "openai-compat";
 export interface GeneratePrContentConfig {
 	readonly commits: string;
 	readonly files: string;
-	readonly ghOutput: string;
 	readonly workspace: string;
 	readonly templatePath: string;
 	readonly provider: AiProvider;
 	readonly model: string;
-	readonly howToTestDefault: string;
 	/** Set when `provider` is `github-models`. */
 	readonly ghToken?: Redacted.Redacted<string>;
 	readonly githubModel?: string;
@@ -165,11 +163,7 @@ const DEFAULT_AI_PROVIDER: AiProvider = "ollama";
 const DEFAULT_OLLAMA_MODEL = "llama3.1:8b";
 
 const GeneratePrContentConfigDef = Config.all({
-	commits: Config.string("COMMITS"),
-	files: Config.string("FILES"),
-	ghOutput: Config.string("GITHUB_OUTPUT"),
 	workspace: Config.string("GITHUB_WORKSPACE"),
-	templatePath: Config.string("PR_TEMPLATE_PATH"),
 	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
 	aiOllamaModel: Config.option(Config.string("AUTO_PR_AI_OLLAMA_MODEL")),
 	ghToken: Config.option(Config.redacted("GH_TOKEN")),
@@ -177,7 +171,6 @@ const GeneratePrContentConfigDef = Config.all({
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
-	howToTestDefault: Config.string("AUTO_PR_HOW_TO_TEST"),
 });
 
 function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
@@ -206,12 +199,10 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 	mapConfigError(
 		Effect.gen(function* () {
 			const base = yield* GeneratePrContentConfigDef;
-			const commits = yield* requireNonEmpty("COMMITS", base.commits);
-			const files = yield* requireNonEmpty("FILES", base.files);
-			const ghOutput = yield* requireNonEmpty("GITHUB_OUTPUT", base.ghOutput);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
-			const templatePath = yield* requireNonEmpty("PR_TEMPLATE_PATH", base.templatePath);
-			const howToTestDefault = yield* requireNonEmpty("AUTO_PR_HOW_TO_TEST", base.howToTestDefault);
+			const commits = join(workspace, "commits.txt");
+			const files = join(workspace, "files.txt");
+			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
 			yield* Option.match(base.aiProvider, {
@@ -223,11 +214,9 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const shared = {
 				commits,
 				files,
-				ghOutput,
 				workspace,
 				templatePath,
 				provider,
-				howToTestDefault,
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -306,8 +295,6 @@ export const CreateOrUpdatePrConfig =
 const CreateOrUpdatePrConfigDef = Config.all({
 	branch: Config.string("BRANCH"),
 	defaultBranch: Config.string("DEFAULT_BRANCH"),
-	title: Config.string("TITLE"),
-	bodyFile: Config.string("BODY_FILE"),
 	workspace: Config.string("GITHUB_WORKSPACE"),
 	ghToken: Config.redacted("GH_TOKEN"),
 });
@@ -319,9 +306,21 @@ export const CreateOrUpdatePrConfigLayer = Layer.effect(
 			const base = yield* CreateOrUpdatePrConfigDef;
 			const branch = yield* requireNonEmpty("BRANCH", base.branch);
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
-			const title = yield* requireNonEmpty("TITLE", base.title);
-			const bodyFile = yield* requireNonEmpty("BODY_FILE", base.bodyFile);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
+			const fs = yield* FileSystem.FileSystem;
+			const titlePath = join(workspace, PR_TITLE_FILE_NAME);
+			const bodyFile = join(workspace, PR_BODY_FILE_NAME);
+			const titleRaw = yield* fs.readFileString(titlePath).pipe(
+				Effect.mapError(
+					() =>
+						new AutoPrConfigError({
+							missing: [
+								`${PR_TITLE_FILE_NAME} at ${titlePath} (readable file required; run generate-content first)`,
+							],
+						}),
+				),
+			);
+			const title = yield* requireNonEmpty(PR_TITLE_FILE_NAME, titleRaw.trim());
 			return {
 				branch,
 				defaultBranch,
@@ -344,7 +343,6 @@ export interface RunAutoPrConfig {
 	readonly provider: AiProvider;
 	readonly model: string;
 	readonly branch: string | undefined;
-	readonly howToTestDefault: string;
 	/** Set when `provider` is `github-models`. */
 	readonly githubModel?: string;
 	/** Set when `provider` is `openai-compat`. */
@@ -358,7 +356,6 @@ export const RunAutoPrConfig = ServiceMap.Service<RunAutoPrConfig>("RunAutoPrCon
 const RunAutoPrConfigDef = Config.all({
 	defaultBranch: Config.string("DEFAULT_BRANCH"),
 	workspace: Config.string("GITHUB_WORKSPACE"),
-	templatePath: Config.string("PR_TEMPLATE_PATH"),
 	ghToken: Config.redacted("GH_TOKEN"),
 	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
 	aiOllamaModel: Config.option(Config.string("AUTO_PR_AI_OLLAMA_MODEL")),
@@ -367,7 +364,6 @@ const RunAutoPrConfigDef = Config.all({
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
 	branch: Config.option(Config.string("BRANCH")),
-	howToTestDefault: Config.string("AUTO_PR_HOW_TO_TEST"),
 });
 
 export const RunAutoPrConfigLayer = Layer.effect(
@@ -377,8 +373,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const base = yield* RunAutoPrConfigDef;
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
-			const templatePath = yield* requireNonEmpty("PR_TEMPLATE_PATH", base.templatePath);
-			const howToTestDefault = yield* requireNonEmpty("AUTO_PR_HOW_TO_TEST", base.howToTestDefault);
+			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
 			yield* Option.match(base.aiProvider, {
@@ -394,7 +389,6 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				ghToken: base.ghToken,
 				provider,
 				branch: Option.getOrUndefined(base.branch),
-				howToTestDefault,
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -446,30 +440,6 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				),
 				Match.exhaustive,
 			);
-		}),
-	),
-);
-
-// ─── FillPrTemplateConfig (CLI tool) ─────────────────────────────────────────
-
-export interface FillPrTemplateConfig {
-	readonly howToTestDefault: string;
-}
-
-export const FillPrTemplateConfig =
-	ServiceMap.Service<FillPrTemplateConfig>("FillPrTemplateConfig");
-
-const FillPrTemplateConfigDef = Config.all({
-	howToTestDefault: Config.string("AUTO_PR_HOW_TO_TEST"),
-});
-
-export const FillPrTemplateConfigLayer = Layer.effect(
-	FillPrTemplateConfig,
-	mapConfigError(
-		Effect.gen(function* () {
-			const base = yield* FillPrTemplateConfigDef;
-			const howToTestDefault = yield* requireNonEmpty("AUTO_PR_HOW_TO_TEST", base.howToTestDefault);
-			return { howToTestDefault };
 		}),
 	),
 );

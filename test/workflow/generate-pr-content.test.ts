@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { Cause, Effect, Exit, FileSystem, Layer, Path, Result } from "effect";
 import {
 	aiProviderLayerFromConfig,
-	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
 	TemplateRenderError,
 } from "#auto-pr";
+import { FillPrTemplateValidationError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import {
 	createOllamaMockFetch,
@@ -28,7 +28,6 @@ function logContent(...blocks: Array<{ subject: string; body: string }>): string
 
 const DEFAULT_TEMPLATE = "# PR\n\n{{description}}";
 const TEMPLATE_WITH_CHANGES = "# PR\n\n{{description}}\n\n## Changes\n{{changes}}";
-const DEFAULT_HOW_TO_TEST = "1. Run `npm run check`\n2. ";
 const DEFAULT_DESCRIPTION_PROMPT =
 	"Summarize these commits. Return JSON with title and description.";
 
@@ -41,7 +40,6 @@ function params(
 		filesContent: "src/foo.ts\n",
 		templateContent: DEFAULT_TEMPLATE,
 		descriptionPromptText: DEFAULT_DESCRIPTION_PROMPT,
-		howToTestDefault: DEFAULT_HOW_TO_TEST,
 		provider: "ollama" as const,
 		model: "llama3.1:8b",
 		...overrides,
@@ -109,25 +107,6 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 			}).pipe(Effect.scoped),
 		);
 	});
-
-	test("fails with FillPrTemplateValidationError when howToTestDefault empty and not docs-only", async () => {
-		const p = params([{ subject: "feat: add x", body: "" }], {
-			filesContent: "src/foo.ts\n",
-			howToTestDefault: "",
-		});
-		await runEffect(layerForGeneratePrContent(p))(
-			Effect.gen(function* () {
-				const exit = yield* generatePrContentFromValues(p).pipe(Effect.exit, Effect.scoped);
-				expect(Exit.isFailure(exit)).toBe(true);
-				if (Exit.isFailure(exit)) {
-					Result.match(Cause.findError(exit.cause), {
-						onSuccess: (err) => expect(err).toBeInstanceOf(FillPrTemplateValidationError),
-						onFailure: () => expect().fail("expected Fail cause"),
-					});
-				}
-			}).pipe(Effect.scoped),
-		);
-	});
 });
 
 describe("normalizeUnknownToGeneratePrContentError", () => {
@@ -163,11 +142,10 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 		expect((result as ParseError).message).toBe("bad");
 	});
 
-	test("decodes class instances via Schema (FillPrTemplateValidationError)", () => {
-		const validationErr = new FillPrTemplateValidationError({ message: "invalid" });
-		const result = normalizeUnknownToGeneratePrContentError(validationErr);
-		expect(result._tag).toBe("FillPrTemplateValidationError");
-		expect((result as FillPrTemplateValidationError).message).toBe("invalid");
+	test("wraps FillPrTemplateValidationError as TemplateRenderError (not in generate schema)", () => {
+		const err = new FillPrTemplateValidationError({ message: "invalid" });
+		const result = normalizeUnknownToGeneratePrContentError(err);
+		expect(result).toBeInstanceOf(TemplateRenderError);
 	});
 });
 
@@ -308,7 +286,7 @@ describe("catchDefect (defect → TemplateRenderError)", () => {
 const RunIntegrationLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 
 describe("runGeneratePrContent (integration, file I/O)", () => {
-	test("reads files, writes title and body_file to GITHUB_OUTPUT and pr-body.md", async () => {
+	test("reads files, writes pr-title.txt and pr-body.md", async () => {
 		await runEffect(RunIntegrationLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("generate-pr-content-integration-");
@@ -317,7 +295,6 @@ describe("runGeneratePrContent (integration, file I/O)", () => {
 
 				const commitsPath = pathApi.join(tmp.path, "commits.txt");
 				const filesPath = pathApi.join(tmp.path, "files.txt");
-				const ghOutput = pathApi.join(tmp.path, "github_output.txt");
 				const templatePath = pathApi.join(tmp.path, "template.md");
 
 				yield* fs.writeFileString(commitsPath, logContent({ subject: "feat: add x", body: "" }));
@@ -327,18 +304,16 @@ describe("runGeneratePrContent (integration, file I/O)", () => {
 				yield* runGeneratePrContent({
 					commits: commitsPath,
 					files: filesPath,
-					ghOutput,
 					workspace: tmp.path,
 					templatePath,
 					provider: "ollama",
 					model: "llama3.1:8b",
-					howToTestDefault: DEFAULT_HOW_TO_TEST,
 					fetch: createOllamaMockFetch(""),
 				});
 
-				const ghContent = yield* fs.readFileString(ghOutput);
-				expect(ghContent).toContain("title=");
-				expect(ghContent).toContain("body_file=");
+				const titlePath = pathApi.join(tmp.path, "pr-title.txt");
+				const titleContent = yield* fs.readFileString(titlePath);
+				expect(titleContent).toContain("feat: add x");
 
 				const bodyPath = pathApi.join(tmp.path, "pr-body.md");
 				const bodyContent = yield* fs.readFileString(bodyPath);

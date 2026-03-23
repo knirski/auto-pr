@@ -90,11 +90,8 @@ jobs:
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
           AUTO_PR_DIR: ${{ steps.install.outputs.dir }}
         run: |
-          TITLE=$(cat "$ARTIFACT_DIR/title.txt")
-          export TITLE
-          BODY_FILE="$GITHUB_WORKSPACE_SAFE/pr-body.md"
-          cp "$ARTIFACT_DIR/body.md" "$BODY_FILE"
-          export BODY_FILE
+          cp "$ARTIFACT_DIR/title.txt" "$GITHUB_WORKSPACE_SAFE/pr-title.txt"
+          cp "$ARTIFACT_DIR/body.md" "$GITHUB_WORKSPACE_SAFE/pr-body.md"
           BRANCH=$(cat "$ARTIFACT_DIR/branch.txt")
           export BRANCH
           DEFAULT_BRANCH=$(cat "$ARTIFACT_DIR/default_branch.txt")

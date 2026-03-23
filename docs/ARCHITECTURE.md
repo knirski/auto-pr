@@ -25,9 +25,9 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Pipeline Flow
 
-1. **get-commits** — `git log` + `git diff` → commits.txt, files.txt, GITHUB_OUTPUT
-2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel` via `generateObject`, using one of **ollama**, **github-models**, or **openai-compat** (selected by config) → fill template → title, body_file
-3. **create-or-update-pr** — `gh pr view` → `gh pr edit` or `gh pr create`
+1. **get-commits** — `git log` + `git diff` → `commits.txt`, `files.txt` under workspace; append `commits`, `files`, `count` to `GITHUB_OUTPUT`
+2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel` via `generateObject`, using one of **ollama**, **github-models**, or **openai-compat** (selected by config) → fill template → write `pr-title.txt` and `pr-body.md` under workspace
+3. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `gh pr view` → `gh pr edit` or `gh pr create`
 
 ## Functional Core / Imperative Shell (FC/IS)
 
@@ -56,7 +56,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Error Handling
 
-Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. GITHUB_OUTPUT is only written on success.
+Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. **get-commits** only appends to `GITHUB_OUTPUT` after it succeeds; **generate-content** writes workspace files on success.
 
 ## Related
 

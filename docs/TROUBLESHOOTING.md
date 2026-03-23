@@ -18,7 +18,7 @@
 
 ### "Missing .github/PULL_REQUEST_TEMPLATE.md" (or custom path)
 
-**Cause:** The PR template is required for auto-pr to fill the body. The error shows the path from the workflow (default `.github/PULL_REQUEST_TEMPLATE.md`, or your `pr_template_path` override).
+**Cause:** The PR template is required for auto-pr to fill the body. The path is always `.github/PULL_REQUEST_TEMPLATE.md` at the repo root (resolved under `GITHUB_WORKSPACE` in scripts).
 
 **Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo, or copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to the path shown in the error.
 
@@ -30,11 +30,11 @@
 
 **Fork contributors:** The workflow runs on forks. To test auto-PR on your fork, add the same secrets to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Otherwise, create the PR manually from your branch to the upstream repo.
 
-### "Missing required env: DEFAULT_BRANCH, GITHUB_OUTPUT, ..."
+### "Missing required env: …"
 
-**Cause:** The script expects certain environment variables (usually set by GitHub Actions).
+**Cause:** Each script validates only the env vars it needs (see [src/auto-pr/config.ts](../src/auto-pr/config.ts)). For example, **get-commits** requires `GITHUB_OUTPUT`; **generate-content** does not. A message listing `DEFAULT_BRANCH` / `GITHUB_OUTPUT` usually means **get-commits** or **run-auto-pr** without a full Actions env.
 
-**Fix:** Ensure you're running in a GitHub Actions workflow. If running locally, set the env vars. See [README.md](../README.md#environment-variables).
+**Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md#environment-variables) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
 
 ## Upgrading from OLLAMA_MODEL / OLLAMA_URL
 
@@ -56,11 +56,11 @@
 
 **Fix:** Use the latest auto-pr (e.g. `npx -p github:knirski/auto-pr`, `bun add github:knirski/auto-pr`, or a recent release). The package ships `dist/` pre-built for Node. If developing from source (clone), run `bun run build` before use.
 
-### "BODY_FILE does not exist"
+### "PR body file does not exist" (`pr-body.md`)
 
-**Cause:** The generate-content step failed or didn't produce output.
+**Cause:** The generate-content step failed or didn't produce `pr-body.md` under the workspace.
 
-**Fix:** Check the "Generate PR content" step logs. Set `AUTO_PR_DEBUG=1` in the workflow env for verbose output. Ensure `COMMITS` and `FILES` paths from the previous step are correct.
+**Fix:** Check the "Generate PR content" step logs. Set `AUTO_PR_DEBUG=1` in the workflow env for verbose output. Ensure the get-commits step ran and wrote `commits.txt` and `files.txt` under the workspace, then generate-content wrote `pr-title.txt` and `pr-body.md`.
 
 ## Create or update PR fails
 

@@ -99,32 +99,6 @@ export function validateGetCommitsOutput(
 	);
 }
 
-/** Validate generate-content GITHUB_OUTPUT. Returns Result with title and body_file. */
-export function validateGenerateContentOutput(
-	parsed: Record<string, string>,
-): Result.Result<{ title: string; bodyFile: string }, Error> {
-	return pipe(
-		getGhOutputValue(parsed, "title"),
-		Result.flatMap((titleRaw) =>
-			pipe(
-				getGhOutputValue(parsed, "body_file"),
-				Result.flatMap((bodyFile) =>
-					isBlank(bodyFile)
-						? Result.fail(new Error("Generate content did not output title and body_file"))
-						: pipe(
-								decodeGhOutputTitle(titleRaw),
-								Result.flatMap((title) =>
-									isBlank(title)
-										? Result.fail(new Error("Generate content did not output title and body_file"))
-										: Result.succeed({ title, bodyFile }),
-								),
-							),
-				),
-			),
-		),
-	);
-}
-
 /** Build GITHUB_OUTPUT entries for get-commits step. */
 export function buildGetCommitsGhEntries(
 	commitsPath: string,
@@ -136,21 +110,4 @@ export function buildGetCommitsGhEntries(
 		{ key: "files", value: filesPath },
 		{ key: "count", value: String(semanticCount) },
 	];
-}
-
-/** Build GITHUB_OUTPUT entries for generate-content step. */
-export function buildGenerateContentGhEntries(
-	title: string,
-	bodyPath: string,
-): Result.Result<ReadonlyArray<{ key: string; value: string | GhOutputValue }>, Error> {
-	return pipe(
-		sanitizeForGhOutput(title),
-		Result.map(
-			(sanitized) =>
-				[
-					{ key: "title", value: sanitized },
-					{ key: "body_file", value: bodyPath },
-				] as const,
-		),
-	);
 }

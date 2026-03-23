@@ -6,7 +6,7 @@
  *
  * Replaces {{placeholder}} values, outputs to stdout.
  *
- * Requires --log-file, --files-file, --template, --format.
+ * Requires --log-file, --files-file, --template, --format. “How to test” copy lives in the template file, not in env.
  */
 
 import * as BunRuntime from "@effect/platform-bun/BunRuntime";
@@ -17,8 +17,6 @@ import {
 	AutoPrLoggerLayer,
 	type FileSystemError,
 	FillPrTemplate,
-	FillPrTemplateConfig,
-	FillPrTemplateConfigLayer,
 	type FillPrTemplateParams,
 	formatError,
 	mapFsError,
@@ -50,7 +48,6 @@ export function runFillBody(
 	filesFilePath: string,
 	templatePath: string,
 	format: OutputFormat,
-	howToTestDefault: string,
 	descriptionFilePath?: string,
 ): Effect.Effect<
 	string,
@@ -66,7 +63,6 @@ export function runFillBody(
 		logFilePath,
 		filesFilePath,
 		templatePath,
-		howToTestDefault,
 		...(descriptionFilePath !== undefined && { descriptionFilePath }),
 	} satisfies FillPrTemplateParams;
 	return Effect.gen(function* () {
@@ -168,19 +164,12 @@ function handleFill(
 ) {
 	return Effect.gen(function* () {
 		const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
-		const layer = Layer.mergeAll(
-			BunServices.layer,
-			loggerLayer,
-			FillPrTemplate.Live,
-			FillPrTemplateConfigLayer,
-		);
-		const { howToTestDefault: howToTest } = yield* FillPrTemplateConfig;
+		const layer = Layer.mergeAll(BunServices.layer, loggerLayer, FillPrTemplate.Live);
 		const output = yield* runFillBody(
 			logPath,
 			filesPath,
 			templatePath,
 			format,
-			howToTest,
 			Option.getOrUndefined(descriptionFile),
 		).pipe(Effect.provide(layer));
 		yield* Console.log(output);
@@ -260,11 +249,8 @@ export const fillCommand = Command.make(
 
 const cliProgram = Command.run(fillCommand, { version: pkg.version });
 
-/** CLI layer (BunServices + Logger + FillPrTemplateConfig). Exported for tests. */
-export const CliLayer = BunServices.layer.pipe(
-	Layer.provideMerge(AutoPrLoggerLayer),
-	Layer.provideMerge(FillPrTemplateConfigLayer),
-);
+/** CLI layer (BunServices + Logger). Exported for tests. */
+export const CliLayer = BunServices.layer.pipe(Layer.provideMerge(AutoPrLoggerLayer));
 
 if (import.meta.main) {
 	BunRuntime.runMain(
