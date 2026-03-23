@@ -35,7 +35,9 @@ const TEST_TEMPLATE = `## Description
 {{changes}}
 
 ## How to test
-{{howToTest}}
+
+1. Run the relevant tests or checks.
+2. 
 
 ## Checklist
 - [{{checklistConventional}}] My commits follow [Conventional Commits](https://www.conventionalcommits.org/)
@@ -418,81 +420,46 @@ describe("fill-pr-template-core", () => {
 
 	describe("fillTemplate", () => {
 		test("empty commits produces minimal data", () => {
-			Result.match(fillTemplate([], []), {
-				onSuccess: (data) => {
-					expect(data.description).toBe("");
-					expect(data.typeOfChange).toBe("Chore");
-					expect(data.changes).toEqual(["- "]);
-					expect(data.howToTest).toBe("N/A");
-				},
-				onFailure: () => expect().fail("expected success"),
-			});
+			const data = fillTemplate([], []);
+			expect(data.description).toBe("");
+			expect(data.typeOfChange).toBe("Chore");
+			expect(data.changes).toEqual(["- "]);
 		});
-		test("docs-only files → howToTest N/A", () => {
+		test("docs-only files → succeeds", () => {
 			const commits = [commit("docs: x", "")];
-			Result.match(fillTemplate(commits, ["README.md"]), {
-				onSuccess: (data) => expect(data.howToTest).toBe("N/A"),
-				onFailure: () => expect().fail("expected success"),
-			});
+			const data = fillTemplate(commits, ["README.md"]);
+			expect(data.typeOfChange).toBe("Documentation update");
 		});
-		test("code files → howToTest has steps", () => {
+		test("code files → succeeds", () => {
 			const commits = [commit("feat: x", "")];
-			Result.match(
-				fillTemplate(commits, ["src/foo.ts"], undefined, "1. Run `npm run check`\n2. "),
-				{
-					onSuccess: (data) => expect(data.howToTest).toContain("npm run check"),
-					onFailure: () => expect().fail("expected success"),
-				},
-			);
+			const data = fillTemplate(commits, ["src/foo.ts"]);
+			expect(data.typeOfChange).toBe("New feature");
 		});
 		test("commitsConventional false when any commit is non-conventional", () => {
 			const commits = [commit("feat: a", "", { type: "feat" }), commit("random message", "")];
-			Result.match(fillTemplate(commits, [], undefined, "1. Run tests"), {
-				onSuccess: (data) => expect(data.commitsConventional).toBe(false),
-				onFailure: () => expect().fail("expected success"),
-			});
+			const data = fillTemplate(commits, []);
+			expect(data.commitsConventional).toBe(false);
 		});
 		test("commitsConventional true when all commits are conventional", () => {
 			const commits = [
 				commit("feat: a", "", { type: "feat" }),
 				commit("fix: b", "", { type: "fix" }),
 			];
-			Result.match(fillTemplate(commits, [], undefined, "1. Run tests"), {
-				onSuccess: (data) => expect(data.commitsConventional).toBe(true),
-				onFailure: () => expect().fail("expected success"),
-			});
+			const data = fillTemplate(commits, []);
+			expect(data.commitsConventional).toBe(true);
 		});
 		test("multi-commit: description concatenates all commit bodies", () => {
 			const commits = [
 				commit("feat: add A", "Adds module A with tests.", { type: "feat" }),
 				commit("fix: fix B", "Fixes null check in B.", { type: "fix" }),
 			];
-			Result.match(fillTemplate(commits, [], undefined, "1. Run tests"), {
-				onSuccess: (data) =>
-					expect(data.description).toBe("Adds module A with tests.\n\nFixes null check in B."),
-				onFailure: () => expect().fail("expected success"),
-			});
+			const data = fillTemplate(commits, []);
+			expect(data.description).toBe("Adds module A with tests.\n\nFixes null check in B.");
 		});
 		test("descriptionOverride overrides computed description", () => {
 			const commits = [commit("feat: add x", "Original body", { type: "feat" })];
-			Result.match(fillTemplate(commits, [], "Ollama-generated summary.", "1. Run tests"), {
-				onSuccess: (data) => expect(data.description).toBe("Ollama-generated summary."),
-				onFailure: () => expect().fail("expected success"),
-			});
-		});
-		test("howToTestDefault overrides default for non-docs-only", () => {
-			const commits = [commit("feat: add x", "", { type: "feat" })];
-			Result.match(fillTemplate(commits, ["src/foo.ts"], undefined, "1. Run `pytest`\n2. "), {
-				onSuccess: (data) => expect(data.howToTest).toBe("1. Run `pytest`\n2. "),
-				onFailure: () => expect().fail("expected success"),
-			});
-		});
-		test("fails when howToTestDefault required but absent (not docs-only)", () => {
-			const commits = [commit("feat: add x", "", { type: "feat" })];
-			Result.match(fillTemplate(commits, ["src/foo.ts"]), {
-				onSuccess: () => expect().fail("expected failure"),
-				onFailure: (e) => expect(e.message).toContain("howToTestDefault is required"),
-			});
+			const data = fillTemplate(commits, [], "Ollama-generated summary.");
+			expect(data.description).toBe("Ollama-generated summary.");
 		});
 	});
 
@@ -552,36 +519,29 @@ describe("fill-pr-template-core", () => {
 	});
 
 	describe("renderBody", () => {
-		const RENDER_CORE_HOW_TO_TEST = "1. Run `npm run check`\n2. ";
-
 		test("output contains all sections", () => {
 			const commits = [commit("feat: add x", "Description here", { type: "feat" })];
-			Result.match(
-				renderBody(commits, ["src/foo.ts"], TEST_TEMPLATE, undefined, RENDER_CORE_HOW_TO_TEST),
-				{
-					onSuccess: (out) => {
-						expect(out).toContain("## Description");
-						expect(out).toContain("## Type of change");
-						expect(out).toContain("## Changes made");
-						expect(out).toContain("## How to test");
-						expect(out).toContain("## Checklist");
-						expect(out).toContain("New feature");
-						expect(out).toContain("Description here");
-					},
-					onFailure: () => expect().fail("expected success"),
+			Result.match(renderBody(commits, ["src/foo.ts"], TEST_TEMPLATE, undefined), {
+				onSuccess: (out) => {
+					expect(out).toContain("## Description");
+					expect(out).toContain("## Type of change");
+					expect(out).toContain("## Changes made");
+					expect(out).toContain("## How to test");
+					expect(out).toContain("## Checklist");
+					expect(out).toContain("New feature");
+					expect(out).toContain("Description here");
+					expect(out).toContain("Run the relevant tests or checks");
 				},
-			);
+				onFailure: () => expect().fail("expected success"),
+			});
 		});
 
 		test("preserves literal {{ and }} in description", () => {
 			const commits = [commit("feat: add x", "Use {{ and }} in your code", { type: "feat" })];
-			Result.match(
-				renderBody(commits, ["src/foo.ts"], TEST_TEMPLATE, undefined, RENDER_CORE_HOW_TO_TEST),
-				{
-					onSuccess: (out) => expect(out).toContain("Use {{ and }} in your code"),
-					onFailure: () => expect().fail("expected success"),
-				},
-			);
+			Result.match(renderBody(commits, ["src/foo.ts"], TEST_TEMPLATE, undefined), {
+				onSuccess: (out) => expect(out).toContain("Use {{ and }} in your code"),
+				onFailure: () => expect().fail("expected success"),
+			});
 		});
 	});
 });

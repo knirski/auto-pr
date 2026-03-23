@@ -76,7 +76,7 @@ test("formatError formats NoSemanticCommitsError", () => {
 
 test("formatError formats BodyFileNotFoundError", () => {
 	expect(formatError(new BodyFileNotFoundError({ path: "/tmp/body.md" }))).toContain(
-		"BODY_FILE does not exist",
+		"PR body file does not exist",
 	);
 });
 

@@ -24,9 +24,10 @@
 
 ## How to test
 
-<!-- Step-by-step instructions for reviewers. Use "N/A" for docs-only or trivial changes. -->
+<!-- Step-by-step instructions for reviewers. Replace this block with project-specific commands (for example `npm run check` or `pytest`). For docs-only or trivial changes you can use "N/A" or delete the steps below. -->
 
-{{howToTest}}
+1. Run the relevant tests or checks.
+2. Add another step if needed.
 
 ## Checklist
 

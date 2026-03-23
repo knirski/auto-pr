@@ -10,7 +10,6 @@ describe("FillPrTemplateParamsSchema", () => {
 			logFilePath: "/a",
 			filesFilePath: "/b",
 			templatePath: "/t",
-			howToTestDefault: "1. Run tests",
 		});
 	});
 
@@ -20,7 +19,6 @@ describe("FillPrTemplateParamsSchema", () => {
 			filesFilePath: "/d",
 			templatePath: "/t",
 			descriptionFilePath: "/desc",
-			howToTestDefault: "1. Run tests",
 		});
 	});
 

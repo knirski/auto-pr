@@ -6,7 +6,6 @@
 export type { GhOutputValue } from "#core/gh-output.js";
 export {
 	buildDescriptionPrompt,
-	buildGenerateContentGhEntries,
 	buildGetCommitsGhEntries,
 	decodeGhOutputTitle,
 	filterSemanticSubjects,
@@ -18,6 +17,5 @@ export {
 	parseGhOutput,
 	parseSubjects,
 	sanitizeForGhOutput,
-	validateGenerateContentOutput,
 	validateGetCommitsOutput,
 } from "#core/index.js";

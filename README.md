@@ -25,13 +25,13 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
 - **AI integration** — For 2+ commits, summarizes commit bodies into a PR description (Ollama default: `llama3.1:8b`)
 - **gh CLI** — Thin wrapper around `gh pr create` / `gh pr edit`
-- **CI-agnostic** — Outputs to `GITHUB_OUTPUT`; works with GitHub Actions or any orchestrator
+- **CI-agnostic** — **get-commits** appends paths and count to `GITHUB_OUTPUT`; **generate-content** writes `pr-title.txt` and `pr-body.md` under the workspace. Works with GitHub Actions or any orchestrator that sets the same env conventions.
 
 ## How it works
 
 1. **Get commits** — `auto-pr-get-commits` runs `git log` and `git diff` to produce `commits.txt`, `files.txt`, and outputs paths to `GITHUB_OUTPUT`
-2. **Generate content** — `auto-pr-generate-content` parses commits, counts semantic commits. For 1 commit: fills template from body. For 2+: calls the AI provider to summarize, then fills template. Outputs `title` and `body_file` to `GITHUB_OUTPUT`
-3. **Create or update PR** — `auto-pr-create-or-update-pr` runs `gh pr view` → `gh pr edit` or `gh pr create` with the title and body file
+2. **Generate content** — `auto-pr-generate-content` parses commits, counts semantic commits. For 1 commit: fills template from body. For 2+: calls the AI provider to summarize, then fills template. Writes `pr-title.txt` and `pr-body.md` under `{GITHUB_WORKSPACE}`
+3. **Create or update PR** — `auto-pr-create-or-update-pr` reads those files, then runs `gh pr view` → `gh pr edit` or `gh pr create`
 
 Merge commits are filtered out. Non-conventional commits are included; type falls back to "Chore".
 
@@ -89,7 +89,7 @@ bun x lefthook install
 
 | Command | Purpose |
 |--------|---------|
-| `npx auto-pr-get-commits` | Get commit log and changed files; output to GITHUB_OUTPUT |
+| `npx auto-pr-get-commits` | Get commit log and changed files; append `commits`, `files`, `count` to `GITHUB_OUTPUT` |
 | `npx auto-pr-generate-content` | Generate PR title and filled body (AI for 2+ commits) |
 | `npx auto-pr-create-or-update-pr` | Create or update PR via `gh` |
 | `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
@@ -127,27 +127,23 @@ bun run src/workflow/auto-pr-run.ts
 
 When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
 
-When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `PR_TEMPLATE_PATH`, `AUTO_PR_AI_PROVIDER`, provider-specific model settings, and `AUTO_PR_HOW_TO_TEST` are provided via workflow inputs with sensible defaults (convention over configuration). Authoritative schema: [src/auto-pr/config.ts](src/auto-pr/config.ts).
+When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `AUTO_PR_AI_PROVIDER` and provider-specific model settings are passed via workflow inputs with sensible defaults (convention over configuration). Authoritative schema: [src/auto-pr/config.ts](src/auto-pr/config.ts).
+
+**Convention (not env):** `get-commits` writes `commits.txt` and `files.txt` under `{GITHUB_WORKSPACE}`; `generate-content` reads those paths and writes `pr-title.txt` and `pr-body.md`. `create-or-update-pr` reads those two files under `{GITHUB_WORKSPACE}`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md`. Edit **How to test** in that file for project-specific instructions.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DEFAULT_BRANCH` | get-commits, create-or-update-pr | Base branch (e.g. `main`) |
 | `GITHUB_WORKSPACE` | get-commits, generate-content, create-or-update-pr | Repo root |
-| `GITHUB_OUTPUT` | get-commits, generate-content | Output file (GitHub Actions) |
-| `COMMITS` | generate-content | Path to commits.txt |
-| `FILES` | generate-content | Path to files.txt |
-| `PR_TEMPLATE_PATH` | generate-content | Path to PR template (default `.github/PULL_REQUEST_TEMPLATE.md`) |
+| `GITHUB_OUTPUT` | get-commits | Output file (GitHub Actions) |
 | `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `ollama`): `ollama`, `github-models`, or `openai-compat` |
 | `AUTO_PR_AI_OLLAMA_MODEL` | generate-content | **Ollama** — model id when `AUTO_PR_AI_PROVIDER` is `ollama` (default `llama3.1:8b`) |
 | `AUTO_PR_AI_GITHUB_MODEL` | generate-content | **GitHub Models** — model id (e.g. `openai/gpt-4.1`) when provider is `github-models`; requires `GH_TOKEN` for the Models API |
 | `AUTO_PR_AI_OPENAI_COMPAT_URL` | generate-content | **OpenAI-compatible** — base URL of the API (e.g. Azure OpenAI, OpenRouter) when provider is `openai-compat` |
 | `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | generate-content | **OpenAI-compatible** — API key (redacted in logs) when provider is `openai-compat` |
 | `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | generate-content | **OpenAI-compatible** — model name/id for the remote endpoint when provider is `openai-compat` |
-| `AUTO_PR_HOW_TO_TEST` | generate-content | "How to test" text (default: generic; Node projects: `auto_pr_how_to_test: "1. Run \`npm run check\`\n2. "`; Python: `"1. Run \`pytest\`\n2. "`) |
 | `GH_TOKEN` | create-or-update-pr; generate-content (github-models) | GitHub token for PR create/update; for **GitHub Models**, also used as the API credential when `AUTO_PR_AI_PROVIDER` is `github-models` |
 | `BRANCH` | create-or-update-pr | Current branch |
-| `TITLE` | create-or-update-pr | PR title |
-| `BODY_FILE` | create-or-update-pr | Path to filled body |
 | `AUTO_PR_DEBUG` | any | Optional. Set to `1` for verbose error hints when debugging |
 
 ## Integration

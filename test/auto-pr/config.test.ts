@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { Cause, ConfigProvider, Effect, Exit, Layer, Redacted, Result } from "effect";
 import {
 	AutoPrConfigError,
@@ -12,7 +13,7 @@ import {
 	RunAutoPrConfigLayer,
 } from "#auto-pr";
 import { runEffect } from "#test/run-effect.js";
-import { TestBaseLayer } from "#test/test-utils.js";
+import { createTestTempDirEffect, TestBaseLayer } from "#test/test-utils.js";
 
 /** Empty config provider so required env vars are missing. */
 const EmptyConfigProviderLayer = ConfigProvider.layer(ConfigProvider.fromUnknown({}));
@@ -54,13 +55,8 @@ describe("GetCommitsConfigLayer succeeds when all vars present", () => {
 
 const GeneratePrContentConfigProviderLayer = ConfigProvider.layer(
 	ConfigProvider.fromUnknown({
-		COMMITS: "/c/commits.txt",
-		FILES: "/c/files.txt",
-		GITHUB_OUTPUT: "/tmp/gh-output",
 		GITHUB_WORKSPACE: "/workspace",
-		PR_TEMPLATE_PATH: "/t/template.md",
 		AUTO_PR_AI_OLLAMA_MODEL: "llama3.1:8b",
-		AUTO_PR_HOW_TO_TEST: "1. Run tests",
 	}),
 );
 
@@ -74,24 +70,18 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 		await runEffect(GeneratePrContentLayer)(
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
-				expect(config.commits).toBe("/c/commits.txt");
-				expect(config.files).toBe("/c/files.txt");
-				expect(config.templatePath).toBe("/t/template.md");
+				expect(config.commits).toBe(join("/workspace", "commits.txt"));
+				expect(config.files).toBe(join("/workspace", "files.txt"));
+				expect(config.templatePath).toBe(join("/workspace", ".github/PULL_REQUEST_TEMPLATE.md"));
 				expect(config.provider).toBe("ollama");
 				expect(config.model).toBe("llama3.1:8b");
-				expect(config.howToTestDefault).toBe("1. Run tests");
 			}),
 		);
 	});
 });
 
 const generatePrContentBaseEnv = {
-	COMMITS: "/c/commits.txt",
-	FILES: "/c/files.txt",
-	GITHUB_OUTPUT: "/tmp/gh-output",
 	GITHUB_WORKSPACE: "/workspace",
-	PR_TEMPLATE_PATH: "/t/template.md",
-	AUTO_PR_HOW_TO_TEST: "1. Run tests",
 };
 
 describe("GeneratePrContentConfigLayer for github-models", () => {
@@ -214,32 +204,32 @@ describe("GeneratePrContentConfigLayer for openai-compat", () => {
 	});
 });
 
-const CreateOrUpdatePrConfigProviderLayer = ConfigProvider.layer(
-	ConfigProvider.fromUnknown({
-		BRANCH: "ai/feature",
-		DEFAULT_BRANCH: "main",
-		TITLE: "feat: add x",
-		BODY_FILE: "/tmp/body.md",
-		GITHUB_WORKSPACE: "/workspace",
-		GH_TOKEN: "ghp_test_token",
-	}),
-);
-
-const CreateOrUpdatePrLayer = Layer.mergeAll(
-	TestBaseLayer,
-	CreateOrUpdatePrConfigLayer.pipe(Layer.provide(CreateOrUpdatePrConfigProviderLayer)),
-);
-
 describe("CreateOrUpdatePrConfigLayer succeeds when all vars present", () => {
 	test("returns config with ghToken redacted", async () => {
-		await runEffect(CreateOrUpdatePrLayer)(
+		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
-				const config = yield* CreateOrUpdatePrConfig;
-				expect(config.branch).toBe("ai/feature");
-				expect(config.title).toBe("feat: add x");
-				expect(config.bodyFile).toBe("/tmp/body.md");
-				expect(Redacted.isRedacted(config.ghToken)).toBe(true);
-			}),
+				const tmp = yield* createTestTempDirEffect("cou-pr-");
+				yield* tmp.writeFile(join(tmp.path, "pr-title.txt"), "feat: add x\n");
+				const providerLayer = ConfigProvider.layer(
+					ConfigProvider.fromUnknown({
+						BRANCH: "ai/feature",
+						DEFAULT_BRANCH: "main",
+						GITHUB_WORKSPACE: tmp.path,
+						GH_TOKEN: "ghp_test_token",
+					}),
+				);
+				const fullLayer = Layer.mergeAll(
+					TestBaseLayer,
+					CreateOrUpdatePrConfigLayer.pipe(Layer.provide(providerLayer)),
+				);
+				return yield* Effect.gen(function* () {
+					const config = yield* CreateOrUpdatePrConfig;
+					expect(config.branch).toBe("ai/feature");
+					expect(config.title).toBe("feat: add x");
+					expect(config.bodyFile).toBe(join(tmp.path, "pr-body.md"));
+					expect(Redacted.isRedacted(config.ghToken)).toBe(true);
+				}).pipe(Effect.provide(fullLayer));
+			}).pipe(Effect.scoped),
 		);
 	});
 });
@@ -256,7 +246,7 @@ describe("config layers fail when required env vars missing", () => {
 		);
 	});
 
-	test("GeneratePrContentConfigLayer fails when COMMITS/FILES/GITHUB_OUTPUT missing", async () => {
+	test("GeneratePrContentConfigLayer fails when GITHUB_WORKSPACE missing", async () => {
 		await Effect.runPromise(
 			expectConfigFailure(
 				Effect.gen(function* () {
@@ -273,7 +263,7 @@ describe("config layers fail when required env vars missing", () => {
 				Effect.gen(function* () {
 					return yield* CreateOrUpdatePrConfig;
 				}),
-				CreateOrUpdatePrConfigLayer,
+				CreateOrUpdatePrConfigLayer.pipe(Layer.provideMerge(TestBaseLayer)),
 			),
 		);
 	});

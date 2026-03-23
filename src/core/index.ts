@@ -47,14 +47,12 @@ export {
 } from "#core/fill-pr-template-core.js";
 export type { GhOutputValue } from "#core/gh-output.js";
 export {
-	buildGenerateContentGhEntries,
 	buildGetCommitsGhEntries,
 	decodeGhOutputTitle,
 	formatGhOutput,
 	getGhOutputValue,
 	parseGhOutput,
 	sanitizeForGhOutput,
-	validateGenerateContentOutput,
 	validateGetCommitsOutput,
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";

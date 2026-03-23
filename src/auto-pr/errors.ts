@@ -76,7 +76,7 @@ export function formatError(e: unknown): string {
 			Match.tag(
 				"BodyFileNotFoundError",
 				({ path }) =>
-					`BODY_FILE does not exist: ${path}. Check generate-content step succeeded. See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md#troubleshooting`,
+					`PR body file does not exist: ${path}. Check generate-content step succeeded. See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md#troubleshooting`,
 			),
 			Match.tag("DescriptionParseError", ({ cause }) => cause),
 			Match.tag("ParseError", ({ message, cause }) =>

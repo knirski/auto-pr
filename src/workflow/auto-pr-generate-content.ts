@@ -1,14 +1,14 @@
 /**
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
- * Requires env: COMMITS (path), FILES (path), GITHUB_OUTPUT, GITHUB_WORKSPACE,
- * PR_TEMPLATE_PATH, AUTO_PR_HOW_TO_TEST. For 2+ commits: AUTO_PR_AI_PROVIDER (optional),
+ * Requires env: GITHUB_WORKSPACE. Reads `commits.txt` and `files.txt` under workspace (from `get-commits`).
+ * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: AUTO_PR_AI_PROVIDER (optional),
  * AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only.
  * For 2+: LanguageModel (AI provider) generates title and description via generateObject, then FillPrTemplate with override.
  *
- * Outputs to GITHUB_OUTPUT: title, body_file (path to filled template)
+ * Writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
  * Run: npx tsx src/workflow/auto-pr-generate-content.ts (or: node dist/workflow/auto-pr-generate-content.js)
  */
@@ -20,15 +20,14 @@ import {
 	type AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
-	appendGhOutput,
 	buildDescriptionPrompt,
-	buildGenerateContentGhEntries,
-	FillPrTemplateValidationError,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
 	NoSemanticCommitsError,
 	ParseError,
+	PR_BODY_FILE_NAME,
+	PR_TITLE_FILE_NAME,
 	runMain,
 	TemplateRenderError,
 	toError,
@@ -58,7 +57,6 @@ const TitleDescriptionSchema = Schema.Struct({
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
-const BODY_FILE_NAME = "pr-body.md";
 const MAX_AI_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
 
@@ -118,7 +116,6 @@ export type GeneratePrContentFromValuesParams = {
 	filesContent: string;
 	templateContent: string;
 	descriptionPromptText: string;
-	howToTestDefault: string;
 	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
 	/** Retry delay in ms. Use 0 for tests. Default 3000. */
@@ -132,7 +129,6 @@ export const GeneratePrContentFromValuesErrorSchema = Schema.Union([
 	NoSemanticCommitsError,
 	ParseError,
 	TemplateRenderError,
-	FillPrTemplateValidationError,
 ]);
 
 /** Errors from generatePrContentFromValues (value-based, no file I/O). */
@@ -154,14 +150,8 @@ export function generatePrContentFromValues(
 	LanguageModel.LanguageModel
 > {
 	return Effect.gen(function* () {
-		const {
-			commitsContent,
-			filesContent,
-			templateContent,
-			descriptionPromptText,
-			howToTestDefault,
-			retryDelayMs,
-		} = params;
+		const { commitsContent, filesContent, templateContent, descriptionPromptText, retryDelayMs } =
+			params;
 
 		const parseResult = parseCommits(commitsContent);
 		const rawCommits = yield* Effect.fromResult(parseResult);
@@ -197,13 +187,7 @@ export function generatePrContentFromValues(
 			descriptionOverride = undefined;
 		}
 
-		const bodyResult = renderBodyCore(
-			filtered,
-			files,
-			templateContent,
-			descriptionOverride,
-			howToTestDefault,
-		);
+		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride);
 		const body = yield* Effect.fromResult(bodyResult);
 		return { title, body, count };
 	}).pipe(
@@ -221,7 +205,6 @@ export function generatePrContentFromValues(
 				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
 				ParseError: (e: ParseError) => Effect.fail(e),
 				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
-				FillPrTemplateValidationError: (e: FillPrTemplateValidationError) => Effect.fail(e),
 			},
 			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
 		),
@@ -248,12 +231,10 @@ export function normalizeUnknownToGeneratePrContentError(
 export function runGeneratePrContent(config: {
 	commits: string;
 	files: string;
-	ghOutput: string;
 	workspace: string;
 	templatePath: string;
 	provider: import("#auto-pr/config.js").AiProvider;
 	model: string;
-	howToTestDefault: string;
 	/** Required when `provider` is `github-models` (GitHub Models API). */
 	ghToken?: Redacted.Redacted<string>;
 	/** Required when `provider` is `openai-compat`. */
@@ -272,12 +253,10 @@ export function runGeneratePrContent(config: {
 		const {
 			commits,
 			files,
-			ghOutput,
 			workspace,
 			templatePath,
 			provider,
 			model,
-			howToTestDefault,
 			retryDelayMs,
 			ghToken,
 			openaiCompatUrl,
@@ -323,26 +302,20 @@ export function runGeneratePrContent(config: {
 			filesContent,
 			templateContent,
 			descriptionPromptText,
-			howToTestDefault,
 			provider,
 			model,
 			...(retryDelayMs !== undefined && { retryDelayMs }),
 			...(config.fetch !== undefined && { fetch: config.fetch }),
 		}).pipe(Effect.provide(generateLayer));
 
-		const bodyPath = pathApi.join(workspace, BODY_FILE_NAME);
-		yield* fs.writeFileString(bodyPath, body).pipe(Effect.mapError(toUnexpected("write body")));
-
-		const entriesResult = buildGenerateContentGhEntries(title, bodyPath);
-		const entries = yield* Effect.fromResult(entriesResult).pipe(
-			Effect.mapError(
-				(e) =>
-					new UnexpectedError({
-						cause: `GITHUB_OUTPUT: ${unknownToMessage(e)}`,
-					}),
-			),
-		);
-		yield* appendGhOutput(ghOutput, entries).pipe(Effect.mapError(toUnexpected("append GhOutput")));
+		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
+		const titlePath = pathApi.join(workspace, PR_TITLE_FILE_NAME);
+		yield* fs
+			.writeFileString(titlePath, title)
+			.pipe(Effect.mapError(toUnexpected("write pr-title.txt")));
+		yield* fs
+			.writeFileString(bodyPath, body)
+			.pipe(Effect.mapError(toUnexpected("write pr-body.md")));
 		yield* Effect.log({
 			event: "generate_pr_content",
 			status: "success",
@@ -369,12 +342,10 @@ const program = Effect.gen(function* () {
 	const params = {
 		commits: config.commits,
 		files: config.files,
-		ghOutput: config.ghOutput,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		provider: config.provider,
 		model: config.model,
-		howToTestDefault: config.howToTestDefault,
 		...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
 		...(config.provider === "openai-compat"
 			? {
