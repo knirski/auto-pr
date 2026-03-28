@@ -74,7 +74,7 @@ jobs:
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@d91047d1129099c0a96fde0d113f33e5fb106913
+        uses: knirski/auto-pr/.github/actions/setup-runtime@57f2adb515f39ef60f14eeea1e9cde36bbe5ef9d
 
       - name: Fetch base branch
         env:
@@ -103,7 +103,7 @@ jobs:
 
       - name: Setup Ollama
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'ollama'
-        uses: ai-action/setup-ollama@71ea83e32be8721c648fa946c5da9853679a3803 # v2
+        uses: ai-action/setup-ollama@8dace3eab22ce4d761427bb75f8f70f1270ea660 # v2
 
       - name: Pull model
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'ollama'
