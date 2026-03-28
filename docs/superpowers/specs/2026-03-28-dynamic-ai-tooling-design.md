@@ -11,9 +11,9 @@
     1. `auto-pr-get-commits.ts`: Manually executes shell commands (`git log`, `git diff`) and writes the entire output to temporary files.
     2. `auto-pr-generate-content.ts`: Reads these files and "dumps" their entire content into the AI prompt as a single block of text.
 - **Limitations:**
-    - **Context Window Waste:** Large PRs with many commits or massive diffs can exceed the AI's context limit or increase latency/cost unnecessarily.
-    - **Inflexible Analysis:** The AI can only see exactly what the pre-processing script provides. It cannot "decide" to look at a related file, check a `README.md` for context, or drill down into a specific commit's changes.
-    - **Complex Pipeline:** Requires maintaining state via temporary files between workflow steps.
+  - **Context Window Waste:** Large PRs with many commits or massive diffs can exceed the AI's context limit or increase latency/cost unnecessarily.
+  - **Inflexible Analysis:** The AI can only see exactly what the pre-processing script provides. It cannot "decide" to look at a related file, check a `README.md` for context, or drill down into a specific commit's changes.
+  - **Complex Pipeline:** Requires maintaining state via temporary files between workflow steps.
 
 ### Goals
 - **On-Demand Context:** Empower the AI to fetch only the data it needs to understand the PR.
@@ -23,9 +23,11 @@
 ## 2. Proposed Design
 
 ### Effect AI Toolkits (beta.42+)
+
 Leverage the new `AiToolkit` and `LanguageModel` features in Effect v4 beta to define a "Repository Toolkit".
 
 #### Example Toolkit Definition
+
 ```typescript
 import { AiToolkit } from "effect/unstable/ai";
 import { Schema } from "effect";
