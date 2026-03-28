@@ -74,7 +74,7 @@ jobs:
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@d91047d1129099c0a96fde0d113f33e5fb106913
+        uses: knirski/auto-pr/.github/actions/setup-runtime@57f2adb515f39ef60f14eeea1e9cde36bbe5ef9d
 
       - name: Fetch base branch
         env:
