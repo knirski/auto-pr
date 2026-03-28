@@ -62,32 +62,33 @@
 		"build": "bun run scripts/build.ts",
 		"prepare": "bun run build || exit 0",
 		"prepublishOnly": "bun run build",
-		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
+		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts",
+		"stage-group": "bun run src/workflow/auto-pr-stage-group.ts"
 	},
 	"dependencies": {
-		"@effect/ai-openai-compat": "4.0.0-beta.37",
-		"@effect/platform-bun": "4.0.0-beta.37",
+		"@effect/ai-openai-compat": "4.0.0-beta.42",
+		"@effect/platform-bun": "4.0.0-beta.42",
 		"conventional-commits-parser": "^6.3.0",
-		"effect": "4.0.0-beta.37",
+		"effect": "4.0.0-beta.42",
 		"micromustache": "^8.0.3",
 		"ollama": "^0.6.3",
 		"remark": "^15.0.1",
 		"unist-util-visit": "^5.1.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.6",
-		"@commitlint/cli": "^20.4.4",
-		"@commitlint/config-conventional": "^20.4.4",
+		"@biomejs/biome": "2.4.9",
+		"@commitlint/cli": "20.5.0",
+		"@commitlint/config-conventional": "20.5.0",
 		"@types/mdast": "^4.0.4",
-		"@types/node": "^24.0.0",
-		"@typescript/native-preview": "^7.0.0-dev",
-		"bun-types": "^1.3.10",
-		"knip": "^5.86.0",
-		"lefthook": "^2.1.4",
-		"lint-staged": "^16.3.2",
+		"@types/node": "25.5.0",
+		"@typescript/native-preview": "7.0.0-dev.20260328.1",
+		"bun-types": "1.3.11",
+		"knip": "6.1.0",
+		"lefthook": "2.1.4",
+		"lint-staged": "16.4.0",
 		"npm-run-all": "^4.1.5",
-		"rumdl": "^0.1.51",
-		"typescript": "^5.7.0"
+		"rumdl": "0.1.62",
+		"typescript": "6.0.2"
 	},
 	"lint-staged": {
 		"*.{ts,tsx}": [
@@ -105,5 +106,8 @@
 	"engines": {
 		"node": ">=24.0.0"
 	},
-	"packageManager": "bun@1.3.10"
+	"packageManager": "bun@1.3.11",
+	"overrides": {
+		"picomatch": "^4.0.4"
+	}
 }
