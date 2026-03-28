@@ -25,7 +25,7 @@ shift
 if command -v "$tool" >/dev/null 2>&1; then
 	exec "$tool" "$@"
 elif command -v nix >/dev/null 2>&1; then
-	exec nix run --option warn-dirty false ".#$tool" -- "$@"
+	exec nix run --extra-experimental-features 'nix-command flakes' --option warn-dirty false ".#$tool" -- "$@"
 elif [[ "$optional" == true ]]; then
 	exit 0
 else
