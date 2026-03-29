@@ -78,7 +78,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 
 ## Project layout
 
-**Setup:** `bun install` then `bun x lefthook install`. Build: `scripts/build.ts` → `dist/`; typecheck: `tsgo --noEmit`.
+**Setup:** `bun install` then `bun x lefthook install`. Local env for workflow CLIs: copy `.env.example` → `.env` (see `src/auto-pr/config.ts`). Build: `scripts/build.ts` → `dist/`; typecheck: `tsgo --noEmit`.
 
 ```
 .github/actions/   — composite actions. Workflows use full path (knirski/auto-pr/...)

@@ -1,0 +1,10 @@
+title = "auto-pr"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented env placeholders only"
+paths = [
+	'''\.env\.example$''',
+]
