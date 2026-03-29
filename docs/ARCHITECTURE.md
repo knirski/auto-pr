@@ -2,6 +2,12 @@
 
 This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. Prompts at `dist/prompts/`. No declaration emit.
 
+## Repository layout (on disk)
+
+- **`src/`** — TypeScript source. `src/core/` is pure (no Effect I/O); `src/auto-pr/` holds config, errors, live interpreters, and shell; `src/workflow/` and `src/tools/` are CLI entrypoints compiled to `dist/` by `scripts/build.ts`.
+- **`scripts/`** — Build and check helpers (`build.ts`, shell wrappers, Nix shims). Not application library code.
+- **`test/`** — Unit tests, mirroring `src/` where applicable.
+
 ## High-Level Structure
 
 ```
