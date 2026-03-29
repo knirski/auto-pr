@@ -8,7 +8,7 @@
 #
 # Reusable workflow refs: use @<branch> while developing (resolves to branch tip). After merge to main,
 # pin both lines to the merge commit SHA (same as update-workflow-pins / INTEGRATION).
-# Composite actions inside auto-pr-generate-reusable.yml use @caa295c… (parent tree with actions).
+# Composite actions in generate + check: use @<branch> while developing; pin to merge SHA on main after merge.
 
 name: Auto-PR
 
