@@ -22,15 +22,7 @@ on:
       ai_provider:
         required: false
         type: string
-        default: "ollama"
-      ai_ollama_model:
-        required: false
-        type: string
-        default: "llama3.1:8b"
-      ai_github_model:
-        required: false
-        type: string
-        default: ""
+        default: "github-models"
       ai_openai_compat_url:
         required: false
         type: string
@@ -42,7 +34,22 @@ on:
       ai_openai_compat_model:
         required: false
         type: string
+        default: "openai/gpt-4.1"
+      ai_llamacpp_release_tag:
+        required: false
+        type: string
+        description: "llama.cpp release tag (ggml-org/llama.cpp) for prebuilt ubuntu-x64 binaries"
+        default: "b8575"
+      ai_llamacpp_model_url:
+        required: false
+        type: string
+        description: "HTTPS URL to a .gguf model. When set with ai_provider=local and ai_openai_compat_url empty, downloads (cached) and starts llama-server."
         default: ""
+      ai_llamacpp_port:
+        required: false
+        type: string
+        description: "Port for llama-server when using ai_llamacpp_model_url"
+        default: "8080"
 
 permissions:
   contents: read
@@ -70,8 +77,7 @@ jobs:
             exit 1
           fi
 
-      # setup-runtime: use full path so callers don't need the action. Relative ./ would
-      # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
+      # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
         uses: knirski/auto-pr/.github/actions/setup-runtime@dbeae191c1f4f27d32bda086541d05def59b815d
@@ -83,10 +89,10 @@ jobs:
 
       - name: Set auto-pr package ref
         id: auto-pr-pkg
-        env:
-          REPO: ${{ github.repository }}
-          REF_NAME: ${{ github.ref_name }}
-        run: bash scripts/auto-pr-set-pkg.sh
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@dbeae191c1f4f27d32bda086541d05def59b815d
+        with:
+          repository: ${{ github.repository }}
+          ref_name: ${{ github.ref_name }}
 
       - name: Install dependencies (workspace only)
         if: steps.auto-pr-pkg.outputs.use_workspace == 'true'
@@ -94,42 +100,60 @@ jobs:
 
       - name: Get commit log and changed files
         id: commits
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
-          RUNNER: ${{ steps.setup.outputs.runner }}
-          USE_WORKSPACE: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-        run: bash scripts/auto-pr-run-command.sh get-commits
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@dbeae191c1f4f27d32bda086541d05def59b815d
+        with:
+          command: get-commits
+          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
+          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
+          runner: ${{ steps.setup.outputs.runner }}
+          default_branch: ${{ github.event.repository.default_branch }}
 
-      - name: Setup Ollama
-        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'ollama'
-        uses: ai-action/setup-ollama@8dace3eab22ce4d761427bb75f8f70f1270ea660 # v2
-
-      - name: Pull model
-        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'ollama'
+      - name: Local llama.cpp — cache key
+        id: llama_cache_key
+        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         env:
-          OLLAMA_MODEL: ${{ inputs.ai_ollama_model }}
+          MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
         run: |
-          if [[ ! "$OLLAMA_MODEL" =~ ^[a-zA-Z0-9._:-]+$ ]]; then
-            echo "::error::Invalid ai_ollama_model: must match ^[a-zA-Z0-9._:-]+$"
-            exit 1
-          fi
-          ollama pull "$OLLAMA_MODEL"
+          h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
+          echo "hash=$h" >> "$GITHUB_OUTPUT"
+
+      - name: Cache llama.cpp (binary + model)
+        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/auto-pr-llama
+          key: llama-${{ inputs.ai_llamacpp_release_tag }}-${{ steps.llama_cache_key.outputs.hash }}-linux-x64
+
+      - name: Start local llama.cpp (llama-server)
+        id: local_llama
+        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-start@dbeae191c1f4f27d32bda086541d05def59b815d
+        with:
+          llama_release: ${{ inputs.ai_llamacpp_release_tag }}
+          model_url: ${{ inputs.ai_llamacpp_model_url }}
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+          llama_port: ${{ inputs.ai_llamacpp_port }}
 
       - name: Generate PR content
         id: generate
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@dbeae191c1f4f27d32bda086541d05def59b815d
+        with:
+          command: generate-content
+          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
+          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
+          runner: ${{ steps.setup.outputs.runner }}
         env:
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
-          AUTO_PR_AI_OLLAMA_MODEL: ${{ inputs.ai_ollama_model }}
-          AUTO_PR_AI_GITHUB_MODEL: ${{ inputs.ai_github_model }}
-          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url != '' && steps.local_llama.outputs.compat_url || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && secrets.GH_TOKEN || '' }}
-          AUTO_PR_PKG: ${{ steps.auto-pr-pkg.outputs.value }}
-          RUNNER: ${{ steps.setup.outputs.runner }}
-          USE_WORKSPACE: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-        run: bash scripts/auto-pr-run-command.sh generate-content
+
+      - name: Stop local llama-server
+        if: always() && steps.local_llama.outcome != 'skipped'
+        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-stop@dbeae191c1f4f27d32bda086541d05def59b815d
+        with:
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
 
       - name: Prepare artifact
         env:

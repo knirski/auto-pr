@@ -1,0 +1,33 @@
+# Composite action: run get-commits or generate-content (workspace or npx/bunx package).
+name: Run auto-pr command
+description: Run get-commits or generate-content via bun workspace or npx/bunx package
+
+inputs:
+  command:
+    description: get-commits or generate-content
+    required: true
+  use_workspace:
+    description: "true to use bun run from workspace"
+    required: true
+  auto_pr_pkg:
+    description: Package spec for npx/bunx -p
+    required: true
+  runner:
+    description: npx or bunx (from setup-runtime)
+    required: true
+  default_branch:
+    description: Base branch name (required for get-commits)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/auto-pr-run-command.sh" "${{ inputs.command }}"
+      env:
+        USE_WORKSPACE: ${{ inputs.use_workspace }}
+        AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
+        RUNNER: ${{ inputs.runner }}
+        DEFAULT_BRANCH: ${{ inputs.default_branch }}
