@@ -37,7 +37,7 @@ export class BodyFileNotFoundError extends Schema.TaggedErrorClass<BodyFileNotFo
 	{ path: Schema.String },
 ) {}
 
-// ─── AI provider (Ollama, GitHub Models, openai-compat) ──────────────────────
+// ─── AI provider (local LLM, GitHub Models) ──────────────────────────────────
 
 /** Transport/API failures from any AI provider. */
 export class AiProviderError extends Schema.TaggedErrorClass<AiProviderError>()("AiProviderError", {

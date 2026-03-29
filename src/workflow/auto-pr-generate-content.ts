@@ -2,15 +2,14 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: GITHUB_WORKSPACE. Reads `commits.txt` and `files.txt` under workspace (from `get-commits`).
- * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: AUTO_PR_AI_PROVIDER (optional),
- * AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama).
+ * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only.
  * For 2+: LanguageModel (AI provider) generates title and description via generateObject, then FillPrTemplate with override.
  *
  * Writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
- * Run: npx tsx src/workflow/auto-pr-generate-content.ts (or: node dist/workflow/auto-pr-generate-content.js)
+ * This repo: bun run generate-content · installed: npx auto-pr-generate-content
  */
 
 import type { Redacted } from "effect";
@@ -237,13 +236,12 @@ export function runGeneratePrContent(config: {
 	model: string;
 	/** Required when `provider` is `github-models` (GitHub Models API). */
 	ghToken?: Redacted.Redacted<string>;
-	/** Required when `provider` is `openai-compat`. */
+	/** When `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp). */
 	openaiCompatUrl?: string;
 	openaiCompatApiKey?: Redacted.Redacted<string>;
-	openaiCompatModel?: string;
 	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
 	retryDelayMs?: number;
-	/** Custom fetch for tests. Omit for production. */
+	/** Custom fetch for tests (OpenAI `POST …/chat/completions`). Omit for production. */
 	fetch?: typeof fetch;
 }): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
 	const toUnexpected = (ctx: string) => (e: unknown) =>
@@ -261,7 +259,6 @@ export function runGeneratePrContent(config: {
 			ghToken,
 			openaiCompatUrl,
 			openaiCompatApiKey,
-			openaiCompatModel,
 		} = config;
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
@@ -286,11 +283,10 @@ export function runGeneratePrContent(config: {
 					provider,
 					model,
 					...(ghToken !== undefined ? { ghToken } : {}),
-					...(provider === "openai-compat"
+					...(provider === "local"
 						? {
-								openaiCompatUrl,
-								openaiCompatApiKey,
-								openaiCompatModel,
+								...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
+								...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
 							}
 						: {}),
 				},
@@ -347,11 +343,14 @@ const program = Effect.gen(function* () {
 		provider: config.provider,
 		model: config.model,
 		...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
-		...(config.provider === "openai-compat"
+		...(config.provider === "local"
 			? {
-					openaiCompatUrl: config.openaiCompatUrl,
-					openaiCompatApiKey: config.openaiCompatApiKey,
-					openaiCompatModel: config.openaiCompatModel,
+					...(config.openaiCompatUrl !== undefined
+						? { openaiCompatUrl: config.openaiCompatUrl }
+						: {}),
+					...(config.openaiCompatApiKey !== undefined
+						? { openaiCompatApiKey: config.openaiCompatApiKey }
+						: {}),
 				}
 			: {}),
 	};

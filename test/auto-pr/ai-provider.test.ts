@@ -4,17 +4,21 @@ import { LanguageModel } from "effect/unstable/ai";
 import { AutoPrConfigError } from "#auto-pr";
 import { aiProviderLayerFromConfig } from "#auto-pr/live/ai-provider.js";
 import { runEffect } from "#test/run-effect.js";
-import { createOllamaMockFetch, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
+import {
+	createOpenAiChatCompletionsMockFetch,
+	SilentLoggerLayer,
+	TestBaseLayer,
+} from "#test/test-utils.js";
 
 const BaseLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 
 describe("aiProviderLayerFromConfig", () => {
-	test("ollama: builds layer that provides LanguageModel", async () => {
+	test("local: builds layer that provides LanguageModel", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
 			aiProviderLayerFromConfig(
-				{ provider: "ollama", model: "llama3.1:8b" },
-				{ fetch: createOllamaMockFetch("") },
+				{ provider: "local", model: "gpt-oss" },
+				{ fetch: createOpenAiChatCompletionsMockFetch("{}") },
 			),
 		);
 		await runEffect(layer)(
@@ -84,17 +88,16 @@ describe("aiProviderLayerFromConfig", () => {
 		}
 	});
 
-	test("openai-compat: builds layer when url, apiKey, and model provided", async () => {
+	test("local: builds layer when url, apiKey, and model provided", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
 			aiProviderLayerFromConfig({
-				provider: "openai-compat",
+				provider: "local",
 				model: "gpt-4",
 				openaiCompatUrl: "https://api.example.com/v1",
 				openaiCompatApiKey: Redacted.make("sk-test", {
 					label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
 				}),
-				openaiCompatModel: "gpt-4",
 			}),
 		);
 		await runEffect(layer)(
@@ -105,56 +108,42 @@ describe("aiProviderLayerFromConfig", () => {
 		);
 	});
 
-	test("openai-compat: fails with AutoPrConfigError when apiKey empty", async () => {
+	test("local: builds layer when apiKey empty (optional for local endpoints)", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
 			aiProviderLayerFromConfig({
-				provider: "openai-compat",
+				provider: "local",
 				model: "gpt-4",
 				openaiCompatUrl: "https://api.example.com/v1",
 				openaiCompatApiKey: Redacted.make("", {
 					label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
 				}),
-				openaiCompatModel: "gpt-4",
 			}),
 		);
-		const exit = await Effect.runPromise(
+		await runEffect(layer)(
 			Effect.gen(function* () {
-				return yield* LanguageModel.LanguageModel;
-			}).pipe(Effect.scoped, Effect.provide(layer), Effect.exit),
+				const model = yield* LanguageModel.LanguageModel;
+				expect(model).toBeDefined();
+			}).pipe(Effect.scoped),
 		);
-		expect(Exit.isFailure(exit)).toBe(true);
-		if (Exit.isFailure(exit)) {
-			Result.match(Cause.findError(exit.cause), {
-				onSuccess: (err) => expect(err).toBeInstanceOf(AutoPrConfigError),
-				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
-			});
-		}
 	});
 
-	test("openai-compat: fails with AutoPrConfigError when url missing", async () => {
+	test("local: builds layer when url omitted (default base URL)", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
 			aiProviderLayerFromConfig({
-				provider: "openai-compat",
+				provider: "local",
 				model: "gpt-4",
 				openaiCompatApiKey: Redacted.make("sk-test", {
 					label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
 				}),
-				openaiCompatModel: "gpt-4",
 			}),
 		);
-		const exit = await Effect.runPromise(
+		await runEffect(layer)(
 			Effect.gen(function* () {
-				return yield* LanguageModel.LanguageModel;
-			}).pipe(Effect.scoped, Effect.provide(layer), Effect.exit),
+				const model = yield* LanguageModel.LanguageModel;
+				expect(model).toBeDefined();
+			}).pipe(Effect.scoped),
 		);
-		expect(Exit.isFailure(exit)).toBe(true);
-		if (Exit.isFailure(exit)) {
-			Result.match(Cause.findError(exit.cause), {
-				onSuccess: (err) => expect(err).toBeInstanceOf(AutoPrConfigError),
-				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
-			});
-		}
 	});
 });

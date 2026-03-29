@@ -9,7 +9,7 @@ import {
 import { FillPrTemplateValidationError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import {
-	createOllamaMockFetch,
+	createOpenAiChatCompletionsMockFetch,
 	createTestTempDirEffect,
 	SilentLoggerLayer,
 	TestBaseLayer,
@@ -40,8 +40,8 @@ function params(
 		filesContent: "src/foo.ts\n",
 		templateContent: DEFAULT_TEMPLATE,
 		descriptionPromptText: DEFAULT_DESCRIPTION_PROMPT,
-		provider: "ollama" as const,
-		model: "llama3.1:8b",
+		provider: "local" as const,
+		model: "gpt-oss",
 		...overrides,
 	};
 }
@@ -59,7 +59,7 @@ function layerForGeneratePrContent(params: GeneratePrContentFromValuesParams) {
 }
 
 describe("generatePrContentFromValues (value-based, no file I/O)", () => {
-	test("returns title and body for 1 commit (no Ollama)", async () => {
+	test("returns title and body for 1 commit (no local LLM call)", async () => {
 		const p = params([{ subject: "feat: add x", body: "" }]);
 		await runEffect(layerForGeneratePrContent(p))(
 			Effect.gen(function* () {
@@ -149,28 +149,27 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 	});
 });
 
-const VALID_OLLAMA_RESPONSE =
-	'{"title":"feat: add X and fix B","description":"Ollama-generated summary."}';
-const INVALID_OLLAMA_RESPONSE = '{"title":"feat","description":"Invalid."}';
+const VALID_AI_RESPONSE = '{"title":"feat: add X and fix B","description":"AI-generated summary."}';
+const INVALID_AI_RESPONSE = '{"title":"feat","description":"Invalid."}';
 
 const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
 
-describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
+describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)", () => {
 	describe("valid title", () => {
-		test("returns Ollama title and body with description", async () => {
+		test("returns AI title and body with description", async () => {
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				fetch: createOllamaMockFetch(VALID_OLLAMA_RESPONSE),
+				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add X and fix B");
-					expect(result.body).toContain("Ollama-generated summary.");
+					expect(result.body).toContain("AI-generated summary.");
 					expect(result.body).toContain("feat: add module A");
 					expect(result.body).toContain("fix: fix bug in B");
 					expect(result.count).toBe(2);
@@ -180,12 +179,12 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 	});
 
 	describe("invalid title (fallback)", () => {
-		test("falls back to first commit subject when Ollama returns invalid title 5 times", async () => {
+		test("falls back to first commit subject when local LLM returns invalid title 5 times", async () => {
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				retryDelayMs: 0,
-				fetch: createOllamaMockFetch(INVALID_OLLAMA_RESPONSE),
+				fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
@@ -202,7 +201,7 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 					{ subject: "Add feature", body: "" },
 					{ subject: "Fix bug", body: "" },
 				],
-				{ retryDelayMs: 0, fetch: createOllamaMockFetch(INVALID_OLLAMA_RESPONSE) },
+				{ retryDelayMs: 0, fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE) },
 			);
 			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
@@ -213,11 +212,11 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 		});
 	});
 
-	describe("Ollama empty response", () => {
-		test("falls back when Ollama returns empty response 5 times", async () => {
+	describe("empty assistant content", () => {
+		test("falls back when local LLM returns empty content 5 times", async () => {
 			const p = params(twoCommits, {
 				retryDelayMs: 0,
-				fetch: createOllamaMockFetch(""),
+				fetch: createOpenAiChatCompletionsMockFetch(""),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
@@ -228,11 +227,11 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 		});
 	});
 
-	describe("Ollama title-only (no description)", () => {
-		test("falls back when Ollama returns invalid JSON 5 times", async () => {
+	describe("invalid JSON in assistant content", () => {
+		test("falls back when local LLM returns invalid JSON 5 times", async () => {
 			const p = params(twoCommits, {
 				retryDelayMs: 0,
-				fetch: createOllamaMockFetch("feat: x\n\n"),
+				fetch: createOpenAiChatCompletionsMockFetch("feat: x\n\n"),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
@@ -243,12 +242,12 @@ describe("generatePrContentFromValues (2+ commits, mocked Ollama)", () => {
 		});
 	});
 
-	describe("Ollama HTTP 500", () => {
-		test("falls back when Ollama returns HTTP 500 five times", async () => {
+	describe("HTTP 500 from OpenAI-compat endpoint", () => {
+		test("falls back when local endpoint returns HTTP 500 five times", async () => {
 			const p = params(twoCommits, {
 				retryDelayMs: 0,
-				fetch: createOllamaMockFetch({
-					response: VALID_OLLAMA_RESPONSE,
+				fetch: createOpenAiChatCompletionsMockFetch({
+					content: VALID_AI_RESPONSE,
 					status: 500,
 				}),
 			});
@@ -306,9 +305,9 @@ describe("runGeneratePrContent (integration, file I/O)", () => {
 					files: filesPath,
 					workspace: tmp.path,
 					templatePath,
-					provider: "ollama",
-					model: "llama3.1:8b",
-					fetch: createOllamaMockFetch(""),
+					provider: "local",
+					model: "gpt-oss",
+					fetch: createOpenAiChatCompletionsMockFetch(""),
 				});
 
 				const titlePath = pathApi.join(tmp.path, "pr-title.txt");

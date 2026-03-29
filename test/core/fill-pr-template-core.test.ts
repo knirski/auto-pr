@@ -245,7 +245,7 @@ describe("fill-pr-template-core", () => {
 	});
 
 	describe("getDescriptionPromptText", () => {
-		test("formats commits for Ollama prompt", () => {
+		test("formats commits for AI prompt", () => {
 			const commits = [
 				commit("feat: add A", "Adds module A."),
 				commit("fix: fix B", "Fixes bug in B."),
@@ -458,8 +458,8 @@ describe("fill-pr-template-core", () => {
 		});
 		test("descriptionOverride overrides computed description", () => {
 			const commits = [commit("feat: add x", "Original body", { type: "feat" })];
-			const data = fillTemplate(commits, [], "Ollama-generated summary.");
-			expect(data.description).toBe("Ollama-generated summary.");
+			const data = fillTemplate(commits, [], "AI-generated summary.");
+			expect(data.description).toBe("AI-generated summary.");
 		});
 	});
 

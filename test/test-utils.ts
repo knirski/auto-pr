@@ -62,59 +62,58 @@ export const ChildProcessSpawnerUpdatePathMock = Layer.mock(ChildProcessSpawner)
 	streamLines: () => Stream.empty,
 });
 
-/** Mock Ollama response: string, { response, status?, prompt_eval_count?, eval_count? }, or { fail } to fail with Error. */
-export type OllamaMockResponse =
+/** Mock OpenAI-compatible chat completion: assistant `content` string (often JSON for `generateObject`). */
+export type OpenAiChatCompletionMockResponse =
 	| string
-	| {
-			response: string;
-			status?: number;
-			prompt_eval_count?: number;
-			eval_count?: number;
-	  }
+	| { content: string; status?: number }
 	| { fail: string };
 
-/** Single response or array (call-based). */
-export type OllamaMockResponses = OllamaMockResponse | readonly OllamaMockResponse[];
+export type OpenAiChatCompletionMockResponses =
+	| OpenAiChatCompletionMockResponse
+	| readonly OpenAiChatCompletionMockResponse[];
 
-type OllamaMockItem =
-	| { response: string; status: number; prompt_eval_count: number; eval_count: number }
-	| { fail: string };
+type OpenAiMockItem = { content: string; status: number } | { fail: string };
 
-function normalizeResponse(r: OllamaMockResponse): OllamaMockItem {
-	if (typeof r === "string")
-		return { response: r, status: 200, prompt_eval_count: 0, eval_count: 0 };
+function normalizeOpenAiResponse(r: OpenAiChatCompletionMockResponse): OpenAiMockItem {
+	if (typeof r === "string") return { content: r, status: 200 };
 	if ("fail" in r) return r;
-	return {
-		response: r.response,
-		status: r.status ?? 200,
-		prompt_eval_count: r.prompt_eval_count ?? 0,
-		eval_count: r.eval_count ?? 0,
-	};
+	return { content: r.content, status: r.status ?? 200 };
 }
 
 /**
- * Mock fetch for Ollama API. Returns canned responses without network.
- * Use with ollama package: new Ollama({ host, fetch: createOllamaMockFetch(...) }).
- *
- * @param responses - Single string (same for all calls) or array (call-based).
- *   Use { response: string, status?: number } for HTTP errors (e.g. status 500).
+ * Mock fetch for OpenAI-compatible `POST …/chat/completions`. Use with `aiProviderLayerFromConfig` + `options.fetch`.
  */
-export function createOllamaMockFetch(responses: OllamaMockResponses): typeof fetch {
-	const arr: OllamaMockItem[] = (Array.isArray(responses) ? responses : [responses]).map((r) =>
-		normalizeResponse(r),
+export function createOpenAiChatCompletionsMockFetch(
+	responses: OpenAiChatCompletionMockResponses,
+): typeof fetch {
+	const arr: OpenAiMockItem[] = (Array.isArray(responses) ? responses : [responses]).map((r) =>
+		normalizeOpenAiResponse(r),
 	);
 	let callCount = 0;
 	return (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-		if (!String(url).includes("/api/generate") || init?.method?.toUpperCase() !== "POST") {
-			throw new Error("createOllamaMockFetch: unexpected request");
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiChatCompletionsMockFetch: unexpected request");
 		}
 		const idx = Math.min(callCount++, arr.length - 1);
 		const item = arr[idx] ?? arr[arr.length - 1];
-		if (!item) throw new Error("createOllamaMockFetch: no responses");
+		if (!item) throw new Error("createOpenAiChatCompletionsMockFetch: no responses");
 		if ("fail" in item) throw new Error(item.fail);
-		const { response, status, prompt_eval_count, eval_count } = item;
-		return new Response(JSON.stringify({ response, prompt_eval_count, eval_count }), { status });
+		const { content, status } = item;
+		const body = {
+			id: "chatcmpl-mock",
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: "stop",
+					message: { role: "assistant", content },
+				},
+			],
+		};
+		return new Response(JSON.stringify(body), { status });
 	}) as typeof fetch;
 }
 

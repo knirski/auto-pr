@@ -189,7 +189,7 @@ describe("runFillBody", () => {
 					yield* tmp.writeFile(tmp.join("commits.txt"), log);
 					yield* tmp.writeFile(tmp.join("files.txt"), "src/foo.ts\n");
 					yield* tmp.writeFile(tmp.join("template.md"), TEST_TEMPLATE);
-					yield* tmp.writeFile(tmp.join("description.txt"), "Ollama-generated summary.");
+					yield* tmp.writeFile(tmp.join("description.txt"), "AI-generated summary.");
 					const output = yield* runFillBody(
 						tmp.join("commits.txt"),
 						tmp.join("files.txt"),
@@ -197,7 +197,7 @@ describe("runFillBody", () => {
 						"body",
 						tmp.join("description.txt"),
 					);
-					expect(output).toContain("Ollama-generated summary.");
+					expect(output).toContain("AI-generated summary.");
 					expect(output).not.toContain("Original body");
 					return output;
 				}).pipe(Effect.ensuring(tmp.remove()));

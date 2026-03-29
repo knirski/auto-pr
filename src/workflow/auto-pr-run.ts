@@ -1,9 +1,9 @@
 /**
  * Run the auto-PR pipeline locally (no GitHub Actions).
  * Requires: DEFAULT_BRANCH, GITHUB_WORKSPACE, GH_TOKEN. PR template: `.github/PULL_REQUEST_TEMPLATE.md` under workspace.
- * For 2+ commits: AUTO_PR_AI_PROVIDER (optional; default ollama), AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama). AI provider must be running (Ollama: localhost:11434).
+ * For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`). For `local`, run an OpenAI-compatible server (e.g. llama.cpp `llama-server`) at `AUTO_PR_AI_OPENAI_COMPAT_URL` (default `http://127.0.0.1:8080/v1`).
  *
- * Run: npx tsx src/workflow/auto-pr-run.ts (or: node dist/workflow/auto-pr-run.js)
+ * This repo: bun run run-auto-pr · installed: npx auto-pr-run
  */
 
 import { join } from "node:path";
@@ -63,11 +63,14 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 			provider,
 			model,
 			...(provider === "github-models" ? { ghToken: config.ghToken } : {}),
-			...(provider === "openai-compat"
+			...(provider === "local"
 				? {
-						openaiCompatUrl: config.openaiCompatUrl,
-						openaiCompatApiKey: config.openaiCompatApiKey,
-						openaiCompatModel: config.openaiCompatModel,
+						...(config.openaiCompatUrl !== undefined
+							? { openaiCompatUrl: config.openaiCompatUrl }
+							: {}),
+						...(config.openaiCompatApiKey !== undefined
+							? { openaiCompatApiKey: config.openaiCompatApiKey }
+							: {}),
 					}
 				: {}),
 		});

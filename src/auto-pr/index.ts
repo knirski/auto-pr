@@ -8,6 +8,9 @@ export type { AiProvider } from "#auto-pr/config.js";
 export {
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
+	DEFAULT_GITHUB_MODELS_MODEL,
+	DEFAULT_OPENAI_COMPAT_MODEL,
+	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	GetCommitsConfig,
@@ -54,7 +57,6 @@ export {
 	aiProviderLayerFromConfig,
 } from "#auto-pr/live/ai-provider.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
-export { ollamaLanguageModelLayer } from "#auto-pr/live/ollama-language-model.js";
 export {
 	getPrDescriptionPromptPath,
 	PR_BODY_FILE_NAME,

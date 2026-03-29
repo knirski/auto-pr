@@ -2,7 +2,8 @@
  * Fill PR template from conventional commit messages.
  * Shell only: Effect pipelines, CLI, I/O. Core in fill-pr-template-core.ts.
  *
- * Run: npx tsx src/tools/auto-pr-fill-pr-template.ts (or: node dist/tools/auto-pr-fill-pr-template.js) --log-file <path> --files-file <path> --template <path> --format body|title-body
+ * This repo: bun run fill-pr-template -- --log-file <path> --files-file <path> --template <path> --format body|title-body
+ * Installed: npx auto-pr-fill-pr-template -- (same flags after --)
  *
  * Replaces {{placeholder}} values, outputs to stdout.
  *
@@ -113,14 +114,14 @@ const validateTitleFlag = Flag.string("validate-title").pipe(
 const outputDescriptionPromptFlag = Flag.boolean("output-description-prompt").pipe(
 	Flag.optional,
 	Flag.withDescription(
-		"Output commit content for Ollama to summarize into PR description. Requires --log-file only. Exits after output.",
+		"Output commit content for an AI model to summarize into PR description. Requires --log-file only. Exits after output.",
 	),
 );
 
 const descriptionFileFlag = Flag.string("description-file").pipe(
 	Flag.optional,
 	Flag.withDescription(
-		"Path to file containing Ollama-generated description. Overrides computed description.",
+		"Path to file containing an AI-generated description. Overrides computed description.",
 	),
 );
 
