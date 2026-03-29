@@ -141,3 +141,9 @@ test/              — mirrors src/ layout
 ### ADR workflow {#adr-workflow}
 
 Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md and ARCHITECTURE.md if needed. *Significant* change: Research first, document in ADR, update both. Significant = multi-module, hard to reverse, new patterns. Minor refactors: no ADR.
+
+## Learned User Preferences
+
+- Prefer semver ranges (for example `^`) with `bun.lock` for most npm dependencies; use exact or tightly aligned pins only when there is a concrete reason (Bun versus `packageManager`, Effect beta line consistency, `@typescript/native-preview` snapshots).
+
+## Learned Workspace Facts
