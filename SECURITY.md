@@ -27,4 +27,4 @@ Include: type of issue, affected paths, steps to reproduce, impact.
 - **Secrets** — `APP_PRIVATE_KEY` must be stored as a repository secret. Never commit it.
 - **No telemetry** — auto-pr does not send data outside the workflow.
 
-**Maintainers:** Keep secret scanning and push protection enabled in repository Settings.
+**Maintainers:** Keep secret scanning and push protection enabled in repository Settings. CI runs [Gitleaks](https://github.com/gitleaks/gitleaks) on each check (see `.gitleaks.toml`).
