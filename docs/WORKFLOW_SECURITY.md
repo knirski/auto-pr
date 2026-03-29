@@ -18,7 +18,7 @@ The auto-pr flow is split into two reusable workflows:
 
 | Workflow | Checkout | Permissions | Secrets |
 |----------|----------|-------------|---------|
-| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read` | None |
+| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read`, `models: read` | `GH_TOKEN` from caller (`secrets.GH_TOKEN` or default `github.token` for GitHub Models) |
 | **create** (`auto-pr-create-reusable.yml`) | Default branch only | `contents: read`, `pull-requests: write` | `APP_ID`, `APP_PRIVATE_KEY` |
 
 ### Generate (Unprivileged)
