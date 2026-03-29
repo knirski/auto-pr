@@ -21,6 +21,7 @@ When creating or editing ADRs, follow the workflow in [AGENTS.md](../../AGENTS.m
 | 0006 | [Nix CI: upstream Nix and caching](0006-nix-ci-upstream-and-caching.md) |
 | 0007 | [Config-driven AI provider abstraction](0007-ai-abstraction-layer.md) |
 | 0008 | [Configuration: env vars; config file deferred](0008-config-file.md) |
+| 0009 | [Ollama removal and OpenAI-compat-only `LanguageModel`](0009-ollama-to-openai-compat-migration.md) |
 
 ## Supporting documents (research and plans)
 
