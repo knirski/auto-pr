@@ -56,6 +56,8 @@ bun x lefthook install
 bun run check
 ```
 
+For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` and set variables. The authoritative list is the environment table at the top of [`src/auto-pr/config.ts`](src/auto-pr/config.ts).
+
 | Command | Purpose |
 |---------|---------|
 | `bun run check` | Local checks (Bun, statix, deadnix, typos, lychee, actionlint) |
