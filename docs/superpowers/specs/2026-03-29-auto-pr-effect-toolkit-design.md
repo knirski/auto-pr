@@ -4,26 +4,26 @@
 **Status:** Proposed  
 **Companion:** [Inference & routing](2026-03-29-auto-pr-inference-and-routing.md) — providers, env, metrics, pre-generate model id.
 
-**Summary:** Replace static “dump everything in one prompt” with **on-demand exploration** via Effect **`Tool` + `Toolkit`** (`effect/unstable/ai`) and **`LanguageModel`**.
+**Summary:** Replace static “dump everything in one prompt” with on-demand exploration via Effect `Tool` + `Toolkit` (`effect/unstable/ai`) and `LanguageModel`.
 
 ## Principle
 
-- **Only** `effect/unstable/ai`: `LanguageModel`, `Tool`/`Toolkit`, `AiError`, `Prompt`/`Response` as needed. **`@effect/ai-openai-compat`** exists to **provide** `LanguageModel`, not as a second API in feature code.
-- **Providers (product):** `llamacpp` and `github-models` only — same `OpenAiClient` + `OpenAiLanguageModel`; see [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
+- Use `effect/unstable/ai` only: `LanguageModel`, `Tool`/`Toolkit`, `AiError`, `Prompt`/`Response` as needed. `@effect/ai-openai-compat` provides `LanguageModel`, not a parallel API in feature code.
+- Product providers: `llamacpp` and `github-models` only — same `OpenAiClient` + `OpenAiLanguageModel`; see [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
 
 ## 1. Problem / goals
 
-**Today:** `auto-pr-get-commits` writes `commits.txt` / `files.txt`; `auto-pr-generate-content` sends **one** large prompt.
+Today: `auto-pr-get-commits` writes `commits.txt` / `files.txt`; `auto-pr-generate-content` sends one large prompt.
 
-**Limits:** Token waste on big PRs; model cannot open files or diffs on demand; temp files between steps.
+Limits: token waste on big PRs; model cannot open files or diffs on demand; temp files between steps.
 
-**Goals:** On-demand context; exploratory repo reads; emphasize important changes (full pre-inference ranking is unreliable — see [Importance before inference](2026-03-29-auto-pr-inference-and-routing.md#importance-before-inference)); long-term optional merge of gather + generate via tools.
+Goals: on-demand context; exploratory repo reads; emphasize important changes (full pre-inference ranking is unreliable — see [Importance before inference](2026-03-29-auto-pr-inference-and-routing.md#importance-before-inference)); long-term optional merge of gather + generate via tools.
 
 ## 2. Toolkit (Effect v4)
 
 ### APIs
 
-`Tool.make`, `Toolkit.make`, `Toolkit.toLayer`; pass **`toolkit`** into **`LanguageModel.generateText`** / **`generateObject`** per pinned `effect` + `@effect/ai-openai-compat` (4.x). Pin versions with repo `package.json`.
+`Tool.make`, `Toolkit.make`, `Toolkit.toLayer`; pass `toolkit` into `LanguageModel.generateText` / `generateObject` per pinned `effect` + `@effect/ai-openai-compat` (4.x). Pin versions with repo `package.json`.
 
 ### Example
 
@@ -54,11 +54,11 @@ const RepoToolkitLayer = RepoToolkit.toLayer({
 });
 ```
 
-Handlers return **`Effect`**. Reuse existing **git** execution (`runCommand` / `ChildProcess` — no replacement required).
+Handlers return `Effect`. Reuse existing git execution (`runCommand` / `ChildProcess` — no replacement required).
 
 ### `LanguageModel` wiring
 
-Same imports as production **`ai-provider.ts`** (subpaths from `@effect/ai-openai-compat`):
+Same imports as production `ai-provider.ts` (subpaths from `@effect/ai-openai-compat`):
 
 ```typescript
 import { Effect, Layer, Redacted } from "effect";
@@ -79,40 +79,40 @@ const program = LanguageModel.generateText({ prompt: "…", toolkit: RepoToolkit
 );
 ```
 
-Local **llama-server:** `apiUrl` = `…/v1` base (e.g. `http://127.0.0.1:8080/v1`); omit `apiKey` if unused. **Which** URL/model in CI vs local: [inference spec](2026-03-29-auto-pr-inference-and-routing.md).
+Local llama-server: `apiUrl` = `…/v1` base (e.g. `http://127.0.0.1:8080/v1`); omit `apiKey` if unused. URL/model in CI vs local: [inference spec](2026-03-29-auto-pr-inference-and-routing.md).
 
 ### `generateObject` vs `generateText`
 
 | Use | When |
 |-----|------|
-| **`generateObject`** + schema `{ title, description }` | **Default** for PR metadata — matches `TitleDescriptionSchema`; avoids ad hoc JSON parsing. |
-| **`generateText` + `toolkit`** | Exploration (Phase 2): multi-turn tool use. |
-| **Two-phase** | `generateText` + tools → then **`generateObject`** on condensed context if “tools + JSON in one call” is flaky on a backend. |
+| `generateObject` + schema `{ title, description }` | Default for PR metadata — matches `TitleDescriptionSchema`; avoids ad hoc JSON parsing. |
+| `generateText` + `toolkit` | Exploration (Phase 2): multi-turn tool use. |
+| Two-phase | `generateText` + tools → then `generateObject` on condensed context if “tools + JSON in one call” is flaky on a backend. |
 
-**`generateObject` + `toolkit` on one call:** `GenerateObjectOptions` extends `GenerateTextOptions`, but **tool rounds + structured JSON** together is **provider-dependent** — verify on `github-models` / llama-server; if not reliable, use two-phase.
+`generateObject` + `toolkit` on one call: `GenerateObjectOptions` extends `GenerateTextOptions`, but tool rounds + structured JSON together is provider-dependent — verify on `github-models` / llama-server; if not reliable, use two-phase.
 
-**Tool loop (Effect):** Provider sends tool definitions → model may return tool calls → handlers run in Effect → results appended → repeat until final text/object. `disableToolCallResolution` exists for manual control.
+Tool loop (Effect): provider sends tool definitions → model may return tool calls → handlers run in Effect → results appended → repeat until final text/object. `disableToolCallResolution` exists for manual control.
 
 ### Shapes for auto-pr
 
 | Shape | When |
 |-------|------|
-| `generateObject({ prompt, schema })` only | Baseline; routing context in **prompt** only. |
+| `generateObject({ prompt, schema })` only | Baseline; routing context in prompt only. |
 | `generateText({ prompt, toolkit })` → `generateObject({ prompt: condensed, schema })` | Explore first; second call is structured. |
 | `generateObject({ prompt, schema, toolkit })` | Fewer round-trips if backend supports it. |
 
-**Layers:** `Effect.provide` `RepoToolkitLayer` and `modelLayer`.
+Layers: `Effect.provide` `RepoToolkitLayer` and `modelLayer`.
 
 ## 3. Roadmap
 
 | Phase | Work |
 |-------|------|
-| **1** | `src/auto-pr/live/repo-toolkit.ts`; wrap existing git reads in tool handlers. |
-| **2** | Wire `RepoToolkit` into generation; validate tools + structured output on both backends; prompt updates. |
-| **3** (optional) | Fold `auto-pr-get-commits` into tool layer where workflows adopt exploration — coordinate with [inference §2](2026-03-29-auto-pr-inference-and-routing.md) (env-driven model). |
+| 1 | `src/auto-pr/live/repo-toolkit.ts`; wrap existing git reads in tool handlers. |
+| 2 | Wire `RepoToolkit` into generation; validate tools + structured output on both backends; prompt updates. |
+| 3 (optional) | Fold `auto-pr-get-commits` into tool layer where workflows adopt exploration — coordinate with [inference §2](2026-03-29-auto-pr-inference-and-routing.md) (env-driven model). |
 
 ## 4. Constraints
 
-- **Read-only** tools (no repo writes during analysis).
-- **Cache** repeated tool results in one Effect run.
-- **No** vendor SDKs in `src/auto-pr` beyond OpenAI-compat + `effect/unstable/ai`.
+- Read-only tools (no repo writes during analysis).
+- Cache repeated tool results in one Effect run.
+- No vendor SDKs in `src/auto-pr` beyond OpenAI-compat + `effect/unstable/ai`.

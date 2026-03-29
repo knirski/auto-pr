@@ -1,18 +1,18 @@
 # Unify AI on OpenAI-compatible `LanguageModel` (remove Ollama)
 
 **Date:** 2026-03-29  
-**Status:** Proposed — **prerequisite** to toolkit + routing work  
+**Status:** Proposed — prerequisite to toolkit + routing work  
 
-**Summary:** Remove **`ollama`** package, **`ollama-language-model.ts`**, and Ollama workflow steps. **Two** provider ids — **`llamacpp`**, **`github-models`** — one implementation: **`@effect/ai-openai-compat`** (`OpenAiClient.layer` + `OpenAiLanguageModel.model`) + **`FetchHttpClient`**. No separate **`openai-compat`** enum: any OpenAI-compatible URL uses **`llamacpp`** with env overrides.
+**Summary:** Remove `ollama` package, `ollama-language-model.ts`, and Ollama workflow steps. Two provider ids — `llamacpp`, `github-models` — one implementation: `@effect/ai-openai-compat` (`OpenAiClient.layer` + `OpenAiLanguageModel.model`) + `FetchHttpClient`. No separate `openai-compat` enum: any OpenAI-compatible URL uses `llamacpp` with env overrides.
 
 ## Principle
 
-All generation through **`effect/unstable/ai`** (`LanguageModel`, later `Tool`/`Toolkit`). **`@effect/ai-openai-compat`** is the only HTTP `LanguageModel` implementation in app code.
+All generation through `effect/unstable/ai` (`LanguageModel`, later `Tool`/`Toolkit`). `@effect/ai-openai-compat` is the only HTTP `LanguageModel` implementation in app code.
 
 ## Current state (remove)
 
 - Default / `AUTO_PR_AI_PROVIDER=ollama`; `ollama-language-model.ts`; `ollama` npm dep.
-- Optional **`openai-compat`** branch (redundant once all backends are OpenAI-shaped).
+- Optional `openai-compat` branch (redundant once all backends are OpenAI-shaped).
 - Workflows: `ai-action/setup-ollama`, `ollama pull`, `ai_ollama_model`, default `ai_provider: ollama`.
 - Env: `AUTO_PR_AI_OLLAMA_MODEL`, `AUTO_PR_AI_OPENAI_COMPAT_*`.
 
@@ -20,12 +20,12 @@ All generation through **`effect/unstable/ai`** (`LanguageModel`, later `Tool`/`
 
 | Provider | Config |
 |----------|--------|
-| **`github-models`** | `apiUrl`: `https://models.github.ai/inference`; `apiKey`: `GH_TOKEN`; model: `AUTO_PR_AI_GITHUB_MODEL` |
-| **`llamacpp`** | `apiUrl`: `AUTO_PR_AI_LLAMACPP_URL` (default e.g. `http://127.0.0.1:8080/v1`); optional `AUTO_PR_AI_LLAMACPP_API_KEY`; model: `AUTO_PR_AI_LLAMACPP_MODEL` |
+| `github-models` | `apiUrl`: `https://models.github.ai/inference`; `apiKey`: `GH_TOKEN`; model: `AUTO_PR_AI_GITHUB_MODEL` |
+| `llamacpp` | `apiUrl`: `AUTO_PR_AI_LLAMACPP_URL` (default e.g. `http://127.0.0.1:8080/v1`); optional `AUTO_PR_AI_LLAMACPP_API_KEY`; model: `AUTO_PR_AI_LLAMACPP_MODEL` |
 
-Remote gateways (OpenRouter, Azure, etc.): **`llamacpp`** + URL + model + key.
+Remote gateways (OpenRouter, Azure, etc.): `llamacpp` + URL + model + key.
 
-**Removed env:** `AUTO_PR_AI_OLLAMA_MODEL`, `ollama` string, standalone `AUTO_PR_AI_OPENAI_COMPAT_*`.
+Removed env: `AUTO_PR_AI_OLLAMA_MODEL`, `ollama` string, standalone `AUTO_PR_AI_OPENAI_COMPAT_*`.
 
 ## Breaking (adopters)
 
@@ -34,7 +34,7 @@ Remote gateways (OpenRouter, Azure, etc.): **`llamacpp`** + URL + model + key.
 
 ## CI
 
-GitHub-hosted runners: do not assume local llama.cpp — prefer **`github-models`** when `GH_TOKEN` exists, or document self-hosted for **`llamacpp`**.
+GitHub-hosted runners: do not assume local llama.cpp — prefer `github-models` when `GH_TOKEN` exists, or document self-hosted for `llamacpp`.
 
 ## Implementation checklist
 
@@ -52,7 +52,7 @@ GitHub-hosted runners: do not assume local llama.cpp — prefer **`github-models
 
 ## Testing
 
-- Unit: `aiProviderLayerFromConfig` for both providers with mock **`fetch`** / `HttpClient`.
+- Unit: `aiProviderLayerFromConfig` for both providers with mock `fetch` / `HttpClient`.
 - Integration: `generatePrContentFromValues` with 2+ commits, HTTP mocked.
 
 ## Resolved / open
