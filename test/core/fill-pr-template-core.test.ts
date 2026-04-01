@@ -105,6 +105,24 @@ describe("fill-pr-template-core", () => {
 			);
 		});
 
+		test("ignores non-numeric #refs in prose (e.g. TS path alias #core)", () => {
+			const block = `---COMMIT---
+chore: require token; drop core re-export
+
+Delete src/auto-pr/core.ts; export gh helpers from #core in index.
+Made-with: Cursor`;
+			pipe(
+				parseCommits(block),
+				Result.match({
+					onSuccess: (commits) => {
+						expect(commits).toHaveLength(1);
+						expect(commits[0]?.references).toEqual([]);
+					},
+					onFailure: () => expect().fail("expected success"),
+				}),
+			);
+		});
+
 		test("returns empty for empty input", () => {
 			pipe(
 				parseCommits(""),

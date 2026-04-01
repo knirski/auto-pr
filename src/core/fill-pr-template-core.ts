@@ -67,6 +67,11 @@ type ConventionalType = (typeof CONVENTIONAL_TYPES)[number];
 
 const ISSUE_STARTS_PATTERN = /^(Closes|Fixes|Fix|Resolves|Resolve|Closed|Close) #\d+/i;
 
+/** GitHub issue/PR numbers are numeric; ignore `#word` prose (e.g. TS path `#core`). */
+function isNumericGitHubIssueId(issue: string): boolean {
+	return /^\d+$/.test(issue);
+}
+
 const TYPE_MAP: Record<ConventionalType, TypeOfChange> = {
 	feat: "New feature",
 	fix: "Bug fix",
@@ -100,14 +105,16 @@ function mapParsedToCommitInfo(block: string, parsed: Commit): CommitInfo {
 	const header = parsed.header ?? block.split("\n")[0] ?? "";
 	const bodyParts = [parsed.body, parsed.footer].filter(Boolean);
 	const body = bodyParts.join("\n\n").trim();
-	const refs = parsed.references.map((r) => {
-		const action = r.action ?? "Closes";
-		const ref =
-			r.owner != null && r.repository != null
-				? `${r.owner}/${r.repository}#${r.issue}`
-				: `${r.prefix ?? "#"}${r.issue}`;
-		return `${action} ${ref}`;
-	});
+	const refs = parsed.references
+		.filter((r) => isNumericGitHubIssueId(r.issue))
+		.map((r) => {
+			const action = r.action ?? "Closes";
+			const ref =
+				r.owner != null && r.repository != null
+					? `${r.owner}/${r.repository}#${r.issue}`
+					: `${r.prefix ?? "#"}${r.issue}`;
+			return `${action} ${ref}`;
+		});
 	const breaking = parsed.notes.find((n) => /BREAKING/i.test(n.title));
 	return {
 		subject: header,
