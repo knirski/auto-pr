@@ -5,6 +5,7 @@ import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	fillTemplate,
 	filterMergeCommits,
+	fitConventionalTitleToLengthLimit,
 	formatTitleBody,
 	getBreakingChanges,
 	getChanges,
@@ -27,6 +28,10 @@ import {
 	renderBody,
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
+import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
+
+/** Subject repeat count so `feat: ${"x".repeat(...)}` is one character over {@link PR_TITLE_LINE_MAX_LENGTH}. */
+const FEAT_COLON_SUBJECT_OVER_MAX = PR_TITLE_LINE_MAX_LENGTH - "feat: ".length + 1;
 
 const TEST_TEMPLATE = `## Description
 {{description}}
@@ -205,6 +210,12 @@ describe("fill-pr-template-core", () => {
 		test("prTitle with breaking marker → Breaking change", () => {
 			const commits = [commit("fix: a", "", { type: "fix" })];
 			expect(inferTypeOfChange(commits, "feat!: remove API")).toBe("Breaking change");
+		});
+		test("prTitle over max length but conventional still overrides type", () => {
+			const commits = [commit("fix: a", "", { type: "fix" })];
+			const longFeat = `feat: ${"x".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`;
+			expect(longFeat.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			expect(inferTypeOfChange(commits, longFeat)).toBe("New feature");
 		});
 	});
 
@@ -520,9 +531,12 @@ describe("fill-pr-template-core", () => {
 	});
 
 	describe("isWithinLengthLimit", () => {
-		test("accepts non-blank titles up to 72 chars trimmed", () => {
+		test("accepts non-blank titles up to max length trimmed", () => {
 			expect(isWithinLengthLimit("feat: add X")).toBe(true);
-			expect(isWithinLengthLimit(`feat: ${"a".repeat(67)}`)).toBe(false);
+			expect(
+				isWithinLengthLimit(`feat: ${"a".repeat(PR_TITLE_LINE_MAX_LENGTH - "feat: ".length)}`),
+			).toBe(true);
+			expect(isWithinLengthLimit(`feat: ${"a".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`)).toBe(false);
 		});
 		test("rejects blank", () => {
 			expect(isWithinLengthLimit("")).toBe(false);
@@ -543,8 +557,47 @@ describe("fill-pr-template-core", () => {
 			expect(isValidConventionalTitle("Add feature X")).toBe(false);
 			expect(isValidConventionalTitle("Here's the title: feat: add X")).toBe(false);
 			expect(isValidConventionalTitle("  ")).toBe(false);
-			expect(isValidConventionalTitle(`feat: ${"a".repeat(67)}`)).toBe(false);
+			expect(isValidConventionalTitle(`feat: ${"a".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`)).toBe(
+				false,
+			);
 			expect(isValidConventionalTitle(" : missing type")).toBe(false);
+		});
+	});
+
+	describe("fitConventionalTitleToLengthLimit", () => {
+		test("leaves short conventional titles unchanged", () => {
+			Result.match(fitConventionalTitleToLengthLimit("feat: add X"), {
+				onSuccess: (t) => expect(t).toBe("feat: add X"),
+				onFailure: () => expect().fail("expected success"),
+			});
+		});
+		test("shortens subject to satisfy max length", () => {
+			const long = `feat: ${"a".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`;
+			expect(long.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			Result.match(fitConventionalTitleToLengthLimit(long), {
+				onSuccess: (t) => {
+					expect(t.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(isValidConventionalTitle(t)).toBe(true);
+				},
+				onFailure: () => expect().fail("expected success"),
+			});
+		});
+		test("shortens scoped titles", () => {
+			const prefix = "feat(ci): ";
+			const long = `${prefix}${"b".repeat(PR_TITLE_LINE_MAX_LENGTH - prefix.length + 1)}`;
+			Result.match(fitConventionalTitleToLengthLimit(long), {
+				onSuccess: (t) => {
+					expect(t.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(matchesConventionalTitleFormat(t)).toBe(true);
+				},
+				onFailure: () => expect().fail("expected success"),
+			});
+		});
+		test("fails for non-conventional titles", () => {
+			Result.match(fitConventionalTitleToLengthLimit("not conventional"), {
+				onSuccess: () => expect().fail("expected failure"),
+				onFailure: () => {},
+			});
 		});
 	});
 
@@ -581,6 +634,16 @@ describe("fill-pr-template-core", () => {
 			Result.match(validateTitleDescription({ title: "Add feature", description: "Body" }), {
 				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
+			});
+		});
+		test("shortens long conventional title to max length", () => {
+			const longTitle = `feat: ${"x".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`;
+			Result.match(validateTitleDescription({ title: longTitle, description: "Summary here." }), {
+				onSuccess: (v) => {
+					expect(v.title.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(v.description).toBe("Summary here.");
+				},
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 	});

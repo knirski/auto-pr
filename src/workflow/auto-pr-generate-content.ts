@@ -20,6 +20,7 @@ import {
 	Layer,
 	Option,
 	Path,
+	pipe,
 	Result,
 	Schedule,
 	Schema,
@@ -50,10 +51,10 @@ import {
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
+	fitConventionalTitleToLengthLimit,
 	getDescriptionFromCommits,
 	getDescriptionPromptText,
 	getTitle as getTitleFromCommits,
-	isValidConventionalTitle,
 	isWithinLengthLimit,
 	matchesConventionalTitleFormat,
 	parseCommits,
@@ -115,33 +116,28 @@ function validateGeneratedContent(value: {
 	risks: readonly string[];
 	notesForReviewers: string;
 }): Result.Result<{ title: string; description: string }, DescriptionParseError> {
-	const { title, motivation, notesForReviewers } = value;
-	if (isBlank(title)) {
-		return Result.fail(new DescriptionParseError({ cause: "title is empty" }));
-	}
-	if (!isValidConventionalTitle(title)) {
-		return Result.fail(
-			new DescriptionParseError({
-				cause: `title not conventional format: "${title}"`,
-			}),
-		);
-	}
-	if (isBlank(motivation)) {
-		return Result.fail(new DescriptionParseError({ cause: "motivation is empty" }));
-	}
-	const normalizedRisks = normalizeRiskItems(value.risks);
-	if (normalizedRisks.length === 0) {
-		return Result.fail(new DescriptionParseError({ cause: "risks are empty" }));
-	}
-	const description = buildDescriptionBlock({
-		motivation,
-		risks: normalizedRisks,
-		notesForReviewers,
-	});
-	if (isBlank(description)) {
-		return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
-	}
-	return Result.succeed({ title: title.trim(), description });
+	const { motivation, notesForReviewers } = value;
+	return pipe(
+		fitConventionalTitleToLengthLimit(value.title),
+		Result.flatMap((title) => {
+			if (isBlank(motivation)) {
+				return Result.fail(new DescriptionParseError({ cause: "motivation is empty" }));
+			}
+			const normalizedRisks = normalizeRiskItems(value.risks);
+			if (normalizedRisks.length === 0) {
+				return Result.fail(new DescriptionParseError({ cause: "risks are empty" }));
+			}
+			const description = buildDescriptionBlock({
+				motivation,
+				risks: normalizedRisks,
+				notesForReviewers,
+			});
+			if (isBlank(description)) {
+				return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
+			}
+			return Result.succeed({ title, description });
+		}),
+	);
 }
 
 function makeRetrySchedule(delayMs: number) {
@@ -161,7 +157,10 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 	description: string;
 } {
 	const firstSubject = filtered[0]?.subject?.trim() ?? "";
-	const title = isValidConventionalTitle(firstSubject) ? firstSubject : "chore: update";
+	const title = Result.match(fitConventionalTitleToLengthLimit(firstSubject), {
+		onSuccess: (t) => t,
+		onFailure: () => "chore: update",
+	});
 	const description = buildDescriptionBlock({
 		motivation: getDescriptionFromCommits(filtered),
 		risks: [
@@ -215,6 +214,17 @@ function generateTitleAndDescription(
 		return yield* Result.match(validateGeneratedContent(raw), {
 			onSuccess: (validated) =>
 				Effect.gen(function* () {
+					if (titleTrimmed !== validated.title) {
+						yield* Effect.log({
+							event: "generate_pr_content",
+							step: "validation",
+							status: "title_shortened",
+							provider,
+							model,
+							title_chars_before: titleTrimmed.length,
+							title_chars_after: validated.title.length,
+						});
+					}
 					yield* Effect.log({
 						event: "generate_pr_content",
 						step: "validation",

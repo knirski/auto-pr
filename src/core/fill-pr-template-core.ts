@@ -10,6 +10,7 @@ import * as Arr from "effect/Array";
 import { render } from "micromustache";
 import { collapseProseParagraphs } from "#core/collapse-prose-paragraphs.js";
 import { DescriptionParseError, ParseError, TemplateRenderError } from "#core/errors.js";
+import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { isBlank, isMergeCommitSubject, parseSubjects, toError } from "#core/string.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -149,7 +150,7 @@ export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: stri
 		return "Breaking change";
 	}
 
-	if (titleTrim && isValidConventionalTitle(titleTrim)) {
+	if (titleTrim && matchesConventionalTitleFormat(titleTrim)) {
 		const token = extractConventionalTypeFromTitle(titleTrim);
 		if (token) {
 			return typeFromString(token.toLowerCase());
@@ -186,18 +187,81 @@ export function getTitle(commits: readonly CommitInfo[]): string {
 
 const CONVENTIONAL_HEADER_PATTERN = /^(\w+)(?:\([^)]*\))?!?: .+$/;
 
-/** True when trimmed title matches `type(scope)?: subject` (72-char limit not applied). */
+/** Capture prefix (through `": `") and subject for shortening long conventional titles. */
+const CONVENTIONAL_PREFIX_AND_SUBJECT_PATTERN = /^(\w+(?:\([^)]*\))?!?: )(.+)$/;
+
+/** True when trimmed title matches `type(scope)?: subject` (line length limit not applied). */
 export function matchesConventionalTitleFormat(s: string): boolean {
 	return CONVENTIONAL_HEADER_PATTERN.test(s.trim());
 }
 
-/** True when title is non-blank and trimmed length is at most 72 (Git subject-line convention). */
+/** True when title is non-blank and trimmed length is at most {@link PR_TITLE_LINE_MAX_LENGTH}. */
 export function isWithinLengthLimit(s: string): boolean {
-	return !isBlank(s) && s.trim().length <= 72;
+	return !isBlank(s) && s.trim().length <= PR_TITLE_LINE_MAX_LENGTH;
 }
 
 export function isValidConventionalTitle(s: string): boolean {
 	return isWithinLengthLimit(s) && matchesConventionalTitleFormat(s);
+}
+
+/**
+ * If the title matches conventional format but exceeds {@link PR_TITLE_LINE_MAX_LENGTH},
+ * shorten the subject so the full line fits. Fails if the header alone does not leave room
+ * for a non-empty subject.
+ */
+export function fitConventionalTitleToLengthLimit(
+	s: string,
+): Result.Result<string, DescriptionParseError> {
+	const t = s.trim();
+	if (isBlank(t)) {
+		return Result.fail(new DescriptionParseError({ cause: "title is empty" }));
+	}
+	if (!matchesConventionalTitleFormat(t)) {
+		return Result.fail(
+			new DescriptionParseError({ cause: `title not conventional format: "${t}"` }),
+		);
+	}
+	if (isWithinLengthLimit(t)) {
+		return Result.succeed(t);
+	}
+	const m = CONVENTIONAL_PREFIX_AND_SUBJECT_PATTERN.exec(t);
+	if (m === null) {
+		return Result.fail(
+			new DescriptionParseError({ cause: `title not conventional format: "${t}"` }),
+		);
+	}
+	const prefix = m[1];
+	const subject = m[2];
+	if (prefix === undefined || subject === undefined) {
+		return Result.fail(
+			new DescriptionParseError({ cause: `title not conventional format: "${t}"` }),
+		);
+	}
+	const maxSubjectLen = PR_TITLE_LINE_MAX_LENGTH - prefix.length;
+	if (maxSubjectLen < 1) {
+		return Result.fail(
+			new DescriptionParseError({
+				cause: `title exceeds ${PR_TITLE_LINE_MAX_LENGTH} characters and cannot be shortened (header too long): "${t}"`,
+			}),
+		);
+	}
+	const shortenedSubject = subject.slice(0, maxSubjectLen).trimEnd();
+	if (isBlank(shortenedSubject)) {
+		return Result.fail(
+			new DescriptionParseError({
+				cause: `title exceeds ${PR_TITLE_LINE_MAX_LENGTH} characters and no usable subject remains after shortening: "${t}"`,
+			}),
+		);
+	}
+	const out = `${prefix}${shortenedSubject}`;
+	if (!isValidConventionalTitle(out)) {
+		return Result.fail(
+			new DescriptionParseError({
+				cause: `title could not be shortened to a valid conventional line: "${t}"`,
+			}),
+		);
+	}
+	return Result.succeed(out);
 }
 
 /**
@@ -209,20 +273,13 @@ export function validateTitleDescription(value: {
 	description: string;
 }): Result.Result<{ title: string; description: string }, DescriptionParseError> {
 	const { title, description } = value;
-	if (isBlank(title)) {
-		return Result.fail(new DescriptionParseError({ cause: "title is empty" }));
-	}
 	if (isBlank(description)) {
 		return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
 	}
-	if (!isValidConventionalTitle(title)) {
-		return Result.fail(
-			new DescriptionParseError({
-				cause: `title not conventional format: "${title}"`,
-			}),
-		);
-	}
-	return Result.succeed({ title, description });
+	return pipe(
+		fitConventionalTitleToLengthLimit(title),
+		Result.flatMap((fitted) => Result.succeed({ title: fitted, description })),
+	);
 }
 
 export function getDescription(first: CommitInfo): string {

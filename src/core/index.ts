@@ -25,6 +25,7 @@ export type { CommitInfo, TemplateData, TypeOfChange } from "#core/fill-pr-templ
 export {
 	fillTemplate,
 	filterMergeCommits,
+	fitConventionalTitleToLengthLimit,
 	formatTitleBody,
 	getBreakingChanges,
 	getChanges,
@@ -59,6 +60,7 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
+export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 export { buildDescriptionPrompt } from "#core/prompt.js";
 export {
 	filterSemanticSubjects,

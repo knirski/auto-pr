@@ -12,6 +12,7 @@ import {
 	isBlank,
 	isHttpError,
 	isMergeCommitSubject,
+	PR_TITLE_LINE_MAX_LENGTH,
 	parseGhOutput,
 	parseSubjects,
 	sanitizeForGhOutput,
@@ -57,18 +58,18 @@ describe("core", () => {
 				onFailure: () => expect().fail("expected success"),
 			});
 		});
-		test("trims and slices to 72", () => {
+		test("trims and slices to PR_TITLE_LINE_MAX_LENGTH", () => {
 			Result.match(sanitizeForGhOutput("  x  "), {
 				onSuccess: (v) => expect(v).toBe("x" as GhOutputValue),
 				onFailure: () => expect().fail("expected success"),
 			});
-			Result.match(sanitizeForGhOutput("a".repeat(100)), {
-				onSuccess: (v) => expect(v.length).toBe(72),
+			Result.match(sanitizeForGhOutput("a".repeat(PR_TITLE_LINE_MAX_LENGTH + 20)), {
+				onSuccess: (v) => expect(v.length).toBe(PR_TITLE_LINE_MAX_LENGTH),
 				onFailure: () => expect().fail("expected success"),
 			});
 		});
-		test("fails when escaped value exceeds 72 chars", () => {
-			Result.match(sanitizeForGhOutput("%".repeat(72)), {
+		test("fails when escaped value exceeds max after percent-encoding", () => {
+			Result.match(sanitizeForGhOutput("%".repeat(PR_TITLE_LINE_MAX_LENGTH)), {
 				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
 			});
@@ -168,10 +169,10 @@ describe("core", () => {
 	});
 
 	describe("sanitizeForGhOutput and decodeGhOutputTitle round-trip", () => {
-		test("sanitize then decode yields original for non-empty strings without special chars (≤72 chars)", () => {
+		test("sanitize then decode yields original for non-empty strings without special chars (≤ max length)", () => {
 			FastCheck.assert(
 				FastCheck.property(
-					FastCheck.string({ minLength: 1, maxLength: 72 }).filter(
+					FastCheck.string({ minLength: 1, maxLength: PR_TITLE_LINE_MAX_LENGTH }).filter(
 						(s) => s.trim().length > 0 && !/[\n\r%]/.test(s),
 					),
 					(title) => {
@@ -180,7 +181,7 @@ describe("core", () => {
 							onSuccess: (encoded) => {
 								const decoded = decodeGhOutputTitle(encoded);
 								Result.match(decoded, {
-									onSuccess: (v) => expect(v).toBe(title.trim().slice(0, 72)),
+									onSuccess: (v) => expect(v).toBe(title.trim().slice(0, PR_TITLE_LINE_MAX_LENGTH)),
 									onFailure: () => expect().fail("decode should succeed"),
 								});
 							},

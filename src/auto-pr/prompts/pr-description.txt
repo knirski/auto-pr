@@ -2,7 +2,7 @@ Summarize these commits into a PR title and structured review metadata. The rend
 
 Respond with JSON only: {"title": "...", "motivation": "...", "risks": ["..."], "notesForReviewers": "..."}.
 
-title: Conventional commit format: TYPE: SUBJECT or TYPE(scope): SUBJECT. Optional (scope) for a subsystem or feature area (e.g. feat(auth): …). Pick a fitting type: feat, fix, docs, chore, refactor, security, perf, test, ci, build, revert, or style. Max 72 chars trimmed. Subject must be concrete after the colon (WRONG: feat. CORRECT: feat: add session refresh). Prefer type security when the change is security-sensitive.
+title: Conventional commit format: TYPE: SUBJECT or TYPE(scope): SUBJECT. Optional (scope) for a subsystem or feature area (e.g. feat(auth): …). Pick a fitting type: feat, fix, docs, chore, refactor, security, perf, test, ci, build, revert, or style. Max 100 chars trimmed (entire line). Subject must be concrete after the colon (WRONG: feat. CORRECT: feat: add session refresh). Prefer type security when the change is security-sensitive.
 
 motivation: Plain text, 2–5 sentences. Put the **main reason this branch exists** first: problem, goal, or constraint. This is the most important field—do not bury it. Avoid a vague opener and avoid a laundry list of every commit theme; synthesize the overarching intent.
 

@@ -8,6 +8,7 @@ import {
 	UnexpectedError,
 } from "#auto-pr";
 import { FillPrTemplateValidationError } from "#core/errors.js";
+import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
 import {
 	createOpenAiChatCompletionsMockFetch,
@@ -195,6 +196,30 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 					expect(result.body).toContain("feat: add module A");
 					expect(result.body).toContain("fix: fix bug in B");
 					expect(result.count).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("accepts long conventional title by shortening subject to max length (no fallback)", async () => {
+			const longTitle = `feat(generate-content): structured AI-driven PR metadata with enhanced CI and validation${"x".repeat(25)}`;
+			expect(longTitle.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			const longResponse = JSON.stringify({
+				title: longTitle,
+				motivation: "Short motivation for the change.",
+				risks: ["One risk bullet."],
+				notesForReviewers: "",
+			});
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(longResponse),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.title.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(result.title.startsWith("feat(generate-content): ")).toBe(true);
+					expect(result.body).toContain("### Motivation");
 				}).pipe(Effect.scoped),
 			);
 		});
