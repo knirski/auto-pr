@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit, FileSystem, Layer, Path, Result } from "effect";
+import { Cause, Effect, Exit, FileSystem, Layer, Path, Redacted, Result } from "effect";
 import {
 	aiProviderLayerFromConfig,
 	NoSemanticCommitsError,
 	ParseError,
 	TemplateRenderError,
+	UnexpectedError,
 } from "#auto-pr";
 import { FillPrTemplateValidationError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
@@ -197,6 +198,28 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 				}).pipe(Effect.scoped),
 			);
 		});
+
+		test("truncates very long motivation and risk strings in model_response logging path", async () => {
+			const longMotivation = `MOTIVATION_${"x".repeat(2100)}`;
+			const longResponse = JSON.stringify({
+				title: "feat: add X and fix B",
+				motivation: longMotivation,
+				risks: ["Short risk only."],
+				notesForReviewers: "n",
+			});
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(longResponse),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain(longMotivation.slice(0, 80));
+				}).pipe(Effect.scoped),
+			);
+		});
 	});
 
 	describe("invalid title (fallback)", () => {
@@ -308,6 +331,82 @@ describe("catchDefect (defect → TemplateRenderError)", () => {
 const RunIntegrationLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 
 describe("runGeneratePrContent (integration, file I/O)", () => {
+	test("fails with UnexpectedError when commits file is missing", async () => {
+		await runEffect(RunIntegrationLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("generate-pr-missing-commits-");
+				const pathApi = yield* Path.Path;
+				const missingCommits = pathApi.join(tmp.path, "does-not-exist-commits.txt");
+				const filesPath = pathApi.join(tmp.path, "files.txt");
+				const templatePath = pathApi.join(tmp.path, "template.md");
+				const fs = yield* FileSystem.FileSystem;
+				yield* fs.writeFileString(filesPath, "src/a.ts\n");
+				yield* fs.writeFileString(templatePath, DEFAULT_TEMPLATE);
+
+				const exit = yield* runGeneratePrContent({
+					commits: missingCommits,
+					files: filesPath,
+					workspace: tmp.path,
+					templatePath,
+					provider: "local",
+					model: "gpt-oss",
+					fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+				}).pipe(Effect.exit);
+
+				expect(Exit.isFailure(exit)).toBe(true);
+				if (Exit.isFailure(exit)) {
+					Result.match(Cause.findError(exit.cause), {
+						onSuccess: (err) => {
+							expect(err).toBeInstanceOf(UnexpectedError);
+							expect((err as UnexpectedError).cause).toContain("commits");
+						},
+						onFailure: () => expect().fail("expected UnexpectedError"),
+					});
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("reads files, writes pr-title.txt and pr-body.md (github-models + ghToken)", async () => {
+		await runEffect(RunIntegrationLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("generate-pr-content-github-models-");
+				const fs = yield* FileSystem.FileSystem;
+				const pathApi = yield* Path.Path;
+
+				const commitsPath = pathApi.join(tmp.path, "commits.txt");
+				const filesPath = pathApi.join(tmp.path, "files.txt");
+				const templatePath = pathApi.join(tmp.path, "template.md");
+
+				yield* fs.writeFileString(
+					commitsPath,
+					logContent(
+						{ subject: "feat: add module A", body: "Adds A." },
+						{ subject: "fix: fix bug in B", body: "Fixes B." },
+					),
+				);
+				yield* fs.writeFileString(filesPath, "src/a.ts\nsrc/b.ts\n");
+				yield* fs.writeFileString(templatePath, TEMPLATE_WITH_CHANGES);
+
+				yield* runGeneratePrContent({
+					commits: commitsPath,
+					files: filesPath,
+					workspace: tmp.path,
+					templatePath,
+					provider: "github-models",
+					model: "openai/gpt-4.1-mini",
+					ghToken: Redacted.make("ghp_integration_test"),
+					retryDelayMs: 0,
+					fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+				});
+
+				const titlePath = pathApi.join(tmp.path, "pr-title.txt");
+				const titleContent = yield* fs.readFileString(titlePath);
+				expect(titleContent).toContain("feat: add X and fix B");
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("reads files, writes pr-title.txt and pr-body.md", async () => {
 		await runEffect(RunIntegrationLayer)(
 			Effect.gen(function* () {

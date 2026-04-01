@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { CommitParser } from "conventional-commits-parser";
 import { Option, pipe, Result } from "effect";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
@@ -107,6 +108,27 @@ describe("fill-pr-template-core", () => {
 					onFailure: () => expect().fail("expected success"),
 				}),
 			);
+		});
+
+		test("returns ParseError when underlying parser throws", () => {
+			const original = CommitParser.prototype.parse;
+			CommitParser.prototype.parse = function parseThrows() {
+				throw new Error("forced parser failure");
+			};
+			try {
+				pipe(
+					parseCommits("---COMMIT---\nfeat: x"),
+					Result.match({
+						onSuccess: () => expect().fail("expected failure"),
+						onFailure: (e) => {
+							expect(e._tag).toBe("ParseError");
+							expect(e.message).toBe("Failed to parse commits");
+						},
+					}),
+				);
+			} finally {
+				CommitParser.prototype.parse = original;
+			}
 		});
 	});
 

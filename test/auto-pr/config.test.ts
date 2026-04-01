@@ -277,6 +277,41 @@ describe("config layers fail when required env vars missing", () => {
 		);
 	});
 
+	test("CreateOrUpdatePrConfigLayer fails when pr-title.txt is missing", async () => {
+		await runEffect(TestBaseLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("cou-pr-no-title-");
+				const providerLayer = ConfigProvider.layer(
+					ConfigProvider.fromUnknown({
+						BRANCH: "ai/feature",
+						DEFAULT_BRANCH: "main",
+						GITHUB_WORKSPACE: tmp.path,
+						GH_TOKEN: "ghp_test_token",
+					}),
+				);
+				const fullLayer = Layer.mergeAll(
+					TestBaseLayer,
+					CreateOrUpdatePrConfigLayer.pipe(Layer.provide(providerLayer)),
+				);
+				const exit = yield* Effect.gen(function* () {
+					return yield* CreateOrUpdatePrConfig;
+				})
+					.pipe(Effect.provide(fullLayer))
+					.pipe(Effect.exit);
+				expect(Exit.isFailure(exit)).toBe(true);
+				if (Exit.isFailure(exit)) {
+					Result.match(Cause.findError(exit.cause), {
+						onSuccess: (err) => {
+							expect(err).toBeInstanceOf(AutoPrConfigError);
+							expect((err as AutoPrConfigError).missing.join(" ")).toContain("pr-title.txt");
+						},
+						onFailure: () => expect().fail("expected AutoPrConfigError"),
+					});
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("RunAutoPrConfigLayer fails when GH_TOKEN missing", async () => {
 		await Effect.runPromise(
 			expectConfigFailure(
@@ -286,5 +321,91 @@ describe("config layers fail when required env vars missing", () => {
 				RunAutoPrConfigLayer,
 			),
 		);
+	});
+});
+
+const runAutoPrBaseEnv = {
+	DEFAULT_BRANCH: "main",
+	GITHUB_WORKSPACE: "/run-auto-pr-ws",
+	GH_TOKEN: "ghp_run_auto_pr",
+};
+
+describe("RunAutoPrConfigLayer succeeds", () => {
+	test("with local provider (default) and model", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.provider).toBe("local");
+				expect(config.model).toBe("gpt-oss");
+				expect(config.openaiCompatUrl).toBe(DEFAULT_OPENAI_COMPAT_URL);
+				expect(config.branch).toBeUndefined();
+			}),
+		);
+	});
+
+	test("with github-models provider and default model", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				AUTO_PR_AI_PROVIDER: "github-models",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.provider).toBe("github-models");
+				expect(config.model).toBe(DEFAULT_GITHUB_MODELS_MODEL);
+				expect(config.openaiCompatUrl).toBeUndefined();
+			}),
+		);
+	});
+});
+
+describe("GeneratePrContentConfigLayer rejects invalid provider", () => {
+	test("fails when AUTO_PR_AI_PROVIDER is not local or github-models", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/workspace",
+				AUTO_PR_AI_PROVIDER: "ollama",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "m",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+						"Invalid AUTO_PR_AI_PROVIDER",
+					);
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError"),
+			});
+		}
 	});
 });
