@@ -469,4 +469,64 @@ describe("fill-pr-template CLI", () => {
 		});
 		expect(msg instanceof Error ? msg.message : msg).toContain("--template");
 	});
+
+	test("--log-file required when filling (with other flags present)", async () => {
+		const exit = await Effect.runPromise(
+			runCli(["--files-file", "/tmp/y", "--template", "/tmp/z", "--format", "body"]),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		const msg = Exit.match(exit, {
+			onSuccess: () => "",
+			onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+		});
+		expect(msg instanceof Error ? msg.message : msg).toContain(
+			"--log-file and --files-file are required",
+		);
+	});
+
+	test("--files-file required when filling (with other flags present)", async () => {
+		const exit = await Effect.runPromise(
+			runCli(["--log-file", "/tmp/x", "--template", "/tmp/z", "--format", "body"]),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		const msg = Exit.match(exit, {
+			onSuccess: () => "",
+			onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+		});
+		expect(msg instanceof Error ? msg.message : msg).toContain(
+			"--log-file and --files-file are required",
+		);
+	});
+
+	const CliFillIntegrationLayer = Layer.mergeAll(TestBaseLayer, CliLayer);
+
+	test("fill succeeds with --quiet, --description-file, and --pr-title (handleFill path)", async () => {
+		await runEffect(CliFillIntegrationLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("fill-cli-handlefill-");
+				const log = logContent({ subject: "feat: add x", body: "Body." });
+				yield* tmp.writeFile(tmp.join("commits.txt"), log);
+				yield* tmp.writeFile(tmp.join("files.txt"), "src/foo.ts\n");
+				yield* tmp.writeFile(tmp.join("template.md"), TEST_TEMPLATE);
+				yield* tmp.writeFile(tmp.join("desc.txt"), "Override description.");
+				const exit = yield* Command.runWith(fillCommand, { version: pkg.version })([
+					"--log-file",
+					tmp.join("commits.txt"),
+					"--files-file",
+					tmp.join("files.txt"),
+					"--template",
+					tmp.join("template.md"),
+					"--format",
+					"body",
+					"--quiet",
+					"--description-file",
+					tmp.join("desc.txt"),
+					"--pr-title",
+					"feat: CLI title",
+				]).pipe(Effect.provide(CliFillIntegrationLayer), Effect.exit);
+				expect(Exit.isSuccess(exit)).toBe(true);
+				return yield* tmp.remove();
+			}).pipe(Effect.scoped),
+		);
+	});
 });

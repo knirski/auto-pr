@@ -283,6 +283,50 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 		});
 	});
 
+	describe("invalid structured fields (validation retries then fallback)", () => {
+		test("falls back when motivation is empty after 5 attempts", async () => {
+			const bad = JSON.stringify({
+				title: "feat: valid title",
+				motivation: "",
+				risks: ["Risk one."],
+				notesForReviewers: "",
+			});
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				retryDelayMs: 0,
+				fetch: createOpenAiChatCompletionsMockFetch(bad),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("falls back when risks normalize to empty after 5 attempts", async () => {
+			const bad = JSON.stringify({
+				title: "feat: valid title",
+				motivation: "Has motivation.",
+				risks: ["", "  ", "-  "],
+				notesForReviewers: "",
+			});
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				retryDelayMs: 0,
+				fetch: createOpenAiChatCompletionsMockFetch(bad),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		});
+	});
+
 	describe("empty assistant content", () => {
 		test("falls back when local LLM returns empty content 5 times", async () => {
 			const p = params(twoCommits, {

@@ -237,6 +237,10 @@ Made-with: Cursor`;
 			expect(longFeat.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
 			expect(inferTypeOfChange(commits, longFeat)).toBe("New feature");
 		});
+		test("prTitle with docs: prefix overrides first commit type", () => {
+			const commits = [commit("fix: bug", "", { type: "fix" })];
+			expect(inferTypeOfChange(commits, "docs: refresh README")).toBe("Documentation update");
+		});
 	});
 
 	describe("getDescription", () => {
@@ -694,6 +698,30 @@ Made-with: Cursor`;
 			Result.match(fitConventionalTitleToLengthLimit("not conventional"), {
 				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
+			});
+		});
+		test("fails when conventional header is too long to leave room for subject", () => {
+			const scope = "a".repeat(92);
+			const title = `feat(${scope}): x`;
+			const prefixLen = `feat(${scope}): `.length;
+			expect(prefixLen).toBe(PR_TITLE_LINE_MAX_LENGTH);
+			expect(title.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			Result.match(fitConventionalTitleToLengthLimit(title), {
+				onSuccess: () => expect().fail("expected failure"),
+				onFailure: (e) => {
+					expect(e.cause).toContain("cannot be shortened");
+				},
+			});
+		});
+		test("fails when shortened slice is whitespace-only (trimEnd)", () => {
+			// Prefix 6 + 94 spaces + "x" → trim does not collapse; first 94 chars of subject are spaces only.
+			const title = `feat: ${" ".repeat(94)}x`;
+			expect(title.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			Result.match(fitConventionalTitleToLengthLimit(title), {
+				onSuccess: () => expect().fail("expected failure"),
+				onFailure: (e) => {
+					expect(e.cause).toContain("no usable subject");
+				},
 			});
 		});
 	});
