@@ -44,6 +44,12 @@
 
 **Fix:** Add at least one conventional commit (e.g. `feat: add X`, `fix: resolve Y`). Merge commits are filtered out. See [Conventional Commits](https://www.conventionalcommits.org/).
 
+### PR body or “Type of change” looks wrong when using fill-pr-template locally
+
+**Cause:** The CLI infers **type** and **breaking** text from commits by default (first commit subject). That can differ from the PR title you intend, especially with multiple commits.
+
+**Fix:** Pass **`--pr-title`** with the same conventional title you will use for the PR (matches what **auto-pr-generate-content** does with the generated title). See [PR_TEMPLATE.md](PR_TEMPLATE.md#fill-pr-template-cli) and [PR_TEMPLATE.md](PR_TEMPLATE.md#single-commit-vs-multi-commit-automated) for single-commit vs multi-commit behavior.
+
 ### "pr-description.txt: NotFound" or "FileSystem.readFile .../dist/prompts/pr-description.txt"
 
 **Cause:** The prompt file is missing from the installed package. The package ships `dist/prompts/pr-description.txt`; if you're on an old version or a broken install, it may be absent.
