@@ -38,7 +38,7 @@ Before CI can run fully:
 | [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
 | [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) | push → main, workflow_dispatch | `paths: .github/workflows/**`, `.github/actions/**` | update-workflow-pins (updates self-referential pins) |
 | [update-dist.yml](../.github/workflows/update-dist.yml) | push → main, workflow_dispatch | `paths: src/**`, package.json, scripts/build.ts, bun.lock | update-dist (builds and commits dist for Node-only GitHub installs) |
-| [add-dist-to-release-pr.yml](../.github/workflows/add-dist-to-release-pr.yml) | pull_request → main | `paths: .release-please-manifest.json`, package.json, CHANGELOG.md | add-dist (adds dist to release PR before merge so tags include it) |
+| [add-dist-to-release-pr.yml](../.github/workflows/add-dist-to-release-pr.yml) | pull_request → main | `paths: .release-please-manifest.json` only | add-dist (adds dist to release PR before merge so tags include it) |
 | [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) | workflow_dispatch, schedule | — | update-flake-lock |
 | [release-please.yml](../.github/workflows/release-please.yml) | push → main | — | release-please (creates release PRs) |
 | [codeql.yml](../.github/workflows/codeql.yml) | push, pull_request → main | `paths-ignore: **/*.md, docs/**` | analyze |
@@ -62,7 +62,7 @@ Before CI can run fully:
 
 **update-dist.yml** runs on push to main when `src/`, `package.json`, `scripts/build.ts`, or `bun.lock` change, and on workflow_dispatch. Uses [build-and-commit-dist](../.github/actions/build-and-commit-dist) to build and commit `dist/` so `npx -p github:knirski/auto-pr` works for Node-only users (no Bun). `dist/` is in `.gitignore` locally—the action uses `git add -f dist/` to override. Loop prevention: skips when commit message starts with `chore: update dist`. Only runs in knirski/auto-pr. See [Dist and .gitignore](#dist-and-gitignore).
 
-**add-dist-to-release-pr.yml** runs on release-please PRs (when `.release-please-manifest.json`, `package.json`, or `CHANGELOG.md` change). Uses build-and-commit-dist to add `dist/` to the PR branch so the merge commit—and thus the release tag—includes it. Fixes `npx -p github:knirski/auto-pr#v0.1.2` for Node-only users.
+**add-dist-to-release-pr.yml** runs when `.release-please-manifest.json` changes on a PR to main (release-please updates that file; ordinary PRs that only change `package.json` or `CHANGELOG.md` do not trigger this). Uses build-and-commit-dist to add `dist/` to the PR branch so the merge commit—and thus the release tag—includes it. Fixes `npx -p github:knirski/auto-pr#v0.1.2` for Node-only users.
 
 **update-flake-lock.yml** runs weekly (Sunday 00:00 UTC) and on manual trigger. Updates `flake.lock` and opens a PR. Requires `dependencies`, `nix`, and `automated` labels. Run `./scripts/create-labels.sh` before the first scheduled run.
 
