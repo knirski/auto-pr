@@ -148,7 +148,8 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url != '' && steps.local_llama.outputs.compat_url || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
-          GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && secrets.GH_TOKEN || '' }}
+          # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
+          GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
 
       - name: Stop local llama-server
         if: always() && steps.local_llama.outcome != 'skipped'
