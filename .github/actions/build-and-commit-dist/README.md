@@ -1,6 +1,6 @@
 # Build and commit dist
 
-Builds `dist/` with Bun and commits it (using `git add -f` to override `.gitignore`). Pushes only when `dist/` changed.
+Builds `dist/` with Bun and commits it (using `git add -f` to override `.gitignore`). Pushes only when `dist/` changed. Commit/push logic lives in [`build-and-commit-dist.sh`](build-and-commit-dist.sh).
 
 **Used by:**
 - [update-dist.yml](../../workflows/update-dist.yml) — main branch
