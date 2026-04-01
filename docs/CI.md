@@ -122,7 +122,7 @@ Self-referential pins (`knirski/auto-pr/...@SHA`) are updated automatically by [
 
 ## Dist and .gitignore
 
-`dist/` is listed in `.gitignore` so local diffs and PRs stay clean. The [update-dist.yml](../.github/workflows/update-dist.yml) workflow (via [build-and-commit-dist](../.github/actions/build-and-commit-dist)) builds `dist/` in CI and commits it using `git add -f dist/`—the `-f` flag overrides `.gitignore`. This allows:
+`dist/` is in `.gitignore` so **untracked** files under `dist/` are not listed by Git and are not added unless you `git add -f`. **Tracked** `dist/` (as on `main` after CI) still shows as modified after a local build—do not commit it; the pre-commit hook ([check-no-dist-staged.sh](../scripts/check-no-dist-staged.sh)) rejects staging `dist/`. The [update-dist.yml](../.github/workflows/update-dist.yml) workflow (via [build-and-commit-dist](../.github/actions/build-and-commit-dist)) builds `dist/` in CI and commits it using `git add -f dist/`—the `-f` flag overrides `.gitignore`. This allows:
 
 - **Local dev:** `dist/` is gitignored. If you branch from main (after update-dist has run), `dist/` may be tracked; running `bun run build` then shows `modified: dist/` in status—do not commit it, the workflow updates main after merge.
 - **Contributors testing on knirski/auto-pr:** When the workflow runs in knirski/auto-pr (e.g. on ai/* branches), it uses the workspace source (`bun run`) instead of the npx package. That avoids requiring committed `dist/` on the branch and prevents "Package does not provide binary" when testing changes before merge.
