@@ -7,7 +7,8 @@
  *
  * Replaces {{placeholder}} values, outputs to stdout.
  *
- * Requires --log-file, --files-file, --template, --format. “How to test” copy lives in the template file, not in env.
+ * Requires --log-file, --files-file, --template, --format. Optional --description-file, --pr-title.
+ * “How to test” copy lives in the template file, not in env.
  */
 
 import * as BunRuntime from "@effect/platform-bun/BunRuntime";
@@ -43,13 +44,19 @@ function isOutputFormat(s: string): s is OutputFormat {
 	return s === "body" || s === "title-body";
 }
 
+/** Optional inputs for {@link runFillBody} (AI description path and PR title for template inference). */
+export type RunFillBodyOptions = {
+	readonly descriptionFilePath?: string;
+	readonly prTitleForTypeOfChange?: string;
+};
+
 /** Run fill using FillPrTemplate service. */
 export function runFillBody(
 	logFilePath: string,
 	filesFilePath: string,
 	templatePath: string,
 	format: OutputFormat,
-	descriptionFilePath?: string,
+	options?: RunFillBodyOptions,
 ): Effect.Effect<
 	string,
 	| Error
@@ -60,20 +67,26 @@ export function runFillBody(
 	| TemplateRenderError,
 	FileSystem.FileSystem | FillPrTemplate | Path.Path
 > {
+	const prTitle = Option.fromNullishOr(options?.prTitleForTypeOfChange?.trim()).pipe(
+		Option.filter((s) => s !== ""),
+	);
 	const params = {
 		logFilePath,
 		filesFilePath,
 		templatePath,
-		...(descriptionFilePath !== undefined && { descriptionFilePath }),
+		...(options?.descriptionFilePath !== undefined && {
+			descriptionFilePath: options.descriptionFilePath,
+		}),
+		...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
 	} satisfies FillPrTemplateParams;
 	return Effect.gen(function* () {
 		const fillPr = yield* FillPrTemplate;
 		if (format === "body") {
 			return yield* fillPr.getBody(params);
 		}
-		const title = yield* fillPr.getTitle(params);
+		const titleLine = Option.isSome(prTitle) ? prTitle.value : yield* fillPr.getTitle(params);
 		const body = yield* fillPr.getBody(params);
-		return formatTitleBody(title, body);
+		return formatTitleBody(titleLine, body);
 	});
 }
 
@@ -125,6 +138,13 @@ const descriptionFileFlag = Flag.string("description-file").pipe(
 	),
 );
 
+const prTitleFlag = Flag.string("pr-title").pipe(
+	Flag.optional,
+	Flag.withDescription(
+		"Optional conventional PR title. Drives {{typeOfChange}} and {{breakingChanges}} like the workflow’s generated title. With --format title-body, used as the first output line instead of the first commit subject.",
+	),
+);
+
 /** Validate conventional commit title. Exported for testing. */
 export function handleValidateTitle(title: string): Effect.Effect<void, Error> {
 	return Effect.gen(function* () {
@@ -162,17 +182,15 @@ function handleFill(
 	format: OutputFormat,
 	quiet: boolean,
 	descriptionFile: Option.Option<string>,
+	prTitle: Option.Option<string>,
 ) {
 	return Effect.gen(function* () {
 		const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
 		const layer = Layer.mergeAll(BunServices.layer, loggerLayer, FillPrTemplate.Live);
-		const output = yield* runFillBody(
-			logPath,
-			filesPath,
-			templatePath,
-			format,
-			Option.getOrUndefined(descriptionFile),
-		).pipe(Effect.provide(layer));
+		const output = yield* runFillBody(logPath, filesPath, templatePath, format, {
+			...(Option.isSome(descriptionFile) && { descriptionFilePath: descriptionFile.value }),
+			...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
+		}).pipe(Effect.provide(layer));
 		yield* Console.log(output);
 	});
 }
@@ -189,6 +207,7 @@ export const fillCommand = Command.make(
 		validateTitle: validateTitleFlag,
 		outputDescriptionPrompt: outputDescriptionPromptFlag,
 		descriptionFile: descriptionFileFlag,
+		prTitle: prTitleFlag,
 	},
 	Effect.fn("fill-pr-template.handler")(function* ({
 		logFile,
@@ -199,6 +218,7 @@ export const fillCommand = Command.make(
 		validateTitle,
 		outputDescriptionPrompt,
 		descriptionFile,
+		prTitle,
 	}) {
 		const titleToValidate = Option.getOrUndefined(validateTitle);
 		if (titleToValidate !== undefined) {
@@ -244,7 +264,15 @@ export const fillCommand = Command.make(
 						"--log-file and --files-file are required. Generate them via git before invoking.",
 					),
 				);
-		yield* handleFill(logPath, filesPath, templatePath, formatVal, quietVal, descriptionFile);
+		yield* handleFill(
+			logPath,
+			filesPath,
+			templatePath,
+			formatVal,
+			quietVal,
+			descriptionFile,
+			prTitle,
+		);
 	}),
 );
 
