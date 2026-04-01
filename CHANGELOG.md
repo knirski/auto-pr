@@ -6,6 +6,24 @@
 
 - **AI providers:** Removed the Ollama-specific integration (`ollama` npm package, `AUTO_PR_AI_OLLAMA_MODEL`, workflow `ai_ollama_model` / setup-ollama steps). Use **`local`** with `AUTO_PR_AI_OPENAI_COMPAT_URL`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`, and optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, or **`github-models`** with `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. The reusable generate workflow defaults to **`github-models`** on GitHub-hosted runners. **`AUTO_PR_AI_GITHUB_MODEL` is removed** — use `AUTO_PR_AI_OPENAI_COMPAT_MODEL` for both providers.
 
+## [0.1.3](https://github.com/knirski/auto-pr/compare/v0.1.2...v0.1.3) (2026-04-01)
+
+
+### Features
+
+* **ai:** add config-driven AI provider abstraction (Phase 1-5) ([#35](https://github.com/knirski/auto-pr/issues/35)) ([d447e17](https://github.com/knirski/auto-pr/commit/d447e17772b5af6f8a8d2e55e5eb9cf8523da811))
+* **ai:** add github-models and openai-compat providers (Phase 6) ([#39](https://github.com/knirski/auto-pr/issues/39)) ([e39c6e0](https://github.com/knirski/auto-pr/commit/e39c6e00775e7000a4be885f7c9046000c132e4e))
+* **auto-pr:** enhance PR title inference, AI validation, and CLI options ([#56](https://github.com/knirski/auto-pr/issues/56)) ([cf2e032](https://github.com/knirski/auto-pr/commit/cf2e0322ec528323dcd1c8121b58687ae08a7dc2))
+* **ci:** add dist management for Node-only installs and fix CI workflows ([#29](https://github.com/knirski/auto-pr/issues/29)) ([f7c7454](https://github.com/knirski/auto-pr/commit/f7c745499fb3b38a6de1fd041ee678a0f327fc91))
+* **ci:** add Gitleaks scan and env example template ([39987d6](https://github.com/knirski/auto-pr/commit/39987d6a2dd39ef044ea3dd360599676580f9ce4))
+* **errors:** add AiProviderError, DescriptionParseError, and validateTitleDescription ([#32](https://github.com/knirski/auto-pr/issues/32)) ([e0a73a5](https://github.com/knirski/auto-pr/commit/e0a73a59ad87873b88af8522a97f7c62330da497))
+* hand off PR title and body via pr-title.txt and pr-body.md ([#45](https://github.com/knirski/auto-pr/issues/45)) ([d91047d](https://github.com/knirski/auto-pr/commit/d91047d1129099c0a96fde0d113f33e5fb106913))
+
+
+### Bug Fixes
+
+* add experimental features flag to nix run ([#48](https://github.com/knirski/auto-pr/issues/48)) ([1003217](https://github.com/knirski/auto-pr/commit/100321735cce8c0a95d605ee9aac173e4c9b4f31))
+
 ## [0.1.2](https://github.com/knirski/auto-pr/compare/v0.1.1...v0.1.2) (2026-03-18)
 
 
