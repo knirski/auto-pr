@@ -6,7 +6,7 @@
 
 ## Description
 
-<!-- What does this PR do and why? Provide context, not just a restatement of the title. -->
+<!-- Narrative: why and what reviewers should focus on. With auto-pr, this is AI-filled from commits; commit subjects appear under "Changes made" below—no need to repeat them here. -->
 
 {{description}}
 

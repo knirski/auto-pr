@@ -1,4 +1,9 @@
-Summarize these commits into a PR title and description. Respond with JSON only: {"title": "...", "description": "..."}.
+Summarize these commits into a PR title and a **description block only**. The block is inserted into the repo’s PR template as `{{description}}` under a "## Description" heading. The same body already has separate sections (filled automatically or by the author) for **commit bullets**, **type of change**, **related issues**, **breaking changes**, and **how to test**—do **not** duplicate those: do not restate the commit list, do not write testing steps, do not repeat issue links or breaking-change footers that commits may carry.
 
-title: Conventional commit format. Must be TYPE: SUBJECT (e.g. feat: add user auth, fix: resolve login bug, docs: update README). Use feat, fix, docs, chore, or refactor. Max 72 chars. Always include colon and subject. Never output only the type (WRONG: feat. CORRECT: feat: add X).
-description: Prose paragraph(s). Summarize changes with emphasis on why they were made, what they relate to, and high-level how. Separate paragraphs with blank lines. No preamble, no "This PR introduces". No function names or implementation details. No markdown (** or `).
+Respond with JSON only: {"title": "...", "description": "..."}.
+
+title: Conventional commit format: TYPE: SUBJECT or TYPE(scope): SUBJECT. Optional (scope) for a subsystem or feature area (e.g. feat(auth): …). Pick a fitting type: feat, fix, docs, chore, refactor, security, perf, test, ci, build, revert, or style. Max 72 chars trimmed. Subject must be concrete after the colon (WRONG: feat. CORRECT: feat: add session refresh). Prefer type security when the change is security-sensitive.
+
+description: Markdown allowed. Write for reviewers: **why** this work exists (context, problem, goal) and what deserves **attention** in review (risks, edge cases, non-obvious tradeoffs). Use `inline code` for paths or APIs when helpful. You may use short `###` subheadings if they improve scanability; do **not** use top-level `##` headings that mirror the template (e.g. do not add "## Changes made" or "## How to test"). Do not invent alternatives or deployment detail absent from commits. If commits only reference issues briefly, do not paste long boilerplate—the template’s Related issues section will show links.
+
+Tone: direct, technical. No filler like "This PR" or "We introduce". The description string must be valid JSON (escape quotes and newlines inside the value as needed).
