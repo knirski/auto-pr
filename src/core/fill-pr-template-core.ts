@@ -135,9 +135,27 @@ export function parseCommits(logOutput: string): Result.Result<readonly CommitIn
 	});
 }
 
-export function inferTypeOfChange(commits: readonly CommitInfo[]): TypeOfChange {
+/**
+ * Infer PR "Type of change" from commits and optionally the final PR title.
+ * When `prTitle` is set (e.g. AI-generated title for multi-commit PRs), the title's
+ * conventional type wins so the template matches `gh pr` title and body.
+ */
+export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: string): TypeOfChange {
 	const hasBreaking = commits.some((c) => c.breakingNote != null);
 	if (hasBreaking) return "Breaking change";
+
+	const titleTrim = prTitle?.trim();
+	if (titleTrim && isBreakingConventionalTitle(titleTrim)) {
+		return "Breaking change";
+	}
+
+	if (titleTrim && isValidConventionalTitle(titleTrim)) {
+		const token = extractConventionalTypeFromTitle(titleTrim);
+		if (token) {
+			return typeFromString(token.toLowerCase());
+		}
+	}
+
 	const first = commits[0];
 	if (!first) return "Chore";
 	const sub = first.subject;
@@ -147,6 +165,18 @@ export function inferTypeOfChange(commits: readonly CommitInfo[]): TypeOfChange 
 	if (fromType !== "Chore") return fromType;
 	const prefix = sub.toLowerCase().split(":")[0] ?? "";
 	return typeFromString(prefix);
+}
+
+function extractConventionalTypeFromTitle(title: string): string | null {
+	const m = CONVENTIONAL_HEADER_PATTERN.exec(title.trim());
+	return m?.[1] ?? null;
+}
+
+/** Header uses `!` before `:` (any type), or starts with BREAKING. */
+function isBreakingConventionalTitle(title: string): boolean {
+	const t = title.trim();
+	if (/^BREAKING\b/i.test(t)) return true;
+	return /^\w+(?:\([^)]*\))?!:/.test(t);
 }
 
 export function getTitle(commits: readonly CommitInfo[]): string {
@@ -285,8 +315,10 @@ export function fillTemplate(
 	commits: readonly CommitInfo[],
 	files: readonly string[],
 	descriptionOverride?: string,
+	/** When set (e.g. AI PR title), drives `typeOfChange` so it matches the title. */
+	prTitleForTypeOfChange?: string,
 ): TemplateData {
-	const typeOfChange = inferTypeOfChange(commits);
+	const typeOfChange = inferTypeOfChange(commits, prTitleForTypeOfChange);
 	const description =
 		descriptionOverride !== undefined && descriptionOverride !== ""
 			? descriptionOverride
@@ -334,8 +366,9 @@ export function renderBody(
 	files: readonly string[],
 	template: string,
 	descriptionOverride?: string,
+	prTitleForTypeOfChange?: string,
 ): Result.Result<string, TemplateRenderError> {
-	const data = fillTemplate(commits, files, descriptionOverride);
+	const data = fillTemplate(commits, files, descriptionOverride, prTitleForTypeOfChange);
 	return Result.try({
 		try: () => render(template, buildSubstitutionScope(data)),
 		catch: (e) =>

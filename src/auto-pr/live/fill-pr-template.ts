@@ -31,8 +31,15 @@ export const renderBody = Effect.fn("renderBody")(function* (
 	files: Parameters<typeof renderBodyCore>[1],
 	template: Parameters<typeof renderBodyCore>[2],
 	descriptionOverride?: Parameters<typeof renderBodyCore>[3],
+	prTitleForTypeOfChange?: Parameters<typeof renderBodyCore>[4],
 ) {
-	const bodyResult = renderBodyCore(commits, files, template, descriptionOverride);
+	const bodyResult = renderBodyCore(
+		commits,
+		files,
+		template,
+		descriptionOverride,
+		prTitleForTypeOfChange,
+	);
 	const body = yield* Effect.fromResult(bodyResult);
 	return hasUnreplacedPlaceholders(body)
 		? yield* Effect.gen(function* () {

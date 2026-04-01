@@ -168,6 +168,20 @@ describe("fill-pr-template-core", () => {
 		test("empty commits → Chore", () => {
 			expect(inferTypeOfChange([])).toBe("Chore");
 		});
+		test("prTitle overrides first commit type (AI title vs newest commit)", () => {
+			const commits = [
+				commit("fix(ci): pass command via env", "", { type: "fix" }),
+				commit("feat(generate-content): log model response", "", { type: "feat" }),
+			];
+			expect(inferTypeOfChange(commits)).toBe("Bug fix");
+			expect(inferTypeOfChange(commits, "feat: improve CI and generate logging")).toBe(
+				"New feature",
+			);
+		});
+		test("prTitle with breaking marker → Breaking change", () => {
+			const commits = [commit("fix: a", "", { type: "fix" })];
+			expect(inferTypeOfChange(commits, "feat!: remove API")).toBe("Breaking change");
+		});
 	});
 
 	describe("getDescription", () => {
@@ -460,6 +474,11 @@ describe("fill-pr-template-core", () => {
 			const commits = [commit("feat: add x", "Original body", { type: "feat" })];
 			const data = fillTemplate(commits, [], "AI-generated summary.");
 			expect(data.description).toBe("AI-generated summary.");
+		});
+		test("prTitleForTypeOfChange aligns typeOfChange with final PR title", () => {
+			const commits = [commit("fix: first in log", "", { type: "fix" })];
+			const data = fillTemplate(commits, [], "Summary.", "feat: rolled-up title");
+			expect(data.typeOfChange).toBe("New feature");
 		});
 	});
 

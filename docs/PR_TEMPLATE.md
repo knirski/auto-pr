@@ -14,7 +14,7 @@ A single template at [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUES
 | Placeholder | Source |
 |------------|--------|
 | `{{description}}` | For 1 commit: first commit body (or subject after colon if body starts with Closes/Fixes); max 20 lines. For 2+ commits: AI summary (workflow) or concatenated bodies (fallback) |
-| `{{typeOfChange}}` | Inferred from conventional commits |
+| `{{typeOfChange}}` | Inferred from conventional commits (breaking notes, newest commit’s type, etc.). **auto-pr-generate-content** also passes the final PR title into filling so this line matches the conventional type in `pr-title.txt` when the AI title differs from the newest commit. The **fill-pr-template** CLI infers from commits only (title = first commit subject). |
 | `{{changes}}` | One bullet per commit subject |
 | *(How to test)* | Not a placeholder. Edit the **How to test** section in this file directly—default scaffold lists generic steps; replace with your project’s commands or `N/A` for docs-only/trivial changes. |
 | `{{checklistConventional}}` | `x` or ` ` |
@@ -52,6 +52,7 @@ Uses `effect/unstable/cli` (Command, Argument, Flag).
 
 ## Behavior
 
+- **Type of change vs title:** For automated runs with 2+ commits, the template’s **Type of change** is driven by the same conventional prefix as the generated PR title (`feat` → New feature, `fix` → Bug fix, …), not only the newest commit’s type.
 - **Merge commits:** Filtered from body and title input (subjects like `Merge branch 'x' into y` add no semantic value).
 - **Non-conventional commits:** Included in body and as AI input; type falls back to "Chore".
 - **Docs-only:** `isDocsOnly(files)` when only `.md` paths (etc.). Reviewers may still see the **How to test** scaffold—edit that section to `N/A` or delete steps when appropriate.

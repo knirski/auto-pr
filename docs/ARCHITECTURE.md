@@ -32,7 +32,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Pipeline Flow
 
 1. **get-commits** — `git log` + `git diff` → `commits.txt`, `files.txt` under workspace; append `commits`, `files`, `count` to `GITHUB_OUTPUT`
-2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel` via `generateObject`, using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config) → fill template → write `pr-title.txt` and `pr-body.md` under workspace
+2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel` via `generateObject`, using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config) → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
 3. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `gh pr view` → `gh pr edit` or `gh pr create`
 
 ## Functional Core / Imperative Shell (FC/IS)

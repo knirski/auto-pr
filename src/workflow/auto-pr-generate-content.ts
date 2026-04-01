@@ -264,7 +264,7 @@ export function generatePrContentFromValues(
 			descriptionOverride = undefined;
 		}
 
-		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride);
+		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride, title);
 		const body = yield* Effect.fromResult(bodyResult);
 		return { title, body, count };
 	}).pipe(
