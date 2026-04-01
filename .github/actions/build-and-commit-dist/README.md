@@ -1,6 +1,6 @@
 # Build and commit dist
 
-Builds `dist/` with Bun and commits it (using `git add -f` to override `.gitignore`). Pushes only when `dist/` changed.
+Builds `dist/` with Bun and commits it (using `git add -f` to override `.gitignore`). Pushes only when `dist/` changed. Commit/push logic lives in [`build-and-commit-dist.sh`](build-and-commit-dist.sh).
 
 **Used by:**
 - [update-dist.yml](../../workflows/update-dist.yml) — main branch
@@ -11,5 +11,7 @@ Builds `dist/` with Bun and commits it (using `git add -f` to override `.gitigno
 - `token` — Token for checkout and push
 - `fetch_depth` — Optional, default `1`
 - `push_branch` — Optional, default `main` (branch to push to)
+
+**Push:** After committing `dist/`, the action `fetch`es `push_branch`, `git rebase` onto `origin/<push_branch>` (so concurrent updates to the branch are incorporated), then pushes. Retries up to 5 times with backoff if the push is rejected. Shallow checkouts are deepened (`--unshallow` or `--deepen`) so rebase can compute a merge base.
 
 **Pins:** `actions/checkout`, `oven-sh/setup-bun`, and `actions/cache` (v5+) are SHA-pinned. Update manually when new versions release (update-workflow-pins only updates knirski/auto-pr refs).
