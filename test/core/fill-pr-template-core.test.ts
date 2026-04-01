@@ -19,6 +19,8 @@ import {
 	isDocsOnly,
 	isMergeCommit,
 	isValidConventionalTitle,
+	isWithinLengthLimit,
+	matchesConventionalTitleFormat,
 	parseCommits,
 	parseFilesContent,
 	renderBody,
@@ -479,6 +481,30 @@ describe("fill-pr-template-core", () => {
 			const commits = [commit("fix: first in log", "", { type: "fix" })];
 			const data = fillTemplate(commits, [], "Summary.", "feat: rolled-up title");
 			expect(data.typeOfChange).toBe("New feature");
+		});
+	});
+
+	describe("matchesConventionalTitleFormat", () => {
+		test("accepts conventional-shaped titles regardless of length", () => {
+			expect(matchesConventionalTitleFormat("feat: add X")).toBe(true);
+			expect(matchesConventionalTitleFormat("fix(ci): resolve bug")).toBe(true);
+			expect(matchesConventionalTitleFormat(`fix(ci): ${"a".repeat(80)}`)).toBe(true);
+		});
+		test("rejects non-matching titles", () => {
+			expect(matchesConventionalTitleFormat("")).toBe(false);
+			expect(matchesConventionalTitleFormat("Add feature X")).toBe(false);
+			expect(matchesConventionalTitleFormat(" : missing type")).toBe(false);
+		});
+	});
+
+	describe("isWithinLengthLimit", () => {
+		test("accepts non-blank titles up to 72 chars trimmed", () => {
+			expect(isWithinLengthLimit("feat: add X")).toBe(true);
+			expect(isWithinLengthLimit(`feat: ${"a".repeat(67)}`)).toBe(false);
+		});
+		test("rejects blank", () => {
+			expect(isWithinLengthLimit("")).toBe(false);
+			expect(isWithinLengthLimit("  ")).toBe(false);
 		});
 	});
 

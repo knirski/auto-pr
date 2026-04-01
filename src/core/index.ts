@@ -40,6 +40,8 @@ export {
 	isDocsOnly,
 	isMergeCommit,
 	isValidConventionalTitle,
+	isWithinLengthLimit,
+	matchesConventionalTitleFormat,
 	parseCommits,
 	parseFilesContent,
 	renderBody,

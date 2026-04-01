@@ -186,9 +186,18 @@ export function getTitle(commits: readonly CommitInfo[]): string {
 
 const CONVENTIONAL_HEADER_PATTERN = /^(\w+)(?:\([^)]*\))?!?: .+$/;
 
-export function isValidConventionalTitle(s: string): boolean {
-	if (isBlank(s) || s.trim().length > 72) return false;
+/** True when trimmed title matches `type(scope)?: subject` (72-char limit not applied). */
+export function matchesConventionalTitleFormat(s: string): boolean {
 	return CONVENTIONAL_HEADER_PATTERN.test(s.trim());
+}
+
+/** True when title is non-blank and trimmed length is at most 72 (Git subject-line convention). */
+export function isWithinLengthLimit(s: string): boolean {
+	return !isBlank(s) && s.trim().length <= 72;
+}
+
+export function isValidConventionalTitle(s: string): boolean {
+	return isWithinLengthLimit(s) && matchesConventionalTitleFormat(s);
 }
 
 /**

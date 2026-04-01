@@ -53,6 +53,8 @@ import {
 	getDescriptionPromptText,
 	getTitle as getTitleFromCommits,
 	isValidConventionalTitle,
+	isWithinLengthLimit,
+	matchesConventionalTitleFormat,
 	parseCommits,
 	parseFilesContent,
 	renderBody as renderBodyCore,
@@ -127,6 +129,7 @@ function generateTitleAndDescription(
 			schema: TitleDescriptionSchema,
 		});
 		const raw = res.value;
+		const titleTrimmed = raw.title.trim();
 		yield* Effect.log({
 			event: "generate_pr_content",
 			step: "model_response",
@@ -135,7 +138,8 @@ function generateTitleAndDescription(
 			model,
 			title: raw.title,
 			title_chars: raw.title.length,
-			title_conventional: isValidConventionalTitle(raw.title.trim()),
+			title_conventional_format: matchesConventionalTitleFormat(titleTrimmed),
+			title_within_length_limit: isWithinLengthLimit(titleTrimmed),
 			description_chars: raw.description.length,
 			description: truncateForLog(raw.description, MAX_LOG_DESCRIPTION_CHARS),
 		});
