@@ -186,7 +186,13 @@ export class FillPrTemplate extends ServiceMap.Service<FillPrTemplate, FillPrTem
 				const { template, commits, files, descriptionOverride } =
 					yield* loadTemplateAndParams(params);
 
-				const body = yield* renderBody(commits, files, template, descriptionOverride);
+				const body = yield* renderBody(
+					commits,
+					files,
+					template,
+					descriptionOverride,
+					params.prTitleForTypeOfChange,
+				);
 				if (!body.trim()) {
 					return yield* Effect.fail(
 						new PullRequestBodyBlankError({
