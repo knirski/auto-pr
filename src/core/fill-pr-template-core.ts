@@ -6,7 +6,6 @@
 import type { Commit } from "conventional-commits-parser";
 import { CommitParser } from "conventional-commits-parser";
 import { Option, pipe, Result } from "effect";
-import * as Arr from "effect/Array";
 import { render } from "micromustache";
 import { collapseProseParagraphs } from "#core/collapse-prose-paragraphs.js";
 import { DescriptionParseError, ParseError, TemplateRenderError } from "#core/errors.js";
@@ -181,7 +180,7 @@ function extractConventionalTypeFromTitle(title: string): string | null {
 }
 
 /** Header uses `!` before `:` (any type), or starts with BREAKING. */
-function isBreakingConventionalTitle(title: string): boolean {
+export function isBreakingConventionalTitle(title: string): boolean {
 	const t = title.trim();
 	if (/^BREAKING\b/i.test(t)) return true;
 	return /^\w+(?:\([^)]*\))?!:/.test(t);
@@ -373,14 +372,72 @@ export function getRelatedIssues(commits: readonly CommitInfo[]): readonly strin
 	);
 }
 
+/** Max length for `{{breakingChanges}}` body. */
+export const BREAKING_CHANGES_BODY_MAX_LENGTH = 2000;
+
+/** All `BREAKING CHANGE:` footer texts in commit order, joined with blank lines. */
 export function getBreakingChanges(commits: readonly CommitInfo[]): Option.Option<string> {
+	const texts = commits
+		.map((c) => c.breakingNote)
+		.filter((n): n is string => n != null && n.trim() !== "")
+		.map((n) => n.trim());
+	if (texts.length === 0) return Option.none();
+	return Option.some(texts.join("\n\n").slice(0, BREAKING_CHANGES_BODY_MAX_LENGTH));
+}
+
+/**
+ * Subject or PR title line: description after `type!:` / `type(scope)!:`; otherwise full line when it starts with `BREAKING`.
+ */
+export function extractBreakingDescriptionFromLine(line: string): Option.Option<string> {
+	const t = line.trim();
+	if (t === "") return Option.none();
+	if (/^BREAKING\b/i.test(t)) {
+		return Option.some(t);
+	}
+	const m = /^\w+(?:\([^)]*\))?!: (.+)$/.exec(t);
+	return m?.[1] != null && m[1].trim() !== "" ? Option.some(m[1].trim()) : Option.none();
+}
+
+/**
+ * Text for `{{breakingChanges}}`: footers first (all commits, in order), else synthetic text from a breaking PR title, else from commit subjects (`feat!:`, etc.).
+ */
+export function resolveBreakingChangesBody(
+	commits: readonly CommitInfo[],
+	prTitleForTypeOfChange?: string,
+): string {
 	return pipe(
-		Arr.findFirst(
-			commits,
-			(c): c is CommitInfo & { breakingNote: string } => c.breakingNote != null,
-		),
-		Option.map((c) => c.breakingNote.trim().slice(0, 2000)),
+		getBreakingChanges(commits),
+		Option.match({
+			onNone: () => resolveSyntheticBreakingDescription(commits, prTitleForTypeOfChange),
+			onSome: (s) => s,
+		}),
 	);
+}
+
+function resolveSyntheticBreakingDescription(
+	commits: readonly CommitInfo[],
+	prTitle?: string,
+): string {
+	const titleTrim = prTitle?.trim();
+	if (titleTrim && isBreakingConventionalTitle(titleTrim)) {
+		return pipe(
+			extractBreakingDescriptionFromLine(titleTrim),
+			Option.getOrElse(() => titleTrim),
+		).slice(0, BREAKING_CHANGES_BODY_MAX_LENGTH);
+	}
+	const parts: string[] = [];
+	for (const c of commits) {
+		pipe(
+			extractBreakingDescriptionFromLine(c.subject),
+			Option.match({
+				onNone: () => {},
+				onSome: (s) => {
+					parts.push(s);
+				},
+			}),
+		);
+	}
+	return parts.join("\n\n").slice(0, BREAKING_CHANGES_BODY_MAX_LENGTH);
 }
 
 /** Builds substitution data from commits and files. Does not fail; rendering is separate (see {@link renderBody}). */
@@ -388,7 +445,7 @@ export function fillTemplate(
 	commits: readonly CommitInfo[],
 	files: readonly string[],
 	descriptionOverride?: string,
-	/** When set (e.g. AI PR title), drives `typeOfChange` so it matches the title. */
+	/** When set (e.g. AI PR title), drives `typeOfChange` and breaking summary when the title uses `!:` / `BREAKING`. */
 	prTitleForTypeOfChange?: string,
 ): TemplateData {
 	const typeOfChange = inferTypeOfChange(commits, prTitleForTypeOfChange);
@@ -397,10 +454,10 @@ export function fillTemplate(
 			? descriptionOverride
 			: getDescriptionFromCommits(commits);
 	const changes = commits.length ? getChanges(commits) : ["- "];
-	const breaking = pipe(
-		getBreakingChanges(commits),
-		Option.getOrElse(() => ""),
-	);
+	const breakingChanges =
+		typeOfChange === "Breaking change"
+			? resolveBreakingChangesBody(commits, prTitleForTypeOfChange)
+			: "";
 	return {
 		description,
 		typeOfChange,
@@ -409,7 +466,7 @@ export function fillTemplate(
 		docsUpdated: hasDocsFiles(files),
 		testsAdded: hasTestFiles(files),
 		relatedIssues: getRelatedIssues(commits),
-		breakingChanges: typeOfChange === "Breaking change" ? breaking : "",
+		breakingChanges,
 	};
 }
 

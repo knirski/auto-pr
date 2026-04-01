@@ -3,6 +3,7 @@ import { CommitParser } from "conventional-commits-parser";
 import { Option, pipe, Result } from "effect";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
+	extractBreakingDescriptionFromLine,
 	fillTemplate,
 	filterMergeCommits,
 	fitConventionalTitleToLengthLimit,
@@ -26,6 +27,7 @@ import {
 	parseCommits,
 	parseFilesContent,
 	renderBody,
+	resolveBreakingChangesBody,
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
@@ -483,6 +485,71 @@ Made-with: Cursor`;
 				}),
 			);
 		});
+		test("joins multiple BREAKING CHANGE footers in commit order", () => {
+			pipe(
+				getBreakingChanges([
+					commit("a", "", { breakingNote: "First" }),
+					commit("b", "", { breakingNote: "Second" }),
+				]),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (text) => expect(text).toBe("First\n\nSecond"),
+				}),
+			);
+		});
+	});
+
+	describe("extractBreakingDescriptionFromLine", () => {
+		test("feat!: subject → description after colon", () => {
+			pipe(
+				extractBreakingDescriptionFromLine("feat!: remove legacy API"),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (s) => expect(s).toBe("remove legacy API"),
+				}),
+			);
+		});
+		test("scoped breaking header → description after colon", () => {
+			pipe(
+				extractBreakingDescriptionFromLine("feat(api)!: drop v1"),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (s) => expect(s).toBe("drop v1"),
+				}),
+			);
+		});
+		test("line starting with BREAKING → full line", () => {
+			pipe(
+				extractBreakingDescriptionFromLine("BREAKING: all clients must migrate"),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (s) => expect(s).toBe("BREAKING: all clients must migrate"),
+				}),
+			);
+		});
+		test("non-breaking conventional title → none", () => {
+			expect(Option.isNone(extractBreakingDescriptionFromLine("feat: add x"))).toBe(true);
+		});
+	});
+
+	describe("resolveBreakingChangesBody", () => {
+		test("prefers footers over title and subjects", () => {
+			const commits = [commit("feat!: ignored", "", { type: "feat", breakingNote: "From footer" })];
+			expect(resolveBreakingChangesBody(commits, "feat!: from title")).toBe("From footer");
+		});
+		test("uses breaking PR title when no footers", () => {
+			const commits = [commit("fix: prep", "", { type: "fix" })];
+			expect(resolveBreakingChangesBody(commits, "feat!: rollup breaking change")).toBe(
+				"rollup breaking change",
+			);
+		});
+		test("concatenates breaking subjects when no footers and title not breaking", () => {
+			const commits = [
+				commit("feat!: remove A", "", { type: "feat" }),
+				commit("feat!: remove B", "", { type: "feat" }),
+			];
+			expect(resolveBreakingChangesBody(commits, undefined)).toBe("remove A\n\nremove B");
+		});
 	});
 
 	describe("fillTemplate", () => {
@@ -532,6 +599,18 @@ Made-with: Cursor`;
 			const commits = [commit("fix: first in log", "", { type: "fix" })];
 			const data = fillTemplate(commits, [], "Summary.", "feat: rolled-up title");
 			expect(data.typeOfChange).toBe("New feature");
+		});
+		test("feat!: without footer fills breakingChanges from subject", () => {
+			const commits = [commit("feat!: drop legacy API", "", { type: "feat" })];
+			const data = fillTemplate(commits, []);
+			expect(data.typeOfChange).toBe("Breaking change");
+			expect(data.breakingChanges).toBe("drop legacy API");
+		});
+		test("prTitleForTypeOfChange breaking title fills breakingChanges when no footers", () => {
+			const commits = [commit("fix: small fix", "", { type: "fix" })];
+			const data = fillTemplate(commits, [], undefined, "feat!: migrate to new API");
+			expect(data.typeOfChange).toBe("Breaking change");
+			expect(data.breakingChanges).toBe("migrate to new API");
 		});
 	});
 

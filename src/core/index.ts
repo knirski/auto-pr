@@ -23,6 +23,8 @@ export {
 } from "#core/errors.js";
 export type { CommitInfo, TemplateData, TypeOfChange } from "#core/fill-pr-template-core.js";
 export {
+	BREAKING_CHANGES_BODY_MAX_LENGTH,
+	extractBreakingDescriptionFromLine,
 	fillTemplate,
 	filterMergeCommits,
 	fitConventionalTitleToLengthLimit,
@@ -37,6 +39,7 @@ export {
 	hasDocsFiles,
 	hasTestFiles,
 	hasUnreplacedPlaceholders,
+	isBreakingConventionalTitle,
 	isConventional,
 	isDocsOnly,
 	isMergeCommit,
@@ -46,6 +49,7 @@ export {
 	parseCommits,
 	parseFilesContent,
 	renderBody,
+	resolveBreakingChangesBody,
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
 export type { GhOutputValue } from "#core/gh-output.js";
