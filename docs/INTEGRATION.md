@@ -238,6 +238,19 @@ Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`
 - **Token:** Optional repository secret **`GH_TOKEN`**; if unset, the entry workflow passes the default Actions **`github.token`** (`secrets.GH_TOKEN || github.token`). See [Step 5](#step-5-add-repository-secrets). The reusable workflow forwards it to generate when `ai_provider` is `github-models`.
 - **Workflow:** Default is `ai_provider: github-models` with `ai_openai_compat_model` (e.g. `openai/gpt-4.1`).
 - **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL=...`, `GH_TOKEN=...`.
+- **Legal model ids:** The catalog is published as JSON — see [REST: List all models](https://docs.github.com/en/rest/models/catalog#list-all-models). Fetch and read each entry’s **`id`** (format `publisher/model`):
+
+  ```bash
+  curl -sL https://models.github.ai/catalog/models
+  ```
+
+  To list ids only:
+
+  ```bash
+  curl -sL https://models.github.ai/catalog/models | jq -r '.[].id' | sort
+  ```
+
+  The catalog includes embedding-only models; for PR text generation, pick an entry whose **`supported_output_modalities`** includes **`text`** (or use a known chat model id such as `openai/gpt-4.1`).
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common failures.
 

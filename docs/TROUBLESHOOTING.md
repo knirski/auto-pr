@@ -94,7 +94,7 @@
 
 **Cause:** `AUTO_PR_AI_OPENAI_COMPAT_MODEL` does not match an available GitHub Models id (wrong name, deprecated, or typo).
 
-**Fix:** Set `ai_openai_compat_model` / `AUTO_PR_AI_OPENAI_COMPAT_MODEL` to a valid id (format `publisher/model`, e.g. `openai/gpt-4.1`). Confirm the model is listed for GitHub Models in your context.
+**Fix:** Set `ai_openai_compat_model` / `AUTO_PR_AI_OPENAI_COMPAT_MODEL` to a valid catalog **`id`** (format `publisher/model`, e.g. `openai/gpt-4.1`). See [INTEGRATION.md — github-models](INTEGRATION.md#github-models) for how to fetch the current list from `https://models.github.ai/catalog/models`.
 
 ### OpenAI-compatible: connection error / URL unreachable (provider: `local`)
 

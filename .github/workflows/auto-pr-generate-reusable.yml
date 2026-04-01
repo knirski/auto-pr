@@ -34,7 +34,8 @@ on:
       ai_openai_compat_model:
         required: false
         type: string
-        default: "openai/gpt-4.1"
+        description: "Model id (publisher/model). For github-models, legal values are catalog entry ids — see docs/INTEGRATION.md#github-models"
+        default: "openai/gpt-4.1-mini"
       ai_llamacpp_release_tag:
         required: false
         type: string

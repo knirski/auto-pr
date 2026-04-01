@@ -16,6 +16,7 @@ import type { Redacted } from "effect";
 import { Duration, Effect, FileSystem, Layer, Option, Path, Schedule, Schema } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import {
+	type AiProvider,
 	type AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
@@ -86,12 +87,53 @@ function generateTitleAndDescription(
 	prompt: string,
 	filtered: readonly CommitInfo[],
 	retryDelayMs: number,
+	provider: AiProvider,
+	model: string,
 ): Effect.Effect<{ title: string; description: string }, unknown, LanguageModel.LanguageModel> {
-	const attempt = LanguageModel.generateObject({
-		prompt,
-		schema: TitleDescriptionSchema,
-	}).pipe(Effect.flatMap((res) => Effect.fromResult(validateTitleDescription(res.value))));
-	return attempt.pipe(
+	const singleAttempt = Effect.gen(function* () {
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "ai_query",
+			status: "start",
+			provider,
+			model,
+			prompt_chars: prompt.length,
+		});
+		const res = yield* LanguageModel.generateObject({
+			prompt,
+			schema: TitleDescriptionSchema,
+		});
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "ai_query",
+			status: "response_received",
+			provider,
+			model,
+		});
+		const validated = yield* Effect.fromResult(validateTitleDescription(res.value));
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "ai_query",
+			status: "validated",
+			provider,
+			model,
+			title_chars: validated.title.length,
+			description_chars: validated.description.length,
+		});
+		return validated;
+	});
+
+	return singleAttempt.pipe(
+		Effect.tapError((e) =>
+			Effect.logWarning({
+				event: "generate_pr_content",
+				step: "ai_query",
+				status: "attempt_failed",
+				provider,
+				model,
+				cause: unknownToMessage(e),
+			}),
+		),
 		Effect.retry(makeRetrySchedule(retryDelayMs)),
 		Effect.catch(() =>
 			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
@@ -178,6 +220,8 @@ export function generatePrContentFromValues(
 				prompt,
 				filtered,
 				retryDelayMs ?? RETRY_DELAY_MS,
+				params.provider,
+				params.model,
 			);
 			title = result.title;
 			descriptionOverride = result.description;

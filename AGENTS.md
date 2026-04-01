@@ -143,3 +143,15 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 ### ADR workflow {#adr-workflow}
 
 Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md and ARCHITECTURE.md if needed. *Significant* change: Research first, document in ADR, update both. Significant = multi-module, hard to reverse, new patterns. Minor refactors: no ADR.
+
+---
+
+## Learned User Preferences
+
+- Prefer caret ranges with the lockfile for most dependencies; keep exact or aligned pins only where justified (for example `bun-types` with `packageManager`, Effect beta packages on the same range, `@typescript/native-preview` snapshots).
+- Prefer continual-learning hook state under `~/.cursor/hooks/state/` (account-wide) when customizing the plugin; upstream marketplace builds may use workspace-relative paths, so reinstalling the plugin can revert a local `homedir()`-based patch.
+
+## Learned Workspace Facts
+
+- `scripts/check-nix-hash.sh` warns from git state when `bun.lock` and `bun.nix` may be out of sync; it does not run Nix or replace `nix develop` / `nix flake check`.
+- The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.
