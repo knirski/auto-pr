@@ -13,7 +13,17 @@
  */
 
 import type { Redacted } from "effect";
-import { Duration, Effect, FileSystem, Layer, Option, Path, Schedule, Schema } from "effect";
+import {
+	Duration,
+	Effect,
+	FileSystem,
+	Layer,
+	Option,
+	Path,
+	Result,
+	Schedule,
+	Schema,
+} from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
@@ -21,6 +31,8 @@ import {
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
+	DescriptionParseError,
+	formatError,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
@@ -59,6 +71,17 @@ const TitleDescriptionSchema = Schema.Struct({
 
 const MAX_AI_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
+
+/** Cap description length in logs (full text is still validated and used). */
+const MAX_LOG_DESCRIPTION_CHARS = 2000;
+
+function truncateForLog(s: string, maxChars: number): string {
+	const t = s.trim();
+	if (t.length <= maxChars) {
+		return t;
+	}
+	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
+}
 
 function makeRetrySchedule(delayMs: number) {
 	return Schedule.recurs(MAX_AI_ATTEMPTS - 1).pipe(
@@ -103,35 +126,46 @@ function generateTitleAndDescription(
 			prompt,
 			schema: TitleDescriptionSchema,
 		});
+		const raw = res.value;
 		yield* Effect.log({
 			event: "generate_pr_content",
-			step: "ai_query",
-			status: "response_received",
+			step: "model_response",
+			status: "parsed",
 			provider,
 			model,
+			title: raw.title,
+			title_chars: raw.title.length,
+			title_conventional: isValidConventionalTitle(raw.title.trim()),
+			description_chars: raw.description.length,
+			description: truncateForLog(raw.description, MAX_LOG_DESCRIPTION_CHARS),
 		});
-		const validated = yield* Effect.fromResult(validateTitleDescription(res.value));
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "ai_query",
-			status: "validated",
-			provider,
-			model,
-			title_chars: validated.title.length,
-			description_chars: validated.description.length,
+		return yield* Result.match(validateTitleDescription(raw), {
+			onSuccess: (validated) =>
+				Effect.gen(function* () {
+					yield* Effect.log({
+						event: "generate_pr_content",
+						step: "validation",
+						status: "ok",
+						provider,
+						model,
+						title_chars: validated.title.length,
+						description_chars: validated.description.length,
+					});
+					return validated;
+				}),
+			onFailure: (err) => Effect.fail(err),
 		});
-		return validated;
 	});
 
 	return singleAttempt.pipe(
 		Effect.tapError((e) =>
 			Effect.logWarning({
 				event: "generate_pr_content",
-				step: "ai_query",
-				status: "attempt_failed",
+				step: e instanceof DescriptionParseError ? "validation" : "ai_query",
+				status: "failed",
 				provider,
 				model,
-				cause: unknownToMessage(e),
+				reason: formatError(e),
 			}),
 		),
 		Effect.retry(makeRetrySchedule(retryDelayMs)),
