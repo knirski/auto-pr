@@ -1,8 +1,9 @@
 /**
  * Initialize auto-pr in the current directory.
- * Creates .github/workflows/auto-pr.yml, .github/PULL_REQUEST_TEMPLATE.md, .nvmrc.
+ * Creates workflow, PR template, and .nvmrc.
  *
- * Run: npx -p github:knirski/auto-pr auto-pr-init
+ * Adopters: npx -p github:knirski/auto-pr auto-pr-init
+ * This repo: bun run src/tools/auto-pr-init.ts
  */
 
 import { Effect, FileSystem, Path } from "effect";

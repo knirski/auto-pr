@@ -54,7 +54,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | New tagged error class | `src/core/errors.ts`; add `formatError` branch in `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
 | New live interpreter | `src/auto-pr/live/`. Layer: `static readonly Live = Layer.effect(...)` |
-| AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher), `ollama-language-model.ts`; new providers in `live/` |
+| AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher: `local` \| `github-models`); new providers in `live/` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Composite action | `.github/actions/<name>/` |
@@ -96,6 +96,8 @@ test/              — mirrors src/ layout
 ---
 
 ## Development
+
+Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runtime` is for **adopters** (Node installs and consumer repos).
 
 ### Design Principles
 
@@ -142,8 +144,15 @@ test/              — mirrors src/ layout
 
 Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md and ARCHITECTURE.md if needed. *Significant* change: Research first, document in ADR, update both. Significant = multi-module, hard to reverse, new patterns. Minor refactors: no ADR.
 
+---
+
 ## Learned User Preferences
 
-- Prefer semver ranges (for example `^`) with `bun.lock` for most npm dependencies; use exact or tightly aligned pins only when there is a concrete reason (Bun versus `packageManager`, Effect beta line consistency, `@typescript/native-preview` snapshots).
+- Prefer caret ranges with the lockfile for most dependencies; keep exact or aligned pins only where justified (for example `bun-types` with `packageManager`, Effect beta packages on the same range, `@typescript/native-preview` snapshots).
+- Prefer continual-learning hook state under `~/.cursor/hooks/state/` (account-wide) when customizing the plugin; upstream marketplace builds may use workspace-relative paths, so reinstalling the plugin can revert a local `homedir()`-based patch.
+- Target auto-generated PR descriptions (and related prompts) at a software-engineer audience; Markdown in the body is appropriate when it improves clarity.
 
 ## Learned Workspace Facts
+
+- `scripts/check-nix-hash.sh` warns from git state when `bun.lock` and `bun.nix` may be out of sync; it does not run Nix or replace `nix develop` / `nix flake check`.
+- The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.

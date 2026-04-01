@@ -1,6 +1,8 @@
 # Adds dist/ to release-please PRs before merge so the tagged release commit includes it.
 # Fixes: npx -p github:knirski/auto-pr#v0.1.2 would otherwise get a commit without dist.
-# Runs when a PR touching .release-please-manifest.json is opened or updated.
+# Runs when a release-please PR touches .release-please-manifest.json (opened or updated).
+# Do not add package.json or CHANGELOG.md here: those fire for ordinary PRs and would push
+# chore: update dist to feature branches, fighting the "no dist in PRs" policy.
 # Loop prevention: only pushes when dist changes; re-run finds no diff.
 
 name: Add dist to release PR
@@ -11,8 +13,6 @@ on:
       - main
     paths:
       - '.release-please-manifest.json'
-      - 'package.json'
-      - 'CHANGELOG.md'
 
 concurrency:
   group: add-dist-to-release-pr-${{ github.event.pull_request.number }}

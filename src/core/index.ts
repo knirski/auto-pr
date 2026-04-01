@@ -23,8 +23,11 @@ export {
 } from "#core/errors.js";
 export type { CommitInfo, TemplateData, TypeOfChange } from "#core/fill-pr-template-core.js";
 export {
+	BREAKING_CHANGES_BODY_MAX_LENGTH,
+	extractBreakingDescriptionFromLine,
 	fillTemplate,
 	filterMergeCommits,
+	fitConventionalTitleToLengthLimit,
 	formatTitleBody,
 	getBreakingChanges,
 	getChanges,
@@ -36,13 +39,17 @@ export {
 	hasDocsFiles,
 	hasTestFiles,
 	hasUnreplacedPlaceholders,
+	isBreakingConventionalTitle,
 	isConventional,
 	isDocsOnly,
 	isMergeCommit,
 	isValidConventionalTitle,
+	isWithinLengthLimit,
+	matchesConventionalTitleFormat,
 	parseCommits,
 	parseFilesContent,
 	renderBody,
+	resolveBreakingChangesBody,
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
 export type { GhOutputValue } from "#core/gh-output.js";
@@ -57,6 +64,7 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
+export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 export { buildDescriptionPrompt } from "#core/prompt.js";
 export {
 	filterSemanticSubjects,

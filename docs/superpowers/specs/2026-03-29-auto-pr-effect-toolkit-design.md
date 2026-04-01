@@ -9,7 +9,7 @@
 ## Principle
 
 - Use `effect/unstable/ai` only: `LanguageModel`, `Tool`/`Toolkit`, `AiError`, `Prompt`/`Response` as needed. `@effect/ai-openai-compat` provides `LanguageModel`, not a parallel API in feature code.
-- Product providers: `llamacpp` and `github-models` only — same `OpenAiClient` + `OpenAiLanguageModel`; see [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
+- Product providers: `local` and `github-models` only — same `OpenAiClient` + `OpenAiLanguageModel`; see [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
 
 ## 1. Problem / goals
 

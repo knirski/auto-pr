@@ -16,12 +16,10 @@
  * | GITHUB_OUTPUT | ✓ | GetCommits | Append target for step outputs; **Actions assigns a unique path per step** (don’t reuse across steps) |
  * | BRANCH | ✓* | CreateOrUpdatePr | Current branch (*optional in RunAutoPr) |
  * | GH_TOKEN | ✓* | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | GitHub token (*required for github-models) |
- * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | ollama \| github-models \| openai-compat (default: ollama) |
- * | AUTO_PR_AI_OLLAMA_MODEL | | GeneratePrContent, RunAutoPr | Model when provider=ollama (default: llama3.1:8b) |
- * | AUTO_PR_AI_GITHUB_MODEL | ✓* | GeneratePrContent, RunAutoPr | Model when provider=github-models |
- * | AUTO_PR_AI_OPENAI_COMPAT_URL | ✓* | GeneratePrContent, RunAutoPr | API URL when provider=openai-compat |
- * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | ✓* | GeneratePrContent, RunAutoPr | API key when provider=openai-compat |
- * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | ✓* | GeneratePrContent, RunAutoPr | Model when provider=openai-compat |
+ * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | local \| github-models (default: local) |
+ * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
+ * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
+ * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to openai/gpt-4.1 when unset |
  * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  *
@@ -62,17 +60,6 @@ function requireNonEmpty(
 	return value.trim() === ""
 		? Effect.fail(new AutoPrConfigError({ missing: [`${name} must be non-empty`] }))
 		: Effect.succeed(value);
-}
-
-function requireNonEmptyStringOption(
-	name: string,
-	opt: Option.Option<string>,
-	missingMessage: string,
-): Effect.Effect<string, AutoPrConfigError, never> {
-	return Option.match(opt, {
-		onNone: () => Effect.fail(new AutoPrConfigError({ missing: [missingMessage] })),
-		onSome: (v) => requireNonEmpty(name, v),
-	});
 }
 
 function requireRedactedNonEmpty(
@@ -138,7 +125,16 @@ export const GetCommitsConfigLayer = Layer.effect(
 
 // ─── GeneratePrContentConfig ─────────────────────────────────────────────────
 
-export type AiProvider = "ollama" | "github-models" | "openai-compat";
+export type AiProvider = "local" | "github-models";
+
+/** Default OpenAI-compatible base URL (e.g. local llama.cpp `llama-server` `/v1`). */
+export const DEFAULT_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
+
+/** Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `local`. */
+export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
+
+/** Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `github-models`. */
+export const DEFAULT_GITHUB_MODELS_MODEL = "openai/gpt-4.1";
 
 export interface GeneratePrContentConfig {
 	readonly commits: string;
@@ -149,25 +145,20 @@ export interface GeneratePrContentConfig {
 	readonly model: string;
 	/** Set when `provider` is `github-models`. */
 	readonly ghToken?: Redacted.Redacted<string>;
-	readonly githubModel?: string;
-	/** Set when `provider` is `openai-compat`. */
+	/** Set when `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp today). */
 	readonly openaiCompatUrl?: string;
 	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
-	readonly openaiCompatModel?: string;
 }
 
 export const GeneratePrContentConfig =
 	ServiceMap.Service<GeneratePrContentConfig>("GeneratePrContentConfig");
 
-const DEFAULT_AI_PROVIDER: AiProvider = "ollama";
-const DEFAULT_OLLAMA_MODEL = "llama3.1:8b";
+const DEFAULT_AI_PROVIDER: AiProvider = "local";
 
 const GeneratePrContentConfigDef = Config.all({
 	workspace: Config.string("GITHUB_WORKSPACE"),
 	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
-	aiOllamaModel: Config.option(Config.string("AUTO_PR_AI_OLLAMA_MODEL")),
 	ghToken: Config.option(Config.redacted("GH_TOKEN")),
-	aiGitHubModel: Config.option(Config.string("AUTO_PR_AI_GITHUB_MODEL")),
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
@@ -176,15 +167,12 @@ const GeneratePrContentConfigDef = Config.all({
 function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
 	const trimmed = raw.trim().toLowerCase();
 	return Match.value(trimmed).pipe(
-		Match.when("ollama", () => Effect.succeed("ollama" as const)),
+		Match.when("local", () => Effect.succeed("local" as const)),
 		Match.when("github-models", () => Effect.succeed("github-models" as const)),
-		Match.when("openai-compat", () => Effect.succeed("openai-compat" as const)),
 		Match.orElse(() =>
 			Effect.fail(
 				new AutoPrConfigError({
-					missing: [
-						`Invalid AUTO_PR_AI_PROVIDER: ${raw}. Must be ollama, github-models, or openai-compat`,
-					],
+					missing: [`Invalid AUTO_PR_AI_PROVIDER: ${raw}. Must be local or github-models`],
 				}),
 			),
 		),
@@ -206,7 +194,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
 			yield* Option.match(base.aiProvider, {
-				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to ollama"),
+				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to local"),
 				onSome: () => Effect.void,
 			});
 			const provider = yield* parseProviderOrDefault(providerRaw);
@@ -220,10 +208,26 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			};
 
 			return yield* Match.value(provider).pipe(
-				Match.when("ollama", () =>
-					Effect.succeed({
-						...shared,
-						model: Option.getOrElse(base.aiOllamaModel, () => DEFAULT_OLLAMA_MODEL),
+				Match.when("local", () =>
+					Effect.gen(function* () {
+						const openaiCompatUrl = Option.getOrElse(
+							base.aiOpenaiCompatUrl,
+							() => DEFAULT_OPENAI_COMPAT_URL,
+						);
+						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const model = Option.getOrElse(
+							base.aiOpenaiCompatModel,
+							() => DEFAULT_OPENAI_COMPAT_MODEL,
+						);
+						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+						return {
+							...shared,
+							model: modelId,
+							openaiCompatUrl: url,
+							...(Option.isSome(base.aiOpenaiCompatApiKey)
+								? { openaiCompatApiKey: base.aiOpenaiCompatApiKey.value }
+								: {}),
+						};
 					}),
 				),
 				Match.when("github-models", () =>
@@ -233,42 +237,15 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.ghToken,
 							"GH_TOKEN required for github-models",
 						);
-						const githubModel = yield* requireNonEmptyStringOption(
-							"AUTO_PR_AI_GITHUB_MODEL",
-							base.aiGitHubModel,
-							"AUTO_PR_AI_GITHUB_MODEL required for github-models",
-						);
-						return {
-							...shared,
-							model: githubModel,
-							ghToken,
-							githubModel,
-						};
-					}),
-				),
-				Match.when("openai-compat", () =>
-					Effect.gen(function* () {
-						const openaiCompatUrl = yield* requireNonEmptyStringOption(
-							"AUTO_PR_AI_OPENAI_COMPAT_URL",
-							base.aiOpenaiCompatUrl,
-							"AUTO_PR_AI_OPENAI_COMPAT_URL required for openai-compat",
-						);
-						const openaiCompatApiKey = yield* requireRedactedOption(
-							"AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
-							base.aiOpenaiCompatApiKey,
-							"AUTO_PR_AI_OPENAI_COMPAT_API_KEY required for openai-compat",
-						);
-						const openaiCompatModel = yield* requireNonEmptyStringOption(
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+						const model = Option.getOrElse(
 							base.aiOpenaiCompatModel,
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL required for openai-compat",
+							() => DEFAULT_GITHUB_MODELS_MODEL,
 						);
+						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
-							model: openaiCompatModel,
-							openaiCompatUrl,
-							openaiCompatApiKey,
-							openaiCompatModel,
+							model: modelId,
+							ghToken,
 						};
 					}),
 				),
@@ -343,12 +320,9 @@ export interface RunAutoPrConfig {
 	readonly provider: AiProvider;
 	readonly model: string;
 	readonly branch: string | undefined;
-	/** Set when `provider` is `github-models`. */
-	readonly githubModel?: string;
-	/** Set when `provider` is `openai-compat`. */
+	/** Set when `provider` is `local`. */
 	readonly openaiCompatUrl?: string;
 	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
-	readonly openaiCompatModel?: string;
 }
 
 export const RunAutoPrConfig = ServiceMap.Service<RunAutoPrConfig>("RunAutoPrConfig");
@@ -358,8 +332,6 @@ const RunAutoPrConfigDef = Config.all({
 	workspace: Config.string("GITHUB_WORKSPACE"),
 	ghToken: Config.redacted("GH_TOKEN"),
 	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
-	aiOllamaModel: Config.option(Config.string("AUTO_PR_AI_OLLAMA_MODEL")),
-	aiGitHubModel: Config.option(Config.string("AUTO_PR_AI_GITHUB_MODEL")),
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
@@ -377,7 +349,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
 			yield* Option.match(base.aiProvider, {
-				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to ollama"),
+				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to local"),
 				onSome: () => Effect.void,
 			});
 			const provider = yield* parseProviderOrDefault(providerRaw);
@@ -392,49 +364,38 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			};
 
 			return yield* Match.value(provider).pipe(
-				Match.when("ollama", () =>
-					Effect.succeed({
-						...shared,
-						model: Option.getOrElse(base.aiOllamaModel, () => DEFAULT_OLLAMA_MODEL),
+				Match.when("local", () =>
+					Effect.gen(function* () {
+						const openaiCompatUrl = Option.getOrElse(
+							base.aiOpenaiCompatUrl,
+							() => DEFAULT_OPENAI_COMPAT_URL,
+						);
+						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const model = Option.getOrElse(
+							base.aiOpenaiCompatModel,
+							() => DEFAULT_OPENAI_COMPAT_MODEL,
+						);
+						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+						return {
+							...shared,
+							model: modelId,
+							openaiCompatUrl: url,
+							...(Option.isSome(base.aiOpenaiCompatApiKey)
+								? { openaiCompatApiKey: base.aiOpenaiCompatApiKey.value }
+								: {}),
+						};
 					}),
 				),
 				Match.when("github-models", () =>
 					Effect.gen(function* () {
-						const githubModel = yield* requireNonEmptyStringOption(
-							"AUTO_PR_AI_GITHUB_MODEL",
-							base.aiGitHubModel,
-							"AUTO_PR_AI_GITHUB_MODEL required for github-models",
-						);
-						return {
-							...shared,
-							model: githubModel,
-							githubModel,
-						};
-					}),
-				),
-				Match.when("openai-compat", () =>
-					Effect.gen(function* () {
-						const openaiCompatUrl = yield* requireNonEmptyStringOption(
-							"AUTO_PR_AI_OPENAI_COMPAT_URL",
-							base.aiOpenaiCompatUrl,
-							"AUTO_PR_AI_OPENAI_COMPAT_URL required for openai-compat",
-						);
-						const openaiCompatApiKey = yield* requireRedactedOption(
-							"AUTO_PR_AI_OPENAI_COMPAT_API_KEY",
-							base.aiOpenaiCompatApiKey,
-							"AUTO_PR_AI_OPENAI_COMPAT_API_KEY required for openai-compat",
-						);
-						const openaiCompatModel = yield* requireNonEmptyStringOption(
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+						const model = Option.getOrElse(
 							base.aiOpenaiCompatModel,
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL required for openai-compat",
+							() => DEFAULT_GITHUB_MODELS_MODEL,
 						);
+						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
-							model: openaiCompatModel,
-							openaiCompatUrl,
-							openaiCompatApiKey,
-							openaiCompatModel,
+							model: modelId,
 						};
 					}),
 				),

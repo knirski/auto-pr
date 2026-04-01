@@ -3,11 +3,12 @@
  */
 
 import { pipe, Result, Schema } from "effect";
+import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { isBlank, unknownToMessage } from "#core/string.js";
 
-/** Branded type for sanitized GITHUB_OUTPUT values (max 72 chars, percent/CR/newline escaped). */
+/** Branded type for sanitized GITHUB_OUTPUT values (see {@link PR_TITLE_LINE_MAX_LENGTH}; percent/CR/newline escaped). */
 const GhOutputValueSchema = Schema.String.pipe(
-	Schema.check(Schema.isMaxLength(72)),
+	Schema.check(Schema.isMaxLength(PR_TITLE_LINE_MAX_LENGTH)),
 	Schema.brand("GhOutputValue"),
 );
 export type GhOutputValue = Schema.Schema.Type<typeof GhOutputValueSchema>;
@@ -21,17 +22,19 @@ export function formatGhOutput(
 
 /**
  * Escape value for GITHUB_OUTPUT format. Percent-encodes `%` → `%25`, `\n` → `%0A`, `\r` → `%0D`.
- * Trims and slices to 72 chars before escaping; escaping can lengthen the string (e.g. `%` → `%25`),
- * so validation may fail if the escaped result exceeds 72 chars.
+ * Trims and slices to {@link PR_TITLE_LINE_MAX_LENGTH} chars before escaping; escaping can lengthen the string (e.g. `%` → `%25`),
+ * so validation may fail if the escaped result exceeds that length.
  * Use {@link decodeGhOutputTitle} when reading the title back from parsed GITHUB_OUTPUT.
  */
 export function sanitizeForGhOutput(s: string): Result.Result<GhOutputValue, Error> {
-	const trimmed = s.trim().slice(0, 72);
+	const trimmed = s.trim().slice(0, PR_TITLE_LINE_MAX_LENGTH);
 	const escaped = trimmed.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
 	return Result.try({
 		try: () => Schema.decodeSync(GhOutputValueSchema)(escaped),
 		catch: (e) =>
-			new Error(`GITHUB_OUTPUT value exceeds 72 chars after escaping: ${unknownToMessage(e)}`),
+			new Error(
+				`GITHUB_OUTPUT value exceeds ${PR_TITLE_LINE_MAX_LENGTH} chars after escaping: ${unknownToMessage(e)}`,
+			),
 	});
 }
 

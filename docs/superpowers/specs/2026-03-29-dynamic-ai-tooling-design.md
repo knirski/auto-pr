@@ -5,7 +5,7 @@
 
 ## Prerequisites
 
-1. [Unify on OpenAI-compat `LanguageModel` (remove Ollama)](2026-03-29-ollama-to-llamacpp-migration-design.md) — two provider ids (`llamacpp`, `github-models`), one `OpenAiClient` path, workflow/env breaks. Do this before toolkit or routing work.
+1. [Unify on OpenAI-compat `LanguageModel` (remove Ollama)](2026-03-29-ollama-to-llamacpp-migration-design.md) — two provider ids (`local`, `github-models`), one `OpenAiClient` path, workflow/env breaks. Do this before toolkit or routing work.
 2. All AI usage via `effect/unstable/ai` only — no parallel vendor SDKs in `src/auto-pr`.
 
 ADR 0007: do not edit [0007](../../adr/0007-ai-abstraction-layer.md) until code matches this set; then add or supersede an ADR.

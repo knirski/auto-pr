@@ -70,9 +70,7 @@ How can we centralize and validate the AI configuration surface while preserving
 ```json
 {
   "ai": {
-    "provider": "ollama",
-    "ollama_model": "llama3.1:8b",
-    "github_model": "",
+    "provider": "local",
     "openai_compat": {
       "url": "",
       "model": ""
@@ -87,9 +85,8 @@ How can we centralize and validate the AI configuration surface while preserving
 
 | When `ai.provider` is | Required from config/env | Optional | Ignored |
 |----------------------|--------------------------|----------|---------|
-| `ollama`             | —                        | `ai.ollama_model` (default: `llama3.1:8b`) | `ai.github_model`, `ai.openai_compat` |
-| `github-models`      | `ai.github_model`, `GH_TOKEN` (env) | — | `ai.ollama_model`, `ai.openai_compat` |
-| `openai-compat`      | `ai.openai_compat.url`, `ai.openai_compat.model`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` (env) | — | `ai.ollama_model`, `ai.github_model` |
+| `local`              | `ai.openai_compat.url`, `ai.openai_compat.model` (or env defaults) | `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` (env) | — |
+| `github-models`      | `ai.openai_compat.model` (or env default), `GH_TOKEN` (env) | — | `ai.openai_compat.url` (fixed in code for GitHub Models) |
 
 **XOR:** Only one provider is active; validate after `provider` is resolved.
 
@@ -103,13 +100,11 @@ Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`GI
 
 #### Env keys mirrored by a future file
 
-| Config key               | Env (override)                    | Default   |
-|--------------------------|-----------------------------------|-----------|
-| `ai.provider`            | `AUTO_PR_AI_PROVIDER`             | `ollama`  |
-| `ai.ollama_model`        | `AUTO_PR_AI_OLLAMA_MODEL`         | `llama3.1:8b` |
-| `ai.github_model`        | `AUTO_PR_AI_GITHUB_MODEL`         | —         |
-| `ai.openai_compat.url`   | `AUTO_PR_AI_OPENAI_COMPAT_URL`    | —         |
-| `ai.openai_compat.model` | `AUTO_PR_AI_OPENAI_COMPAT_MODEL`  | —         |
+| Config key               | Env (override)                    | Default (see `config.ts`) |
+|--------------------------|-----------------------------------|---------------------------|
+| `ai.provider`            | `AUTO_PR_AI_PROVIDER`             | `local`                   |
+| `ai.openai_compat.url`   | `AUTO_PR_AI_OPENAI_COMPAT_URL`    | `http://127.0.0.1:8080/v1` (local) |
+| `ai.openai_compat.model` | `AUTO_PR_AI_OPENAI_COMPAT_MODEL`  | `gpt-oss` (local) / `openai/gpt-4.1` (github-models) when unset |
 
 **Override order (if file exists):** env → file → built-in default.
 

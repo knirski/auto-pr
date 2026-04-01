@@ -5,7 +5,7 @@
 
 ## Current direction
 
-Use the 2026-03-29 set (two providers `llamacpp` + `github-models`, one OpenAI-compat stack, no Ollama):
+Use the 2026-03-29 set (two providers `local` + `github-models`, one OpenAI-compat stack, no Ollama):
 
 | Doc | Role |
 |-----|------|

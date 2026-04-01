@@ -9,9 +9,9 @@
 [![Liberapay](https://img.shields.io/badge/Liberapay-Support-yellow.svg)](https://liberapay.com/knirski/)
 [![CII Best Practices](https://img.shields.io/badge/CII%20Best%20Practices-register-green)](https://www.bestpractices.dev/en/projects/new?project_url=https%3A%2F%2Fgithub.com%2Fknirski%2Fauto-pr)
 
-Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider ([Ollama](https://ollama.com/) by default) to generate descriptions for multi-commit PRs.
+Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider (GitHub Models by default in CI; local OpenAI-compatible servers for self-hosted or dev) to generate descriptions for multi-commit PRs.
 
-**Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done. Defaults work for most projects; override via workflow inputs only when needed.
+**Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done — most adopters only use GitHub Actions and do not add this package to `package.json` unless they want the CLIs locally. Defaults work for most projects; override via workflow inputs only when needed.
 
 **Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying—workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
 
@@ -23,7 +23,7 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 - **Conventional commits** — Parses `feat:`, `fix:`, `docs:`, etc. for PR title and type
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
-- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description (Ollama default: `llama3.1:8b`)
+- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **local** (OpenAI-compatible HTTP, e.g. llama.cpp) or **github-models**
 - **gh CLI** — Thin wrapper around `gh pr create` / `gh pr edit`
 - **CI-agnostic** — **get-commits** appends paths and count to `GITHUB_OUTPUT`; **generate-content** writes `pr-title.txt` and `pr-body.md` under the workspace. Works with GitHub Actions or any orchestrator that sets the same env conventions.
 
@@ -39,7 +39,7 @@ Merge commits are filtered out. Non-conventional commits are included; type fall
 
 Add auto-pr to any repo in 6 steps:
 
-1. **Init** — `npx -p github:knirski/auto-pr auto-pr-init` (creates workflow, PR template, `.nvmrc`)
+1. **Init** — `npx -p github:knirski/auto-pr auto-pr-init` (creates workflow, PR template, and `.nvmrc`)
 2. **Create** — [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
 3. **Generate** — Private key in app settings → save `.pem`
 4. **Install** — Install the app on your repository
@@ -68,7 +68,9 @@ For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` 
 
 ## Installation
 
-**As a dependency (optional; for local runs or when pinning a version):**
+**Normal setup does not use this section.** Follow [Quick start (user)](#quick-start-user): Actions runs everything; you do not add auto-pr to `package.json` unless you choose to.
+
+**Optional — add as a dependency** (local CLI runs, pinning a version, or scripting):
 
 ```bash
 npm install github:knirski/auto-pr
@@ -97,7 +99,7 @@ bun x lefthook install
 | `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
 | `npx auto-pr-init` | Create workflow, PR template, and .nvmrc in current repo |
 
-Use `npx -p github:knirski/auto-pr <command>` for one-off runs without adding a dependency.
+After install, or for one-offs: `npx -p github:knirski/auto-pr <command>`. CI runs the same bins via reusable workflows without a repo dependency.
 
 ## Nix flake (contributors only, optional)
 
@@ -138,12 +140,10 @@ When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.
 | `DEFAULT_BRANCH` | get-commits, create-or-update-pr | Base branch (e.g. `main`) |
 | `GITHUB_WORKSPACE` | get-commits, generate-content, create-or-update-pr | Repo root |
 | `GITHUB_OUTPUT` | get-commits | Output file (GitHub Actions) |
-| `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `ollama`): `ollama`, `github-models`, or `openai-compat` |
-| `AUTO_PR_AI_OLLAMA_MODEL` | generate-content | **Ollama** — model id when `AUTO_PR_AI_PROVIDER` is `ollama` (default `llama3.1:8b`) |
-| `AUTO_PR_AI_GITHUB_MODEL` | generate-content | **GitHub Models** — model id (e.g. `openai/gpt-4.1`) when provider is `github-models`; requires `GH_TOKEN` for the Models API |
-| `AUTO_PR_AI_OPENAI_COMPAT_URL` | generate-content | **OpenAI-compatible** — base URL of the API (e.g. Azure OpenAI, OpenRouter) when provider is `openai-compat` |
-| `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | generate-content | **OpenAI-compatible** — API key (redacted in logs) when provider is `openai-compat` |
-| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | generate-content | **OpenAI-compatible** — model name/id for the remote endpoint when provider is `openai-compat` |
+| `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `local`): `local` or `github-models` |
+| `AUTO_PR_AI_OPENAI_COMPAT_URL` | generate-content | **local** — OpenAI-compatible API base URL (default `http://127.0.0.1:8080/v1`; e.g. llama.cpp `llama-server`) |
+| `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | generate-content | **local** — optional API key for that endpoint |
+| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | generate-content | Model id: **local** defaults to `gpt-oss` when unset; **github-models** defaults to `openai/gpt-4.1` when unset |
 | `GH_TOKEN` | create-or-update-pr; generate-content (github-models) | GitHub token for PR create/update; for **GitHub Models**, also used as the API credential when `AUTO_PR_AI_PROVIDER` is `github-models` |
 | `BRANCH` | create-or-update-pr | Current branch |
 | `AUTO_PR_DEBUG` | any | Optional. Set to `1` for verbose error hints when debugging |

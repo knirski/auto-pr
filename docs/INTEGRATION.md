@@ -2,6 +2,8 @@
 
 This guide walks through adding auto-pr to any repository so that pushes to `ai/**` branches automatically create or update pull requests.
 
+**Typical setup:** GitHub Actions only — `auto-pr-init`, GitHub App, secrets, then push to `ai/**`. No `package.json` or install of auto-pr in your repo; reusable workflows pull from `knirski/auto-pr`. **Optional:** install or `npx -p github:knirski/auto-pr …` to run CLIs locally — [Step 1 (optional)](#step-1-optional-install-the-package-for-local-cli).
+
 ## Getting started
 
 1. **Run** `npx -p github:knirski/auto-pr auto-pr-init` in your repo — creates the workflow, PR template, and `.nvmrc`
@@ -21,10 +23,10 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 | **GitHub App** | Create at [github.com/settings/apps/new](https://github.com/settings/apps/new). Permissions: Contents, Pull requests (Read and write). [Step 2](#step-2-create-the-github-app) |
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
-| **Secrets** | Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. [Step 5](#step-5-add-repository-secrets) |
+| **Secrets** | Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions** (optional: `GH_TOKEN` to override the default token for GitHub Models). [Step 5](#step-5-add-repository-secrets) |
 | **Branch protection** | (Optional) Require `Auto-PR generate (reusable) / generate` and `Auto-PR create (reusable) / create` before merging. [Step 8](#step-8-configure-branch-protection-optional) |
 
-**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App (Steps 2–5) → push to `ai/**`.
+**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App + secrets (Steps 2–5) → push to `ai/**`.
 
 ## Overview
 
@@ -33,9 +35,11 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 3. **GitHub App** creates or updates the PR using its token
 4. **PR** is opened by `your-app-name[bot]` → you approve it
 
-## Step 1: Add auto-pr as a dependency (optional)
+## Step 1 (optional): Install the package for local CLI
 
-**Skip this step** — the default reusable workflow fetches auto-pr from knirski/auto-pr and needs no `package.json`. When installing from git (e.g. `npx -p github:knirski/auto-pr` or `bun add github:knirski/auto-pr`), the package works with Node only: `dist/` is pre-built and committed by CI. With Bun, `prepare` also builds it on install.
+**Skip this step** unless you run auto-pr CLIs on your machine. The default reusable workflow fetches auto-pr from `knirski/auto-pr` and needs **no** dependency on auto-pr in your `package.json`.
+
+When you do install from git (e.g. `npx -p github:knirski/auto-pr` or `bun add github:knirski/auto-pr`), the package works with Node only: `dist/` is pre-built and committed by CI. With Bun, `prepare` also builds it on install.
 
 **JS/TS projects:** The generate and create jobs auto-detect your runtime (npm, yarn, pnpm, bun) from `packageManager` or lockfile. No config needed.
 
@@ -68,22 +72,24 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 ## Step 5: Add repository secrets
 
 1. Go to your repo → **Settings** → **Secrets and variables** → **Actions**
-2. Add two secrets:
+2. Add these repository secrets:
 
 | Secret name | Value |
 |-------------|-------|
 | `APP_ID` | Your app's App ID (from app settings, "About") |
 | `APP_PRIVATE_KEY` | Full contents of the `.pem` file |
 
-These secrets are used by both the auto-pr workflow and release-please (if you use it).
+Optional: **`GH_TOKEN`** — use only if you want a specific token for [GitHub Models](https://github.com/marketplace/models) instead of the default **`GITHUB_TOKEN`** injected into Actions. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes `secrets.GH_TOKEN || github.token` into the generate workflow (entry workflow must keep **`models: read`**).
+
+`APP_*` are used by the create job (and release-please if you use it).
 
 ## Step 6: Add the workflow file
 
-**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command.
+**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command. The reusable generate job runs shell via **composite actions** pinned in `knirski/auto-pr`; you do not need `scripts/` in your repository.
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
-**No action copying required.** The reusable workflows fetch everything (including the setup-runtime action) from knirski/auto-pr. The `./` path would resolve to your repo; we use full paths so you don't need anything in `.github/actions/`.
+**No action copying required.** The reusable workflows fetch those composite actions from `knirski/auto-pr`. A relative `./` path would resolve to your repo; we use full paths so you do not need anything under `.github/actions/` in your project.
 
 All inputs use sensible defaults for the AI model. The PR template path is always `.github/PULL_REQUEST_TEMPLATE.md` at the repo root. Edit the **How to test** section in that file directly for project-specific steps (for example `npm run check` or `pytest`). Override other options via `with:` when needed.
 
@@ -208,34 +214,43 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | I want to… | Set |
 |------------|-----|
 | Use my project's check command in "How to test" | Edit the **How to test** section in `.github/PULL_REQUEST_TEMPLATE.md` |
-| Use a different AI model (Ollama) | `ai_ollama_model` (e.g. `llama3.2:3b`) |
-| Use GitHub Models or OpenAI-compatible API | `ai_provider` to `github-models` or `openai-compat`; add secrets if required |
+| Use a different GitHub Models id | `ai_openai_compat_model` (e.g. `openai/gpt-4.1`) |
+| Point **local** at another host or gateway | `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` |
+| Run **local** on GitHub-hosted runners with llama.cpp | `ai_provider: local`, leave `ai_openai_compat_url` empty, set **`ai_llamacpp_model_url`** (HTTPS link to a `.gguf` file). Optional: `ai_llamacpp_release_tag`, `ai_llamacpp_port`. The workflow caches the binary + model and starts `llama-server`. |
 | Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
 
-## AI providers (ollama, github-models, openai-compat)
+## AI providers (`local`, `github-models`)
 
 For branches with **2+ commits**, auto-pr generates the PR description via an AI backend. Choose a provider with `ai_provider` on the generate reusable workflow (maps to `AUTO_PR_AI_PROVIDER`), or set env when running locally.
 
-### Ollama (default)
+### `local` (OpenAI-compatible HTTP)
 
-- **Workflow:** `ai_provider: ollama` (default), optional `ai_ollama_model` (default `llama3.1:8b`).
-- **CI:** The reusable workflow runs Ollama on the runner when needed; URL is fixed (`http://localhost:11434`).
-- **Local:** Run Ollama locally when using `run-auto-pr` with 2+ commits.
+Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.) using the same env names as in [`src/auto-pr/config.ts`](../src/auto-pr/config.ts): `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
 
-### GitHub Models (`github-models`)
+- **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow downloads llama.cpp (prebuilt ubuntu-x64), caches the binary and model, and starts `llama-server` on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
+- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (bundled llama.cpp setup + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly.
+- **Local dev:** Defaults target `http://127.0.0.1:8080/v1` and model `gpt-oss` (override via env).
+
+### `github-models`
 
 Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`https://models.github.ai/inference`) with an OpenAI-compatible client.
 
-- **Token:** Set **`GH_TOKEN`** to a token allowed to call GitHub Models (e.g. fine-grained or classic PAT with Models access, or in Actions pass the secret into the generate job).
-- **Workflow:** Set `ai_provider: github-models`, `ai_github_model` to a model id such as `openai/gpt-4.1`, and pass **`secrets: GH_TOKEN: ${{ secrets.GH_TOKEN }}`** (or another secret containing the token) on the `uses:` of [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml). The reusable workflow forwards it only when `ai_provider` is `github-models`.
-- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_GITHUB_MODEL=...`, `GH_TOKEN=...`.
+- **Token:** Optional repository secret **`GH_TOKEN`**; if unset, the entry workflow passes the default Actions **`github.token`** (`secrets.GH_TOKEN || github.token`). See [Step 5](#step-5-add-repository-secrets). The reusable workflow forwards it to generate when `ai_provider` is `github-models`.
+- **Workflow:** Default is `ai_provider: github-models` with `ai_openai_compat_model` (e.g. `openai/gpt-4.1`).
+- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL=...`, `GH_TOKEN=...`.
+- **Legal model ids:** The catalog is published as JSON — see [REST: List all models](https://docs.github.com/en/rest/models/catalog#list-all-models). Fetch and read each entry’s **`id`** (format `publisher/model`):
 
-### OpenAI-compatible (`openai-compat`)
+  ```bash
+  curl -sL https://models.github.ai/catalog/models
+  ```
 
-Use any OpenAI-compatible HTTP API (Azure OpenAI, OpenRouter, local gateways, etc.).
+  To list ids only:
 
-- **Workflow:** `ai_provider: openai-compat` and set `ai_openai_compat_url`, `ai_openai_compat_api_key`, and `ai_openai_compat_model` to match your provider.
-- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=openai-compat`, `AUTO_PR_AI_OPENAI_COMPAT_URL`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
+  ```bash
+  curl -sL https://models.github.ai/catalog/models | jq -r '.[].id' | sort
+  ```
+
+  The catalog includes embedding-only models; for PR text generation, pick an entry whose **`supported_output_modalities`** includes **`text`** (or use a known chat model id such as `openai/gpt-4.1`).
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common failures.
 
@@ -257,7 +272,7 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common f
 | Command | Required | Optional |
 |---------|----------|----------|
 | **auto-pr-get-commits** | `DEFAULT_BRANCH`, `GITHUB_WORKSPACE`, `GITHUB_OUTPUT` | — |
-| **auto-pr-generate-content** | `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `ollama`), `AUTO_PR_AI_OLLAMA_MODEL` (ollama), `AUTO_PR_AI_GITHUB_MODEL` + `GH_TOKEN` (github-models), `AUTO_PR_AI_OPENAI_COMPAT_*` (openai-compat). Reads `{GITHUB_WORKSPACE}/commits.txt` and `files.txt` from `get-commits`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
+| **auto-pr-generate-content** | `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local`), `AUTO_PR_AI_OPENAI_COMPAT_*` (model for both providers; URL/key for local), `GH_TOKEN` (github-models). Reads `{GITHUB_WORKSPACE}/commits.txt` and `files.txt` from `get-commits`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `GITHUB_WORKSPACE` | — (reads `{GITHUB_WORKSPACE}/pr-title.txt` and `pr-body.md`) |
 
 Override AI-related defaults via workflow `with:` inputs when needed.
