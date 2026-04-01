@@ -25,8 +25,9 @@ runs:
   steps:
     - id: run
       shell: bash
-      run: bash "$GITHUB_ACTION_PATH/auto-pr-run-command.sh" "${{ inputs.command }}"
+      run: bash "$GITHUB_ACTION_PATH/auto-pr-run-command.sh" "$AUTO_PR_COMMAND"
       env:
+        AUTO_PR_COMMAND: ${{ inputs.command }}
         USE_WORKSPACE: ${{ inputs.use_workspace }}
         AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
         RUNNER: ${{ inputs.runner }}
