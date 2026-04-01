@@ -88,7 +88,7 @@
 
 **Cause:** `GH_TOKEN` is missing, expired, or lacks permission to call the GitHub Models API.
 
-**Fix:** Provide a valid token via the generate workflow `secrets.GH_TOKEN` (see [INTEGRATION.md](INTEGRATION.md#github-models)). For local runs, export `GH_TOKEN` before `run-auto-pr`. Ensure the token is allowed for Models (check GitHub documentation for your account and token type).
+**Fix:** In CI, the stock workflow passes `github.token` when `GH_TOKEN` is unset — ensure the entry workflow has **`models: read`**. Optionally set repository secret **`GH_TOKEN`** to override. For local runs, export `GH_TOKEN` before `run-auto-pr`. See [INTEGRATION.md](INTEGRATION.md#github-models).
 
 ### GitHub Models: model not found / 404 (provider: github-models)
 

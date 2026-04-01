@@ -31,7 +31,8 @@ jobs:
     if: github.ref_name != github.event.repository.default_branch
     uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@ai/composite-actions-generate-ci
     secrets:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      # Repo secret overrides; else default Actions token (needs models:read on this workflow).
+      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
   create:
     needs: generate
