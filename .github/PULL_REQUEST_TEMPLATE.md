@@ -6,7 +6,7 @@
 
 ## Description
 
-<!-- Narrative: why and what reviewers should focus on. With auto-pr, this is AI-filled from commits; commit subjects appear under "Changes made" below—no need to repeat them here. -->
+<!-- Narrative (auto-pr prefers ### Motivation, ### Risks, and optional ### Notes for reviewers here). Commit subjects are under "Changes made" below. -->
 
 {{description}}
 

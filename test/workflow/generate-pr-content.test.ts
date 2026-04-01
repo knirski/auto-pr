@@ -149,7 +149,17 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 	});
 });
 
-const VALID_AI_RESPONSE = '{"title":"feat: add X and fix B","description":"AI-generated summary."}';
+const VALID_AI_RESPONSE = JSON.stringify({
+	title: "feat: add X and fix B",
+	motivation:
+		"Align CI and provider behavior so multi-commit PR generation is easier to review and operate.",
+	risks: [
+		"Verify token handling and workflow permissions in reusable GitHub Actions jobs.",
+		"Double-check provider integration paths when switching between local and remote models.",
+	],
+	notesForReviewers:
+		"Start with `src/workflow/auto-pr-generate-content.ts` and related prompt changes.",
+});
 const INVALID_AI_RESPONSE = '{"title":"feat","description":"Invalid."}';
 
 const twoCommits = [
@@ -159,7 +169,7 @@ const twoCommits = [
 
 describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)", () => {
 	describe("valid title", () => {
-		test("returns AI title and body with description", async () => {
+		test("returns AI title and body with structured description sections", async () => {
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
@@ -169,7 +179,18 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add X and fix B");
-					expect(result.body).toContain("AI-generated summary.");
+					expect(result.body).toContain("### Motivation");
+					expect(result.body).toContain(
+						"Align CI and provider behavior so multi-commit PR generation is easier to review and operate.",
+					);
+					expect(result.body).toContain("### Risks");
+					expect(result.body).toContain(
+						"- Verify token handling and workflow permissions in reusable GitHub Actions jobs.",
+					);
+					expect(result.body).toContain("### Notes for reviewers");
+					expect(result.body).toContain(
+						"Start with `src/workflow/auto-pr-generate-content.ts` and related prompt changes.",
+					);
 					expect(result.body).toContain("feat: add module A");
 					expect(result.body).toContain("fix: fix bug in B");
 					expect(result.count).toBe(2);
@@ -190,6 +211,8 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add module A");
+					expect(result.body).toContain("### Motivation");
+					expect(result.body).toContain("### Risks");
 					expect(result.count).toBe(2);
 				}).pipe(Effect.scoped),
 			);

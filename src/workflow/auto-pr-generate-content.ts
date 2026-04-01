@@ -36,6 +36,7 @@ import {
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
+	isBlank,
 	NoSemanticCommitsError,
 	ParseError,
 	PR_BODY_FILE_NAME,
@@ -58,15 +59,16 @@ import {
 	parseCommits,
 	parseFilesContent,
 	renderBody as renderBodyCore,
-	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
-/** Schema for structured AI output: PR title and description. */
+/** Schema for structured AI output: PR title plus structured review sections. */
 const TitleDescriptionSchema = Schema.Struct({
 	title: Schema.String,
-	description: Schema.String,
+	motivation: Schema.String,
+	risks: Schema.Array(Schema.String),
+	notesForReviewers: Schema.String,
 });
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -83,6 +85,63 @@ function truncateForLog(s: string, maxChars: number): string {
 		return t;
 	}
 	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
+}
+
+function normalizeRiskItems(risks: readonly string[]): readonly string[] {
+	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
+}
+
+function buildDescriptionBlock(value: {
+	motivation: string;
+	risks: readonly string[];
+	notesForReviewers: string;
+}): string {
+	const sections = [
+		`### Motivation\n${value.motivation.trim()}`,
+		`### Risks\n${normalizeRiskItems(value.risks)
+			.map((risk) => `- ${risk}`)
+			.join("\n")}`,
+	];
+	const notes = value.notesForReviewers.trim();
+	if (!isBlank(notes)) {
+		sections.push(`### Notes for reviewers\n${notes}`);
+	}
+	return sections.join("\n\n");
+}
+
+function validateGeneratedContent(value: {
+	title: string;
+	motivation: string;
+	risks: readonly string[];
+	notesForReviewers: string;
+}): Result.Result<{ title: string; description: string }, DescriptionParseError> {
+	const { title, motivation, notesForReviewers } = value;
+	if (isBlank(title)) {
+		return Result.fail(new DescriptionParseError({ cause: "title is empty" }));
+	}
+	if (!isValidConventionalTitle(title)) {
+		return Result.fail(
+			new DescriptionParseError({
+				cause: `title not conventional format: "${title}"`,
+			}),
+		);
+	}
+	if (isBlank(motivation)) {
+		return Result.fail(new DescriptionParseError({ cause: "motivation is empty" }));
+	}
+	const normalizedRisks = normalizeRiskItems(value.risks);
+	if (normalizedRisks.length === 0) {
+		return Result.fail(new DescriptionParseError({ cause: "risks are empty" }));
+	}
+	const description = buildDescriptionBlock({
+		motivation,
+		risks: normalizedRisks,
+		notesForReviewers,
+	});
+	if (isBlank(description)) {
+		return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
+	}
+	return Result.succeed({ title: title.trim(), description });
 }
 
 function makeRetrySchedule(delayMs: number) {
@@ -103,7 +162,13 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 } {
 	const firstSubject = filtered[0]?.subject?.trim() ?? "";
 	const title = isValidConventionalTitle(firstSubject) ? firstSubject : "chore: update";
-	const description = getDescriptionFromCommits(filtered);
+	const description = buildDescriptionBlock({
+		motivation: getDescriptionFromCommits(filtered),
+		risks: [
+			"None obvious from commits; review focused on changed code paths and integration boundaries.",
+		],
+		notesForReviewers: "",
+	});
 	return { title, description };
 }
 
@@ -140,10 +205,14 @@ function generateTitleAndDescription(
 			title_chars: raw.title.length,
 			title_conventional_format: matchesConventionalTitleFormat(titleTrimmed),
 			title_within_length_limit: isWithinLengthLimit(titleTrimmed),
-			description_chars: raw.description.length,
-			description: truncateForLog(raw.description, MAX_LOG_DESCRIPTION_CHARS),
+			motivation_chars: raw.motivation.length,
+			motivation: truncateForLog(raw.motivation, MAX_LOG_DESCRIPTION_CHARS),
+			risks_count: raw.risks.length,
+			risks: raw.risks.map((risk) => truncateForLog(risk, 200)),
+			notes_for_reviewers_chars: raw.notesForReviewers.length,
+			notes_for_reviewers: truncateForLog(raw.notesForReviewers, 500),
 		});
-		return yield* Result.match(validateTitleDescription(raw), {
+		return yield* Result.match(validateGeneratedContent(raw), {
 			onSuccess: (validated) =>
 				Effect.gen(function* () {
 					yield* Effect.log({

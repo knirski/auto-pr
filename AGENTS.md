@@ -150,6 +150,7 @@ Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md an
 
 - Prefer caret ranges with the lockfile for most dependencies; keep exact or aligned pins only where justified (for example `bun-types` with `packageManager`, Effect beta packages on the same range, `@typescript/native-preview` snapshots).
 - Prefer continual-learning hook state under `~/.cursor/hooks/state/` (account-wide) when customizing the plugin; upstream marketplace builds may use workspace-relative paths, so reinstalling the plugin can revert a local `homedir()`-based patch.
+- Target auto-generated PR descriptions (and related prompts) at a software-engineer audience; Markdown in the body is appropriate when it improves clarity.
 
 ## Learned Workspace Facts
 
