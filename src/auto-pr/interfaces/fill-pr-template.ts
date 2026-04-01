@@ -22,6 +22,8 @@ export const FillPrTemplateParamsSchema = Schema.Struct({
 	filesFilePath: Schema.String,
 	templatePath: Schema.String,
 	descriptionFilePath: Schema.optionalKey(Schema.String),
+	/** Drives `inferTypeOfChange` / breaking text (same role as the workflow’s generated PR title). */
+	prTitleForTypeOfChange: Schema.optionalKey(Schema.String),
 });
 
 /** Parameters for loading commit log and files. */

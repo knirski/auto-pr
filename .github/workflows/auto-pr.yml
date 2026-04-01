@@ -6,16 +6,15 @@
 #
 # Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
 #
-# Update both @SHA refs below when:
-# - After merging changes to auto-pr-generate-reusable.yml, auto-pr-create-reusable.yml,
-#   or .github/actions/setup-runtime
-# - When testing workflow changes on a branch: set to current commit (git rev-parse HEAD)
-# - After merge: set to the merge commit SHA on main
+# Reusable workflow refs: use @<branch> while developing (resolves to branch tip). After merge to main,
+# pin both lines to the merge commit SHA (same as update-workflow-pins / INTEGRATION).
+# Composite actions in generate + check: use @<branch> while developing; pin to merge SHA on main after merge.
 
 name: Auto-PR
 
 permissions:
   contents: read
+  models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
   pull-requests: write
 
 on:
@@ -30,13 +29,16 @@ concurrency:
 jobs:
   generate:
     if: github.ref_name != github.event.repository.default_branch
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@dbeae191c1f4f27d32bda086541d05def59b815d
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@6c83e8f330013ca6aa01ea66fb1f71624c082f35
     secrets:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      # GitHub API token for the generate job. This workflow grants `models: read` so the default
+      # `github.token` works. If you use a PAT, set repo secret `GH_TOKEN` and pass
+      # `${{ secrets.GH_TOKEN || github.token }}` here instead.
+      GH_TOKEN: ${{ github.token }}
 
   create:
     needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@dbeae191c1f4f27d32bda086541d05def59b815d
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@6c83e8f330013ca6aa01ea66fb1f71624c082f35
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit

@@ -2,28 +2,42 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: GITHUB_WORKSPACE. Reads `commits.txt` and `files.txt` under workspace (from `get-commits`).
- * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: AUTO_PR_AI_PROVIDER (optional),
- * AUTO_PR_AI_OLLAMA_MODEL (optional when provider is ollama).
+ * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only.
  * For 2+: LanguageModel (AI provider) generates title and description via generateObject, then FillPrTemplate with override.
  *
  * Writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
- * Run: npx tsx src/workflow/auto-pr-generate-content.ts (or: node dist/workflow/auto-pr-generate-content.js)
+ * This repo: bun run generate-content · installed: npx auto-pr-generate-content
  */
 
 import type { Redacted } from "effect";
-import { Duration, Effect, FileSystem, Layer, Option, Path, Schedule, Schema } from "effect";
+import {
+	Duration,
+	Effect,
+	FileSystem,
+	Layer,
+	Option,
+	Path,
+	pipe,
+	Result,
+	Schedule,
+	Schema,
+} from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import {
+	type AiProvider,
 	type AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
+	DescriptionParseError,
+	formatError,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	getPrDescriptionPromptPath,
+	isBlank,
 	NoSemanticCommitsError,
 	ParseError,
 	PR_BODY_FILE_NAME,
@@ -37,28 +51,94 @@ import {
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
+	fitConventionalTitleToLengthLimit,
 	getDescriptionFromCommits,
 	getDescriptionPromptText,
 	getTitle as getTitleFromCommits,
-	isValidConventionalTitle,
+	isWithinLengthLimit,
+	matchesConventionalTitleFormat,
 	parseCommits,
 	parseFilesContent,
 	renderBody as renderBodyCore,
-	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
-/** Schema for structured AI output: PR title and description. */
+/** Schema for structured AI output: PR title plus structured review sections. */
 const TitleDescriptionSchema = Schema.Struct({
 	title: Schema.String,
-	description: Schema.String,
+	motivation: Schema.String,
+	risks: Schema.Array(Schema.String),
+	notesForReviewers: Schema.String,
 });
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const MAX_AI_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 3000;
+
+/** Cap description length in logs (full text is still validated and used). */
+const MAX_LOG_DESCRIPTION_CHARS = 2000;
+
+function truncateForLog(s: string, maxChars: number): string {
+	const t = s.trim();
+	if (t.length <= maxChars) {
+		return t;
+	}
+	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
+}
+
+function normalizeRiskItems(risks: readonly string[]): readonly string[] {
+	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
+}
+
+function buildDescriptionBlock(value: {
+	motivation: string;
+	risks: readonly string[];
+	notesForReviewers: string;
+}): string {
+	const sections = [
+		`### Motivation\n${value.motivation.trim()}`,
+		`### Risks\n${normalizeRiskItems(value.risks)
+			.map((risk) => `- ${risk}`)
+			.join("\n")}`,
+	];
+	const notes = value.notesForReviewers.trim();
+	if (!isBlank(notes)) {
+		sections.push(`### Notes for reviewers\n${notes}`);
+	}
+	return sections.join("\n\n");
+}
+
+function validateGeneratedContent(value: {
+	title: string;
+	motivation: string;
+	risks: readonly string[];
+	notesForReviewers: string;
+}): Result.Result<{ title: string; description: string }, DescriptionParseError> {
+	const { motivation, notesForReviewers } = value;
+	return pipe(
+		fitConventionalTitleToLengthLimit(value.title),
+		Result.flatMap((title) => {
+			if (isBlank(motivation)) {
+				return Result.fail(new DescriptionParseError({ cause: "motivation is empty" }));
+			}
+			const normalizedRisks = normalizeRiskItems(value.risks);
+			if (normalizedRisks.length === 0) {
+				return Result.fail(new DescriptionParseError({ cause: "risks are empty" }));
+			}
+			const description = buildDescriptionBlock({
+				motivation,
+				risks: normalizedRisks,
+				notesForReviewers,
+			});
+			if (isBlank(description)) {
+				return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
+			}
+			return Result.succeed({ title, description });
+		}),
+	);
+}
 
 function makeRetrySchedule(delayMs: number) {
 	return Schedule.recurs(MAX_AI_ATTEMPTS - 1).pipe(
@@ -77,8 +157,17 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 	description: string;
 } {
 	const firstSubject = filtered[0]?.subject?.trim() ?? "";
-	const title = isValidConventionalTitle(firstSubject) ? firstSubject : "chore: update";
-	const description = getDescriptionFromCommits(filtered);
+	const title = Result.match(fitConventionalTitleToLengthLimit(firstSubject), {
+		onSuccess: (t) => t,
+		onFailure: () => "chore: update",
+	});
+	const description = buildDescriptionBlock({
+		motivation: getDescriptionFromCommits(filtered),
+		risks: [
+			"None obvious from commits; review focused on changed code paths and integration boundaries.",
+		],
+		notesForReviewers: "",
+	});
 	return { title, description };
 }
 
@@ -87,12 +176,81 @@ function generateTitleAndDescription(
 	prompt: string,
 	filtered: readonly CommitInfo[],
 	retryDelayMs: number,
+	provider: AiProvider,
+	model: string,
 ): Effect.Effect<{ title: string; description: string }, unknown, LanguageModel.LanguageModel> {
-	const attempt = LanguageModel.generateObject({
-		prompt,
-		schema: TitleDescriptionSchema,
-	}).pipe(Effect.flatMap((res) => Effect.fromResult(validateTitleDescription(res.value))));
-	return attempt.pipe(
+	const singleAttempt = Effect.gen(function* () {
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "ai_query",
+			status: "start",
+			provider,
+			model,
+			prompt_chars: prompt.length,
+		});
+		const res = yield* LanguageModel.generateObject({
+			prompt,
+			schema: TitleDescriptionSchema,
+		});
+		const raw = res.value;
+		const titleTrimmed = raw.title.trim();
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "model_response",
+			status: "parsed",
+			provider,
+			model,
+			title: raw.title,
+			title_chars: raw.title.length,
+			title_conventional_format: matchesConventionalTitleFormat(titleTrimmed),
+			title_within_length_limit: isWithinLengthLimit(titleTrimmed),
+			motivation_chars: raw.motivation.length,
+			motivation: truncateForLog(raw.motivation, MAX_LOG_DESCRIPTION_CHARS),
+			risks_count: raw.risks.length,
+			risks: raw.risks.map((risk) => truncateForLog(risk, 200)),
+			notes_for_reviewers_chars: raw.notesForReviewers.length,
+			notes_for_reviewers: truncateForLog(raw.notesForReviewers, 500),
+		});
+		return yield* Result.match(validateGeneratedContent(raw), {
+			onSuccess: (validated) =>
+				Effect.gen(function* () {
+					if (titleTrimmed !== validated.title) {
+						yield* Effect.log({
+							event: "generate_pr_content",
+							step: "validation",
+							status: "title_shortened",
+							provider,
+							model,
+							title_chars_before: titleTrimmed.length,
+							title_chars_after: validated.title.length,
+						});
+					}
+					yield* Effect.log({
+						event: "generate_pr_content",
+						step: "validation",
+						status: "ok",
+						provider,
+						model,
+						title_chars: validated.title.length,
+						description_chars: validated.description.length,
+					});
+					return validated;
+				}),
+			onFailure: (err) => Effect.fail(err),
+		});
+	});
+
+	return singleAttempt.pipe(
+		Effect.tapError((e) =>
+			Effect.logWarning({
+				event: "generate_pr_content",
+				step: e instanceof DescriptionParseError ? "validation" : "ai_query",
+				status: "failed",
+				provider,
+				model,
+				reason: formatError(e),
+			}),
+		),
 		Effect.retry(makeRetrySchedule(retryDelayMs)),
 		Effect.catch(() =>
 			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
@@ -179,6 +337,8 @@ export function generatePrContentFromValues(
 				prompt,
 				filtered,
 				retryDelayMs ?? RETRY_DELAY_MS,
+				params.provider,
+				params.model,
 			);
 			title = result.title;
 			descriptionOverride = result.description;
@@ -187,7 +347,7 @@ export function generatePrContentFromValues(
 			descriptionOverride = undefined;
 		}
 
-		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride);
+		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride, title);
 		const body = yield* Effect.fromResult(bodyResult);
 		return { title, body, count };
 	}).pipe(
@@ -237,13 +397,12 @@ export function runGeneratePrContent(config: {
 	model: string;
 	/** Required when `provider` is `github-models` (GitHub Models API). */
 	ghToken?: Redacted.Redacted<string>;
-	/** Required when `provider` is `openai-compat`. */
+	/** When `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp). */
 	openaiCompatUrl?: string;
 	openaiCompatApiKey?: Redacted.Redacted<string>;
-	openaiCompatModel?: string;
 	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
 	retryDelayMs?: number;
-	/** Custom fetch for tests. Omit for production. */
+	/** Custom fetch for tests (OpenAI `POST …/chat/completions`). Omit for production. */
 	fetch?: typeof fetch;
 }): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
 	const toUnexpected = (ctx: string) => (e: unknown) =>
@@ -261,7 +420,6 @@ export function runGeneratePrContent(config: {
 			ghToken,
 			openaiCompatUrl,
 			openaiCompatApiKey,
-			openaiCompatModel,
 		} = config;
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
@@ -286,11 +444,10 @@ export function runGeneratePrContent(config: {
 					provider,
 					model,
 					...(ghToken !== undefined ? { ghToken } : {}),
-					...(provider === "openai-compat"
+					...(provider === "local"
 						? {
-								openaiCompatUrl,
-								openaiCompatApiKey,
-								openaiCompatModel,
+								...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
+								...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
 							}
 						: {}),
 				},
@@ -347,11 +504,14 @@ const program = Effect.gen(function* () {
 		provider: config.provider,
 		model: config.model,
 		...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
-		...(config.provider === "openai-compat"
+		...(config.provider === "local"
 			? {
-					openaiCompatUrl: config.openaiCompatUrl,
-					openaiCompatApiKey: config.openaiCompatApiKey,
-					openaiCompatModel: config.openaiCompatModel,
+					...(config.openaiCompatUrl !== undefined
+						? { openaiCompatUrl: config.openaiCompatUrl }
+						: {}),
+					...(config.openaiCompatApiKey !== undefined
+						? { openaiCompatApiKey: config.openaiCompatApiKey }
+						: {}),
 				}
 			: {}),
 	};

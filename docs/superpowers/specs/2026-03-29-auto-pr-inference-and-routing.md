@@ -4,7 +4,7 @@
 **Status:** Proposed  
 **Companion:** [Effect toolkit](2026-03-29-auto-pr-effect-toolkit-design.md) — tools, `generateObject` vs loops.
 
-**Summary:** Backend choice (`llamacpp` vs `github-models`), `AUTO_PR_AI_*`, pre-generate model id (no router in `generate-content`), metrics → band → allowlisted model, and prompt placeholders. Stack: `LanguageModel` via `@effect/ai-openai-compat`. Ollama removal: [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
+**Summary:** Backend choice (`local` vs `github-models`), `AUTO_PR_AI_*`, pre-generate model id (no router in `generate-content`), metrics → band → allowlisted model, and prompt placeholders. Stack: `LanguageModel` via `@effect/ai-openai-compat`. Ollama removal: [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
 
 ## Independence from tools
 
@@ -16,7 +16,7 @@ Metrics, model selection, and routing context can ship with `generateObject` + o
 
 ### Conventions
 
-`AUTO_PR_AI_PROVIDER` ∈ { `llamacpp`, `github-models` }. Both use `OpenAiClient.layer` + `OpenAiLanguageModel.model` + `FetchHttpClient`. No separate `openai-compat` enum; remote OpenAI-compatible hosts use `llamacpp` with URL + model + optional key.
+`AUTO_PR_AI_PROVIDER` ∈ { `local`, `github-models` }. Both use `OpenAiClient.layer` + `OpenAiLanguageModel.model` + `FetchHttpClient`. No separate `openai-compat` enum; remote OpenAI-compatible hosts use **`local`** with URL + model + optional key.
 
 ADR 0007: revise after implementation; do not edit preemptively ([index](2026-03-29-dynamic-ai-tooling-design.md)).
 
@@ -27,7 +27,7 @@ ADR 0007: revise after implementation; do not edit preemptively ([index](2026-03
 ### `github-models`
 
 - Docs: [GitHub Models](https://docs.github.com/en/github-models) (billing, rate limits, catalog).
-- Env: `AUTO_PR_AI_PROVIDER=github-models`, `GH_TOKEN`, `AUTO_PR_AI_GITHUB_MODEL`.
+- Env: `AUTO_PR_AI_PROVIDER=github-models`, `GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
 - Defaults: prefer mini/small chat rows for quota on free Actions; confirm ids in live catalog.
 
 ### `llamacpp`
@@ -47,13 +47,13 @@ Prefer `LanguageModel.generateObject` + `{ title, description }` — [generateOb
 | Variable | When |
 |----------|------|
 | `AUTO_PR_AI_PROVIDER` | `llamacpp` \| `github-models` |
-| `AUTO_PR_AI_GITHUB_MODEL` | Required if `github-models` |
+| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | Model for both providers; `github-models` defaults to `openai/gpt-4.1` when unset |
 | `GH_TOKEN` | GitHub Models + existing PR flows |
 | `AUTO_PR_AI_LLAMACPP_URL` | Optional; default e.g. llama-server `/v1` |
 | `AUTO_PR_AI_LLAMACPP_MODEL` | Required if `llamacpp` |
 | `AUTO_PR_AI_LLAMACPP_API_KEY` | Optional Bearer for gated endpoints |
 
-Removed: `ollama`, `AUTO_PR_AI_OLLAMA_MODEL`, standalone `AUTO_PR_AI_OPENAI_COMPAT_*`.
+Removed: `ollama` package, `AUTO_PR_AI_OLLAMA_MODEL`, `ollama` provider string. **Local** uses `AUTO_PR_AI_OPENAI_COMPAT_*` for the OpenAI-compatible endpoint.
 
 ### Importance before inference
 

@@ -7,7 +7,7 @@
  * Uses --json number,url for reliable PR existence check (avoids exit-code ambiguity).
  * Uses PR number for edits (more robust than branch name). Uses --head for create (CI-safe).
  *
- * Run: npx tsx src/workflow/auto-pr-create-or-update-pr.ts (or: node dist/workflow/auto-pr-create-or-update-pr.js)
+ * This repo: bun run create-or-update-pr · installed: npx auto-pr-create-or-update-pr
  */
 
 import { Duration, Effect, FileSystem, Option, Schedule, Schema } from "effect";

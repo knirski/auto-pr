@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { CommitParser } from "conventional-commits-parser";
 import { Option, pipe, Result } from "effect";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
+	extractBreakingDescriptionFromLine,
 	fillTemplate,
 	filterMergeCommits,
+	fitConventionalTitleToLengthLimit,
 	formatTitleBody,
 	getBreakingChanges,
 	getChanges,
@@ -19,11 +22,18 @@ import {
 	isDocsOnly,
 	isMergeCommit,
 	isValidConventionalTitle,
+	isWithinLengthLimit,
+	matchesConventionalTitleFormat,
 	parseCommits,
 	parseFilesContent,
 	renderBody,
+	resolveBreakingChangesBody,
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
+import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
+
+/** Subject repeat count so `feat: ${"x".repeat(...)}` is one character over {@link PR_TITLE_LINE_MAX_LENGTH}. */
+const FEAT_COLON_SUBJECT_OVER_MAX = PR_TITLE_LINE_MAX_LENGTH - "feat: ".length + 1;
 
 const TEST_TEMPLATE = `## Description
 {{description}}
@@ -97,6 +107,24 @@ describe("fill-pr-template-core", () => {
 			);
 		});
 
+		test("ignores non-numeric #refs in prose (e.g. TS path alias #core)", () => {
+			const block = `---COMMIT---
+chore: require token; drop core re-export
+
+Delete src/auto-pr/core.ts; export gh helpers from #core in index.
+Made-with: Cursor`;
+			pipe(
+				parseCommits(block),
+				Result.match({
+					onSuccess: (commits) => {
+						expect(commits).toHaveLength(1);
+						expect(commits[0]?.references).toEqual([]);
+					},
+					onFailure: () => expect().fail("expected success"),
+				}),
+			);
+		});
+
 		test("returns empty for empty input", () => {
 			pipe(
 				parseCommits(""),
@@ -105,6 +133,27 @@ describe("fill-pr-template-core", () => {
 					onFailure: () => expect().fail("expected success"),
 				}),
 			);
+		});
+
+		test("returns ParseError when underlying parser throws", () => {
+			const original = CommitParser.prototype.parse;
+			CommitParser.prototype.parse = function parseThrows() {
+				throw new Error("forced parser failure");
+			};
+			try {
+				pipe(
+					parseCommits("---COMMIT---\nfeat: x"),
+					Result.match({
+						onSuccess: () => expect().fail("expected failure"),
+						onFailure: (e) => {
+							expect(e._tag).toBe("ParseError");
+							expect(e.message).toBe("Failed to parse commits");
+						},
+					}),
+				);
+			} finally {
+				CommitParser.prototype.parse = original;
+			}
 		});
 	});
 
@@ -167,6 +216,30 @@ describe("fill-pr-template-core", () => {
 		});
 		test("empty commits → Chore", () => {
 			expect(inferTypeOfChange([])).toBe("Chore");
+		});
+		test("prTitle overrides first commit type (AI title vs newest commit)", () => {
+			const commits = [
+				commit("fix(ci): pass command via env", "", { type: "fix" }),
+				commit("feat(generate-content): log model response", "", { type: "feat" }),
+			];
+			expect(inferTypeOfChange(commits)).toBe("Bug fix");
+			expect(inferTypeOfChange(commits, "feat: improve CI and generate logging")).toBe(
+				"New feature",
+			);
+		});
+		test("prTitle with breaking marker → Breaking change", () => {
+			const commits = [commit("fix: a", "", { type: "fix" })];
+			expect(inferTypeOfChange(commits, "feat!: remove API")).toBe("Breaking change");
+		});
+		test("prTitle over max length but conventional still overrides type", () => {
+			const commits = [commit("fix: a", "", { type: "fix" })];
+			const longFeat = `feat: ${"x".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`;
+			expect(longFeat.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			expect(inferTypeOfChange(commits, longFeat)).toBe("New feature");
+		});
+		test("prTitle with docs: prefix overrides first commit type", () => {
+			const commits = [commit("fix: bug", "", { type: "fix" })];
+			expect(inferTypeOfChange(commits, "docs: refresh README")).toBe("Documentation update");
 		});
 	});
 
@@ -245,7 +318,7 @@ describe("fill-pr-template-core", () => {
 	});
 
 	describe("getDescriptionPromptText", () => {
-		test("formats commits for Ollama prompt", () => {
+		test("formats commits for AI prompt", () => {
 			const commits = [
 				commit("feat: add A", "Adds module A."),
 				commit("fix: fix B", "Fixes bug in B."),
@@ -416,6 +489,71 @@ describe("fill-pr-template-core", () => {
 				}),
 			);
 		});
+		test("joins multiple BREAKING CHANGE footers in commit order", () => {
+			pipe(
+				getBreakingChanges([
+					commit("a", "", { breakingNote: "First" }),
+					commit("b", "", { breakingNote: "Second" }),
+				]),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (text) => expect(text).toBe("First\n\nSecond"),
+				}),
+			);
+		});
+	});
+
+	describe("extractBreakingDescriptionFromLine", () => {
+		test("feat!: subject → description after colon", () => {
+			pipe(
+				extractBreakingDescriptionFromLine("feat!: remove legacy API"),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (s) => expect(s).toBe("remove legacy API"),
+				}),
+			);
+		});
+		test("scoped breaking header → description after colon", () => {
+			pipe(
+				extractBreakingDescriptionFromLine("feat(api)!: drop v1"),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (s) => expect(s).toBe("drop v1"),
+				}),
+			);
+		});
+		test("line starting with BREAKING → full line", () => {
+			pipe(
+				extractBreakingDescriptionFromLine("BREAKING: all clients must migrate"),
+				Option.match({
+					onNone: () => expect().fail("expected some"),
+					onSome: (s) => expect(s).toBe("BREAKING: all clients must migrate"),
+				}),
+			);
+		});
+		test("non-breaking conventional title → none", () => {
+			expect(Option.isNone(extractBreakingDescriptionFromLine("feat: add x"))).toBe(true);
+		});
+	});
+
+	describe("resolveBreakingChangesBody", () => {
+		test("prefers footers over title and subjects", () => {
+			const commits = [commit("feat!: ignored", "", { type: "feat", breakingNote: "From footer" })];
+			expect(resolveBreakingChangesBody(commits, "feat!: from title")).toBe("From footer");
+		});
+		test("uses breaking PR title when no footers", () => {
+			const commits = [commit("fix: prep", "", { type: "fix" })];
+			expect(resolveBreakingChangesBody(commits, "feat!: rollup breaking change")).toBe(
+				"rollup breaking change",
+			);
+		});
+		test("concatenates breaking subjects when no footers and title not breaking", () => {
+			const commits = [
+				commit("feat!: remove A", "", { type: "feat" }),
+				commit("feat!: remove B", "", { type: "feat" }),
+			];
+			expect(resolveBreakingChangesBody(commits, undefined)).toBe("remove A\n\nremove B");
+		});
 	});
 
 	describe("fillTemplate", () => {
@@ -458,8 +596,52 @@ describe("fill-pr-template-core", () => {
 		});
 		test("descriptionOverride overrides computed description", () => {
 			const commits = [commit("feat: add x", "Original body", { type: "feat" })];
-			const data = fillTemplate(commits, [], "Ollama-generated summary.");
-			expect(data.description).toBe("Ollama-generated summary.");
+			const data = fillTemplate(commits, [], "AI-generated summary.");
+			expect(data.description).toBe("AI-generated summary.");
+		});
+		test("prTitleForTypeOfChange aligns typeOfChange with final PR title", () => {
+			const commits = [commit("fix: first in log", "", { type: "fix" })];
+			const data = fillTemplate(commits, [], "Summary.", "feat: rolled-up title");
+			expect(data.typeOfChange).toBe("New feature");
+		});
+		test("feat!: without footer fills breakingChanges from subject", () => {
+			const commits = [commit("feat!: drop legacy API", "", { type: "feat" })];
+			const data = fillTemplate(commits, []);
+			expect(data.typeOfChange).toBe("Breaking change");
+			expect(data.breakingChanges).toBe("drop legacy API");
+		});
+		test("prTitleForTypeOfChange breaking title fills breakingChanges when no footers", () => {
+			const commits = [commit("fix: small fix", "", { type: "fix" })];
+			const data = fillTemplate(commits, [], undefined, "feat!: migrate to new API");
+			expect(data.typeOfChange).toBe("Breaking change");
+			expect(data.breakingChanges).toBe("migrate to new API");
+		});
+	});
+
+	describe("matchesConventionalTitleFormat", () => {
+		test("accepts conventional-shaped titles regardless of length", () => {
+			expect(matchesConventionalTitleFormat("feat: add X")).toBe(true);
+			expect(matchesConventionalTitleFormat("fix(ci): resolve bug")).toBe(true);
+			expect(matchesConventionalTitleFormat(`fix(ci): ${"a".repeat(80)}`)).toBe(true);
+		});
+		test("rejects non-matching titles", () => {
+			expect(matchesConventionalTitleFormat("")).toBe(false);
+			expect(matchesConventionalTitleFormat("Add feature X")).toBe(false);
+			expect(matchesConventionalTitleFormat(" : missing type")).toBe(false);
+		});
+	});
+
+	describe("isWithinLengthLimit", () => {
+		test("accepts non-blank titles up to max length trimmed", () => {
+			expect(isWithinLengthLimit("feat: add X")).toBe(true);
+			expect(
+				isWithinLengthLimit(`feat: ${"a".repeat(PR_TITLE_LINE_MAX_LENGTH - "feat: ".length)}`),
+			).toBe(true);
+			expect(isWithinLengthLimit(`feat: ${"a".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`)).toBe(false);
+		});
+		test("rejects blank", () => {
+			expect(isWithinLengthLimit("")).toBe(false);
+			expect(isWithinLengthLimit("  ")).toBe(false);
 		});
 	});
 
@@ -476,8 +658,71 @@ describe("fill-pr-template-core", () => {
 			expect(isValidConventionalTitle("Add feature X")).toBe(false);
 			expect(isValidConventionalTitle("Here's the title: feat: add X")).toBe(false);
 			expect(isValidConventionalTitle("  ")).toBe(false);
-			expect(isValidConventionalTitle(`feat: ${"a".repeat(67)}`)).toBe(false);
+			expect(isValidConventionalTitle(`feat: ${"a".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`)).toBe(
+				false,
+			);
 			expect(isValidConventionalTitle(" : missing type")).toBe(false);
+		});
+	});
+
+	describe("fitConventionalTitleToLengthLimit", () => {
+		test("leaves short conventional titles unchanged", () => {
+			Result.match(fitConventionalTitleToLengthLimit("feat: add X"), {
+				onSuccess: (t) => expect(t).toBe("feat: add X"),
+				onFailure: () => expect().fail("expected success"),
+			});
+		});
+		test("shortens subject to satisfy max length", () => {
+			const long = `feat: ${"a".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`;
+			expect(long.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			Result.match(fitConventionalTitleToLengthLimit(long), {
+				onSuccess: (t) => {
+					expect(t.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(isValidConventionalTitle(t)).toBe(true);
+				},
+				onFailure: () => expect().fail("expected success"),
+			});
+		});
+		test("shortens scoped titles", () => {
+			const prefix = "feat(ci): ";
+			const long = `${prefix}${"b".repeat(PR_TITLE_LINE_MAX_LENGTH - prefix.length + 1)}`;
+			Result.match(fitConventionalTitleToLengthLimit(long), {
+				onSuccess: (t) => {
+					expect(t.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(matchesConventionalTitleFormat(t)).toBe(true);
+				},
+				onFailure: () => expect().fail("expected success"),
+			});
+		});
+		test("fails for non-conventional titles", () => {
+			Result.match(fitConventionalTitleToLengthLimit("not conventional"), {
+				onSuccess: () => expect().fail("expected failure"),
+				onFailure: () => {},
+			});
+		});
+		test("fails when conventional header is too long to leave room for subject", () => {
+			const scope = "a".repeat(92);
+			const title = `feat(${scope}): x`;
+			const prefixLen = `feat(${scope}): `.length;
+			expect(prefixLen).toBe(PR_TITLE_LINE_MAX_LENGTH);
+			expect(title.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			Result.match(fitConventionalTitleToLengthLimit(title), {
+				onSuccess: () => expect().fail("expected failure"),
+				onFailure: (e) => {
+					expect(e.cause).toContain("cannot be shortened");
+				},
+			});
+		});
+		test("fails when shortened slice is whitespace-only (trimEnd)", () => {
+			// Prefix 6 + 94 spaces + "x" → trim does not collapse; first 94 chars of subject are spaces only.
+			const title = `feat: ${" ".repeat(94)}x`;
+			expect(title.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
+			Result.match(fitConventionalTitleToLengthLimit(title), {
+				onSuccess: () => expect().fail("expected failure"),
+				onFailure: (e) => {
+					expect(e.cause).toContain("no usable subject");
+				},
+			});
 		});
 	});
 
@@ -514,6 +759,16 @@ describe("fill-pr-template-core", () => {
 			Result.match(validateTitleDescription({ title: "Add feature", description: "Body" }), {
 				onSuccess: () => expect().fail("expected failure"),
 				onFailure: () => {},
+			});
+		});
+		test("shortens long conventional title to max length", () => {
+			const longTitle = `feat: ${"x".repeat(FEAT_COLON_SUBJECT_OVER_MAX)}`;
+			Result.match(validateTitleDescription({ title: longTitle, description: "Summary here." }), {
+				onSuccess: (v) => {
+					expect(v.title.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
+					expect(v.description).toBe("Summary here.");
+				},
+				onFailure: () => expect().fail("expected success"),
 			});
 		});
 	});

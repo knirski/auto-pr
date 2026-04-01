@@ -10,6 +10,7 @@ import {
 	fillCommand,
 	handleOutputDescriptionPrompt,
 	handleValidateTitle,
+	type RunFillBodyOptions,
 	runFillBody,
 } from "#tools/auto-pr-fill-pr-template.js";
 import pkg from "../../package.json" with { type: "json" };
@@ -67,6 +68,7 @@ function runWithLogAndFilesEffect(
 	opts?: {
 		templatePath?: string;
 		format?: "body" | "title-body";
+		prTitleForTypeOfChange?: string;
 	},
 ): Effect.Effect<string, Error> {
 	return Effect.gen(function* () {
@@ -78,11 +80,16 @@ function runWithLogAndFilesEffect(
 		return yield* Effect.gen(function* () {
 			yield* tmp.writeFile(tmp.join("commits.txt"), logStr);
 			yield* tmp.writeFile(tmp.join("files.txt"), filesStr);
+			const fillOpts: RunFillBodyOptions | undefined =
+				opts?.prTitleForTypeOfChange !== undefined
+					? { prTitleForTypeOfChange: opts.prTitleForTypeOfChange }
+					: undefined;
 			return yield* runFillBody(
 				tmp.join("commits.txt"),
 				tmp.join("files.txt"),
 				templatePath,
 				opts?.format ?? "body",
+				fillOpts,
 			);
 		}).pipe(Effect.ensuring(tmp.remove()));
 	}).pipe(Effect.provide(TestBaseLayer), Effect.provide(FillPrTemplate.Live));
@@ -149,6 +156,19 @@ describe("runFillBody", () => {
 			}),
 		));
 
+	test("title-body: --pr-title overrides first line of output", async () =>
+		runEffect(RunFillBodyTestLayer)(
+			Effect.gen(function* () {
+				const log = logContent({ subject: "fix: oldest commit", body: "" });
+				const output = yield* runWithLogAndFilesEffect(log, "src/x.ts\n", {
+					format: "title-body",
+					prTitleForTypeOfChange: "feat: user-chosen PR title",
+				});
+				expect(output.split("\n")[0]).toBe("feat: user-chosen PR title");
+				expect(output).toContain("fix: oldest commit");
+			}),
+		));
+
 	test("multi-commit: body includes all commits, title from first (newest)", async () =>
 		runEffect(RunFillBodyTestLayer)(
 			Effect.gen(function* () {
@@ -189,16 +209,53 @@ describe("runFillBody", () => {
 					yield* tmp.writeFile(tmp.join("commits.txt"), log);
 					yield* tmp.writeFile(tmp.join("files.txt"), "src/foo.ts\n");
 					yield* tmp.writeFile(tmp.join("template.md"), TEST_TEMPLATE);
-					yield* tmp.writeFile(tmp.join("description.txt"), "Ollama-generated summary.");
+					yield* tmp.writeFile(tmp.join("description.txt"), "AI-generated summary.");
 					const output = yield* runFillBody(
 						tmp.join("commits.txt"),
 						tmp.join("files.txt"),
 						tmp.join("template.md"),
 						"body",
-						tmp.join("description.txt"),
+						{ descriptionFilePath: tmp.join("description.txt") },
 					);
-					expect(output).toContain("Ollama-generated summary.");
+					expect(output).toContain("AI-generated summary.");
 					expect(output).not.toContain("Original body");
+					return output;
+				}).pipe(Effect.ensuring(tmp.remove()));
+			}).pipe(Effect.scoped),
+		));
+
+	test("--pr-title drives Type of change when it differs from first commit", async () =>
+		runEffect(RunFillBodyTestLayer)(
+			Effect.gen(function* () {
+				const log = logContent(
+					{ subject: "fix: newest commit", body: "" },
+					{ subject: "feat: older commit", body: "" },
+				);
+				const output = yield* runWithLogAndFilesEffect(log, "src/a.ts\n", {
+					prTitleForTypeOfChange: "feat: rolled-up title",
+				});
+				expect(output).toContain("New feature");
+				expect(output).not.toContain("Bug fix");
+			}),
+		));
+
+	test("feat!: commit fills Breaking changes section from subject (no extra files)", async () =>
+		runEffect(RunFillBodyTestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("fill-pr-template-");
+				return yield* Effect.gen(function* () {
+					const log = logContent({ subject: "feat!: remove old flag", body: "" });
+					yield* tmp.writeFile(tmp.join("commits.txt"), log);
+					yield* tmp.writeFile(tmp.join("files.txt"), "src/foo.ts\n");
+					yield* tmp.writeFile(tmp.join("template.md"), TEST_TEMPLATE);
+					const output = yield* runFillBody(
+						tmp.join("commits.txt"),
+						tmp.join("files.txt"),
+						tmp.join("template.md"),
+						"body",
+					);
+					expect(output).toContain("Breaking change");
+					expect(output).toContain("remove old flag");
 					return output;
 				}).pipe(Effect.ensuring(tmp.remove()));
 			}).pipe(Effect.scoped),
@@ -411,5 +468,65 @@ describe("fill-pr-template CLI", () => {
 			onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
 		});
 		expect(msg instanceof Error ? msg.message : msg).toContain("--template");
+	});
+
+	test("--log-file required when filling (with other flags present)", async () => {
+		const exit = await Effect.runPromise(
+			runCli(["--files-file", "/tmp/y", "--template", "/tmp/z", "--format", "body"]),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		const msg = Exit.match(exit, {
+			onSuccess: () => "",
+			onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+		});
+		expect(msg instanceof Error ? msg.message : msg).toContain(
+			"--log-file and --files-file are required",
+		);
+	});
+
+	test("--files-file required when filling (with other flags present)", async () => {
+		const exit = await Effect.runPromise(
+			runCli(["--log-file", "/tmp/x", "--template", "/tmp/z", "--format", "body"]),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		const msg = Exit.match(exit, {
+			onSuccess: () => "",
+			onFailure: (cause) => Option.getOrElse(Cause.findErrorOption(cause), () => String(cause)),
+		});
+		expect(msg instanceof Error ? msg.message : msg).toContain(
+			"--log-file and --files-file are required",
+		);
+	});
+
+	const CliFillIntegrationLayer = Layer.mergeAll(TestBaseLayer, CliLayer);
+
+	test("fill succeeds with --quiet, --description-file, and --pr-title (handleFill path)", async () => {
+		await runEffect(CliFillIntegrationLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("fill-cli-handlefill-");
+				const log = logContent({ subject: "feat: add x", body: "Body." });
+				yield* tmp.writeFile(tmp.join("commits.txt"), log);
+				yield* tmp.writeFile(tmp.join("files.txt"), "src/foo.ts\n");
+				yield* tmp.writeFile(tmp.join("template.md"), TEST_TEMPLATE);
+				yield* tmp.writeFile(tmp.join("desc.txt"), "Override description.");
+				const exit = yield* Command.runWith(fillCommand, { version: pkg.version })([
+					"--log-file",
+					tmp.join("commits.txt"),
+					"--files-file",
+					tmp.join("files.txt"),
+					"--template",
+					tmp.join("template.md"),
+					"--format",
+					"body",
+					"--quiet",
+					"--description-file",
+					tmp.join("desc.txt"),
+					"--pr-title",
+					"feat: CLI title",
+				]).pipe(Effect.provide(CliFillIntegrationLayer), Effect.exit);
+				expect(Exit.isSuccess(exit)).toBe(true);
+				return yield* tmp.remove();
+			}).pipe(Effect.scoped),
+		);
 	});
 });

@@ -20,6 +20,12 @@ describe("FillPrTemplateParamsSchema", () => {
 			templatePath: "/t",
 			descriptionFilePath: "/desc",
 		});
+		await asserts.decoding().succeed({
+			logFilePath: "/c",
+			filesFilePath: "/d",
+			templatePath: "/t",
+			prTitleForTypeOfChange: "feat: rolled-up title",
+		});
 	});
 
 	test("decoding fails for missing required fields", async () => {

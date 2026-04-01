@@ -21,12 +21,12 @@
 
 | Order | Doc | Purpose |
 |-------|-----|---------|
-| 1 | [2026-03-29-ollama-to-llamacpp-migration-design.md](superpowers/specs/2026-03-29-ollama-to-llamacpp-migration-design.md) | Remove Ollama; two providers; one OpenAI-compat path |
+| 1 | [ADR 0009](adr/0009-ollama-to-openai-compat-migration.md) · [spec stub](superpowers/specs/2026-03-29-ollama-to-llamacpp-migration-design.md) | `local` + `github-models`; one OpenAI-compat path (Ollama removed) |
 | — | [2026-03-29-dynamic-ai-tooling-design.md](superpowers/specs/2026-03-29-dynamic-ai-tooling-design.md) | Index — which doc for which task |
 | 2+ | [2026-03-29-auto-pr-inference-and-routing.md](superpowers/specs/2026-03-29-auto-pr-inference-and-routing.md) | Env, metrics, model selection, prompt placeholders |
 | 2+ | [2026-03-29-auto-pr-effect-toolkit-design.md](superpowers/specs/2026-03-29-auto-pr-effect-toolkit-design.md) | `Tool`/`Toolkit`, phases, `generateObject` vs tools |
 
-Historical pointer: [2026-03-22-ai-abstraction-layer-design.md](superpowers/specs/2026-03-22-ai-abstraction-layer-design.md) — superseded; [ADR 0007](adr/0007-ai-abstraction-layer.md) unchanged until implementation.
+Historical pointer: [2026-03-22-ai-abstraction-layer-design.md](superpowers/specs/2026-03-22-ai-abstraction-layer-design.md) — superseded for provider ids; see [ADR 0007](adr/0007-ai-abstraction-layer.md).
 
 ## Quick links
 

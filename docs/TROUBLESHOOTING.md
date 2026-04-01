@@ -36,12 +36,6 @@
 
 **Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md#environment-variables) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
 
-## Upgrading from OLLAMA_MODEL / OLLAMA_URL
-
-**Cause:** auto-pr now uses `AUTO_PR_AI_PROVIDER` and `AUTO_PR_AI_OLLAMA_MODEL`. The old env vars (`OLLAMA_MODEL`, `OLLAMA_URL`) are no longer supported.
-
-**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to get the latest workflow. If you pass workflow inputs: use `ai_provider` (default `ollama`) and `ai_ollama_model` (default `llama3.1:8b`) instead of `ollama_model` and `ollama_url`. The Ollama URL is fixed (`http://localhost:11434`); no config needed.
-
 ## Get commits / Generate content fails
 
 ### "No semantic commits" or "PR title is empty"
@@ -49,6 +43,12 @@
 **Cause:** All commits are merge commits, or no commits match conventional format.
 
 **Fix:** Add at least one conventional commit (e.g. `feat: add X`, `fix: resolve Y`). Merge commits are filtered out. See [Conventional Commits](https://www.conventionalcommits.org/).
+
+### PR body or “Type of change” looks wrong when using fill-pr-template locally
+
+**Cause:** The CLI infers **type** and **breaking** text from commits by default (first commit subject). That can differ from the PR title you intend, especially with multiple commits.
+
+**Fix:** Pass **`--pr-title`** with the same conventional title you will use for the PR (matches what **auto-pr-generate-content** does with the generated title). See [PR_TEMPLATE.md](PR_TEMPLATE.md#fill-pr-template-cli) and [PR_TEMPLATE.md](PR_TEMPLATE.md#single-commit-vs-multi-commit-automated) for single-commit vs multi-commit behavior.
 
 ### "pr-description.txt: NotFound" or "FileSystem.readFile .../dist/prompts/pr-description.txt"
 
@@ -78,43 +78,37 @@
 
 ## AI provider / 2+ commits
 
-### "Ollama HTTP 404" or connection refused (provider: ollama)
+### Connection refused or unreachable URL (provider: `local`)
 
-**Cause:** For 2+ commits, auto-pr uses an AI provider to generate the description. When `AUTO_PR_AI_PROVIDER` is `ollama` (the default), the workflow installs Ollama via `ai-action/setup-ollama`. The URL is fixed (`http://localhost:11434`); no config needed.
+**Cause:** For 2+ commits with `AUTO_PR_AI_PROVIDER=local`, auto-pr calls the OpenAI-compatible URL from `AUTO_PR_AI_OPENAI_COMPAT_URL` (default `http://127.0.0.1:8080/v1`). Nothing starts a local server for you in CI.
 
-**Fix:** Check the "Setup Ollama" step. Ensure `ai_provider` is `ollama` (default) and "Setup Ollama" runs (only when 2+ commits). In CI, Ollama runs on the runner.
-
-### GitHub Models or OpenAI-compat: "not yet implemented"
-
-**Cause:** `github-models` and `openai-compat` providers are deferred. Setting `AUTO_PR_AI_PROVIDER` to either returns `AutoPrConfigError` with "not yet implemented".
-
-**Fix:** Use `ollama` (the default) for now. When github-models and openai-compat are implemented, they will require `GH_TOKEN` (GitHub Models) or `OPENAI_API_KEY` (openai-compat); the workflow will need to pass these via secrets.
+**Fix:** Ensure a compatible server is running and reachable from the environment (self-hosted runner, tunnel, or remote URL). On GitHub-hosted runners, prefer **`github-models`** unless you expose a reachable endpoint.
 
 ### Description is empty or "null"
 
 **Cause:** The AI provider returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
 
-**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. When using Ollama, try a different `AUTO_PR_AI_OLLAMA_MODEL` (default `llama3.1:8b`). For other providers, verify model ID and API URL. Ensure `AUTO_PR_AI_PROVIDER` is set correctly (optional; defaults to `ollama` when unset).
+**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. For **local**, verify `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and URL. For **github-models**, verify `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. `AUTO_PR_AI_PROVIDER` defaults to `local` when unset (see [config.ts](../src/auto-pr/config.ts)).
 
 ### GitHub Models: 401 / invalid token (provider: github-models)
 
 **Cause:** `GH_TOKEN` is missing, expired, or lacks permission to call the GitHub Models API.
 
-**Fix:** Provide a valid token via the generate workflow `secrets.GH_TOKEN` (see [INTEGRATION.md](INTEGRATION.md#github-models-github-models)). For local runs, export `GH_TOKEN` before `run-auto-pr`. Ensure the token is allowed for Models (check GitHub documentation for your account and token type).
+**Fix:** In CI, the stock workflow passes `github.token` when `GH_TOKEN` is unset — ensure the entry workflow has **`models: read`**. Optionally set repository secret **`GH_TOKEN`** to override. For local runs, export `GH_TOKEN` before `run-auto-pr`. See [INTEGRATION.md](INTEGRATION.md#github-models).
 
 ### GitHub Models: model not found / 404 (provider: github-models)
 
-**Cause:** `AUTO_PR_AI_GITHUB_MODEL` does not match an available GitHub Models id (wrong name, deprecated, or typo).
+**Cause:** `AUTO_PR_AI_OPENAI_COMPAT_MODEL` does not match an available GitHub Models id (wrong name, deprecated, or typo).
 
-**Fix:** Set `ai_github_model` / `AUTO_PR_AI_GITHUB_MODEL` to a valid id (format `publisher/model`, e.g. `openai/gpt-4.1`). Confirm the model is listed for GitHub Models in your context.
+**Fix:** Set `ai_openai_compat_model` / `AUTO_PR_AI_OPENAI_COMPAT_MODEL` to a valid catalog **`id`** (format `publisher/model`, e.g. `openai/gpt-4.1`). See [INTEGRATION.md — github-models](INTEGRATION.md#github-models) for how to fetch the current list from `https://models.github.ai/catalog/models`.
 
-### OpenAI-compatible: connection error / URL unreachable (provider: openai-compat)
+### OpenAI-compatible: connection error / URL unreachable (provider: `local`)
 
 **Cause:** `AUTO_PR_AI_OPENAI_COMPAT_URL` is wrong, the host is down, TLS/firewall blocked the runner, or the path is not the API base your provider expects.
 
 **Fix:** Verify the URL in a small curl or client test from the same environment (local vs CI). For Azure and similar hosts, use the exact resource base URL and deployment name via `AUTO_PR_AI_OPENAI_COMPAT_MODEL` as required by that provider.
 
-### OpenAI-compatible: 401 / invalid API key (provider: openai-compat)
+### OpenAI-compatible: 401 / invalid API key (provider: `local`)
 
 **Cause:** `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` is empty, rotated, or incorrect for the endpoint.
 

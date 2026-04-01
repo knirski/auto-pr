@@ -9,7 +9,7 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import { ChildProcessSpawnerLayer, FillPrTemplate, parseGhOutput } from "#auto-pr";
 import { runEffect } from "#test/run-effect.js";
 import {
-	createOllamaMockFetch,
+	createOpenAiChatCompletionsMockFetch,
 	createTestTempDirEffect,
 	SilentLoggerLayer,
 	TestBaseLayer,
@@ -74,9 +74,9 @@ describe("get-commits → generate-pr-content pipeline", () => {
 					files: join(tmp.path, "files.txt"),
 					workspace: tmp.path,
 					templatePath,
-					provider: "ollama",
-					model: "llama3.1:8b",
-					fetch: createOllamaMockFetch(""),
+					provider: "local",
+					model: "gpt-oss",
+					fetch: createOpenAiChatCompletionsMockFetch(""),
 				});
 
 				const ghAfterGenerate = yield* fs.readFileString(ghOutput);

@@ -3,7 +3,7 @@ import { getInitFileSpecs } from "#core/init-core.js";
 
 describe("init-core", () => {
 	describe("getInitFileSpecs", () => {
-		test("returns three specs", () => {
+		test("returns specs for workflow, template, and nvmrc", () => {
 			const specs = getInitFileSpecs();
 			expect(specs).toHaveLength(3);
 		});

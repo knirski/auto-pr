@@ -6,7 +6,7 @@
 
 ## Description
 
-<!-- What does this PR do and why? Provide context, not just a restatement of the title. -->
+<!-- Narrative (auto-pr prefers ### Motivation, ### Risks, and optional ### Notes for reviewers here). Commit subjects are under "Changes made" below. -->
 
 {{description}}
 

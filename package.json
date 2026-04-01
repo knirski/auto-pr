@@ -7,7 +7,6 @@
 		"conventional-commits",
 		"github",
 		"github-actions",
-		"ollama",
 		"pr-template",
 		"ai-assisted-development",
 		"pull-request"
@@ -71,7 +70,6 @@
 		"conventional-commits-parser": "^6.3.0",
 		"effect": "^4.0.0-beta.42",
 		"micromustache": "^8.0.3",
-		"ollama": "^0.6.3",
 		"remark": "^15.0.1",
 		"unist-util-visit": "^5.1.0"
 	},
