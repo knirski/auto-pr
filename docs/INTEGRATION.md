@@ -23,10 +23,10 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 | **GitHub App** | Create at [github.com/settings/apps/new](https://github.com/settings/apps/new). Permissions: Contents, Pull requests (Read and write). [Step 2](#step-2-create-the-github-app) |
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
-| **Secrets** | Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. [Step 5](#step-5-add-repository-secrets) |
+| **Secrets** | Add `APP_ID`, `APP_PRIVATE_KEY`, and `GH_TOKEN` (for GitHub Models on generate) to **Settings → Secrets and variables → Actions**. [Step 5](#step-5-add-repository-secrets) |
 | **Branch protection** | (Optional) Require `Auto-PR generate (reusable) / generate` and `Auto-PR create (reusable) / create` before merging. [Step 8](#step-8-configure-branch-protection-optional) |
 
-**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App (Steps 2–5) → push to `ai/**`.
+**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App + secrets (Steps 2–5) → push to `ai/**`.
 
 ## Overview
 
@@ -72,14 +72,15 @@ When you do install from git (e.g. `npx -p github:knirski/auto-pr` or `bun add g
 ## Step 5: Add repository secrets
 
 1. Go to your repo → **Settings** → **Secrets and variables** → **Actions**
-2. Add two secrets:
+2. Add these repository secrets:
 
 | Secret name | Value |
 |-------------|-------|
 | `APP_ID` | Your app's App ID (from app settings, "About") |
 | `APP_PRIVATE_KEY` | Full contents of the `.pem` file |
+| `GH_TOKEN` | Token allowed to call [GitHub Models](https://github.com/marketplace/models) (e.g. fine-grained or classic PAT with Models access). Required for the default **`github-models`** generate step. |
 
-These secrets are used by both the auto-pr workflow and release-please (if you use it).
+`APP_*` are used by the create job (and release-please if you use it). `GH_TOKEN` is passed to the generate reusable workflow for AI when `ai_provider` is `github-models` (the default).
 
 ## Step 6: Add the workflow file
 
@@ -233,8 +234,8 @@ Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.)
 
 Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`https://models.github.ai/inference`) with an OpenAI-compatible client.
 
-- **Token:** Set **`GH_TOKEN`** to a token allowed to call GitHub Models (e.g. fine-grained or classic PAT with Models access, or in Actions pass the secret into the generate job).
-- **Workflow:** Default is `ai_provider: github-models` with `ai_openai_compat_model` (e.g. `openai/gpt-4.1`). Pass **`secrets: GH_TOKEN: ${{ secrets.GH_TOKEN }}`** (or another secret containing the token) on the `uses:` of [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml). The reusable workflow forwards it only when `ai_provider` is `github-models`.
+- **Token:** Add repository secret **`GH_TOKEN`** (see [Step 5](#step-5-add-repository-secrets)). The entry workflow passes **`secrets: GH_TOKEN: ${{ secrets.GH_TOKEN }}`** into [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml). The reusable workflow forwards it to the generate step only when `ai_provider` is `github-models`.
+- **Workflow:** Default is `ai_provider: github-models` with `ai_openai_compat_model` (e.g. `openai/gpt-4.1`).
 - **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL=...`, `GH_TOKEN=...`.
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common failures.

@@ -36,12 +36,6 @@
 
 **Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md#environment-variables) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
 
-## Upgrading from Ollama / `OLLAMA_MODEL` / `OLLAMA_URL`
-
-**Cause:** The Ollama integration and `AUTO_PR_AI_OLLAMA_MODEL` were removed. Inference uses **local** (OpenAI-compatible HTTP, same `AUTO_PR_AI_OPENAI_COMPAT_*` vars) or **github-models**.
-
-**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to get the latest workflow. Map your setup to `ai_provider: local` with `ai_openai_compat_*` inputs (or env), or `ai_provider: github-models` with `ai_openai_compat_model` and `secrets.GH_TOKEN`. See [INTEGRATION.md](INTEGRATION.md#ai-providers-local-github-models).
-
 ## Get commits / Generate content fails
 
 ### "No semantic commits" or "PR title is empty"

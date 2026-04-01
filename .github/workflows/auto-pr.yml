@@ -14,6 +14,7 @@ name: Auto-PR
 
 permissions:
   contents: read
+  models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
   pull-requests: write
 
 on:
@@ -30,8 +31,7 @@ jobs:
     if: github.ref_name != github.event.repository.default_branch
     uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@ai/composite-actions-generate-ci
     secrets:
-      # Prefer repo secret; otherwise GitHub Models works with the default Actions token (add models:read in reusable).
-      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
   create:
     needs: generate

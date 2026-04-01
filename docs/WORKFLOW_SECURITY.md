@@ -18,15 +18,17 @@ The auto-pr flow is split into two reusable workflows:
 
 | Workflow | Checkout | Permissions | Secrets |
 |----------|----------|-------------|---------|
-| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read`, `models: read` | `GH_TOKEN` from caller (`secrets.GH_TOKEN` or default `github.token` for GitHub Models) |
+| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read`, `models: read` | `GH_TOKEN` from caller (`secrets.GH_TOKEN`) for GitHub Models |
 | **create** (`auto-pr-create-reusable.yml`) | Default branch only | `contents: read`, `pull-requests: write` | `APP_ID`, `APP_PRIVATE_KEY` |
+
+The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must also include `models: read` in its top-level `permissions` when it calls the generate reusable workflow. Nested jobs cannot request broader `GITHUB_TOKEN` permissions than the caller grants ([reusable workflows and permissions](https://docs.github.com/en/actions/using-workflows/reusing-workflows#supported-keywords-for-jobs-that-call-a-reusable-workflow)).
 
 ### Generate (Unprivileged)
 
 - **Checkout:** The pushed branch — untrusted, but acceptable because the workflow has no privileged permissions.
 - **Runs:** `auto-pr-get-commits`, `auto-pr-generate-content` (AI), artifact preparation.
 - **Output:** Artifact `pr-content` (title, body, branch, default_branch).
-- **Risk:** Limited. Even if the checked-out code is malicious, it cannot write to the repo or access secrets.
+- **Risk:** Limited. It cannot write to the repo. The job receives **`GH_TOKEN`** only as passed from the caller (for GitHub Models API calls), not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`).
 
 ### Create (Privileged, Trusted Checkout Only)
 

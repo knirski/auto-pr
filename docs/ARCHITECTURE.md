@@ -43,7 +43,6 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 - **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Uses `@effect/platform-bun` for FileSystem, Path, ChildProcessSpawner, Runtime. Orchestrates I/O.
 - **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets. `getPrDescriptionPromptPath` resolves `dist/prompts/pr-description.txt` (relative to shared chunk in `dist/`).
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
-- **`src/auto-pr/core.ts`** — Re-exports from `src/core/` for backward compatibility.
 - **`src/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).
 - **`src/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production. Per Effect idiom, layers are attached to services: `FillPrTemplate.Live`. Workflow-specific config layers (GetCommitsConfig, GeneratePrContentConfig, etc.) provide per-workflow env validation.
 

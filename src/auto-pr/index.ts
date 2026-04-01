@@ -18,22 +18,6 @@ export {
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr/config.js";
-export type { GhOutputValue } from "#auto-pr/core.js";
-export {
-	buildDescriptionPrompt,
-	buildGetCommitsGhEntries,
-	decodeGhOutputTitle,
-	filterSemanticSubjects,
-	formatGhOutput,
-	getGhOutputValue,
-	isBlank,
-	isHttpError,
-	isMergeCommitSubject,
-	parseGhOutput,
-	parseSubjects,
-	sanitizeForGhOutput,
-	validateGetCommitsOutput,
-} from "#auto-pr/core.js";
 export {
 	AiProviderError,
 	AutoPrConfigError,
@@ -49,7 +33,6 @@ export {
 	TemplateRenderError,
 	UnexpectedError,
 } from "#auto-pr/errors.js";
-
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export {
@@ -79,3 +62,19 @@ export {
 	unknownToMessage,
 } from "#auto-pr/utils.js";
 export { validateTitleDescription } from "#core/fill-pr-template-core.js";
+export type { GhOutputValue } from "#core/gh-output.js";
+export {
+	buildDescriptionPrompt,
+	buildGetCommitsGhEntries,
+	decodeGhOutputTitle,
+	filterSemanticSubjects,
+	formatGhOutput,
+	getGhOutputValue,
+	isBlank,
+	isHttpError,
+	isMergeCommitSubject,
+	parseGhOutput,
+	parseSubjects,
+	sanitizeForGhOutput,
+	validateGetCommitsOutput,
+} from "#core/index.js";
