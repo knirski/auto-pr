@@ -29,14 +29,16 @@ concurrency:
 jobs:
   generate:
     if: github.ref_name != github.event.repository.default_branch
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@ai/composite-actions-generate-ci
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@6c83e8f330013ca6aa01ea66fb1f71624c082f35
     secrets:
-      # Repo secret overrides; else default Actions token (needs models:read on this workflow).
-      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      # GitHub API token for the generate job. This workflow grants `models: read` so the default
+      # `github.token` works. If you use a PAT, set repo secret `GH_TOKEN` and pass
+      # `${{ secrets.GH_TOKEN || github.token }}` here instead.
+      GH_TOKEN: ${{ github.token }}
 
   create:
     needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@ai/composite-actions-generate-ci
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@6c83e8f330013ca6aa01ea66fb1f71624c082f35
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit
