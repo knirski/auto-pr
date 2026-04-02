@@ -63,10 +63,24 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. **get-commits** only appends to `GITHUB_OUTPUT` after it succeeds; **generate-content** writes workspace files on success.
 
+## Glossary
+
+| Term | Meaning |
+|------|---------|
+| **FC/IS** | Functional Core / Imperative Shell. The core (`src/core/*.ts`) contains pure functions returning `Result`; no Effect, no I/O. The shell (`src/auto-pr/shell.ts`) orchestrates I/O and bridges via `Effect.fromResult`. |
+| **Tagless Final** | Effect idiom: define service interfaces (e.g. `FillPrTemplate`); implement as live interpreters in `live/`; tests swap mocks. |
+| **Conventional commits** | Commit message format: `type(scope): subject` (e.g. `feat: add X`, `fix(scope): resolve Y`). See [conventionalcommits.org](https://www.conventionalcommits.org/). |
+| **GITHUB_OUTPUT** | GitHub Actions mechanism for passing data between steps. Key-value pairs appended to a file; later steps read via `${{ steps.id.outputs.key }}`. auto-pr's **get-commits** step writes `commits`, `files`, and `count` here. Title/body for the PR use workspace files (`pr-title.txt`, `pr-body.md`), not `GITHUB_OUTPUT`. |
+| **GitHub App** | OAuth app for GitHub; creates tokens with repository permissions. auto-pr uses it for PR creation (not `GITHUB_TOKEN`) so PRs are attributed to the app. |
+| **Two-phase workflow** | Split into generate (unprivileged checkout) and create (trusted checkout, PR write). Satisfies CodeQL/CWE-829; see [WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). |
+| **ai/\* branch** | Branch name pattern that triggers the auto-pr workflow. Push to `ai/feature-x` → workflow creates/updates PR. |
+| **Effect** | TypeScript library for typed functional programming. Used for error handling, dependency injection, and async. |
+| **Result** | Type from `effect` or similar: `Ok(value)` or `Err(error)`. Core returns `Result`; shell bridges to `Effect`. |
+| **Domain errors** | Tagged error classes live in `src/core/errors.ts`; `formatError` (shell) in `src/auto-pr/errors.ts`. Core defines, shell formats for logging. |
+
 ## Related
 
 - [ADR 0001: Functional Core / Imperative Shell](adr/0001-functional-core-imperative-shell.md)
 - [ADR 0002: Two-phase auto-PR workflow](adr/0002-two-phase-auto-pr-workflow.md)
 - [ADR 0007: AI provider abstraction](adr/0007-ai-abstraction-layer.md)
 - [ADR 0009: Ollama removal and OpenAI-compat-only LanguageModel](adr/0009-ollama-to-openai-compat-migration.md)
-- [CONCEPTS.md](CONCEPTS.md) — Glossary of terms
