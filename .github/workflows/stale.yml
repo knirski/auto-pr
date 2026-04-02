@@ -10,12 +10,13 @@ concurrency:
   group: stale
   cancel-in-progress: true
 
-permissions:
-  issues: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   stale:
+    permissions:
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-24.04
     steps:
       - name: Mark stale issues and PRs
