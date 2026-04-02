@@ -2,7 +2,7 @@
 
 Increase the OpenSSF Scorecard from 6/10 to 8-9/10 by fixing actionable checks and documenting future work.
 
-**Baseline (2026-04-02):** https://scorecard.dev/viewer/?uri=github.com/knirski/auto-pr
+**Baseline (2026-04-02):** <https://scorecard.dev/viewer/?uri=github.com/knirski/auto-pr>
 
 | Score | Check |
 |-------|-------|
@@ -57,7 +57,7 @@ The score improves gradually as the ratio of approved-to-total changesets increa
 
 ## 6. CII Best Practices Badge (0 -> 10) — manual registration
 
-1. Register at https://www.bestpractices.dev/en/projects/new
+1. Register at <https://www.bestpractices.dev/en/projects/new>
 2. Complete the self-assessment questionnaire (most criteria already met per `docs/CII.md`)
 3. Add the badge URL to `README.md`
 4. Update `docs/CII.md` to link to the badge
