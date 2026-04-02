@@ -17,7 +17,7 @@
 **Files:**
 - Modify: `.github/workflows/add-dist-to-release-pr.yml:21-23` and `:25-27`
 
-- [ ] **Step 1: Move write permissions from workflow-level to job-level**
+- [x] **Step 1: Move write permissions from workflow-level to job-level**
 
 Replace the workflow-level permissions block (lines 21-23) with `permissions: {}`, and add job-level permissions to the `add-dist` job:
 
@@ -46,12 +46,12 @@ jobs:
       pull-requests: read
 ```
 
-- [ ] **Step 2: Validate the workflow syntax**
+- [x] **Step 2: Validate the workflow syntax**
 
 Run: `actionlint .github/workflows/add-dist-to-release-pr.yml`
 Expected: No errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/add-dist-to-release-pr.yml
@@ -65,7 +65,7 @@ git commit -m "fix(ci): move write permissions to job-level in add-dist-to-relea
 **Files:**
 - Modify: `.github/workflows/stale.yml:13-15` and `:17-19`
 
-- [ ] **Step 1: Move write permissions from workflow-level to job-level**
+- [x] **Step 1: Move write permissions from workflow-level to job-level**
 
 Replace the workflow-level permissions block (lines 13-15) with `permissions: {}`, and add job-level permissions to the `stale` job:
 
@@ -94,12 +94,12 @@ jobs:
     runs-on: ubuntu-24.04
 ```
 
-- [ ] **Step 2: Validate the workflow syntax**
+- [x] **Step 2: Validate the workflow syntax**
 
 Run: `actionlint .github/workflows/stale.yml`
 Expected: No errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/stale.yml
@@ -115,7 +115,7 @@ git commit -m "fix(ci): move write permissions to job-level in stale"
 
 This workflow calls two reusable workflows. Caller workflow permissions cap nested reusable workflows, so each calling job must declare the permissions its callee needs.
 
-- [ ] **Step 1: Replace workflow-level permissions with `permissions: {}` and add job-level permissions**
+- [x] **Step 1: Replace workflow-level permissions with `permissions: {}` and add job-level permissions**
 
 Before:
 
@@ -190,12 +190,12 @@ jobs:
     secrets: inherit
 ```
 
-- [ ] **Step 2: Validate the workflow syntax**
+- [x] **Step 2: Validate the workflow syntax**
 
 Run: `actionlint .github/workflows/auto-pr.yml`
 Expected: No errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/auto-pr.yml
@@ -211,7 +211,7 @@ git commit -m "fix(ci): move write permissions to job-level in auto-pr"
 
 The job at line 24 already has `permissions: contents: read, pull-requests: write`. Only the workflow-level block needs to change.
 
-- [ ] **Step 1: Replace workflow-level permissions with `permissions: {}`**
+- [x] **Step 1: Replace workflow-level permissions with `permissions: {}`**
 
 Before:
 
@@ -227,12 +227,12 @@ After:
 permissions: {}
 ```
 
-- [ ] **Step 2: Validate the workflow syntax**
+- [x] **Step 2: Validate the workflow syntax**
 
 Run: `actionlint .github/workflows/auto-pr-create-reusable.yml`
 Expected: No errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/auto-pr-create-reusable.yml
@@ -246,7 +246,7 @@ git commit -m "fix(ci): move write permissions to job-level in auto-pr-create-re
 **Files:**
 - Modify: `docs/CII.md`
 
-- [ ] **Step 1: Update CII.md to reflect current scorecard status and next steps**
+- [x] **Step 1: Update CII.md to reflect current scorecard status and next steps**
 
 Replace the full contents of `docs/CII.md` with:
 
@@ -274,7 +274,7 @@ This project pursues the [OpenSSF Best Practices badge](https://www.bestpractice
 - Fuzzing with ClusterFuzzLite + Jazzer.js (when input parsing complexity warrants it)
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/CII.md
@@ -288,12 +288,12 @@ git commit -m "docs: update CII.md with current scorecard status"
 **Files:**
 - None (verification only)
 
-- [ ] **Step 1: Run actionlint on all modified workflows**
+- [x] **Step 1: Run actionlint on all modified workflows**
 
 Run: `actionlint .github/workflows/add-dist-to-release-pr.yml .github/workflows/stale.yml .github/workflows/auto-pr.yml .github/workflows/auto-pr-create-reusable.yml`
 Expected: No errors.
 
-- [ ] **Step 2: Run the full check suite**
+- [x] **Step 2: Run the full check suite**
 
 Run: `bun run check`
 Expected: All checks pass. This runs biome, knip, tsgo, tests, and actionlint.
