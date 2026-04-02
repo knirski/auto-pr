@@ -82,7 +82,7 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@e7a7fa9ff40e0b0e9102ef0bdb9de34d28ab6941
+        uses: knirski/auto-pr/.github/actions/setup-runtime@36ebb16988410323ae9d52b01d93b8994018e47c
 
       - name: Fetch base branch
         env:
@@ -91,7 +91,7 @@ jobs:
 
       - name: Set auto-pr package ref
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@e7a7fa9ff40e0b0e9102ef0bdb9de34d28ab6941
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@36ebb16988410323ae9d52b01d93b8994018e47c
         with:
           repository: ${{ github.repository }}
           ref_name: ${{ github.ref_name }}
@@ -102,7 +102,7 @@ jobs:
 
       - name: Get commit log and changed files
         id: commits
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@e7a7fa9ff40e0b0e9102ef0bdb9de34d28ab6941
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@36ebb16988410323ae9d52b01d93b8994018e47c
         with:
           command: get-commits
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -129,7 +129,7 @@ jobs:
       - name: Start local llama.cpp (llama-server)
         id: local_llama
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-start@e7a7fa9ff40e0b0e9102ef0bdb9de34d28ab6941
+        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-start@36ebb16988410323ae9d52b01d93b8994018e47c
         with:
           llama_release: ${{ inputs.ai_llamacpp_release_tag }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -138,7 +138,7 @@ jobs:
 
       - name: Generate PR content
         id: generate
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@e7a7fa9ff40e0b0e9102ef0bdb9de34d28ab6941
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@36ebb16988410323ae9d52b01d93b8994018e47c
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -154,7 +154,7 @@ jobs:
 
       - name: Stop local llama-server
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-stop@e7a7fa9ff40e0b0e9102ef0bdb9de34d28ab6941
+        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-stop@36ebb16988410323ae9d52b01d93b8994018e47c
         with:
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama
 
