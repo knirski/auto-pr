@@ -29,4 +29,4 @@ Chosen option: **"Functional Core / Imperative Shell (FC/IS)"**, because it meet
 ## References
 
 * [ARCHITECTURE.md](../ARCHITECTURE.md) — High-level structure, dependency direction
-* [ORIGIN.md](../ORIGIN.md) — Extraction from paperless-ingestion-bot
+* [ADR 0010](0010-extract-from-paperless-ingestion-bot.md) — Extraction from paperless-ingestion-bot
