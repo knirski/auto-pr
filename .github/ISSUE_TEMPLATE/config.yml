@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: ../../SECURITY.md
-    about: Report a security vulnerability privately
+    url: https://github.com/knirski/auto-pr/security/advisories/new
+    about: Report a security vulnerability privately via GitHub's private advisory
+  - name: Documentation
+    url: https://github.com/knirski/auto-pr/blob/main/docs/TROUBLESHOOTING.md
+    about: Check troubleshooting docs before opening an issue

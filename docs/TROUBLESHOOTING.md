@@ -34,7 +34,7 @@
 
 **Cause:** Each script validates only the env vars it needs (see [src/auto-pr/config.ts](../src/auto-pr/config.ts)). For example, **get-commits** requires `GITHUB_OUTPUT`; **generate-content** does not. A message listing `DEFAULT_BRANCH` / `GITHUB_OUTPUT` usually means **get-commits** or **run-auto-pr** without a full Actions env.
 
-**Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md#environment-variables) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
+**Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md) (local env via `.env` and [`src/auto-pr/config.ts`](../src/auto-pr/config.ts)) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
 
 ## Get commits / Generate content fails
 

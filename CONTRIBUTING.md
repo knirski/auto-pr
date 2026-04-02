@@ -18,7 +18,11 @@ bun x lefthook install
 
 ### Optional: typos, lychee, and actionlint for full local check
 
-`bun run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use Nix:
+`bun run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use `nix develop` (recommended — puts all tools in PATH).
+
+Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
+
+#### Install without Nix (per-OS instructions)
 
 | OS | typos | lychee | actionlint |
 |----|-------|--------|------------|
@@ -28,9 +32,6 @@ bun x lefthook install
 | **Linux** (Arch) | `pacman -S typos` | `pacman -S lychee` or `cargo install lychee` | `pacman -S actionlint` |
 | **Linux** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
 | **Windows** | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
-| **Nix** | `nix develop` (tools in PATH) or `nix run .#typos` | `nix run .#lychee` | `nix run .#actionlint` |
-
-Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
 
 **check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `bun run check:just-links` to verify links locally. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge. Lychee accepts 200 and 429 (rate limit) via `--accept 200,429`.
 
@@ -62,6 +63,32 @@ If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 **Fork PRs:** CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
 
 See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architecture.
+
+## Nix flake (optional)
+
+Nix is **not required for users**. The workflows use Node and npx only.
+
+For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. Builds on x86_64-linux and aarch64-linux (arm64 runners). The flake provides:
+
+| Use | Command | Purpose |
+|-----|---------|---------|
+| **Dev shell** | `nix develop` | Bun, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
+| **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
+| **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
+| **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, AI provider for 2+ commits) |
+| **Update bun.nix** | `nix run .#update-bun-nix` | Regenerate `bun.nix` after changing `bun.lock` |
+| **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
+| **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, bun2nix directly |
+
+```bash
+# Development shell
+nix develop
+
+# Run full pipeline (requires GH_TOKEN, AI provider for 2+ commits)
+bun run src/workflow/auto-pr-run.ts
+# or: node dist/workflow/auto-pr-run.js (after bun run build)
+# or: nix run .#default
+```
 
 ## CHANGELOG.md
 
