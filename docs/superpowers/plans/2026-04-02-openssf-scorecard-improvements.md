@@ -12,7 +12,7 @@
 
 ---
 
-### Task 1: Fix Token-Permissions in `add-dist-to-release-pr.yml`
+## Task 1: Fix Token-Permissions in `add-dist-to-release-pr.yml`
 
 **Files:**
 - Modify: `.github/workflows/add-dist-to-release-pr.yml:21-23` and `:25-27`
@@ -22,6 +22,7 @@
 Replace the workflow-level permissions block (lines 21-23) with `permissions: {}`, and add job-level permissions to the `add-dist` job:
 
 Before:
+
 ```yaml
 permissions:
   contents: write
@@ -33,6 +34,7 @@ jobs:
 ```
 
 After:
+
 ```yaml
 permissions: {}
 
@@ -68,6 +70,7 @@ git commit -m "fix(ci): move write permissions to job-level in add-dist-to-relea
 Replace the workflow-level permissions block (lines 13-15) with `permissions: {}`, and add job-level permissions to the `stale` job:
 
 Before:
+
 ```yaml
 permissions:
   issues: write
@@ -79,6 +82,7 @@ jobs:
 ```
 
 After:
+
 ```yaml
 permissions: {}
 
@@ -114,6 +118,7 @@ This workflow calls two reusable workflows. Caller workflow permissions cap nest
 - [ ] **Step 1: Replace workflow-level permissions with `permissions: {}` and add job-level permissions**
 
 Before:
+
 ```yaml
 permissions:
   contents: read
@@ -148,6 +153,7 @@ jobs:
 ```
 
 After:
+
 ```yaml
 permissions: {}
 
@@ -208,6 +214,7 @@ The job at line 24 already has `permissions: contents: read, pull-requests: writ
 - [ ] **Step 1: Replace workflow-level permissions with `permissions: {}`**
 
 Before:
+
 ```yaml
 permissions:
   contents: read
@@ -215,6 +222,7 @@ permissions:
 ```
 
 After:
+
 ```yaml
 permissions: {}
 ```
