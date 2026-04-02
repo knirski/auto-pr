@@ -13,11 +13,18 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 **Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done — most adopters only use GitHub Actions and do not add this package to `package.json` unless they want the CLIs locally. Defaults work for most projects; override via workflow inputs only when needed.
 
-**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying—workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying — workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, the AI provider summarizes the changes into a coherent description.
 
-**Origin:** Extracted from [paperless-ingestion-bot](https://github.com/knirski/paperless-ingestion-bot), where it powered the auto-PR workflow for AI-generated branches. See [docs/ORIGIN.md](docs/ORIGIN.md).
+## Table of contents
+
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Quick start](#quick-start)
+- [Commands](#commands)
+- [Documentation](#documentation)
+- [License](#license)
 
 ## Features
 
@@ -35,7 +42,9 @@ Auto-create pull requests from conventional commits on `ai/*` branches. Parses c
 
 Merge commits are filtered out. Non-conventional commits are included; type falls back to "Chore".
 
-## Quick start (user)
+## Quick start
+
+### Users (adopters)
 
 Add auto-pr to any repo in 6 steps:
 
@@ -48,7 +57,7 @@ Add auto-pr to any repo in 6 steps:
 
 No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
-## Quick start (development)
+### Contributors
 
 ```bash
 bun install
@@ -66,28 +75,7 @@ For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` 
 | `bun run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
 | `bun run check:just-links` | Lychee link check only (requires lychee or Nix) |
 
-## Installation
-
-**Normal setup does not use this section.** Follow [Quick start (user)](#quick-start-user): Actions runs everything; you do not add auto-pr to `package.json` unless you choose to.
-
-**Optional — add as a dependency** (local CLI runs, pinning a version, or scripting):
-
-```bash
-npm install github:knirski/auto-pr
-# or: bun add github:knirski/auto-pr
-```
-
-Install from GitHub; the package is not published to npm. `dist/` is pre-built and committed by CI (see [docs/CI.md](docs/CI.md#dist-and-gitignore)). With Bun, `prepare` also builds it on install. No manual build needed.
-
-**From source (contributors):**
-
-```bash
-git clone https://github.com/knirski/auto-pr.git
-cd auto-pr
-bun install
-bun run build
-bun x lefthook install
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup, Nix flake, and pre-push hooks.
 
 ## Commands
 
@@ -101,87 +89,18 @@ bun x lefthook install
 
 After install, or for one-offs: `npx -p github:knirski/auto-pr <command>`. CI runs the same bins via reusable workflows without a repo dependency.
 
-## Nix flake (contributors only, optional)
-
-Nix is **not required for users**. The workflows use Node and npx only.
-
-For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. Builds on x86_64-linux and aarch64-linux (arm64 runners). The flake provides:
-
-| Use | Command | Purpose |
-|-----|---------|---------|
-| **Dev shell** | `nix develop` | Bun, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
-| **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
-| **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
-| **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, AI provider for 2+ commits) |
-| **Update bun.nix** | `nix run .#update-bun-nix` | Regenerate `bun.nix` after changing `bun.lock` |
-| **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
-| **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, bun2nix directly |
-
-```bash
-# Development shell
-nix develop
-
-# Run full pipeline (requires GH_TOKEN, AI provider for 2+ commits)
-bun run src/workflow/auto-pr-run.ts
-# or: node dist/workflow/auto-pr-run.js (after bun run build)
-# or: nix run .#default
-```
-
-## Environment variables
-
-When running scripts directly, all required vars must be set and non-empty. No default values; fail fast when absent.
-
-When using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml), `AUTO_PR_AI_PROVIDER` and provider-specific model settings are passed via workflow inputs with sensible defaults (convention over configuration). Authoritative schema: [src/auto-pr/config.ts](src/auto-pr/config.ts).
-
-**Convention (not env):** `get-commits` writes `commits.txt` and `files.txt` under `{GITHUB_WORKSPACE}`; `generate-content` reads those paths and writes `pr-title.txt` and `pr-body.md`. `create-or-update-pr` reads those two files under `{GITHUB_WORKSPACE}`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md`. Edit **How to test** in that file for project-specific instructions.
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DEFAULT_BRANCH` | get-commits, create-or-update-pr | Base branch (e.g. `main`) |
-| `GITHUB_WORKSPACE` | get-commits, generate-content, create-or-update-pr | Repo root |
-| `GITHUB_OUTPUT` | get-commits | Output file (GitHub Actions) |
-| `AUTO_PR_AI_PROVIDER` | generate-content | AI provider (optional; default `local`): `local` or `github-models` |
-| `AUTO_PR_AI_OPENAI_COMPAT_URL` | generate-content | **local** — OpenAI-compatible API base URL (default `http://127.0.0.1:8080/v1`; e.g. llama.cpp `llama-server`) |
-| `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | generate-content | **local** — optional API key for that endpoint |
-| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | generate-content | Model id: **local** defaults to `gpt-oss` when unset; **github-models** defaults to `openai/gpt-4.1` when unset |
-| `GH_TOKEN` | create-or-update-pr; generate-content (github-models) | GitHub token for PR create/update; for **GitHub Models**, also used as the API credential when `AUTO_PR_AI_PROVIDER` is `github-models` |
-| `BRANCH` | create-or-update-pr | Current branch |
-| `AUTO_PR_DEBUG` | any | Optional. Set to `1` for verbose error hints when debugging |
-
-## Integration
-
-Designed to run in CI (e.g. GitHub Actions) or locally via `auto-pr-run.ts`. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for how to add auto-pr to any repository (GitHub App setup, workflow example).
-
-This repo uses [release-please](https://github.com/googleapis/release-please) for version and changelog automation. Requires `APP_ID` and `APP_PRIVATE_KEY` secrets (GitHub App). **Supply chain:** bun audit in check; SBOM (CycloneDX via native npm sbom), Dependabot, CodeQL, OpenSSF Scorecard with least-privilege workflow permissions.
-
 ## Documentation
 
-- [docs/](docs/) — Documentation index
-- [docs/INTEGRATION.md](docs/INTEGRATION.md) — Integration guide (GitHub App, workflow)
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Debugging and common issues
-- [docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) — Template placeholders and behavior
-- [docs/CI.md](docs/CI.md) — Workflows, branch protection, first-time setup
-- [.github/actions/setup-runtime/README.md](.github/actions/setup-runtime/README.md) — Runtime detection (contributors)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Project structure and design
-- [docs/CONCEPTS.md](docs/CONCEPTS.md) — Glossary (FC/IS, Tagless Final, etc.)
-- [docs/adr/](docs/adr/) — Architecture Decision Records
-- [docs/ORIGIN.md](docs/ORIGIN.md) — Extraction from paperless-ingestion-bot
-- [docs/CII.md](docs/CII.md) — CII Best Practices badge progress
-- [AGENTS.md](AGENTS.md) — AI agent instructions
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Development setup, commits, PRs
-- [SECURITY.md](SECURITY.md) — Vulnerability reporting
-- [SUPPORT.md](SUPPORT.md) — Getting help
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Community standards
+| Audience | Documents |
+|----------|-----------|
+| **Users** | [Integration guide](docs/INTEGRATION.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [PR template](docs/PR_TEMPLATE.md) |
+| **Contributors** | [Architecture](docs/ARCHITECTURE.md) · [CI & workflows](docs/CI.md) · [Contributing](CONTRIBUTING.md) · [Workflow security](docs/WORKFLOW_SECURITY.md) |
+| **Decisions** | [Architecture Decision Records](docs/adr/) |
+| **Project** | [Security](SECURITY.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [CII badge progress](docs/CII.md) |
+
+Full index: [docs/README.md](docs/)
 
 This project was developed with assistance from AI coding tools.
-
-## Verification
-
-```bash
-bun run check
-```
-
-Runs full check: audit, test, lint, knip, typecheck, Nix (statix, deadnix), docs (rumdl, typos), actionlint, shellcheck, shfmt. Use `check:with-links` to add lychee link verification. Pre-push runs `check:code` (Bun deps only). Use `check:ci` for full CI parity in Docker.
 
 ## License
 

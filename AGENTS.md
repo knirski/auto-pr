@@ -15,7 +15,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | Situation | Skill |
 |-----------|-------|
 | New features | brainstorming — design, get approval before coding |
-| Approved design | writing-plans — plan in `docs/superpowers/plans/` (or specs in `docs/superpowers/specs/`) |
+| Approved design | writing-plans — plan in `docs/superpowers/specs/` |
 | Feature isolation | using-git-worktrees |
 | Features/bugfixes | test-driven-development — RED-GREEN-REFACTOR |
 | Bugs/failures | systematic-debugging — root cause first |
@@ -138,7 +138,7 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 
 ## Documentation & ADR
 
-[docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) · [INTEGRATION.md](docs/INTEGRATION.md) · [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · [ORIGIN.md](docs/ORIGIN.md) · [CI.md](docs/CI.md) · [WORKFLOW_SECURITY.md](docs/WORKFLOW_SECURITY.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/adr/](docs/adr/) · [CONTRIBUTING.md](CONTRIBUTING.md) (CHANGELOG auto-generated)
+[docs/PR_TEMPLATE.md](docs/PR_TEMPLATE.md) · [INTEGRATION.md](docs/INTEGRATION.md) · [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · [CI.md](docs/CI.md) · [WORKFLOW_SECURITY.md](docs/WORKFLOW_SECURITY.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/adr/](docs/adr/) · [CONTRIBUTING.md](CONTRIBUTING.md) (CHANGELOG auto-generated)
 
 ### ADR workflow {#adr-workflow}
 
