@@ -270,7 +270,7 @@ See Phase 2.6. Cache: `bun.lock`, `bun.nix`.
 - [.nvmrc](../../../.nvmrc): keep for consumer Node version
 - Add `.bun-version` (e.g. `1.3.10`) or document in README
 - Track `bun.lock`; remove `package-lock.json` from git if present
-- [scripts/run-check-act.ts](../../../scripts/run-check-act.ts): optional local CI parity (`bun run act`); runs `check` then `integration`; see [CONTRIBUTING](../../../CONTRIBUTING.md#run-ci-locally-full-parity) for `gh act`, nektos `act`, and Nix-on-Linux (`nix run .#act`)
+- [scripts/run-check-act.ts](../../../scripts/run-check-act.ts): optional local CI parity (`bun run act`); runs `check` then `integration`; see [CONTRIBUTING](../../../CONTRIBUTING.md#run-ci-locally-check-job) for `gh act`, nektos `act`, and Nix-on-Linux (`nix run .#act`)
 
 ---
 
