@@ -1,8 +1,0 @@
-#!/usr/bin/env node
-import{Bb as M,Ja as Z,La as W,ec as N,fc as X,gc as F,hc as V,ic as L,j as Y,kc as y,nb as $,qb as q,rb as v,ya as D,zb as I}from"./auto-pr-get-commits-2e9p02j0.js";var O="origin/";function R(J,x){let z=`${O}${J}`;return D.gen(function*(){let[H,K,Q]=yield*D.all([V("git",["log","--format=---COMMIT---%n%s%n%n%b",`${z}..HEAD`],x),V("git",["log","--format=%s",`${z}..HEAD`],x),V("git",["diff","--name-only",`${z}..HEAD`],x)]),T=I(K),U=M(T);return{commits:H,subjects:K,files:Q,semanticSubjects:U}})}function B(J,x){return D.gen(function*(){let z=yield*Z.FileSystem,H=yield*W.Path,K=H.join(J,"commits.txt"),Q=H.join(J,"subjects.txt"),T=H.join(J,"files.txt"),U=H.join(J,"semantic_subjects.txt");yield*D.all([z.writeFileString(K,x.commits),z.writeFileString(Q,x.subjects),z.writeFileString(T,x.files),z.writeFileString(U,`${x.semanticSubjects.join(`
-`)}
-`)])})}function _(J,x,z){return D.gen(function*(){let H=yield*R(J,x);if(H.semanticSubjects.length===0)return yield*D.fail(new $({message:"No semantic commits (all merge or non-semantic). Add at least one non-merge commit before pushing to ai/ branch."}));yield*B(x,H);let K=yield*W.Path,Q=K.join(x,"commits.txt"),T=K.join(x,"files.txt"),U=N(Q,T,H.semanticSubjects.length);yield*L(z,U),yield*D.log({event:"auto_pr_get_commits",status:"success",count:H.semanticSubjects.length})})}var g=D.gen(function*(){let{defaultBranch:J,workspace:x,ghOutput:z}=yield*q;yield*_(J,x,z)}).pipe(D.provide(v),D.provide(X),D.provide(F));if(Y.main==Y.module)y(g,"auto_pr_get_commits_failed");
-export{_ as a};
-
-//# debugId=5D952463139518F064756E2164756E21
-//# sourceMappingURL=auto-pr-get-commits-rcgdf8bf.js.map
