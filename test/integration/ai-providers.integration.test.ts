@@ -1,7 +1,11 @@
 /**
- * Real HTTP integration tests for AI providers. Disabled unless env flags are set
- * (see `.github/workflows/integration.yml`). Normal `bun test` skips these via describe.skipIf.
- * CI runs with `bun --config=bunfig.integration.toml` so coverage threshold from the main bunfig
+ * Real HTTP integration tests for AI providers. Excluded from default `bun test` via
+ * `pathIgnorePatterns` in `bunfig.toml`. Use `bun run test:integration`.
+ *
+ * Each suite runs only when its prerequisites are set (OpenAI-compat URL + model for local;
+ * `GH_TOKEN` for GitHub Models). CI sets all of them in one job and runs both.
+ *
+ * Uses `bun --config=bunfig.integration.toml` in CI so coverage threshold from the main bunfig
  * does not fail narrow integration-only runs.
  *
  * Exercises `generatePrContentFromValues` (same orchestration as production) with real providers.
@@ -15,8 +19,17 @@ import { runEffect } from "#test/run-effect.js";
 import { TestBaseLayer } from "#test/test-utils.js";
 import { generatePrContentFromValues } from "#workflow/auto-pr-generate-content.js";
 
-const runLocal = process.env.AUTO_PR_INTEGRATION_LOCAL === "1";
-const runGithubModels = process.env.AUTO_PR_INTEGRATION_GITHUB_MODELS === "1";
+function envNonEmpty(name: string): boolean {
+	const v = process.env[name];
+	return v !== undefined && v.trim() !== "";
+}
+
+/** Local OpenAI-compat: URL and model id (from llama-server or your server). */
+const canRunLocal =
+	envNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL") && envNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL");
+
+/** GitHub Models: token with `models: read` (e.g. `GITHUB_TOKEN` in Actions). */
+const canRunGithubModels = envNonEmpty("GH_TOKEN");
 
 const PR_DESCRIPTION_PROMISE = Bun.file(
 	new URL("../../src/auto-pr/prompts/pr-description.txt", import.meta.url),
@@ -57,7 +70,7 @@ function layerLocal(model: string, openaiCompatUrl: string) {
 	);
 }
 
-describe.skipIf(!runLocal)("integration: local OpenAI-compat (llama.cpp)", () => {
+describe.skipIf(!canRunLocal)("integration: local OpenAI-compat (llama.cpp)", () => {
 	test(
 		"generatePrContentFromValues (2 commits) completes with PR-shaped body",
 		async () => {
@@ -93,11 +106,11 @@ describe.skipIf(!runLocal)("integration: local OpenAI-compat (llama.cpp)", () =>
 	);
 });
 
-describe.skipIf(!runGithubModels)("integration: github-models", () => {
+describe.skipIf(!canRunGithubModels)("integration: github-models", () => {
 	test(
 		"generatePrContentFromValues (2 commits) returns title and structured description",
 		async () => {
-			const model = process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL ?? "microsoft/phi-4-mini-instruct";
+			const model = process.env.INTEGRATION_GITHUB_MODEL?.trim() || "microsoft/phi-4-mini-instruct";
 			const token = process.env.GH_TOKEN;
 			if (token === undefined || token === "") {
 				throw new Error("GH_TOKEN is required for github-models integration");
