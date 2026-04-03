@@ -20,6 +20,18 @@ inputs:
     required: false
     default: ""
 
+# Caller workflows read steps.<id>.outputs.* — composite actions must forward step outputs explicitly.
+outputs:
+  commits:
+    description: Path to commits.txt (get-commits only)
+    value: ${{ steps.run.outputs.commits }}
+  files:
+    description: Path to files.txt (get-commits only)
+    value: ${{ steps.run.outputs.files }}
+  count:
+    description: Semantic commit count (get-commits only)
+    value: ${{ steps.run.outputs.count }}
+
 runs:
   using: composite
   steps:
