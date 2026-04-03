@@ -79,6 +79,11 @@ export class FillPrTemplateValidationError extends Schema.TaggedErrorClass<FillP
 	{ message: Schema.String },
 ) {}
 
+/** Local act runner (`run-check-act`) failed. */
+export class ActLocalCiError extends Schema.TaggedErrorClass<ActLocalCiError>()("ActLocalCiError", {
+	reason: Schema.String,
+}) {}
+
 /** Unexpected error during generate-content; wraps unknown failures (e.g. non-Error throws). */
 export class UnexpectedError extends Schema.TaggedErrorClass<UnexpectedError>()("UnexpectedError", {
 	cause: Schema.String,
