@@ -1,8 +1,10 @@
 /**
  * AI provider layer factory. Builds Layer<LanguageModel> from config.
- * Providers: `local` (any local LLM via OpenAI-compatible HTTP — llama.cpp today), `github-models`.
+ * Providers: `local` (any local LLM via OpenAI-compatible HTTP — e.g. llama.cpp), `github-models`.
  *
  * Both use `@effect/ai-openai-compat` (`OpenAiClient.layer` + `OpenAiLanguageModel.model`) + `FetchHttpClient`.
+ * Outgoing HTTP matches the OpenAI Chat Completions API (`POST …/v1/chat/completions`); see
+ * https://platform.openai.com/docs/api-reference/chat/create and `@effect/ai-openai-compat` — no duplicate request-shape logic here.
  * Generate-content uses `LanguageModel.generateText` + JSON parse (not `generateObject` / `json_schema`); see `auto-pr-generate-content.ts`.
  *
  * ADR: docs/adr/0007-ai-abstraction-layer.md, docs/adr/0009-ollama-to-openai-compat-migration.md
