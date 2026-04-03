@@ -27,3 +27,9 @@ concurrency:
 jobs:
   check:
     uses: ./.github/workflows/check-workflows.yml
+
+  integration:
+    permissions:
+      contents: read
+      models: read
+    uses: ./.github/workflows/check-integration.yml
