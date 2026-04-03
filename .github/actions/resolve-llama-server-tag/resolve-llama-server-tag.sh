@@ -13,12 +13,14 @@ READ_TAG="$GITHUB_ACTION_PATH/read-dockerfile-tag.sh"
 always_raw="${ALWAYS_RESOLVE_TAG:-false}"
 always_lc="${always_raw,,}"
 if [[ "$always_lc" != "true" && "$always_lc" != "1" && "$always_lc" != "yes" ]]; then
-	C="${COMMITS_COUNT:?}"
-	AP="${AI_PROVIDER:?}"
+	# Empty count/provider can happen if a caller omits composite outputs; treat as non-NEED.
+	C="${COMMITS_COUNT:-}"
+	AP="${AI_PROVIDER:-}"
 	MU="${AI_LLAMACPP_MODEL_URL:-}"
 	CU="${AI_OPENAI_COMPAT_URL:-}"
 	NEED=false
-	if [[ "$C" != "1" ]] && [[ "$AP" == "local" ]] && [[ -n "$MU" ]] && [[ -z "$CU" ]]; then
+	# Require explicit count: empty (e.g. missing composite outputs) must not imply "multi-commit".
+	if [[ -n "$C" && "$C" != "1" ]] && [[ "$AP" == "local" ]] && [[ -n "$MU" ]] && [[ -z "$CU" ]]; then
 		NEED=true
 	fi
 	if [[ "$NEED" == "false" ]]; then
