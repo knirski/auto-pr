@@ -43,8 +43,9 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 
 - **gh extension** (preferred): `gh extension install nektos/gh-act`
 - **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
+- **Nix**: `act` is in this flake for **x86_64-linux** and **aarch64-linux** only (same systems as the rest of the flake). With Nix installed on those platforms, the script runs `nix run .#act` when `act` is not on your PATH (same pattern as `scripts/nix-run-if-missing.sh`). `nix develop` also puts `act` in PATH. On macOS or other hosts, use `gh act`, Homebrew `act`, or another install.
 
-The script tries `gh act` first, then falls back to `act`.
+The script tries `gh act` first, then `act` (from PATH or via Nix).
 
 ### Pre-push hook
 
@@ -72,7 +73,7 @@ For contributors to this repo, the project includes an optional Nix flake. CI us
 
 | Use | Command | Purpose |
 |-----|---------|---------|
-| **Dev shell** | `nix develop` | Bun, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
+| **Dev shell** | `nix develop` | Bun, act, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
 | **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
 | **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
 | **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, AI provider for 2+ commits) |
