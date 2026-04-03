@@ -7,9 +7,9 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | When | What runs |
 |------|-----------|
 | Push to `ai/**` | auto-pr creates/updates PR |
-| PR to main (code changes) | ci → check, dependency-review |
+| PR to main (code changes) | ci → check (`check` + `integration` jobs), dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
-| PR to main (.github only) | ci-workflows → check (actionlint, shellcheck, shfmt) |
+| PR to main (.github only) | ci-workflows → `check-workflows` (actionlint, shellcheck, shfmt) + `integration` (same integration job as code CI) |
 | PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), update-dist (when src/pkg/build/bun.lock change), scorecard (if configured) |
@@ -21,18 +21,26 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 Before CI can run fully:
 
 1. **GitHub App** — Create an app with Contents and Pull requests (Read and write). Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. Required for auto-pr, release-please, update-dist, and add-dist-to-release-pr.
-2. **Codecov** (optional) — Add `CODECOV_TOKEN` for coverage badge. Get from [codecov.io](https://codecov.io). Without it, the upload step is skipped; CI still passes.
+2. **Codecov** (optional) — Add `CODECOV_TOKEN` for the coverage badge and test analytics. The **`check`** job uploads unit coverage (`coverage/lcov.info`) and JUnit (`test-report.junit.xml`). The **`integration`** job does not upload to Codecov. Get the token from [codecov.io](https://codecov.io). Without it, upload steps no-op; CI still passes.
 3. **Labels** — Run `./scripts/create-labels.sh` so update-flake-lock can open PRs (needs `dependencies`, `nix`, `automated`) and issue templates work (`bug`, `enhancement`, `good first issue`).
-4. **Branch protection** — Require `check / check` before merging to main.
+4. **Branch protection** — Require `check / check` and `check / integration` before merging to main (integration: Docker + GitHub Models smoke tests). Same checks apply to **ci-workflows** runs (`.github/**`-only PRs).
+
+### Integration job and fork PRs
+
+The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Models. On **fork** pull requests, token scopes or Models behavior can differ from same-repo PRs. If integration fails only on a fork, merge from a branch in this repo or re-run on `main` after merge to confirm.
+
+### Integration tests
+
+**`bun run test:integration`** runs integration smoke tests with `--no-coverage` (coverage is tracked on the unit job only). Requires the same opt-in env and infrastructure as CI when you want tests to run (for example `AUTO_PR_INTEGRATION_LOCAL`, `AUTO_PR_INTEGRATION_GITHUB_MODELS`, `GH_TOKEN`, Docker / Testcontainers).
 
 ## Workflows
 
 | Workflow | Trigger | Path filter | Jobs |
 |----------|---------|-------------|------|
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
-| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**'` | check, dependency-review |
+| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**'` | check (reusable: `check` + `integration`), dependency-review |
 | [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
-| [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check |
+| [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check-workflows + [check-integration.yml](../.github/workflows/check-integration.yml) |
 | [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
 | [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
@@ -53,7 +61,7 @@ Before CI can run fully:
 
 **ci-docs.yml** is complementary: runs when only `*.md` files change. Reports a passing `check` job so branch protection allows merge.
 
-**ci-workflows.yml** is complementary: runs when only `.github/**` changes. Minimal check (actionlint, shellcheck, shfmt on .github/actions). Reports a passing `check` job so branch protection allows merge.
+**ci-workflows.yml** is complementary: runs when only `.github/**` changes. Runs **check-workflows** (actionlint, shellcheck, shfmt on `.github/actions`) and the same **integration** reusable workflow as [.github/workflows/ci.yml](../.github/workflows/ci.yml) (Docker + GitHub Models smoke tests).
 
 **ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
@@ -97,9 +105,10 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 
 ## Branch Protection
 
-ci.yml, ci-docs.yml, and ci-workflows.yml report **`check / check`**. Configure main branch protection to require:
+Configure main branch protection to require:
 
-- **Status checks that are required:** `check / check`
+- **`check / check`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), [ci-docs.yml](../.github/workflows/ci-docs.yml) (pass-through), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-workflows.yml](../.github/workflows/check-workflows.yml)).
+- **`check / integration`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-integration.yml](../.github/workflows/check-integration.yml)). Not reported by ci-docs (docs-only path).
 
 Do not require `dependency-review` (PR-only), `nix` (path-filtered), or `act-smoke` (path-filtered smoke test); they would block when skipped or unrelated paths change.
 
