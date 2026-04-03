@@ -165,5 +165,6 @@ Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md an
 - The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.
 - Lefthook pre-commit runs `scripts/check-no-dist-staged.sh`, which fails if any staged path is under `dist/`.
 - Dependabot does not bump arbitrary version pins in plain files (for example `.github/llama-cpp-release`); it handles `package.json`/lockfile ecosystems and `github-actions` refs. Use another mechanism for those pins (scheduled workflow, Renovate, or manual bumps).
+- Integration CI resolves **`AUTO_PR_AI_OPENAI_COMPAT_MODEL`** for the local provider from **`GET …/v1/models`** (OpenAI-compatible model list) before running HTTP tests.
 - With **nektos act**, the gitleaks SARIF upload step may need `HOME: ${{ github.workspace }}` because gitleaks-action uses `HOME` as the SARIF root and act mounts the repo at a host path instead of under `/home/runner`.
 - With **nektos act**, **Upload SBOM** in CI may be gated with `if: ${{ env.ACT != 'true' }}` (generate SBOM still runs locally) because act’s artifact server can reject upload-artifact v7 payloads over a known `mime_type` mismatch.
