@@ -73,7 +73,7 @@ For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` 
 | `bun run check:code` | Code only: build, audit, **unit** tests, lint, knip, typecheck. Runs on pre-push (no integration). |
 | `bun run test:all` | `bun test` then `test:integration` (integration needs env) |
 | `bun run act` | `check` + `integration` jobs in Docker (`gh act` or nektos `act`; on Linux, Nix can supply `act` via `nix run .#act`) |
-| `bun run act -- check` / `bun run act -- integration` | Only CI `check`, or only `integration` — see [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-full-parity) |
+| `bun run act -- check` / `bun run act -- integration` | Only CI `check`, or only `integration` — see [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-check-job) |
 | `bun run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
 | `bun run check:just-links` | Lychee link check only (requires lychee or Nix) |
 
