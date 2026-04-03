@@ -27,7 +27,7 @@
 
         packages = {
           default = pkgs.callPackage ./default.nix { inherit (bun2nix.packages.${system}) bun2nix; };
-          inherit (pkgs) statix deadnix typos actionlint lychee shellcheck shfmt;
+          inherit (pkgs) act statix deadnix typos actionlint lychee shellcheck shfmt;
           bun2nix = bun2nix.packages.${system}.default;
           update-bun-nix = pkgs.writeShellApplication {
             name = "update-bun-nix";
@@ -42,6 +42,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
+            act
             bun
             statix
             deadnix

@@ -78,7 +78,7 @@ Before CI can run fully:
 
 ## Run CI locally
 
-`bun run check:ci` runs the check workflow locally via [act](https://github.com/nektos/act) in Docker. Requires Docker and either `gh extension install nektos/gh-act` or `act` installed. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-full-parity).
+`bun run check:ci` runs the **`check`** job from [ci.yml](../.github/workflows/ci.yml) (the reusable [check.yml](../.github/workflows/check.yml) job: tests, lint, Codecov, etc.) via [act](https://github.com/nektos/act) in Docker. It does **not** run the **`integration`** job (Docker/Testcontainers smoke tests); those only run in GitHub Actions. Requires Docker and either `gh extension install nektos/gh-act`, `act` on your PATH, or Nix on **Linux** (x86_64/aarch64) where this flake provides `act` — the script runs `nix run .#act` when `act` is missing. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-full-parity).
 
 Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
 
