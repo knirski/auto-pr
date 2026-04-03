@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit, FileSystem, Layer, Path, Redacted, Result } from "effect";
+import { Cause, Duration, Effect, Exit, FileSystem, Layer, Path, Redacted, Result } from "effect";
 import {
 	aiProviderLayerFromConfig,
 	NoSemanticCommitsError,
@@ -54,7 +54,13 @@ function layerForGeneratePrContent(params: GeneratePrContentFromValuesParams) {
 	return Layer.mergeAll(
 		ValueBasedLayer,
 		aiProviderLayerFromConfig(
-			{ provider: params.provider, model: params.model },
+			{
+				provider: params.provider,
+				model: params.model,
+				...(params.provider === "github-models"
+					? { ghToken: Redacted.make("mock-github-token") }
+					: {}),
+			},
 			params.fetch !== undefined ? { fetch: params.fetch } : undefined,
 		),
 	);
@@ -169,9 +175,9 @@ const twoCommits = [
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
 
-describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)", () => {
+describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () => {
 	describe("valid title", () => {
-		test("returns AI title and body with structured description sections", async () => {
+		test("returns AI title and body with structured description sections (local provider)", async () => {
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
@@ -196,6 +202,23 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 					expect(result.body).toContain("feat: add module A");
 					expect(result.body).toContain("fix: fix bug in B");
 					expect(result.count).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("same generateText + JSON path for github-models provider (mocked)", async () => {
+			const p = params(twoCommits, {
+				provider: "github-models",
+				model: "microsoft/phi-mock",
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
 				}).pipe(Effect.scoped),
 			);
 		});
@@ -252,7 +275,7 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				retryDelayMs: 0,
+				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
@@ -272,7 +295,10 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 					{ subject: "Add feature", body: "" },
 					{ subject: "Fix bug", body: "" },
 				],
-				{ retryDelayMs: 0, fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE) },
+				{
+					retryDelay: Duration.zero,
+					fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE),
+				},
 			);
 			await runEffect(layerForGeneratePrContent(p))(
 				Effect.gen(function* () {
@@ -294,7 +320,7 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				retryDelayMs: 0,
+				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(bad),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
@@ -315,7 +341,7 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 			const p = params(twoCommits, {
 				filesContent: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				retryDelayMs: 0,
+				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(bad),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
@@ -330,7 +356,7 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 	describe("empty assistant content", () => {
 		test("falls back when local LLM returns empty content 5 times", async () => {
 			const p = params(twoCommits, {
-				retryDelayMs: 0,
+				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(""),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
@@ -345,7 +371,7 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 	describe("invalid JSON in assistant content", () => {
 		test("falls back when local LLM returns invalid JSON 5 times", async () => {
 			const p = params(twoCommits, {
-				retryDelayMs: 0,
+				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch("feat: x\n\n"),
 			});
 			await runEffect(layerForGeneratePrContent(p))(
@@ -360,7 +386,7 @@ describe("generatePrContentFromValues (2+ commits, mocked local OpenAI-compat)",
 	describe("HTTP 500 from OpenAI-compat endpoint", () => {
 		test("falls back when local endpoint returns HTTP 500 five times", async () => {
 			const p = params(twoCommits, {
-				retryDelayMs: 0,
+				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch({
 					content: VALID_AI_RESPONSE,
 					status: 500,
@@ -465,7 +491,7 @@ describe("runGeneratePrContent (integration, file I/O)", () => {
 					provider: "github-models",
 					model: "openai/gpt-4.1-mini",
 					ghToken: Redacted.make("ghp_integration_test"),
-					retryDelayMs: 0,
+					retryDelay: Duration.zero,
 					fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 				});
 

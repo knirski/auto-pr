@@ -3,6 +3,7 @@
  * Providers: `local` (any local LLM via OpenAI-compatible HTTP — llama.cpp today), `github-models`.
  *
  * Both use `@effect/ai-openai-compat` (`OpenAiClient.layer` + `OpenAiLanguageModel.model`) + `FetchHttpClient`.
+ * Generate-content uses `LanguageModel.generateText` + JSON parse (not `generateObject` / `json_schema`); see `auto-pr-generate-content.ts`.
  *
  * ADR: docs/adr/0007-ai-abstraction-layer.md, docs/adr/0009-ollama-to-openai-compat-migration.md
  */

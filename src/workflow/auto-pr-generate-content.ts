@@ -4,8 +4,9 @@
  * Requires env: GITHUB_WORKSPACE. Reads `commits.txt` and `files.txt` under workspace (from `get-commits`).
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
- * Parses commits to count semantic commits. For 1: FillPrTemplate only.
- * For 2+: LanguageModel (AI provider) generates title and description via generateObject, then FillPrTemplate with override.
+ * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
+ * `parseFirstJsonObject` + {@link TitleDescriptionSchema} (see `decodeTitleDescriptionFromAssistantText`). Retries, then
+ * commit-derived fallback. Why not `generateObject`: see `docs/ARCHITECTURE.md` and `docs/INTEGRATION.md` (AI providers).
  *
  * Writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
@@ -61,6 +62,7 @@ import {
 	parseFilesContent,
 	renderBody as renderBodyCore,
 } from "#core/fill-pr-template-core.js";
+import { parseFirstJsonObject } from "#core/parse-model-json.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -72,10 +74,71 @@ const TitleDescriptionSchema = Schema.Struct({
 	notesForReviewers: Schema.String,
 });
 
+type TitleDescription = Schema.Schema.Type<typeof TitleDescriptionSchema>;
+
+/** Parse assistant reply → JSON → {@link TitleDescriptionSchema}. */
+function decodeTitleDescriptionFromAssistantText(
+	text: string,
+): Effect.Effect<TitleDescription, unknown, never> {
+	return pipe(
+		Effect.fromResult(parseFirstJsonObject(text)),
+		Effect.flatMap(Schema.decodeUnknownEffect(TitleDescriptionSchema)),
+	);
+}
+
+function logAndValidateTitleDescription(
+	raw: TitleDescription,
+	provider: AiProvider,
+	model: string,
+): Effect.Effect<{ title: string; description: string }, DescriptionParseError> {
+	return Effect.gen(function* () {
+		const titleTrimmed = raw.title.trim();
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "model_response",
+			status: "parsed",
+			provider,
+			model,
+			title: raw.title,
+			title_chars: raw.title.length,
+			title_conventional_format: matchesConventionalTitleFormat(titleTrimmed),
+			title_within_length_limit: isWithinLengthLimit(titleTrimmed),
+			motivation_chars: raw.motivation.length,
+			motivation: truncateForLog(raw.motivation, MAX_LOG_DESCRIPTION_CHARS),
+			risks_count: raw.risks.length,
+			risks: raw.risks.map((risk) => truncateForLog(risk, 200)),
+			notes_for_reviewers_chars: raw.notesForReviewers.length,
+			notes_for_reviewers: truncateForLog(raw.notesForReviewers, 500),
+		});
+		const validated = yield* Effect.fromResult(validateGeneratedContent(raw));
+		if (titleTrimmed !== validated.title) {
+			yield* Effect.log({
+				event: "generate_pr_content",
+				step: "validation",
+				status: "title_shortened",
+				provider,
+				model,
+				title_chars_before: titleTrimmed.length,
+				title_chars_after: validated.title.length,
+			});
+		}
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "validation",
+			status: "ok",
+			provider,
+			model,
+			title_chars: validated.title.length,
+			description_chars: validated.description.length,
+		});
+		return validated;
+	});
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const MAX_AI_ATTEMPTS = 5;
-const RETRY_DELAY_MS = 3000;
+const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 
 /** Cap description length in logs (full text is still validated and used). */
 const MAX_LOG_DESCRIPTION_CHARS = 2000;
@@ -110,12 +173,9 @@ function buildDescriptionBlock(value: {
 	return sections.join("\n\n");
 }
 
-function validateGeneratedContent(value: {
-	title: string;
-	motivation: string;
-	risks: readonly string[];
-	notesForReviewers: string;
-}): Result.Result<{ title: string; description: string }, DescriptionParseError> {
+function validateGeneratedContent(
+	value: TitleDescription,
+): Result.Result<{ title: string; description: string }, DescriptionParseError> {
 	const { motivation, notesForReviewers } = value;
 	return pipe(
 		fitConventionalTitleToLengthLimit(value.title),
@@ -140,14 +200,16 @@ function validateGeneratedContent(value: {
 	);
 }
 
-function makeRetrySchedule(delayMs: number) {
+function makeRetrySchedule(delay: Duration.Duration) {
+	const delayMs = Duration.toMillis(delay);
+	const delayLabel = delayMs >= 1000 ? `${delayMs / 1000}s` : `${delayMs}ms`;
 	return Schedule.recurs(MAX_AI_ATTEMPTS - 1).pipe(
 		Schedule.addDelay(() =>
 			Effect.logWarning({
 				event: "generate_pr_content",
 				status: "ai_retry",
-				message: "Title invalid or AI failed, retrying in 3s...",
-			}).pipe(Effect.as(Duration.millis(delayMs))),
+				message: `Title invalid or AI failed, retrying in ${delayLabel}...`,
+			}).pipe(Effect.as(delay)),
 		),
 	);
 }
@@ -171,15 +233,15 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 	return { title, description };
 }
 
-/** Generate title and description via LanguageModel.generateObject. Requires LanguageModel in context. */
+/** Generate title and description via `generateText` + JSON parse + schema validation (see file-level doc). */
 function generateTitleAndDescription(
 	prompt: string,
 	filtered: readonly CommitInfo[],
-	retryDelayMs: number,
+	retryDelay: Duration.Duration,
 	provider: AiProvider,
 	model: string,
 ): Effect.Effect<{ title: string; description: string }, unknown, LanguageModel.LanguageModel> {
-	const singleAttempt = Effect.gen(function* () {
+	return Effect.gen(function* () {
 		yield* Effect.log({
 			event: "generate_pr_content",
 			step: "ai_query",
@@ -188,59 +250,10 @@ function generateTitleAndDescription(
 			model,
 			prompt_chars: prompt.length,
 		});
-		const res = yield* LanguageModel.generateObject({
-			prompt,
-			schema: TitleDescriptionSchema,
-		});
-		const raw = res.value;
-		const titleTrimmed = raw.title.trim();
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "model_response",
-			status: "parsed",
-			provider,
-			model,
-			title: raw.title,
-			title_chars: raw.title.length,
-			title_conventional_format: matchesConventionalTitleFormat(titleTrimmed),
-			title_within_length_limit: isWithinLengthLimit(titleTrimmed),
-			motivation_chars: raw.motivation.length,
-			motivation: truncateForLog(raw.motivation, MAX_LOG_DESCRIPTION_CHARS),
-			risks_count: raw.risks.length,
-			risks: raw.risks.map((risk) => truncateForLog(risk, 200)),
-			notes_for_reviewers_chars: raw.notesForReviewers.length,
-			notes_for_reviewers: truncateForLog(raw.notesForReviewers, 500),
-		});
-		return yield* Result.match(validateGeneratedContent(raw), {
-			onSuccess: (validated) =>
-				Effect.gen(function* () {
-					if (titleTrimmed !== validated.title) {
-						yield* Effect.log({
-							event: "generate_pr_content",
-							step: "validation",
-							status: "title_shortened",
-							provider,
-							model,
-							title_chars_before: titleTrimmed.length,
-							title_chars_after: validated.title.length,
-						});
-					}
-					yield* Effect.log({
-						event: "generate_pr_content",
-						step: "validation",
-						status: "ok",
-						provider,
-						model,
-						title_chars: validated.title.length,
-						description_chars: validated.description.length,
-					});
-					return validated;
-				}),
-			onFailure: (err) => Effect.fail(err),
-		});
-	});
-
-	return singleAttempt.pipe(
+		const res = yield* LanguageModel.generateText({ prompt });
+		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
+		return yield* logAndValidateTitleDescription(raw, provider, model);
+	}).pipe(
 		Effect.tapError((e) =>
 			Effect.logWarning({
 				event: "generate_pr_content",
@@ -251,7 +264,7 @@ function generateTitleAndDescription(
 				reason: formatError(e),
 			}),
 		),
-		Effect.retry(makeRetrySchedule(retryDelayMs)),
+		Effect.retry(makeRetrySchedule(retryDelay)),
 		Effect.catch(() =>
 			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
 				Effect.tap(() =>
@@ -274,10 +287,10 @@ export type GeneratePrContentFromValuesParams = {
 	filesContent: string;
 	templateContent: string;
 	descriptionPromptText: string;
-	provider: import("#auto-pr/config.js").AiProvider;
+	provider: AiProvider;
 	model: string;
-	/** Retry delay in ms. Use 0 for tests. Default 3000. */
-	retryDelayMs?: number;
+	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
+	retryDelay?: Duration.Duration;
 	/** Custom fetch for tests. Omit for production. */
 	fetch?: typeof fetch;
 };
@@ -308,7 +321,7 @@ export function generatePrContentFromValues(
 	LanguageModel.LanguageModel
 > {
 	return Effect.gen(function* () {
-		const { commitsContent, filesContent, templateContent, descriptionPromptText, retryDelayMs } =
+		const { commitsContent, filesContent, templateContent, descriptionPromptText, retryDelay } =
 			params;
 
 		const parseResult = parseCommits(commitsContent);
@@ -333,10 +346,11 @@ export function generatePrContentFromValues(
 		if (count >= 2) {
 			const commitContent = getDescriptionPromptText(filtered);
 			const prompt = buildDescriptionPrompt(descriptionPromptText, commitContent);
+			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescription(
 				prompt,
 				filtered,
-				retryDelayMs ?? RETRY_DELAY_MS,
+				delay,
 				params.provider,
 				params.model,
 			);
@@ -393,15 +407,15 @@ export function runGeneratePrContent(config: {
 	files: string;
 	workspace: string;
 	templatePath: string;
-	provider: import("#auto-pr/config.js").AiProvider;
+	provider: AiProvider;
 	model: string;
 	/** Required when `provider` is `github-models` (GitHub Models API). */
 	ghToken?: Redacted.Redacted<string>;
 	/** When `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp). */
 	openaiCompatUrl?: string;
 	openaiCompatApiKey?: Redacted.Redacted<string>;
-	/** Retry delay in ms. Use 0 for tests to avoid timeouts. Default 3000. */
-	retryDelayMs?: number;
+	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
+	retryDelay?: Duration.Duration;
 	/** Custom fetch for tests (OpenAI `POST …/chat/completions`). Omit for production. */
 	fetch?: typeof fetch;
 }): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
@@ -416,7 +430,7 @@ export function runGeneratePrContent(config: {
 			templatePath,
 			provider,
 			model,
-			retryDelayMs,
+			retryDelay,
 			ghToken,
 			openaiCompatUrl,
 			openaiCompatApiKey,
@@ -461,7 +475,7 @@ export function runGeneratePrContent(config: {
 			descriptionPromptText,
 			provider,
 			model,
-			...(retryDelayMs !== undefined && { retryDelayMs }),
+			...(retryDelay !== undefined && { retryDelay }),
 			...(config.fetch !== undefined && { fetch: config.fetch }),
 		}).pipe(Effect.provide(generateLayer));
 

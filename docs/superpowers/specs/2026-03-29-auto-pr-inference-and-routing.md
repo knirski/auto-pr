@@ -2,13 +2,13 @@
 
 **Date:** 2026-03-29  
 **Status:** Proposed  
-**Companion:** [Effect toolkit](2026-03-29-auto-pr-effect-toolkit-design.md) — tools, `generateObject` vs loops.
+**Companion:** [Effect toolkit](2026-03-29-auto-pr-effect-toolkit-design.md) — tools, structured output vs loops.
 
 **Summary:** Backend choice (`local` vs `github-models`), `AUTO_PR_AI_*`, pre-generate model id (no router in `generate-content`), metrics → band → allowlisted model, and prompt placeholders. Stack: `LanguageModel` via `@effect/ai-openai-compat`. Ollama removal: [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
 
 ## Independence from tools
 
-Metrics, model selection, and routing context can ship with `generateObject` + offline git + commit text without `Tool`/`Toolkit`. Tools are optional for targeted diffs/files ([toolkit spec](2026-03-29-auto-pr-effect-toolkit-design.md)). Band → model id stays allowlisted in code, never LLM-chosen.
+Metrics, model selection, and routing context can ship with structured PR JSON (`generateText` + parse in shipped code) + offline git + commit text without `Tool`/`Toolkit`. Tools are optional for targeted diffs/files ([toolkit spec](2026-03-29-auto-pr-effect-toolkit-design.md)). Band → model id stays allowlisted in code, never LLM-chosen.
 
 ---
 
@@ -40,7 +40,7 @@ ADR 0007: revise after implementation; do not edit preemptively ([index](2026-03
 
 ### Structured PR output
 
-Prefer `LanguageModel.generateObject` + `{ title, description }` — [generateObject vs generateText](2026-03-29-auto-pr-effect-toolkit-design.md#generateobject-vs-generatetext).
+Shipped path: `LanguageModel.generateText` + JSON matching `TitleDescriptionSchema` — [generateObject vs generateText](2026-03-29-auto-pr-effect-toolkit-design.md#generateobject-vs-generatetext).
 
 ### Environment contract (post–Ollama — align `config.ts`)
 
@@ -135,7 +135,7 @@ Fixed allowlists in workflow: band → model id. Calibrate thresholds per repo.
 Validate against the live [GitHub Models catalog](https://github.com/marketplace/models) or API. Names/tiers change.
 
 - Hosted CI: e.g. `openai/gpt-4o-mini` for bands A–B; step up for C when `delta_src` or hardness warrants — confirm quota/tier.
-- Local `llamacpp`: instruction-tuned GGUFs; match server’s registered model string for `/v1/chat/completions`. Re-test `generateObject` after model/server changes.
+- Local `llamacpp`: instruction-tuned GGUFs; match server’s registered model string for `/v1/chat/completions`. Re-test JSON output quality after model/server changes.
 
 Deprioritize: branch name alone; raw `commits.txt` byte length.
 
@@ -178,7 +178,7 @@ function buildDescriptionPrompt(
 }
 ```
 
-Schema: still `generateObject` → `{ title, description }`; routing text is prompt only, not JSON.
+Schema: structured fields via `TitleDescriptionSchema` after parsing assistant JSON; routing text is prompt only, not JSON.
 
 Do not feed unbounded diff just because metrics are large — still truncate/path-filter (§1 “importance”, §3.4).
 

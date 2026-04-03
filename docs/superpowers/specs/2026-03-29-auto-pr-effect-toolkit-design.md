@@ -83,13 +83,16 @@ Local llama-server: `apiUrl` = `…/v1` base (e.g. `http://127.0.0.1:8080/v1`); 
 
 ### `generateObject` vs `generateText`
 
+**Shipped generate-content:** `LanguageModel.generateText` + parse JSON + `TitleDescriptionSchema` — not `generateObject` — because GitHub Models does not allow `response_format: json_schema` and other OpenAI-compat servers are inconsistent with structured-output mode. See [ARCHITECTURE.md](../../ARCHITECTURE.md).
+
 | Use | When |
 |-----|------|
-| `generateObject` + schema `{ title, description }` | Default for PR metadata — matches `TitleDescriptionSchema`; avoids ad hoc JSON parsing. |
+| `generateText` + manual parse + `TitleDescriptionSchema` | **Current** PR metadata path for `local` and `github-models`. |
+| `generateObject` + schema | Effect API option; not used for the multi-commit PR title/description path (provider gaps above). |
 | `generateText` + `toolkit` | Exploration (Phase 2): multi-turn tool use. |
-| Two-phase | `generateText` + tools → then `generateObject` on condensed context if “tools + JSON in one call” is flaky on a backend. |
+| Two-phase | `generateText` + tools → then structured JSON on condensed context if one-call tool+object is flaky. |
 
-`generateObject` + `toolkit` on one call: `GenerateObjectOptions` extends `GenerateTextOptions`, but tool rounds + structured JSON together is provider-dependent — verify on `github-models` / llama-server; if not reliable, use two-phase.
+`generateObject` + `toolkit` on one call: `GenerateObjectOptions` extends `GenerateTextOptions`, but tool rounds + structured JSON together is provider-dependent — verify per backend if adopted.
 
 Tool loop (Effect): provider sends tool definitions → model may return tool calls → handlers run in Effect → results appended → repeat until final text/object. `disableToolCallResolution` exists for manual control.
 
@@ -97,9 +100,10 @@ Tool loop (Effect): provider sends tool definitions → model may return tool ca
 
 | Shape | When |
 |-------|------|
-| `generateObject({ prompt, schema })` only | Baseline; routing context in prompt only. |
-| `generateText({ prompt, toolkit })` → `generateObject({ prompt: condensed, schema })` | Explore first; second call is structured. |
-| `generateObject({ prompt, schema, toolkit })` | Fewer round-trips if backend supports it. |
+| `generateText({ prompt })` → parse JSON → `TitleDescriptionSchema` | **Shipped** multi-commit PR metadata. |
+| `generateObject({ prompt, schema })` only | Alternative in Effect; not used for shipped generate-content. |
+| `generateText({ prompt, toolkit })` → structured second call | Explore first; second call is structured. |
+| `generateObject({ prompt, schema, toolkit })` | Fewer round-trips if backend supports it (not used in shipped path). |
 
 Layers: `Effect.provide` `RepoToolkitLayer` and `modelLayer`.
 

@@ -73,6 +73,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
 | Workflow testing | `check:ci` locally; update `@SHA` refs to `git rev-parse HEAD` |
+| Multi-commit AI | `LanguageModel.generateText` + JSON parse + Schema decode in `auto-pr-generate-content.ts`; not `generateObject` (`json_schema` unsupported on GitHub Models) |
 
 ---
 
@@ -151,8 +152,12 @@ Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md an
 - Prefer caret ranges with the lockfile for most dependencies; keep exact or aligned pins only where justified (for example `bun-types` with `packageManager`, Effect beta packages on the same range, `@typescript/native-preview` snapshots).
 - Prefer continual-learning hook state under `~/.cursor/hooks/state/` (account-wide) when customizing the plugin; upstream marketplace builds may use workspace-relative paths, so reinstalling the plugin can revert a local `homedir()`-based patch.
 - Target auto-generated PR descriptions (and related prompts) at a software-engineer audience; Markdown in the body is appropriate when it improves clarity.
+- For GitHub Models integration or smoke tests, prefer `microsoft/phi-4-mini-instruct` when minimizing cost (the catalog may not expose a cheaper `phi-4-nano`-style id).
+- For local LLM smoke tests on CI, prefer resource-minimal setups (tiny GGUF, tight constraints) because free-tier GitHub runners have scarce CPU and RAM.
 
 ## Learned Workspace Facts
 
 - `scripts/check-nix-hash.sh` warns from git state when `bun.lock` and `bun.nix` may be out of sync; it does not run Nix or replace `nix develop` / `nix flake check`.
 - The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.
+- Lefthook pre-commit runs `scripts/check-no-dist-staged.sh`, which fails if any staged path is under `dist/`.
+- Dependabot does not bump arbitrary version pins in plain files (for example `.github/llama-cpp-release`); it handles `package.json`/lockfile ecosystems and `github-actions` refs. Use another mechanism for those pins (scheduled workflow, Renovate, or manual bumps).
