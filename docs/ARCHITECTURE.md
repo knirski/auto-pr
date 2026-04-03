@@ -32,7 +32,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Pipeline Flow
 
 1. **get-commits** — `git log` + `git diff` → `commits.txt`, `files.txt` under workspace; append `commits`, `files`, `count` to `GITHUB_OUTPUT`
-2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel` via `generateObject`, using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config) → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
+2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel.generateText` with the PR description prompt, parse assistant JSON, validate with Effect Schema (`TitleDescriptionSchema`), using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config). Not `generateObject` (OpenAI `json_schema` is unsupported on GitHub Models and flaky on some compat servers). Retries → commit-derived fallback on failure → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
 3. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `gh pr view` → `gh pr edit` or `gh pr create`
 
 ## Functional Core / Imperative Shell (FC/IS)
@@ -52,7 +52,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 - **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
 - **Core logic:** `src/core/*.ts` (fill-pr-template-core, gh-output, string, etc.)
-- **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateObject` for PR title/description. CI uses composite actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
+- **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateText` and decodes JSON to `TitleDescriptionSchema` (see file header). CI uses composite actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
 - **Config:** `src/auto-pr/config.ts` — env schema and validation
 
 ## Dependency Direction
