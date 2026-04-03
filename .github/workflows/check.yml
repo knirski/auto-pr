@@ -1,4 +1,5 @@
 # Reusable workflow: run full check (test, lint, typecheck, rumdl, typos, actionlint, shellcheck, lychee, SBOM, Codecov).
+# Plus integration smoke tests via check-integration.yml.
 # Called by ci.yml (runs when non-.md files change).
 # No Nix — uses GitHub Actions for rumdl/typos/lychee/actionlint/shellcheck.
 
@@ -11,6 +12,9 @@ permissions:
   contents: read
 
 jobs:
+  integration:
+    uses: ./.github/workflows/check-integration.yml
+
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -24,7 +28,7 @@ jobs:
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       # setup-runtime: use full path so callers don't need the action. Relative ./ would
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
@@ -92,3 +96,5 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./test-report.junit.xml
           report_type: test_results
+          fail_ci_if_error: false
+          disable_search: true
