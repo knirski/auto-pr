@@ -1,0 +1,17 @@
+# Integration workflow only (see .github/workflows/integration.yml).
+# Default bunfig.toml enables coverage + threshold; a narrow integration run
+# would fail that global gate even when all tests pass.
+logLevel = "warn"
+
+[install]
+exact = true
+
+[test]
+coverage = false
+concurrentTestGlob = "test/**/*.test.ts"
+preload = ["./test/test-setup.ts"]
+smol = true
+timeout = 15000
+
+[test.reporter]
+junit = "test-report.junit.xml"

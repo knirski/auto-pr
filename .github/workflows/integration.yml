@@ -90,7 +90,7 @@ jobs:
           AUTO_PR_INTEGRATION_LOCAL: "1"
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
-        run: bun test test/integration/ai-providers.integration.test.ts
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
 
       - name: Stop local llama-server
         if: always() && steps.local_llama.outcome != 'skipped'
@@ -122,4 +122,4 @@ jobs:
           AUTO_PR_INTEGRATION_GITHUB_MODELS: "1"
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun test test/integration/ai-providers.integration.test.ts
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
