@@ -11,6 +11,7 @@ coverage/
 .rumdl_cache/
 test-report.junit.xml
 sbom.json
+.act-artifacts/
 result
 .cursor/worktrees.json
 .cursor/debug-*.log

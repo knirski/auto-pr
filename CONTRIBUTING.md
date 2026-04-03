@@ -39,13 +39,36 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 
 ### Run CI locally (full parity)
 
-`bun run check:ci` runs the same check workflow as CI in Docker. Requires [Docker](https://docs.docker.com/get-docker/) and either:
+`bun run act` runs the **`check`** job from [ci.yml](.github/workflows/ci.yml), then the **`integration`** job from [integration.yml](.github/workflows/integration.yml), matching GitHub Actions. Requires [Docker](https://docs.docker.com/get-docker/) and either:
 
 - **gh extension** (preferred): `gh extension install nektos/gh-act`
 - **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
 - **Nix**: `act` is in this flake for **x86_64-linux** and **aarch64-linux** only (same systems as the rest of the flake). With Nix installed on those platforms, the script runs `nix run .#act` when `act` is not on your PATH (same pattern as `scripts/nix-run-if-missing.sh`). `nix develop` also puts `act` in PATH. On macOS or other hosts, use `gh act`, Homebrew `act`, or another install.
 
-The script tries `gh act` first, then `act` (from PATH or via Nix).
+The script prefers standalone `act` (PATH or `nix run .#act` on Linux), so you do not need `gh extension install nektos/gh-act` unless you rely on `gh act` alone. If neither `act` nor Nix is available, it uses `gh act` when that extension is installed. In code this is the **`direct`** backend (`bash` + `scripts/nix-run-if-missing.sh` + `act`) vs **`gh`** (`gh act`); see `ActBackend` in [`act-local-ci.ts`](src/core/act-local-ci.ts).
+
+This repo’s workflows use a specific `runs-on` label (see the YAML). [act](https://github.com/nektos/act) needs **`-P <runs-on>=<container image>`** where `<runs-on>` **matches** the workflow job’s label. [scripts/run-check-act.ts](scripts/run-check-act.ts) defaults the label to **`ubuntu-24.04`** ([`DEFAULT_ACT_RUNS_ON_LABEL`](src/core/act-local-ci.ts)); set **`ACT_RUNS_ON_LABEL`** if your workflows use something else. It resolves a **container image** via **`ACT_RUNNER_IMAGE`** (optional) or built-in defaults tuned for this repo’s current label. Same script writes a minimal `workflow_dispatch` JSON (`-e`, from `git remote origin` or `package.json` `repository`) to `.act-artifacts/workflow_dispatch.json` so `github.event.repository` exists for actions that need it, and **`--artifact-server-path .act-artifacts/`** so [`actions/upload-artifact`](https://github.com/actions/upload-artifact) (SBOM, gitleaks SARIF) gets a local [artifact server](https://github.com/nektos/act/issues/1929) instead of GitHub’s `ACTIONS_RUNTIME_TOKEN`. If you invoke **`act` by hand**, pass **`-P`** with the same label as `runs-on` and your chosen image.
+
+**Parity limits:** GitHub-hosted CI is still an **Azure VM**, not Docker—kernel, OIDC, and some services differ. act cannot be identical, but **matching runner image + artifact server + event file** lets the [check workflow](.github/workflows/check.yml) run the same steps locally without skipping gitleaks, SBOM upload, or rumdl.
+
+### Unit vs integration tests
+
+Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integration tests under `test/integration/` are excluded by default ([`bunfig.toml`](bunfig.toml)); they need env and network.
+
+| Command | What runs |
+|---------|-----------|
+| `bun test` | Unit tests only |
+| `bun run check:code` | Unit tests (same as above), plus build, audit, lint, knip, typecheck |
+| `bun run test:integration` | HTTP integration tests only |
+| `bun run test:all` | Unit tests, then integration |
+| `bun run act` | CI `check` then `integration` in Docker (not the same as `test:all`). [package.json](package.json) exposes a single **`act`** script; pass a mode after `--` (see below). |
+| `bun run act -- check` | Only the CI `check` job (faster; skips integration) |
+| `bun run act -- check-workflows` | Only [ci-workflows.yml](.github/workflows/ci-workflows.yml) → [check-workflows.yml](.github/workflows/check-workflows.yml) (actionlint + shellcheck on `.github`; fast). |
+| `bun run act -- --dry-run check` | `act --dryrun` for [ci.yml](.github/workflows/ci.yml) → [check.yml](.github/workflows/check.yml) (validates workflow graph; not a full run). Equivalent: `bun scripts/run-check-act.ts --dry-run check` (or `-n check`). |
+| `bun run act -- --dry-run check-workflows` | `act --dryrun` for the **ci-workflows** path only. Equivalent: `bun scripts/run-check-act.ts --dry-run check-workflows`. |
+| `bun run act -- integration` | Only the `integration` workflow job (llama-server + GitHub Models) |
+
+**GitHub Actions** runs [act-smoke.yml](.github/workflows/act-smoke.yml) on pushes/PRs that touch act-related paths: it installs [**nektos/gh-act**](https://github.com/nektos/gh-act), then runs the same [run-check-act.ts](scripts/run-check-act.ts) invocations as dry-run `check-workflows`, dry-run `check`, then `check-workflows` (`gh act` when `act` is not on `PATH`; on GitHub Actions the script uses a **smaller default container image** for those modes unless **`ACT_RUNNER_IMAGE`** is set). It does **not** replace full `check` on GitHub—optional smoke test. See [docs/CI.md](docs/CI.md#run-ci-locally) for what is intentionally out of scope.
 
 ### Pre-push hook
 
@@ -112,7 +135,7 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 **AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
 
-- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run check:ci` (act) for local testing. (2) If pushing to CI, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): auto-pr.yml (both workflow refs), and the setup-runtime ref in auto-pr-generate-reusable.yml and check.yml. **After merging:** Pins are updated automatically by update-workflow-pins. See [docs/CI.md](docs/CI.md#workflow-pin-automation).
+- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run act` (nektos act / `gh act`) for local testing. (2) If pushing to CI, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): auto-pr.yml (both workflow refs), and the setup-runtime ref in auto-pr-generate-reusable.yml and check.yml. **After merging:** Pins are updated automatically by update-workflow-pins. See [docs/CI.md](docs/CI.md#workflow-pin-automation).
 - **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
 1. Run `bun run check` before submitting.

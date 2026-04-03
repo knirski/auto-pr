@@ -25,12 +25,16 @@ jobs:
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # gitleaks-action uploads SARIF with rootDirectory=$HOME; on GitHub-hosted runners
+          # the workspace is under /home/runner, but act mounts the repo at the host path, so
+          # HOME must match the workspace for artifact paths to validate.
+          HOME: ${{ github.workspace }}
 
       # setup-runtime: use full path so callers don't need the action. Relative ./ would
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@a0233bd6f5dd8a71872624e4ab9a84f4c5d6d81e
+        uses: knirski/auto-pr/.github/actions/setup-runtime@f4b85a117b20a8a07614a6f554c471478d971e82
 
       - name: Setup Node (for SBOM)
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -45,6 +49,10 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Upload SBOM
+        # upload-artifact@v7 sends mime_type; act's artifact server unmarshals CreateArtifact with strict
+        # protojson and rejects unknown fields (nektos/act#6022). Upstream: open PRs e.g. #6039 / #6053
+        # (DiscardUnknown) — after merge and an act release, this guard can be removed if desired.
+        if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: sbom
