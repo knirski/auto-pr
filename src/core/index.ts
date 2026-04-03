@@ -64,6 +64,8 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
+export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
+export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 export { buildDescriptionPrompt } from "#core/prompt.js";
 export {

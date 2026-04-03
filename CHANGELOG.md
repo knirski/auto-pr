@@ -4,6 +4,8 @@
 
 ### ⚠️ Breaking Changes
 
+- **Programmatic generate-content API:** `GeneratePrContentFromValuesParams` and `runGeneratePrContent` no longer accept `retryDelayMs: number`. Use **`retryDelay?: Duration`** (Effect `Duration`, e.g. `Duration.seconds(3)`, `Duration.zero` in tests) instead.
+- **AI generation path:** Multi-commit PR title/description uses **`LanguageModel.generateText`** plus JSON parsing and `TitleDescriptionSchema` validation — not `generateObject` / OpenAI `json_schema` (incompatible with GitHub Models and many OpenAI-compatible servers).
 - **AI providers:** Removed the Ollama-specific integration (`ollama` npm package, `AUTO_PR_AI_OLLAMA_MODEL`, workflow `ai_ollama_model` / setup-ollama steps). Use **`local`** with `AUTO_PR_AI_OPENAI_COMPAT_URL`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`, and optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, or **`github-models`** with `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. The reusable generate workflow defaults to **`github-models`** on GitHub-hosted runners. **`AUTO_PR_AI_GITHUB_MODEL` is removed** — use `AUTO_PR_AI_OPENAI_COMPAT_MODEL` for both providers.
 
 ## [0.1.3](https://github.com/knirski/auto-pr/compare/v0.1.2...v0.1.3) (2026-04-01)
