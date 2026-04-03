@@ -35,10 +35,12 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 |---------|---------|
 | `bun run check` | Full check. Run before committing. |
 | `bun run check:code` | Code only. Runs on pre-push. |
-| `bun run check:ci` | Runs the CI **`check`** job in Docker (`gh act` or `act`; on Linux, Nix can run `nix run .#act` from this flake); not **`integration`**. See [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-full-parity). |
+| `bun run check:ci` | Runs the CI **`check`** job in Docker (`gh act` or `act`; on Linux, Nix can run `nix run .#act` from this flake); not **`integration`**. See [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-check-job). |
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
-| `bun test` | Unit tests with coverage |
+| `bun test` | Full suite with coverage (includes `test/integration`; opt-in env runs them) |
+| `bun run test:unit` | Coverage, excluding `test/integration` — used by `check:code` and pre-push |
+| `bun run test:integration` | Opt-in integration smoke tests (`--no-coverage`; Docker / GitHub Models). Not sent to Codecov. |
 | `bun run lint` / `lint:fix` | Lint (Biome) |
 | `bun run lint:scripts` | Shellcheck + shfmt check |
 | `bun run format:scripts` | Format shell scripts |
@@ -151,8 +153,10 @@ Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md an
 - Prefer caret ranges with the lockfile for most dependencies; keep exact or aligned pins only where justified (for example `bun-types` with `packageManager`, Effect beta packages on the same range, `@typescript/native-preview` snapshots).
 - Prefer continual-learning hook state under `~/.cursor/hooks/state/` (account-wide) when customizing the plugin; upstream marketplace builds may use workspace-relative paths, so reinstalling the plugin can revert a local `homedir()`-based patch.
 - Target auto-generated PR descriptions (and related prompts) at a software-engineer audience; Markdown in the body is appropriate when it improves clarity.
+- Unless asked, do not commit local editor-only paths such as `.cursor/settings.json`, `.idea/`, or `.vscode/`.
 
 ## Learned Workspace Facts
 
 - `scripts/check-nix-hash.sh` warns from git state when `bun.lock` and `bun.nix` may be out of sync; it does not run Nix or replace `nix develop` / `nix flake check`.
 - The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.
+- Markdown lint (`rumdl`) flags bare URLs as MD034; use autolinks or explicit link syntax instead of raw URLs on their own line.
