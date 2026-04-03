@@ -35,10 +35,14 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 |---------|---------|
 | `bun run check` | Full check. Run before committing. |
 | `bun run check:code` | Code only. Runs on pre-push. |
-| `bun run check:ci` | Runs the CI **`check`** job in Docker (`gh act` or `act`; on Linux, Nix can run `nix run .#act` from this flake); not **`integration`**. See [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-full-parity). |
+| `bun run act` | CI **`check`** then **`integration`** in Docker (default). See [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-full-parity). |
+| `bun run act -- <mode>` | `check`, `check-workflows`, `integration`, or `all`. Example: `bun run act -- check-workflows`. |
+| `bun run act -- --dry-run <mode>` | `act --dryrun` (validate workflow graph). Example: `bun run act -- --dry-run check`. Same flags on `bun scripts/run-check-act.ts` without the extra `--`. |
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
-| `bun test` | Unit tests with coverage |
+| `bun test` | Unit tests with coverage (`test/integration/**` excluded in [bunfig.toml](bunfig.toml)) — this is what `check:code` runs |
+| `bun run test:integration` | Real HTTP AI provider tests (`bunfig.integration.toml`); needs env — see `test/integration/ai-providers.integration.test.ts` |
+| `bun run test:all` | `bun test` then `test:integration` |
 | `bun run lint` / `lint:fix` | Lint (Biome) |
 | `bun run lint:scripts` | Shellcheck + shfmt check |
 | `bun run format:scripts` | Format shell scripts |
@@ -72,7 +76,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | Optionals | `Option<T>`, not `T \| null` |
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
-| Workflow testing | `check:ci` locally; update `@SHA` refs to `git rev-parse HEAD` |
+| Workflow testing | `bun run act` locally; update `@SHA` refs to `git rev-parse HEAD` |
 | Multi-commit AI | `LanguageModel.generateText` + JSON parse + Schema decode in `auto-pr-generate-content.ts`; not `generateObject` (`json_schema` unsupported on GitHub Models) |
 
 ---
@@ -161,3 +165,5 @@ Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md an
 - The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.
 - Lefthook pre-commit runs `scripts/check-no-dist-staged.sh`, which fails if any staged path is under `dist/`.
 - Dependabot does not bump arbitrary version pins in plain files (for example `.github/llama-cpp-release`); it handles `package.json`/lockfile ecosystems and `github-actions` refs. Use another mechanism for those pins (scheduled workflow, Renovate, or manual bumps).
+- With **nektos act**, the gitleaks SARIF upload step may need `HOME: ${{ github.workspace }}` because gitleaks-action uses `HOME` as the SARIF root and act mounts the repo at a host path instead of under `/home/runner`.
+- With **nektos act**, **Upload SBOM** in CI may be gated with `if: ${{ env.ACT != 'true' }}` (generate SBOM still runs locally) because act’s artifact server can reject upload-artifact v7 payloads over a known `mime_type` mismatch.
