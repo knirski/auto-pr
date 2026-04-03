@@ -19,6 +19,7 @@ export {
 	RunAutoPrConfigLayer,
 } from "#auto-pr/config.js";
 export {
+	ActLocalCiError,
 	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,

@@ -36,12 +36,12 @@
 		".nvmrc"
 	],
 	"scripts": {
-		"test": "bun test --coverage",
-		"test:unit": "bun test",
+		"test": "bun test",
 		"test:integration": "bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts",
+		"test:all": "bun test && bun run test:integration",
 		"test:watch": "bun test --watch",
 		"check": "bash scripts/check-nix-hash.sh && bun run check:nix && bun run check:code && bun run check:docs && bun run lint:workflows && bun run lint:scripts",
-		"check:ci": "bash scripts/run-check-ci.sh",
+		"act": "bun scripts/run-check-act.ts",
 		"check:code": "bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
 		"check:with-links": "bun run check && bun run check:just-links",
 		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix --exclude bun.nix .",

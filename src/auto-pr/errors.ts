@@ -3,6 +3,7 @@
  */
 
 import { Match } from "effect";
+import { CliError } from "effect/unstable/cli";
 import {
 	errorToLogMessage,
 	FileSystemError,
@@ -10,6 +11,7 @@ import {
 	unknownToMessage,
 } from "#auto-pr/utils.js";
 import {
+	ActLocalCiError,
 	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
@@ -25,6 +27,7 @@ import {
 } from "#core/errors.js";
 
 export {
+	ActLocalCiError,
 	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
@@ -41,7 +44,11 @@ export {
 
 /** Format script errors for logs. */
 export function formatError(e: unknown): string {
+	if (CliError.isCliError(e)) {
+		return e.message;
+	}
 	if (
+		e instanceof ActLocalCiError ||
 		e instanceof PullRequestFailedError ||
 		e instanceof AiProviderError ||
 		e instanceof AutoPrConfigError ||
@@ -56,6 +63,7 @@ export function formatError(e: unknown): string {
 		e instanceof UnexpectedError
 	) {
 		return Match.value(e).pipe(
+			Match.tag("ActLocalCiError", ({ reason }) => reason),
 			Match.tag("PullRequestFailedError", ({ cause }) => cause),
 			Match.tag("AiProviderError", ({ status, cause }) =>
 				status == null ? cause : `AI provider HTTP ${status}: ${cause}`,
