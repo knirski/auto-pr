@@ -70,8 +70,8 @@ For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` 
 | Command | Purpose |
 |---------|---------|
 | `bun run check` | Local checks (Bun, statix, deadnix, typos, lychee, actionlint) |
-| `bun run check:code` | Code only: build, audit, test, lint, knip, typecheck. Runs on pre-push. |
-| `bun run check:ci` | Full CI parity in Docker (Docker + `gh act` or `act`; on Linux, Nix can supply `act` via this flake’s `nix run .#act`) |
+| `bun run check:code` | Code only: build, audit, unit tests (excludes `test/integration`), lint, knip, typecheck. Pre-push. |
+| `bun run check:ci` | CI **`check`** job in Docker (`gh act` or `act`; not **`integration`**; on Linux, Nix can supply `act` via `nix run .#act`) |
 | `bun run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
 | `bun run check:just-links` | Lychee link check only (requires lychee or Nix) |
 

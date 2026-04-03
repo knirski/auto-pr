@@ -37,9 +37,9 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 
 **statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
 
-### Run CI locally (full parity)
+### Run CI locally (check job)
 
-`bun run check:ci` runs the same check workflow as CI in Docker. Requires [Docker](https://docs.docker.com/get-docker/) and either:
+`bun run check:ci` runs the **`check`** job from CI (lint, unit tests, Codecov uploads, etc.) in Docker — the same job [scripts/run-check-ci.sh](scripts/run-check-ci.sh) targets. It does **not** run the **`integration`** job (see [docs/CI.md](docs/CI.md#run-ci-locally)). Requires [Docker](https://docs.docker.com/get-docker/) and either:
 
 - **gh extension** (preferred): `gh extension install nektos/gh-act`
 - **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
@@ -49,7 +49,7 @@ The script tries `gh act` first, then `act` (from PATH or via Nix).
 
 ### Pre-push hook
 
-Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, test, lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
+Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, `test:unit` (excludes `test/integration`), lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
 
 **When changing `src/`:** Run `bun run build` before tests if needed (`check:code` does this automatically). `dist/` is gitignored—you don't commit it; the [update-dist](docs/CI.md#dist-and-gitignore) workflow builds and commits it after merge so `npx -p github:knirski/auto-pr` works for Node-only users.
 
