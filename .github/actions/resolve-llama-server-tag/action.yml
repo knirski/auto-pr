@@ -1,0 +1,51 @@
+# Composite: resolve GHCR llama.cpp server-<tag> for workflows that start llama-server (e.g. auto-pr generate).
+name: Resolve llama-server image tag
+description: >-
+  For normal auto-pr PR generation: when the bundled Docker llama-server path is active, outputs the tag from
+  inputs.ai_llamacpp_release_tag or .github/llama-ci/Dockerfile; otherwise outputs an empty tag. Matches the same
+  gating as cache/start steps in auto-pr-generate-reusable (no silent default pin).
+
+inputs:
+  always_resolve_tag:
+    description: >-
+      Advanced: if true, always resolve the tag (override or Dockerfile), skipping generate-job gating. Omit for
+      standard auto-pr workflows (default false).
+    required: false
+    default: "false"
+  commits_count:
+    description: get-commits output count (when always_resolve_tag is false)
+    required: false
+    default: ""
+  ai_provider:
+    required: false
+    default: ""
+  ai_llamacpp_model_url:
+    required: false
+    default: ""
+  ai_openai_compat_url:
+    required: false
+    default: ""
+  ai_llamacpp_release_tag:
+    required: false
+    default: ""
+
+outputs:
+  tag:
+    description: >-
+      GHCR server tag (image suffix). When always_resolve_tag is false (default): empty unless the bundled local
+      llama path is active. When always_resolve_tag is true: set from override or Dockerfile when resolution runs.
+    value: ${{ steps.resolve.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/resolve-llama-server-tag.sh"
+      env:
+        ALWAYS_RESOLVE_TAG: ${{ inputs.always_resolve_tag }}
+        COMMITS_COUNT: ${{ inputs.commits_count }}
+        AI_PROVIDER: ${{ inputs.ai_provider }}
+        AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
+        AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
+        AI_LLAMACPP_RELEASE_TAG: ${{ inputs.ai_llamacpp_release_tag }}
