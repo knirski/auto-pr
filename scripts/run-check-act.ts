@@ -8,12 +8,13 @@
  * Example: `bun run act -- check`. Or run the file directly: `bun scripts/run-check-act.ts check` (no `--`).
  */
 
+import * as BunServices from "@effect/platform-bun/BunServices";
 import { Effect, FileSystem, Match, Option, Path } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { ChildProcessSpawnerLayer, runMain } from "#auto-pr";
+import { runMain } from "#auto-pr";
 import {
 	ACT_GENERATED_EVENT_RELATIVE_PATH,
 	ACT_LOCAL_CI_MODES,
@@ -305,7 +306,8 @@ export const runCheckActCommand = Command.make(
 		const pathApi = yield* Path.Path;
 		const scriptPath = yield* pathApi.fromFileUrl(new URL(import.meta.url));
 		const repoRoot = pathApi.join(pathApi.dirname(scriptPath), "..");
-		yield* program({ dryRun: dry, mode }, repoRoot).pipe(Effect.provide(ChildProcessSpawnerLayer));
+		// BunServices.layer: ChildProcessSpawner + FS/Path + Stdio/Terminal (Command.run needs Stdio).
+		yield* program({ dryRun: dry, mode }, repoRoot).pipe(Effect.provide(BunServices.layer));
 	}),
 ).pipe(
 	Command.withDescription(
@@ -325,7 +327,7 @@ const cliProgram = Command.run(runCheckActCommand, { version: pkg.version });
 
 if (import.meta.main) {
 	runMain(
-		cliProgram.pipe(Effect.provide(ChildProcessSpawnerLayer)) as Effect.Effect<void, unknown>,
+		cliProgram.pipe(Effect.provide(BunServices.layer)) as Effect.Effect<void, unknown>,
 		"run-check-act",
 	);
 }
