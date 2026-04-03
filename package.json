@@ -37,11 +37,12 @@
 	],
 	"scripts": {
 		"test": "bun test --coverage",
-		"test:unit": "bun test",
+		"test:integration": "bun test --no-coverage test/integration",
+		"test:unit": "bun test --coverage --path-ignore-patterns '**/integration/**'",
 		"test:watch": "bun test --watch",
 		"check": "bash scripts/check-nix-hash.sh && bun run check:nix && bun run check:code && bun run check:docs && bun run lint:workflows && bun run lint:scripts",
 		"check:ci": "bash scripts/run-check-ci.sh",
-		"check:code": "bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
+		"check:code": "bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test:unit",
 		"check:with-links": "bun run check && bun run check:just-links",
 		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix --exclude bun.nix .",
 		"check:docs": "bun x rumdl check . && scripts/nix-run-if-missing.sh typos",
@@ -86,6 +87,7 @@
 		"lint-staged": "^16.4.0",
 		"npm-run-all": "^4.1.5",
 		"rumdl": "^0.1.62",
+		"testcontainers": "11.13.0",
 		"typescript": "^6.0.2"
 	},
 	"lint-staged": {
