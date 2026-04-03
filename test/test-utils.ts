@@ -62,7 +62,7 @@ export const ChildProcessSpawnerUpdatePathMock = Layer.mock(ChildProcessSpawner)
 	streamLines: () => Stream.empty,
 });
 
-/** Mock OpenAI-compatible chat completion: assistant `content` string (often JSON for `generateObject`). */
+/** Mock OpenAI-compatible chat completion: assistant `content` string (JSON matching `TitleDescriptionSchema` for generate-content). */
 export type OpenAiChatCompletionMockResponse =
 	| string
 	| { content: string; status?: number }
