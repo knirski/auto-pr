@@ -41,7 +41,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@a0233bd6f5dd8a71872624e4ab9a84f4c5d6d81e
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@7bafa752f980b5f331511099be375badc658e81d
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit
