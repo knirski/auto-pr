@@ -37,7 +37,7 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 
 **statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
 
-### Run CI locally (full parity)
+### Run CI locally (check job)
 
 `bun run act` runs the **`check`** job from [ci.yml](.github/workflows/ci.yml), then the **`integration`** job from [integration.yml](.github/workflows/integration.yml), matching GitHub Actions. Requires [Docker](https://docs.docker.com/get-docker/) and either:
 
@@ -72,7 +72,7 @@ Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integr
 
 ### Pre-push hook
 
-Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, test, lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
+Lefthook runs `bun run check:code` before each push. It is installed as a devDependency; run `bun x lefthook install` after cloning to enable git hooks (no separate install required). Uses Bun for build, audit, `test:unit` (excludes `test/integration`), lint, knip, typecheck; no typos/lychee/actionlint required. Skip with `git push --no-verify` if needed.
 
 **When changing `src/`:** Run `bun run build` before tests if needed (`check:code` does this automatically). `dist/` is gitignored—you don't commit it; the [update-dist](docs/CI.md#dist-and-gitignore) workflow builds and commits it after merge so `npx -p github:knirski/auto-pr` works for Node-only users.
 

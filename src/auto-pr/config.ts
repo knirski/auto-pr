@@ -19,7 +19,7 @@
  * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | local \| github-models (default: local) |
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
- * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to openai/gpt-4.1 when unset |
+ * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to microsoft/phi-4-mini-instruct when unset (lowest GitHub Models billing multipliers; see docs) |
  * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  *
@@ -133,8 +133,11 @@ export const DEFAULT_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
 /** Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `local`. */
 export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
 
-/** Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `github-models`. */
-export const DEFAULT_GITHUB_MODELS_MODEL = "openai/gpt-4.1";
+/**
+ * Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `github-models`.
+ * Picks a catalog model with the lowest billing multipliers (GitHub: “Costs and multipliers for using GitHub Models directly”).
+ */
+export const DEFAULT_GITHUB_MODELS_MODEL = "microsoft/phi-4-mini-instruct";
 
 export interface GeneratePrContentConfig {
 	readonly commits: string;
