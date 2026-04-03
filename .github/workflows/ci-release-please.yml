@@ -21,5 +21,8 @@ concurrency:
 
 jobs:
   check:
+    permissions:
+      contents: read
+      models: read
     uses: ./.github/workflows/check.yml
     secrets: inherit
