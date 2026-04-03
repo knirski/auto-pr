@@ -45,6 +45,7 @@ Before CI can run fully:
 | [codeql-docs.yml](../.github/workflows/codeql-docs.yml) | pull_request → main | `paths: **/*.md, docs/**` | analyze (pass-through) |
 | [scorecard.yml](../.github/workflows/scorecard.yml) | push → main, schedule (Sat 01:30 UTC) | — | Scorecard analysis |
 | [stale.yml](../.github/workflows/stale.yml) | schedule (Mon 00:00 UTC), workflow_dispatch | — | Mark stale issues/PRs |
+| [act-smoke.yml](../.github/workflows/act-smoke.yml) | push, pull_request → main, workflow_dispatch | `paths: .github/workflows/**`, `scripts/run-check-act.ts`, `flake.nix` | `--dry-run check-workflows`, `--dry-run check`, then `check-workflows` via [`gh-act`](https://github.com/nektos/gh-act) (job sets `GH_TOKEN` for `gh`) |
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
@@ -78,7 +79,15 @@ Before CI can run fully:
 
 ## Run CI locally
 
-`bun run check:ci` runs the **`check`** job from [ci.yml](../.github/workflows/ci.yml) (the reusable [check.yml](../.github/workflows/check.yml) job: tests, lint, Codecov, etc.) via [act](https://github.com/nektos/act) in Docker. It does **not** run the **`integration`** job (Docker/Testcontainers smoke tests); those only run in GitHub Actions. Requires Docker and either `gh extension install nektos/gh-act`, `act` on your PATH, or Nix on **Linux** (x86_64/aarch64) where this flake provides `act` — the script runs `nix run .#act` when `act` is missing. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-full-parity).
+`bun run act` runs two jobs via [act](https://github.com/nektos/act) in Docker: first **`check`** from [ci.yml](../.github/workflows/ci.yml) (reusable [check.yml](../.github/workflows/check.yml): tests, lint, Codecov, etc.), then **`integration`** from [integration.yml](../.github/workflows/integration.yml) (local llama-server + GitHub Models HTTP tests). Requires Docker and either `act` on your PATH, Nix on **Linux** (x86_64/aarch64) where this flake provides `act` (`nix run .#act` when `act` is not on PATH), or `gh extension install nektos/gh-act` for `gh act`. [run-check-act.ts](../scripts/run-check-act.ts) passes **`-P <runs-on>=<container image>`** (default label **`ubuntu-24.04`**, overridable with **`ACT_RUNS_ON_LABEL`**; image from **`ACT_RUNNER_IMAGE`** or defaults — see [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-full-parity)), writes a minimal **workflow_dispatch** JSON to `.act-artifacts/workflow_dispatch.json` (owner/name from **`git remote origin`** or **`package.json` `repository`**) for **`act -e`**, and starts act’s **artifact server** under `.act-artifacts/` (gitignored). Integration is heavier than `check` alone.
+
+**More workflows:** `bun run act -- check-workflows` runs only [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (reusable [check-workflows.yml](../.github/workflows/check-workflows.yml): actionlint + shellcheck on `.github`). Use it when editing workflows or actions—much faster than the full `check` job.
+
+**Dry runs:** `bun run act -- --dry-run check` and `bun run act -- --dry-run check-workflows` pass **`act --dryrun`** ([nektos/act](https://github.com/nektos/act) validates workflow graphs without a full run). Useful before a long `check` act run or to catch YAML/reusable-workflow issues early. Still uses Docker for parts of planning; not a substitute for **`bun run check`** or hosted CI.
+
+**Act on GitHub:** [act-smoke.yml](../.github/workflows/act-smoke.yml) runs on pushes/PRs that touch act-related paths (`.github/workflows`, `scripts/run-check-act.ts`, `flake.nix`, etc.). It installs [**nektos/gh-act**](https://github.com/nektos/gh-act) with `gh extension install` (the job sets **`GH_TOKEN`** to **`github.token`** so [GitHub CLI works in Actions](https://docs.github.com/en/actions/using-workflows/using-github-cli-in-workflows)), runs dry-run `check-workflows`, dry-run `check`, then `check-workflows` via [run-check-act.ts](../scripts/run-check-act.ts); that script invokes **`gh act`** when the standalone `act` binary is not on `PATH`, and uses a **smaller default container image** on GitHub Actions for those modes unless **`ACT_RUNNER_IMAGE`** is set. Smoke-tests act + Docker against the **.github** path and the **ci.yml → check.yml** graph. It does **not** run full **`check`** in act (too slow), **`integration`**, or **`dependency-review`** (GitHub-only). It does **not** replace hosted `check` or prove full parity with `bun run act`.
+
+**What we do not run in act-smoke:** Full **`ci.yml` `check`** in act (long, duplicates hosted CI), **`integration.yml`** (heavy, secrets/models), **`ci-docs`** / **`check-docs`** (thin wrappers), and **`dependency-review`** (needs GitHub APIs). Use **`bun run check`** and hosted Actions for those.
 
 Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
 
@@ -92,7 +101,7 @@ ci.yml, ci-docs.yml, and ci-workflows.yml report **`check / check`**. Configure 
 
 - **Status checks that are required:** `check / check`
 
-Do not require `dependency-review` (PR-only) or `nix` (path-filtered); they would block when skipped.
+Do not require `dependency-review` (PR-only), `nix` (path-filtered), or `act-smoke` (path-filtered smoke test); they would block when skipped or unrelated paths change.
 
 ## Dependency review and vulnerability detection
 

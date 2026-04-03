@@ -18,4 +18,4 @@ ADR: [0007](../../adr/0007-ai-abstraction-layer.md) stays as the committed recor
 
 ## What this file described (archive summary)
 
-Effect `LanguageModel`, multi-provider config, `generateObject` for title/body, FC/IS split (`core` pure, `live/` adapters). The Ollama + `openai-compat` enum details here are obsolete; the pattern (schema-validated output, `Layer` mocks in tests) still matches [ARCHITECTURE.md](../../ARCHITECTURE.md) and ADR 0007’s intent.
+Effect `LanguageModel`, multi-provider config, structured PR metadata via **`generateText` + JSON parse + Schema** (not `generateObject` / `json_schema` in production — see [ARCHITECTURE.md](../../ARCHITECTURE.md)), FC/IS split (`core` pure, `live/` adapters). The Ollama + `openai-compat` enum details here are obsolete; the pattern (schema-validated output, `Layer` mocks in tests) still matches [ARCHITECTURE.md](../../ARCHITECTURE.md) and ADR 0007’s intent.

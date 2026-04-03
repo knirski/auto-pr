@@ -3,11 +3,40 @@
  * Shell (auto-pr) and workflow/tools depend on core.
  */
 
+export type {
+	ActBackend,
+	ActLocalCiMode,
+	ActRunPlan,
+	ActWorkflowDispatchRepo,
+	BuildActArgsInput,
+	ResolveActRunnerImageArgs,
+	RunCheckActRun,
+} from "#core/act-local-ci.js";
+export {
+	ACT_GENERATED_EVENT_RELATIVE_PATH,
+	ACT_LOCAL_CI_MODES,
+	buildActArgv,
+	CI_EVENT,
+	CI_WORKFLOW,
+	CI_WORKFLOWS_ENTRY,
+	DEFAULT_ACT_RUNS_ON_LABEL,
+	INTEGRATION_WORKFLOW,
+	isActLocalCiMode,
+	parseGithubRepoFromPackageJsonRepository,
+	parseGithubRepoFromRemoteUrl,
+	parseGithubRepoFromShortName,
+	planActRun,
+	resolveActRunnerImage,
+	resolveActWorkflowDispatchRepo,
+	resolveRunCheckActInput,
+	stringifyWorkflowDispatchEventJson,
+} from "#core/act-local-ci.js";
 export {
 	collapseProseParagraphs,
 	fallbackWhenParseFails,
 } from "#core/collapse-prose-paragraphs.js";
 export {
+	ActLocalCiError,
 	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
@@ -64,6 +93,8 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
+export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
+export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 export { buildDescriptionPrompt } from "#core/prompt.js";
 export {

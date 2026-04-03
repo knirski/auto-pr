@@ -24,6 +24,7 @@ import {
 	runCommand,
 	runMain,
 } from "#auto-pr";
+import type { ParsedJson } from "#core/parse-model-json.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ function ghPrViewJson(
 		const trimmed = stdout.trim();
 		if (!trimmed) return Option.none();
 		const parsed = yield* Effect.try({
-			try: () => JSON.parse(trimmed) as unknown,
+			try: () => JSON.parse(trimmed) as ParsedJson,
 			catch: () => null,
 		}).pipe(Effect.catch(() => Effect.succeed(null)));
 		if (parsed === null) return Option.none();

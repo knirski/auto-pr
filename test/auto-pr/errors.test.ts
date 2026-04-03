@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { Redacted } from "effect";
+import { CliError } from "effect/unstable/cli";
 import {
+	ActLocalCiError,
 	AiProviderError,
 	AutoPrConfigError,
 	BodyFileNotFoundError,
@@ -16,6 +18,21 @@ import {
 	UnexpectedError,
 } from "#auto-pr/errors.js";
 import { FileSystemError } from "#auto-pr/utils.js";
+
+test("formatError formats ActLocalCiError", () => {
+	expect(formatError(new ActLocalCiError({ reason: "no act" }))).toBe("no act");
+});
+
+test("formatError formats CliError", () => {
+	const err = new CliError.InvalidValue({
+		option: "mode",
+		value: "x",
+		expected: "check | all",
+		kind: "argument",
+	});
+	expect(formatError(err)).toContain("Invalid value for argument");
+	expect(formatError(err)).toContain("mode");
+});
 
 test("formatError formats PullRequestFailedError", () => {
 	expect(formatError(new PullRequestFailedError({ cause: "git failed" }))).toBe("git failed");

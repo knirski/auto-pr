@@ -33,7 +33,7 @@ Remote gateways (OpenRouter, Azure, etc.) use **`local`** with the appropriate U
 
 **CI:** GitHub-hosted runners: default **`github-models`** with the stock reusable workflow; **`local`** requires a reachable OpenAI-compatible endpoint (self-hosted runner, tunnel, or remote URL).
 
-**Related decisions:** `generateObject` for title/body — see [auto-pr-effect-toolkit design](../superpowers/specs/2026-03-29-auto-pr-effect-toolkit-design.md#generateobject-vs-generatetext). Ongoing abstraction — [0007-ai-abstraction-layer.md](0007-ai-abstraction-layer.md).
+**Related decisions:** PR title/body use `LanguageModel.generateText` + JSON parse + `TitleDescriptionSchema` (not `generateObject` / `json_schema` — GitHub Models and many compat servers do not support it). Historical toolkit notes: [auto-pr-effect-toolkit design](../superpowers/specs/2026-03-29-auto-pr-effect-toolkit-design.md#generateobject-vs-generatetext). Ongoing abstraction — [0007-ai-abstraction-layer.md](0007-ai-abstraction-layer.md).
 
 ## References
 

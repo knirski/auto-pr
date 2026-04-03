@@ -86,7 +86,7 @@
 
 ### Description is empty or "null"
 
-**Cause:** The AI provider returned invalid or empty response. Auto-pr retries 3× and falls back to concatenated commit bodies.
+**Cause:** The AI provider returned invalid or empty response. Auto-pr retries up to **five** attempts (see `MAX_AI_ATTEMPTS` in `auto-pr-generate-content.ts`) and then falls back to commit-derived title and description.
 
 **Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. For **local**, verify `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and URL. For **github-models**, verify `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. `AUTO_PR_AI_PROVIDER` defaults to `local` when unset (see [config.ts](../src/auto-pr/config.ts)).
 
