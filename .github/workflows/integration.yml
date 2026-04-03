@@ -1,0 +1,125 @@
+# Real HTTP integration tests: llama.cpp (Mozilla tiny GGUF) and GitHub Models.
+# Not published by auto-pr-init — knirski/auto-pr CI only; adopters do not copy this workflow.
+# Runs on main and same-repo PRs (skipped for forks — no models token).
+name: Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Mozilla minimal GGUF (~27 KiB) for llama-server smoke — see Mozilla/llama-test-model on Hugging Face.
+  INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
+  # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
+  INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
+
+jobs:
+  local-llama:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # always_resolve_tag: CI always starts llama here (no auto-pr generate NEED gate).
+      - name: Resolve llama-server image tag
+        id: llama_cpp_release
+        uses: ./.github/actions/resolve-llama-server-tag
+        with:
+          always_resolve_tag: "true"
+
+      - name: Setup runtime (Bun) with cache
+        id: setup
+        uses: ./.github/actions/setup-runtime
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Local llama — cache key
+        id: llama_cache_key
+        env:
+          MODEL_URL: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
+        run: |
+          h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
+          echo "hash=$h" >> "$GITHUB_OUTPUT"
+
+      - name: Cache llama.cpp (model)
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/auto-pr-llama
+          key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.llama_cache_key.outputs.hash }}-docker-integration
+
+      - name: Start local llama.cpp (llama-server)
+        id: local_llama
+        uses: ./.github/actions/llama-ci-local-server-start
+        with:
+          llama_release: ${{ steps.llama_cpp_release.outputs.tag }}
+          model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+          llama_port: "8080"
+
+      - name: Resolve OpenAI model id from llama-server
+        id: openai_model
+        env:
+          BASE_URL: ${{ steps.local_llama.outputs.compat_url }}
+        run: |
+          id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
+          if [[ -z "$id" ]]; then
+            echo "::error::Could not read model id from $BASE_URL/models"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Run integration test (local)
+        env:
+          AUTO_PR_INTEGRATION_LOCAL: "1"
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
+
+      - name: Stop local llama-server
+        if: always() && steps.local_llama.outcome != 'skipped'
+        uses: ./.github/actions/llama-ci-local-server-stop
+        with:
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+
+  github-models:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      models: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup runtime (Bun) with cache
+        uses: ./.github/actions/setup-runtime
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run integration test (github-models)
+        env:
+          AUTO_PR_INTEGRATION_GITHUB_MODELS: "1"
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
