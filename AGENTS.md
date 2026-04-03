@@ -35,7 +35,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 |---------|---------|
 | `bun run check` | Full check. Run before committing. |
 | `bun run check:code` | Code only. Runs on pre-push. |
-| `bun run check:ci` | CI parity in Docker. Prefer for workflow testing. |
+| `bun run check:ci` | Runs the CI **`check`** job in Docker (`gh act` or `act`; on Linux, Nix can run `nix run .#act` from this flake); not **`integration`**. See [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-full-parity). |
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
 | `bun test` | Unit tests with coverage |

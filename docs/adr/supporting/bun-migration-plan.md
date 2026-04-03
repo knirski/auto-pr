@@ -270,7 +270,7 @@ See Phase 2.6. Cache: `bun.lock`, `bun.nix`.
 - [.nvmrc](../../../.nvmrc): keep for consumer Node version
 - Add `.bun-version` (e.g. `1.3.10`) or document in README
 - Track `bun.lock`; remove `package-lock.json` from git if present
-- [scripts/run-check-ci.sh](../../../scripts/run-check-ci.sh): no change
+- [scripts/run-check-ci.sh](../../../scripts/run-check-ci.sh): optional local CI parity (`bun run check:ci`); see [CONTRIBUTING](../../../CONTRIBUTING.md#run-ci-locally-full-parity) for `gh act`, `act`, and Nix-on-Linux (`nix run .#act`)
 
 ---
 
@@ -344,5 +344,5 @@ flowchart TD
 
 - `bun run check` passes
 - `nix flake check` passes
-- `bun run check:ci` (act) passes
+- `bun run check:ci` passes (optional; `act` / `gh act` / Nix flake on Linux)
 - `npx -p github:knirski/auto-pr#branch auto-pr-init` works (Node consumer)
