@@ -12,10 +12,23 @@ import { TestBaseLayer } from "#test/test-utils.js";
 const runLocal = process.env.AUTO_PR_INTEGRATION_LOCAL === "1";
 const runGithubModels = process.env.AUTO_PR_INTEGRATION_GITHUB_MODELS === "1";
 
-/** Minimal structured output to verify `generateObject` against GitHub Models. */
+/** Minimal JSON shape to verify GitHub Models (see github-models describe block). */
 const SmokeObjectSchema = Schema.Struct({
 	word: Schema.String,
 });
+
+function parseFirstJsonObject(text: string): unknown {
+	const trimmed = text.trim();
+	try {
+		return JSON.parse(trimmed) as unknown;
+	} catch {
+		const match = trimmed.match(/\{[\s\S]*\}/u);
+		if (match === null) {
+			throw new Error("integration: no JSON object in model output");
+		}
+		return JSON.parse(match[0]) as unknown;
+	}
+}
 
 function layerLocal(model: string, openaiCompatUrl: string) {
 	return Layer.mergeAll(
@@ -65,9 +78,14 @@ describe.skipIf(!runLocal)("integration: local OpenAI-compat (llama.cpp)", () =>
 	);
 });
 
+// GitHub Models (`models.github.ai`) rejects `response_format.type: json_schema` (HTTP 422); it only
+// allows `text` or `json_object`. `LanguageModel.generateObject` via `@effect/ai-openai-compat` always
+// emits OpenAI-style `json_schema` structured output, so it fails here. We use `generateText` + parse
+// until Effect exposes a `json_object` (non-schema) path for structured output on such APIs — likely
+// an upstream gap / bug for non-OpenAI OpenAI-compatible endpoints.
 describe.skipIf(!runGithubModels)("integration: github-models", () => {
 	test(
-		"generateObject returns structured JSON",
+		"generateText returns JSON we can decode (GitHub Models allows text/json_object response_format only)",
 		async () => {
 			const model = process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL ?? "microsoft/phi-4-mini-instruct";
 			const token = process.env.GH_TOKEN;
@@ -77,12 +95,13 @@ describe.skipIf(!runGithubModels)("integration: github-models", () => {
 			const layer = layerGithubModels(model, token);
 			await runEffect(layer)(
 				Effect.gen(function* () {
-					const res = yield* LanguageModel.generateObject({
+					const res = yield* LanguageModel.generateText({
 						prompt:
-							'Return a JSON object with a single string field "word" whose value is the text "pong".',
-						schema: SmokeObjectSchema,
+							'Reply with a single JSON object only (no markdown fences, no extra text). The object must have one string field "word" with value "pong".',
 					});
-					expect(res.value.word.toLowerCase()).toContain("pong");
+					const parsed = parseFirstJsonObject(res.text);
+					const decoded = yield* Schema.decodeUnknownEffect(SmokeObjectSchema)(parsed);
+					expect(decoded.word.toLowerCase()).toContain("pong");
 				}),
 			);
 		},
