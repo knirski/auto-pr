@@ -37,7 +37,7 @@ auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Ef
 | `bun run check:code` | Code only. Runs on pre-push. |
 | `bun run act` | CI **`check`** then **`integration`** in Docker (default). See [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-check-job). |
 | `bun run act -- <mode>` | `check`, `check-workflows`, `integration`, or `all`. Example: `bun run act -- check-workflows`. |
-| `bun run act -- --dry-run <mode>` | `act --dryrun` (validate workflow graph). Example: `bun run act -- --dry-run check`. Same flags on `bun scripts/run-check-act.ts` without the extra `--`. |
+| `bun run act -- --dry-run <mode>` | `act --dryrun` (validate workflow graph). Example: `bun run act -- --dry-run check`. Same flags on `bun scripts/act-local-ci.ts` without the extra `--`. |
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
 | `bun test` | Unit tests with coverage (`test/integration/**` excluded in [bunfig.toml](bunfig.toml)) — this is what `check:code` runs |
@@ -168,3 +168,4 @@ Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md an
 - Integration CI resolves **`AUTO_PR_AI_OPENAI_COMPAT_MODEL`** for the local provider from **`GET …/v1/models`** (OpenAI-compatible model list) before running HTTP tests.
 - With **nektos act**, the gitleaks SARIF upload step may need `HOME: ${{ github.workspace }}` because gitleaks-action uses `HOME` as the SARIF root and act mounts the repo at a host path instead of under `/home/runner`.
 - With **nektos act**, **Upload SBOM** in CI may be gated with `if: ${{ env.ACT != 'true' }}` (generate SBOM still runs locally) because act’s artifact server can reject upload-artifact v7 payloads over a known `mime_type` mismatch.
+- Local `bun run act` (`scripts/act-local-ci.ts`) writes the synthetic `workflow_dispatch` JSON for `act -e` to `.act-artifacts/workflow_dispatch.json`, resolving `owner`/`name` from `git remote origin` or `package.json` `repository`.

@@ -8,30 +8,30 @@ import {
 	parseGithubRepoFromRemoteUrl,
 	parseGithubRepoFromShortName,
 	planActRun,
+	resolveActLocalCiInput,
 	resolveActRunnerImage,
 	resolveActWorkflowDispatchRepo,
-	resolveRunCheckActInput,
 } from "#core/act-local-ci.js";
 import { ActLocalCiError } from "#core/errors.js";
 
-test("resolveRunCheckActInput defaults to all when mode is all", () => {
-	const r = resolveRunCheckActInput(false, "all");
+test("resolveActLocalCiInput defaults to all when mode is all", () => {
+	const r = resolveActLocalCiInput(false, "all");
 	expect(Result.isSuccess(r)).toBe(true);
 	if (Result.isSuccess(r)) {
 		expect(r.success).toEqual({ dryRun: false, mode: "all" });
 	}
 });
 
-test("resolveRunCheckActInput dry-run + check", () => {
-	const r = resolveRunCheckActInput(true, "check");
+test("resolveActLocalCiInput dry-run + check", () => {
+	const r = resolveActLocalCiInput(true, "check");
 	expect(Result.isSuccess(r)).toBe(true);
 	if (Result.isSuccess(r)) {
 		expect(r.success).toEqual({ dryRun: true, mode: "check" });
 	}
 });
 
-test("resolveRunCheckActInput rejects unknown mode", () => {
-	const r = resolveRunCheckActInput(false, "bogus");
+test("resolveActLocalCiInput rejects unknown mode", () => {
+	const r = resolveActLocalCiInput(false, "bogus");
 	expect(Result.isFailure(r)).toBe(true);
 	if (Result.isFailure(r)) {
 		expect(r.failure).toBeInstanceOf(ActLocalCiError);

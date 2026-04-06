@@ -8,16 +8,16 @@ import { ChildProcessSpawner, ExitCode } from "effect/unstable/process/ChildProc
 import { AutoPrLoggerLayer, AutoPrPlatformLayer } from "#auto-pr";
 import { ACT_GENERATED_EVENT_RELATIVE_PATH, CI_EVENT, CI_WORKFLOW } from "#core/act-local-ci.js";
 import pkg from "../../package.json" with { type: "json" };
-import { program, runCheckActCommand } from "../../scripts/run-check-act.js";
+import { actLocalCiCommand, program } from "../../scripts/act-local-ci.js";
 
 const repoRoot = join(import.meta.dir, "..", "..");
 
 /** Bun platform + logger (Command needs Terminal/Stdio). */
-const RunCheckActCliTestLayer = BunServices.layer.pipe(Layer.provideMerge(AutoPrLoggerLayer));
+const ActLocalCiCliTestLayer = BunServices.layer.pipe(Layer.provideMerge(AutoPrLoggerLayer));
 
 function runCli(args: string[]): Effect.Effect<void, unknown, never> {
-	return Command.runWith(runCheckActCommand, { version: pkg.version })(args).pipe(
-		Effect.provide(RunCheckActCliTestLayer),
+	return Command.runWith(actLocalCiCommand, { version: pkg.version })(args).pipe(
+		Effect.provide(ActLocalCiCliTestLayer),
 	) as Effect.Effect<void, unknown, never>;
 }
 
@@ -34,7 +34,7 @@ function childProcessSpawnerCaptureExit0(
 	});
 }
 
-describe("run-check-act", () => {
+describe("act-local-ci", () => {
 	describe("CLI", () => {
 		test("invalid mode fails parse (failure exit)", async () => {
 			const exit = await Effect.runPromise(runCli(["bogus"]).pipe(Effect.exit));
