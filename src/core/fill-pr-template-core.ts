@@ -16,6 +16,7 @@ import { isBlank, isMergeCommitSubject, parseSubjects, toError } from "#core/str
 
 /** Parsed commit info. */
 export interface CommitInfo {
+	readonly hash: string;
 	readonly subject: string;
 	readonly body: string;
 	readonly fullMessage: string;
@@ -100,7 +101,7 @@ function typeFromString(s: string | null | undefined): TypeOfChange {
 	return isConventionalType(lower) ? TYPE_MAP[lower] : "Chore";
 }
 
-function mapParsedToCommitInfo(block: string, parsed: Commit): CommitInfo {
+function mapParsedToCommitInfo(block: string, parsed: Commit, hash: string): CommitInfo {
 	const header = parsed.header ?? block.split("\n")[0] ?? "";
 	const bodyParts = [parsed.body, parsed.footer].filter(Boolean);
 	const body = bodyParts.join("\n\n").trim();
@@ -116,6 +117,7 @@ function mapParsedToCommitInfo(block: string, parsed: Commit): CommitInfo {
 		});
 	const breaking = parsed.notes.find((n) => /BREAKING/i.test(n.title));
 	return {
+		hash,
 		subject: header,
 		body,
 		fullMessage: block,
@@ -132,7 +134,14 @@ export function parseCommits(logOutput: string): Result.Result<readonly CommitIn
 				.split("---COMMIT---")
 				.map((b) => b.trim())
 				.filter(Boolean);
-			return blocks.map((block) => mapParsedToCommitInfo(block, parser.parse(block)));
+			return blocks.map((block) => {
+				const lines = block.split("\n");
+				const hashLine = lines[0] ?? "";
+				const isHash = /^[0-9a-f]{40}$/.test(hashLine);
+				const hash = isHash ? hashLine : "";
+				const commitBlock = isHash ? lines.slice(1).join("\n") : block;
+				return mapParsedToCommitInfo(commitBlock, parser.parse(commitBlock), hash);
+			});
 		},
 		catch: (e) =>
 			new ParseError({
@@ -308,7 +317,10 @@ export function getDescriptionFromCommits(commits: readonly CommitInfo[]): strin
 export function getDescriptionPromptText(commits: readonly CommitInfo[]): string {
 	return commits
 		.map((c) => {
-			const block = c.body.trim() ? `${c.subject}\n\n${c.body}` : c.subject;
+			const hashPrefix = c.hash ? `${c.hash.slice(0, 7)} ` : "";
+			const block = c.body.trim()
+				? `${hashPrefix}${c.subject}\n\n${c.body}`
+				: `${hashPrefix}${c.subject}`;
 			return `- ${block}`;
 		})
 		.join("\n\n");
