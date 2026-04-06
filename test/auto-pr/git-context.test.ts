@@ -162,9 +162,10 @@ describe("GitContext", () => {
 				]);
 
 				const spawner = yield* ChildProcessSpawner;
-				const hash = (yield* spawner
+				const hashRaw = yield* spawner
 					.string(ChildProcess.make("git", ["rev-parse", "HEAD"], { cwd: tmp.path }))
-					.pipe(Effect.mapError((e) => new Error(String(e))))).trim();
+					.pipe(Effect.mapError((e) => new Error(String(e))));
+				const hash = hashRaw.trim();
 
 				const diff = yield* Effect.gen(function* () {
 					const git = yield* GitContext;

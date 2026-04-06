@@ -31,37 +31,57 @@ export function GitContextLive(
 	return Layer.effect(
 		GitContext,
 		Effect.gen(function* () {
-			return {
-				getLog: (baseRef, headRef) =>
-					runCommand(
-						"git",
-						["log", `--format=${LOG_FORMAT}`, `${baseRef}..${headRef}`],
-						workspace,
-					).pipe(Effect.mapError((e) => new Error(String(e)))),
+			const getLog = Effect.fn("GitContext.getLog")(function* (baseRef: string, headRef: string) {
+				return yield* runCommand(
+					"git",
+					["log", `--format=${LOG_FORMAT}`, `${baseRef}..${headRef}`],
+					workspace,
+				).pipe(Effect.mapError((e) => new Error(e instanceof Error ? e.message : String(e))));
+			});
 
-				getChangedFiles: (baseRef, headRef) =>
-					runCommand("git", ["diff", "--name-only", `${baseRef}..${headRef}`], workspace).pipe(
-						Effect.mapError((e) => new Error(String(e))),
-					),
+			const getChangedFiles = Effect.fn("GitContext.getChangedFiles")(function* (
+				baseRef: string,
+				headRef: string,
+			) {
+				return yield* runCommand(
+					"git",
+					["diff", "--name-only", `${baseRef}..${headRef}`],
+					workspace,
+				).pipe(Effect.mapError((e) => new Error(e instanceof Error ? e.message : String(e))));
+			});
 
-				getDiffStat: (baseRef, headRef) =>
-					runCommand("git", ["diff", "--stat", `${baseRef}..${headRef}`], workspace).pipe(
-						Effect.mapError((e) => new Error(String(e))),
-					),
+			const getDiffStat = Effect.fn("GitContext.getDiffStat")(function* (
+				baseRef: string,
+				headRef: string,
+			) {
+				return yield* runCommand(
+					"git",
+					["diff", "--stat", `${baseRef}..${headRef}`],
+					workspace,
+				).pipe(Effect.mapError((e) => new Error(e instanceof Error ? e.message : String(e))));
+			});
 
-				getDiff: (baseRef, headRef, path?) => {
-					const args = ["diff", `${baseRef}..${headRef}`];
-					if (path !== undefined) args.push("--", path);
-					return runCommand("git", args, workspace).pipe(
-						Effect.mapError((e) => new Error(String(e))),
-					);
-				},
+			const getDiff = Effect.fn("GitContext.getDiff")(function* (
+				baseRef: string,
+				headRef: string,
+				path?: string,
+			) {
+				const args =
+					path !== undefined
+						? ["diff", `${baseRef}..${headRef}`, "--", path]
+						: ["diff", `${baseRef}..${headRef}`];
+				return yield* runCommand("git", args, workspace).pipe(
+					Effect.mapError((e) => new Error(e instanceof Error ? e.message : String(e))),
+				);
+			});
 
-				getCommitDiff: (hash) =>
-					runCommand("git", ["show", hash], workspace).pipe(
-						Effect.mapError((e) => new Error(String(e))),
-					),
-			};
+			const getCommitDiff = Effect.fn("GitContext.getCommitDiff")(function* (hash: string) {
+				return yield* runCommand("git", ["show", hash], workspace).pipe(
+					Effect.mapError((e) => new Error(e instanceof Error ? e.message : String(e))),
+				);
+			});
+
+			return { getLog, getChangedFiles, getDiffStat, getDiff, getCommitDiff };
 		}),
 	);
 }
