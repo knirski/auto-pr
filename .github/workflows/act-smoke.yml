@@ -36,14 +36,17 @@ jobs:
         include:
           - label: Dry run (ci.yml check graph)
             act_command: bun scripts/act-local-ci.ts --dry-run check
+            # --dryrun skips step execution; container only needs to start up, so a minimal image suffices.
+            act_runner_image: ubuntu:24.04
           - label: Run act (check-workflows job)
             act_command: bun scripts/act-local-ci.ts check-workflows
+            act_runner_image: ghcr.io/catthehacker/ubuntu:act-24.04
     env:
       # gh requires this in Actions; see https://docs.github.com/en/actions/using-workflows/using-github-cli-in-workflows
       GH_TOKEN: ${{ github.token }}
-      # Single source of truth for the act runner image. ACT_RUNNER_IMAGE is also read by act-local-ci.ts
-      # (resolveActLocalCiRunnerFromProcessEnv), so changing it here propagates to both caching and the act run.
-      ACT_RUNNER_IMAGE: ghcr.io/catthehacker/ubuntu:act-24.04
+      # ACT_RUNNER_IMAGE is read by act-local-ci.ts (resolveActLocalCiRunnerFromProcessEnv), so it propagates
+      # to both caching and the act run. Each matrix entry sets its own image via act_runner_image.
+      ACT_RUNNER_IMAGE: ${{ matrix.act_runner_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
