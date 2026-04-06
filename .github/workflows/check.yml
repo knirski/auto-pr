@@ -1,6 +1,5 @@
 # Reusable workflow: run full check (test, lint, typecheck, rumdl, typos, actionlint, shellcheck, lychee, SBOM, Codecov).
-# Plus integration smoke tests via check-integration.yml.
-# Called by ci.yml (runs when non-.md files change).
+# Called by ci.yml (runs when non-.md files change). Integration tests run separately via integration.yml.
 # No Nix — uses GitHub Actions for rumdl/typos/lychee/actionlint/shellcheck.
 
 name: Check
@@ -12,9 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  integration:
-    uses: ./.github/workflows/check-integration.yml
-
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

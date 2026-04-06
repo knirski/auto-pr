@@ -32,4 +32,4 @@ jobs:
     permissions:
       contents: read
       models: read
-    uses: ./.github/workflows/check-integration.yml
+    uses: ./.github/workflows/integration.yml
