@@ -1,12 +1,9 @@
 # Real HTTP integration tests: llama.cpp (Mozilla tiny GGUF) and GitHub Models in one job.
 # Not published by auto-pr-init — knirski/auto-pr CI only; adopters do not copy this workflow.
-# Runs on main push/dispatch and via workflow_call (ci.yml, ci-workflows.yml).
+# Called via workflow_call by ci.yml and ci-workflows.yml; workflow_dispatch for manual runs.
 name: Integration
 
 on:
-  push:
-    branches:
-      - main
   workflow_call:
   workflow_dispatch:
 
