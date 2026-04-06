@@ -148,24 +148,3 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 ### ADR workflow {#adr-workflow}
 
 Add to `docs/adr/` via [template](docs/adr/adr-template.md). Update AGENTS.md and ARCHITECTURE.md if needed. *Significant* change: Research first, document in ADR, update both. Significant = multi-module, hard to reverse, new patterns. Minor refactors: no ADR.
-
----
-
-## Learned User Preferences
-
-- Prefer caret ranges with the lockfile for most dependencies; keep exact or aligned pins only where justified (for example `bun-types` with `packageManager`, Effect beta packages on the same range, `@typescript/native-preview` snapshots).
-- Prefer continual-learning hook state under `~/.cursor/hooks/state/` (account-wide) when customizing the plugin; upstream marketplace builds may use workspace-relative paths, so reinstalling the plugin can revert a local `homedir()`-based patch.
-- Target auto-generated PR descriptions (and related prompts) at a software-engineer audience; Markdown in the body is appropriate when it improves clarity.
-- For GitHub Models integration or smoke tests, prefer `microsoft/phi-4-mini-instruct` when minimizing cost (the catalog may not expose a cheaper `phi-4-nano`-style id).
-- For local LLM smoke tests on CI, prefer resource-minimal setups (tiny GGUF, tight constraints) because free-tier GitHub runners have scarce CPU and RAM.
-
-## Learned Workspace Facts
-
-- `scripts/check-nix-hash.sh` warns from git state when `bun.lock` and `bun.nix` may be out of sync; it does not run Nix or replace `nix develop` / `nix flake check`.
-- The `picomatch` entry in `package.json` `overrides` is optional for current high-severity audit; without it, nested `picomatch` 2.x under `micromatch` is normal.
-- Lefthook pre-commit runs `scripts/check-no-dist-staged.sh`, which fails if any staged path is under `dist/`.
-- Dependabot does not bump arbitrary version pins in plain files (for example `.github/llama-cpp-release`); it handles `package.json`/lockfile ecosystems and `github-actions` refs. Use another mechanism for those pins (scheduled workflow, Renovate, or manual bumps).
-- Integration CI resolves **`AUTO_PR_AI_OPENAI_COMPAT_MODEL`** for the local provider from **`GET …/v1/models`** (OpenAI-compatible model list) before running HTTP tests.
-- With **nektos act**, the gitleaks SARIF upload step may need `HOME: ${{ github.workspace }}` because gitleaks-action uses `HOME` as the SARIF root and act mounts the repo at a host path instead of under `/home/runner`.
-- With **nektos act**, **Upload SBOM** in CI may be gated with `if: ${{ env.ACT != 'true' }}` (generate SBOM still runs locally) because act’s artifact server can reject upload-artifact v7 payloads over a known `mime_type` mismatch.
-- Local `bun run act` (`scripts/act-local-ci.ts`) writes the synthetic `workflow_dispatch` JSON for `act -e` to `.act-artifacts/workflow_dispatch.json`, resolving `owner`/`name` from `git remote origin` or `package.json` `repository`.
