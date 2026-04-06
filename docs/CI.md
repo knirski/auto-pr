@@ -10,7 +10,7 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | PR to main (code changes) | ci → check (`check` + `integration` jobs), dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
 | PR to main (.github only) | ci-workflows → `check-workflows` (actionlint, shellcheck, shfmt) + `integration` (same integration job as code CI) |
-| PR to main (nix/deps) | ci-nix → nix flake check (x64 + arm64) + bun.nix update |
+| PR to main (nix/deps) | ci-nix → nix flake check (Linux x64 + arm64, macOS arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), update-dist (when src/pkg/build/bun.lock change), scorecard (if configured) |
 | Manual | update-bun-nix, update-flake-lock, update-workflow-pins, update-dist |
