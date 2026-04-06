@@ -354,7 +354,7 @@ export function generatePrContentFromValues(
 
 		if (count >= 2) {
 			const commitContent = getDescriptionPromptText(filtered);
-			const prompt = buildDescriptionPrompt(descriptionPromptText, commitContent);
+			const prompt = buildDescriptionPrompt(descriptionPromptText, "", commitContent);
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescription(
 				prompt,
