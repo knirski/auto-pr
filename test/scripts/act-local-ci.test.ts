@@ -6,7 +6,12 @@ import { Command } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner, ExitCode } from "effect/unstable/process/ChildProcessSpawner";
 import { AutoPrLoggerLayer, AutoPrPlatformLayer } from "#auto-pr";
-import { ACT_GENERATED_EVENT_RELATIVE_PATH, CI_EVENT, CI_WORKFLOW } from "#core/act-local-ci.js";
+import {
+	ACT_GENERATED_EVENT_RELATIVE_PATH,
+	CI_EVENT,
+	CI_WORKFLOW,
+	resolveActLocalCiRunnerFromProcessEnv,
+} from "#core/act-local-ci.js";
 import pkg from "../../package.json" with { type: "json" };
 import { actLocalCiCommand, program } from "../../scripts/act-local-ci.js";
 
@@ -68,7 +73,11 @@ describe("act-local-ci", () => {
 			expect(args[0]).toContain("nix-run-if-missing.sh");
 			expect(args[1]).toBe("act");
 			const actArgv = args.slice(2);
-			expect(actArgv[0]).toBe(`-Pubuntu-24.04=ghcr.io/catthehacker/ubuntu:full-24.04`);
+			const expected = resolveActLocalCiRunnerFromProcessEnv(process.env, {
+				mode: "check",
+				dryRun: true,
+			});
+			expect(actArgv[0]).toBe(`-P${expected.runsOnLabel}=${expected.runnerImage}`);
 			expect(actArgv).toContain("--dryrun");
 			expect(actArgv).toContain("-W");
 			expect(actArgv).toContain(CI_WORKFLOW);
@@ -100,7 +109,11 @@ describe("act-local-ci", () => {
 			expect(command).toBe("gh");
 			expect(args[0]).toBe("act");
 			const actArgv = args.slice(1);
-			expect(actArgv[0]).toBe(`-Pubuntu-24.04=ghcr.io/catthehacker/ubuntu:full-24.04`);
+			const expected = resolveActLocalCiRunnerFromProcessEnv(process.env, {
+				mode: "check",
+				dryRun: true,
+			});
+			expect(actArgv[0]).toBe(`-P${expected.runsOnLabel}=${expected.runnerImage}`);
 			expect(actArgv).toContain("--dryrun");
 			expect(actArgv).toContain(CI_WORKFLOW);
 		});

@@ -23,10 +23,9 @@ import {
 	buildActArgv,
 	CI_WORKFLOW,
 	CI_WORKFLOWS_ENTRY,
-	DEFAULT_ACT_RUNS_ON_LABEL,
 	INTEGRATION_WORKFLOW,
 	planActRun,
-	resolveActRunnerImage,
+	resolveActLocalCiRunnerFromProcessEnv,
 	resolveActWorkflowDispatchRepo,
 	stringifyWorkflowDispatchEventJson,
 } from "#core/act-local-ci.js";
@@ -138,22 +137,6 @@ function runWorkflowJob(
 	});
 }
 
-function actRunnerEnv(): {
-	readonly runnerImageFromEnv: string | undefined;
-	readonly runsOnLabel: string;
-	readonly githubActions: boolean;
-} {
-	const fromRunner = process.env.ACT_RUNNER_IMAGE?.trim();
-	const runnerImageFromEnv =
-		fromRunner !== undefined && fromRunner.length > 0 ? fromRunner : undefined;
-	const label = process.env.ACT_RUNS_ON_LABEL?.trim();
-	return {
-		runnerImageFromEnv,
-		runsOnLabel: label !== undefined && label.length > 0 ? label : DEFAULT_ACT_RUNS_ON_LABEL,
-		githubActions: process.env.GITHUB_ACTIONS === "true",
-	};
-}
-
 type ActWorkflowCtx = {
 	readonly dryRun: boolean;
 	readonly repoRoot: string;
@@ -236,10 +219,7 @@ export function program(
 	ActLocalCiError | PlatformError,
 	FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
-	const env = actRunnerEnv();
-	const runnerImage = resolveActRunnerImage({
-		runnerImageFromEnv: env.runnerImageFromEnv,
-		githubActions: env.githubActions,
+	const { runsOnLabel, runnerImage } = resolveActLocalCiRunnerFromProcessEnv(process.env, {
 		mode: outcome.mode,
 		dryRun: outcome.dryRun,
 	});
@@ -263,7 +243,7 @@ export function program(
 		const ctx = {
 			dryRun: outcome.dryRun,
 			repoRoot,
-			runsOnLabel: env.runsOnLabel,
+			runsOnLabel,
 			runnerImage,
 			eventFile,
 		} as const;

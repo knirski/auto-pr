@@ -192,6 +192,28 @@ export function resolveActRunnerImage(input: ResolveActRunnerImageArgs): string 
 	return "ghcr.io/catthehacker/ubuntu:full-24.04";
 }
 
+/**
+ * Reads `ACT_RUNNER_IMAGE`, `ACT_RUNS_ON_LABEL`, and `GITHUB_ACTIONS` from `env` the same way the
+ * `act-local-ci` script does, then returns the `runs-on` label and resolved container image for {@link buildActArgv}.
+ */
+export function resolveActLocalCiRunnerFromProcessEnv(
+	env: NodeJS.ProcessEnv,
+	input: { readonly mode: ActLocalCiMode; readonly dryRun: boolean },
+): { readonly runsOnLabel: string; readonly runnerImage: string } {
+	const fromRunner = env.ACT_RUNNER_IMAGE?.trim();
+	const runnerImageFromEnv =
+		fromRunner !== undefined && fromRunner.length > 0 ? fromRunner : undefined;
+	const label = env.ACT_RUNS_ON_LABEL?.trim();
+	const runsOnLabel = label !== undefined && label.length > 0 ? label : DEFAULT_ACT_RUNS_ON_LABEL;
+	const runnerImage = resolveActRunnerImage({
+		runnerImageFromEnv,
+		githubActions: env.GITHUB_ACTIONS === "true",
+		mode: input.mode,
+		dryRun: input.dryRun,
+	});
+	return { runsOnLabel, runnerImage };
+}
+
 export type ActRunPlan = {
 	readonly command: string;
 	readonly args: readonly string[];

@@ -27,6 +27,7 @@ export {
 	parseGithubRepoFromShortName,
 	planActRun,
 	resolveActLocalCiInput,
+	resolveActLocalCiRunnerFromProcessEnv,
 	resolveActRunnerImage,
 	resolveActWorkflowDispatchRepo,
 	stringifyWorkflowDispatchEventJson,
