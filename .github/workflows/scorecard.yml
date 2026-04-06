@@ -11,10 +11,7 @@ concurrency:
   group: scorecard-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  security-events: none
-  id-token: none
+permissions: {}
 
 jobs:
   analysis:
