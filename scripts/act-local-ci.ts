@@ -5,7 +5,7 @@
  * Writes `.act-artifacts/workflow_dispatch.json` for `act -e` (repo from `git remote origin` or package.json `repository`).
  *
  * From package.json: `bun run act -- <mode>` — the `--` forwards args to this script (not to `bun run`).
- * Example: `bun run act -- check`. Or run the file directly: `bun scripts/run-check-act.ts check` (no `--`).
+ * Example: `bun run act -- check`. Or run the file directly: `bun scripts/act-local-ci.ts check` (no `--`).
  */
 
 import * as BunServices from "@effect/platform-bun/BunServices";
@@ -19,14 +19,13 @@ import {
 	ACT_GENERATED_EVENT_RELATIVE_PATH,
 	ACT_LOCAL_CI_MODES,
 	type ActBackend,
+	type ActLocalCiRun,
 	buildActArgv,
 	CI_WORKFLOW,
 	CI_WORKFLOWS_ENTRY,
-	DEFAULT_ACT_RUNS_ON_LABEL,
 	INTEGRATION_WORKFLOW,
 	planActRun,
-	type RunCheckActRun,
-	resolveActRunnerImage,
+	resolveActLocalCiRunnerFromProcessEnv,
 	resolveActWorkflowDispatchRepo,
 	stringifyWorkflowDispatchEventJson,
 } from "#core/act-local-ci.js";
@@ -138,22 +137,6 @@ function runWorkflowJob(
 	});
 }
 
-function actRunnerEnv(): {
-	readonly runnerImageFromEnv: string | undefined;
-	readonly runsOnLabel: string;
-	readonly githubActions: boolean;
-} {
-	const fromRunner = process.env.ACT_RUNNER_IMAGE?.trim();
-	const runnerImageFromEnv =
-		fromRunner !== undefined && fromRunner.length > 0 ? fromRunner : undefined;
-	const label = process.env.ACT_RUNS_ON_LABEL?.trim();
-	return {
-		runnerImageFromEnv,
-		runsOnLabel: label !== undefined && label.length > 0 ? label : DEFAULT_ACT_RUNS_ON_LABEL,
-		githubActions: process.env.GITHUB_ACTIONS === "true",
-	};
-}
-
 type ActWorkflowCtx = {
 	readonly dryRun: boolean;
 	readonly repoRoot: string;
@@ -223,23 +206,20 @@ function runActCheckThenIntegration(
 }
 
 /** Optional overrides for tests (e.g. inject `resolveActBackend`). */
-export type RunCheckActProgramOptions = {
+export type ActLocalCiProgramOptions = {
 	readonly resolveActBackend?: () => Option.Option<ActBackend>;
 };
 
 export function program(
-	outcome: RunCheckActRun,
+	outcome: ActLocalCiRun,
 	repoRoot: string,
-	options?: RunCheckActProgramOptions,
+	options?: ActLocalCiProgramOptions,
 ): Effect.Effect<
 	void,
 	ActLocalCiError | PlatformError,
 	FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
-	const env = actRunnerEnv();
-	const runnerImage = resolveActRunnerImage({
-		runnerImageFromEnv: env.runnerImageFromEnv,
-		githubActions: env.githubActions,
+	const { runsOnLabel, runnerImage } = resolveActLocalCiRunnerFromProcessEnv(process.env, {
 		mode: outcome.mode,
 		dryRun: outcome.dryRun,
 	});
@@ -263,7 +243,7 @@ export function program(
 		const ctx = {
 			dryRun: outcome.dryRun,
 			repoRoot,
-			runsOnLabel: env.runsOnLabel,
+			runsOnLabel,
 			runnerImage,
 			eventFile,
 		} as const;
@@ -295,13 +275,13 @@ const modeArg = Argument.choice("mode", [...ACT_LOCAL_CI_MODES]).pipe(
 	),
 );
 
-export const runCheckActCommand = Command.make(
-	"run-check-act",
+export const actLocalCiCommand = Command.make(
+	"act-local-ci",
 	{
 		dryRun: dryRunFlag,
 		mode: modeArg,
 	},
-	Effect.fn("run-check-act.handler")(function* ({ dryRun, mode }) {
+	Effect.fn("act-local-ci.handler")(function* ({ dryRun, mode }) {
 		const dry = Option.getOrElse(dryRun, () => false);
 		const pathApi = yield* Path.Path;
 		const scriptPath = yield* pathApi.fromFileUrl(new URL(import.meta.url));
@@ -314,20 +294,20 @@ export const runCheckActCommand = Command.make(
 		"Run CI check / integration jobs locally via act or gh act (Docker). See CONTRIBUTING.md.",
 	),
 	Command.withExamples([
-		{ command: "run-check-act", description: "Run check job then integration (default mode all)" },
-		{ command: "run-check-act check", description: "CI check job only" },
+		{ command: "act-local-ci", description: "Run check job then integration (default mode all)" },
+		{ command: "act-local-ci check", description: "CI check job only" },
 		{
-			command: "run-check-act --dry-run check-workflows",
+			command: "act-local-ci --dry-run check-workflows",
 			description: "Validate ci-workflows graph without full run",
 		},
 	]),
 );
 
-const cliProgram = Command.run(runCheckActCommand, { version: pkg.version });
+const cliProgram = Command.run(actLocalCiCommand, { version: pkg.version });
 
 if (import.meta.main) {
 	runMain(
 		cliProgram.pipe(Effect.provide(BunServices.layer)) as Effect.Effect<void, unknown>,
-		"run-check-act",
+		"act-local-ci",
 	);
 }

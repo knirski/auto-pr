@@ -51,7 +51,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Where to Start
 
 - **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
-- **Local CI parity (optional):** `scripts/run-check-act.ts` (`bun run act`) — Docker + nektos act or `gh act`; pure planning in `src/core/act-local-ci.ts`. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job).
+- **Local CI parity (optional):** `scripts/act-local-ci.ts` (`bun run act`) — Docker + nektos act or `gh act`; pure planning in `src/core/act-local-ci.ts`. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job).
 - **Core logic:** `src/core/*.ts` (fill-pr-template-core, gh-output, string, etc.)
 - **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateText` and decodes JSON to `TitleDescriptionSchema` (see file header). CI uses composite actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
 - **Config:** `src/auto-pr/config.ts` — env schema and validation
@@ -78,7 +78,7 @@ Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.T
 | **Effect** | TypeScript library for typed functional programming. Used for error handling, dependency injection, and async. |
 | **Result** | Type from `effect` or similar: `Ok(value)` or `Err(error)`. Core returns `Result`; shell bridges to `Effect`. |
 | **Domain errors** | Tagged error classes live in `src/core/errors.ts`; `formatError` (shell) in `src/auto-pr/errors.ts`. Core defines, shell formats for logging. |
-| **ActBackend (`direct` / `gh`)** | How `run-check-act` invokes act: **`direct`** runs `bash scripts/nix-run-if-missing.sh act …` when `act` or `nix` is on `PATH`; **`gh`** runs `gh act …` when the gh-act extension is available. See `ActBackend` and `planActRun` in `src/core/act-local-ci.ts`. |
+| **ActBackend (`direct` / `gh`)** | How `act-local-ci` invokes act: **`direct`** runs `bash scripts/nix-run-if-missing.sh act …` when `act` or `nix` is on `PATH`; **`gh`** runs `gh act …` when the gh-act extension is available. See `ActBackend` and `planActRun` in `src/core/act-local-ci.ts`. |
 
 ## Related
 

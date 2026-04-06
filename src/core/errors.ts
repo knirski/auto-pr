@@ -79,7 +79,7 @@ export class FillPrTemplateValidationError extends Schema.TaggedErrorClass<FillP
 	{ message: Schema.String },
 ) {}
 
-/** Local act runner (`run-check-act`) failed. */
+/** Local act runner (`act-local-ci`) failed. */
 export class ActLocalCiError extends Schema.TaggedErrorClass<ActLocalCiError>()("ActLocalCiError", {
 	reason: Schema.String,
 }) {}

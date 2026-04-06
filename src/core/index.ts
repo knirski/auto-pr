@@ -6,11 +6,11 @@
 export type {
 	ActBackend,
 	ActLocalCiMode,
+	ActLocalCiRun,
 	ActRunPlan,
 	ActWorkflowDispatchRepo,
 	BuildActArgsInput,
 	ResolveActRunnerImageArgs,
-	RunCheckActRun,
 } from "#core/act-local-ci.js";
 export {
 	ACT_GENERATED_EVENT_RELATIVE_PATH,
@@ -26,9 +26,10 @@ export {
 	parseGithubRepoFromRemoteUrl,
 	parseGithubRepoFromShortName,
 	planActRun,
+	resolveActLocalCiInput,
+	resolveActLocalCiRunnerFromProcessEnv,
 	resolveActRunnerImage,
 	resolveActWorkflowDispatchRepo,
-	resolveRunCheckActInput,
 	stringifyWorkflowDispatchEventJson,
 } from "#core/act-local-ci.js";
 export {
