@@ -1,15 +1,13 @@
 # Real HTTP integration tests: llama.cpp (Mozilla tiny GGUF) and GitHub Models in one job.
 # Not published by auto-pr-init — knirski/auto-pr CI only; adopters do not copy this workflow.
-# Runs on main and same-repo PRs (skipped for forks — no models token).
+# Runs on main push/dispatch and via workflow_call (ci.yml, ci-workflows.yml).
 name: Integration
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -28,7 +26,6 @@ env:
 
 jobs:
   integration:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -91,7 +88,7 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
           INTEGRATION_GITHUB_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
 
       - name: Stop local llama-server
