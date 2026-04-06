@@ -1,5 +1,5 @@
-# Smoke-test nektos/act against the lightweight check-workflows job (ci-workflows.yml → check-workflows.yml).
-# Does not replace GitHub-hosted CI; validates act + Docker + reusable workflow wiring on pushes/PRs that touch act-related files.
+# Smoke-test nektos/act: dry-run the ci.yml → check graph, and run the check-workflows job (ci-workflows.yml → check-workflows.yml).
+# Matrix runs both in parallel (prep is cheap vs act). Does not replace GitHub-hosted CI.
 
 name: Act smoke
 
@@ -26,9 +26,18 @@ permissions:
   contents: read
 
 jobs:
-  check-workflows:
+  smoke:
+    name: ${{ matrix.label }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Dry run (ci.yml check graph)
+            act_command: bun scripts/act-local-ci.ts --dry-run check
+          - label: Run act (check-workflows job)
+            act_command: bun scripts/act-local-ci.ts check-workflows
     env:
       # gh requires this in Actions; see https://docs.github.com/en/actions/using-workflows/using-github-cli-in-workflows
       GH_TOKEN: ${{ github.token }}
@@ -48,10 +57,5 @@ jobs:
           gh extension install nektos/gh-act
           gh act --version
 
-      - name: Dry run act (validate workflow graphs)
-        run: |
-          bun scripts/act-local-ci.ts --dry-run check-workflows
-          bun scripts/act-local-ci.ts --dry-run check
-
-      - name: Run act (check-workflows job)
-        run: bun scripts/act-local-ci.ts check-workflows
+      - name: Run act
+        run: ${{ matrix.act_command }}
