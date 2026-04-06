@@ -57,5 +57,33 @@ jobs:
           gh extension install nektos/gh-act
           gh act --version
 
+      # Both matrix entries resolve to act-24.04 (GITHUB_ACTIONS=true + dryRun or check-workflows mode).
+      # Cache the image so subsequent runs skip the ~1.5 GB pull.
+      - name: Restore runner image cache
+        id: image-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /tmp/act-image-cache/ubuntu-act-24.04.tar.gz
+          key: act-image-${{ runner.os }}-ubuntu-act-24.04-v1
+
+      - name: Load cached runner image
+        if: steps.image-cache.outputs.cache-hit == 'true'
+        run: docker load < /tmp/act-image-cache/ubuntu-act-24.04.tar.gz
+
+      - name: Pull and cache runner image
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: |
+          docker pull ghcr.io/catthehacker/ubuntu:act-24.04
+          mkdir -p /tmp/act-image-cache
+          docker save ghcr.io/catthehacker/ubuntu:act-24.04 | gzip > /tmp/act-image-cache/ubuntu-act-24.04.tar.gz
+
+      # Cache actions downloaded by act (composite actions, etc.) across runs.
+      - name: Cache act action store
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/act
+          key: act-actions-${{ runner.os }}-${{ hashFiles('.github/workflows/**') }}
+          restore-keys: act-actions-${{ runner.os }}-
+
       - name: Run act
         run: ${{ matrix.act_command }}
