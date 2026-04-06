@@ -51,3 +51,9 @@ jobs:
       models: read
     uses: ./.github/workflows/check.yml
     secrets: inherit
+
+  integration:
+    permissions:
+      contents: read
+      models: read
+    uses: ./.github/workflows/integration.yml
