@@ -143,9 +143,6 @@ function logAndValidateTitleDescription(
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 
-/** Cap description length in logs (full text is still validated and used). */
-const _MAX_LOG_DESCRIPTION_CHARS = 2000;
-
 function truncateForLog(s: string, maxChars: number): string {
 	const t = s.trim();
 	if (t.length <= maxChars) {
