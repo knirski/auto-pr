@@ -39,6 +39,10 @@
 | Modify | `.github/workflows/auto-pr-generate-reusable.yml` | Remove get-commits step, add bash count step |
 | Modify | `.github/actions/auto-pr-run-command/action.yml` | Remove get-commits outputs |
 | Modify | `package.json` | Remove `auto-pr-get-commits` binary |
+| Modify | `docs/ARCHITECTURE.md` | Update Pipeline Flow, FC/IS, Entry points, Error Handling, Glossary — remove get-commits references |
+| Modify | `docs/TROUBLESHOOTING.md` | Update references to get-commits step and file artifacts |
+| Modify | `docs/WORKFLOW_SECURITY.md` | Update Generate section (no longer mentions auto-pr-get-commits) |
+| Modify | `docs/INTEGRATION.md` | Update env var table and file flow (get-commits row removed, generate-content row updated) |
 
 ---
 
@@ -1614,15 +1618,60 @@ git commit -m "ci: update generate workflow to use inline commit count, remove g
 
 ---
 
-### Task 9: Final Verification
+### Task 9: Update Documentation
+
+The following docs reference `get-commits` and need updating to reflect the new architecture.
+
+**Files:**
+- Modify: `docs/ARCHITECTURE.md`
+- Modify: `docs/TROUBLESHOOTING.md`
+- Modify: `docs/WORKFLOW_SECURITY.md`
+- Modify: `docs/INTEGRATION.md`
+
+- [ ] **Step 1: Update `docs/ARCHITECTURE.md`**
+
+Update these sections:
+- **High-Level Structure diagram**: Remove `auto-pr-get-commits` from CLI entry points box
+- **Pipeline Flow**: Replace the 3-step pipeline with a 2-step pipeline:
+  1. **generate-content** — `GitContext` fetches commits, files, diff stat directly. 1 commit: fill from body; 2+: `LanguageModel.generateText` with toolkit (`get_diff`, `get_commit_diff`). Retries → fallback → fill template → write `pr-title.txt` and `pr-body.md`
+  2. **create-or-update-pr** — unchanged
+- **FC/IS section**: Remove `get-commits` from workflow list, add `GitContext` to `src/auto-pr/` description, add `DiffToolkit` mention
+- **Where to Start / Entry points**: Remove `auto-pr-get-commits.ts`
+- **Error Handling**: Remove "get-commits only appends to GITHUB_OUTPUT after it succeeds" sentence
+- **Glossary**: Update GITHUB_OUTPUT entry (no longer written by get-commits), remove get-commits references
+
+- [ ] **Step 2: Update `docs/TROUBLESHOOTING.md`**
+
+- Update the `AutoPrConfigError` entry: remove reference to get-commits requiring `GITHUB_OUTPUT`
+- Update the "generate-content" troubleshooting: remove "Ensure the get-commits step ran and wrote commits.txt and files.txt"
+
+- [ ] **Step 3: Update `docs/WORKFLOW_SECURITY.md`**
+
+- Update Generate (Unprivileged) section: Change "Runs: `auto-pr-get-commits`, `auto-pr-generate-content` (AI), artifact preparation" to "Runs: `auto-pr-generate-content` (AI), artifact preparation"
+
+- [ ] **Step 4: Update `docs/INTEGRATION.md`**
+
+- Remove `auto-pr-get-commits` row from the env var table
+- Update `auto-pr-generate-content` row: add `DEFAULT_BRANCH`, `BRANCH` to required env vars; remove "Reads `{GITHUB_WORKSPACE}/commits.txt` and `files.txt` from `get-commits`"
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/
+git commit -m "docs: update architecture and integration docs for get-commits elimination"
+```
+
+---
+
+### Task 10: Final Verification
 
 - [ ] **Step 1: Run full check**
 
 ```bash
-bun run check:code
+bun run check
 ```
 
-Expected: build, audit, tests, lint, typecheck, knip all PASS.
+Expected: build, audit, tests, lint, typecheck, knip, actionlint, shellcheck, shfmt all PASS.
 
 - [ ] **Step 2: Verify no dead exports with knip**
 
