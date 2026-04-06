@@ -34,6 +34,7 @@ export {
 	TemplateRenderError,
 	UnexpectedError,
 } from "#auto-pr/errors.js";
+export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export {
