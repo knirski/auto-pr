@@ -139,6 +139,8 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 
 **Post-merge:** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) — auto-updates self-refs. [update-dist.yml](.github/workflows/update-dist.yml) — builds `dist/` on main. Do not commit `dist/` in PRs. [CI.md](docs/CI.md#dist-and-gitignore)
 
+**Act smoke:** [act-smoke.yml](.github/workflows/act-smoke.yml) uses a **matrix** so **`--dry-run check`** and **`check-workflows`** run in parallel (no **`--dry-run check-workflows`**; the **`check-workflows`** cell covers that graph). [docs/CI.md](docs/CI.md#run-ci-locally).
+
 ---
 
 ## Documentation & ADR
