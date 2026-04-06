@@ -1,21 +1,20 @@
-Summarize these commits into a PR title and structured review metadata. The renderer will turn your structured fields into the markdown shown under the PR template's "## Description" heading. The same PR body already has separate sections for **commit bullets**, **type of change**, **related issues**, **breaking changes**, and **how to test**—do **not** duplicate those: do not restate the commit list, do not write testing steps, do not repeat issue links or breaking-change footers that commits may carry.
+Output JSON only: {"title": "...", "motivation": ["..."], "benefits": ["..."], "risks": ["..."], "notesForReviewers": "..."}.
 
-Respond with JSON only: {"title": "...", "motivation": "...", "risks": ["..."], "notesForReviewers": "..."}.
+title: TYPE: subject or TYPE(scope): subject. Types: feat, fix, docs, chore, refactor, security, perf, test, ci, build, revert, style. Max 100 chars. Be concrete after the colon ("feat: add session refresh", not "feat: update").
 
-title: Conventional commit format: TYPE: SUBJECT or TYPE(scope): SUBJECT. Optional (scope) for a subsystem or feature area (e.g. feat(auth): …). Pick a fitting type: feat, fix, docs, chore, refactor, security, perf, test, ci, build, revert, or style. Max 100 chars trimmed (entire line). Subject must be concrete after the colon (WRONG: feat. CORRECT: feat: add session refresh). Prefer type security when the change is security-sensitive.
+motivation: 1–5 bullets. Why does this branch exist—what problem, goal, or constraint? Most important field. Be specific.
 
-motivation: Plain text, 2–5 sentences. Put the **main reason this branch exists** first: problem, goal, or constraint. This is the most important field—do not bury it. Avoid a vague opener and avoid a laundry list of every commit theme; synthesize the overarching intent.
+benefits: 0–3 bullets. Concrete gains (performance, reliability, developer experience). Use [] when nothing stands out beyond motivation.
 
-risks: Array of 1–5 plain-text bullets. Each item should describe what could go wrong, what reviewers should double-check, or what operational/integration concern the commits imply. If nothing stands out, use one concrete low-risk item such as "Low risk: docs-only change; review focused on wording accuracy."
+risks: 1–5 bullets. What could go wrong or needs careful review. If genuinely low risk, say so: "Low risk: docs-only change."
 
-notesForReviewers: Plain text, optional but always present in JSON. Use `""` when nothing extra is needed. When non-empty, point reviewers to non-obvious files, tradeoffs, or read order. Do not repeat motivation or risks.
+notesForReviewers: Where to start, non-obvious tradeoffs, or read order. Use "" if nothing to add.
 
-Use `inline code` in `motivation` or `notesForReviewers` for paths or APIs when helpful. Do not invent alternatives or deployment detail absent from commits. If commits only reference issues briefly, do not paste long boilerplate—the Related issues section will show links.
+Do not repeat commit messages, issue links, testing steps, or breaking-change notes—those appear elsewhere in the PR.
+Use inline code for file paths and API names when helpful.
 
-Good output example 1:
-{"title":"feat(ci): harden generate workflow token fallback","motivation":"GitHub token handling across reusable workflows was inconsistent, which made AI-backed PR generation fragile in repositories that do not provide a dedicated PAT. This change aligns the workflow defaults and token forwarding path so the generate job behaves predictably in common CI setups while keeping the branch mergeable and reviewable.","risks":["Verify `github.token` and forwarded secret precedence in reusable workflow calls.","Double-check permission scopes such as `models:read` in jobs that query GitHub Models."],"notesForReviewers":"Start with `.github/workflows/auto-pr-generate-reusable.yml`, then review related config/docs updates."}
+Example 1:
+{"title":"feat(ci): harden generate workflow token fallback","motivation":["Token handling was inconsistent across reusable workflows, making AI-backed PR generation fragile without a dedicated PAT.","This aligns workflow defaults so the generate job works reliably in common CI setups."],"benefits":["Repositories without a dedicated PAT now work out of the box."],"risks":["Verify github.token precedence in reusable workflow calls.","Check models:read permission scope in GitHub Models jobs."],"notesForReviewers":"Start with .github/workflows/auto-pr-generate-reusable.yml, then related config and docs."}
 
-Good output example 2:
-{"title":"fix(pr-template): keep type of change aligned with final title","motivation":"The PR body could show a different type-of-change label than the generated PR title when a multi-commit branch was summarized into a rolled-up title. This change keeps the rendered template aligned with the final conventional title so reviewers do not see conflicting metadata.","risks":["Confirm multi-commit PRs still infer the expected type when the generated title differs from the newest commit subject.","Review fallback behavior when the AI output is invalid and the code falls back to commit-derived values."],"notesForReviewers":"Look at `src/core/fill-pr-template-core.ts` and the workflow tests that cover generated titles."}
-
-Tone: direct, technical. No filler like "This PR" or "We introduce". Every field must be valid JSON (escape quotes and newlines inside values as needed).
+Example 2:
+{"title":"fix(pr-template): keep type of change aligned with final title","motivation":["PR body showed a different type-of-change label than the generated title when a multi-commit branch was summarized."],"benefits":[],"risks":["Confirm multi-commit PRs still infer the right type when the generated title differs from commits.","Review fallback when AI output is invalid."],"notesForReviewers":"See src/core/fill-pr-template-core.ts and the workflow tests covering generated titles."}
