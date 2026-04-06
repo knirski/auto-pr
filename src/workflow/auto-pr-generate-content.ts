@@ -69,7 +69,8 @@ import { parseFirstJsonObject } from "#core/parse-model-json.js";
 /** Schema for structured AI output: PR title plus structured review sections. */
 const TitleDescriptionSchema = Schema.Struct({
 	title: Schema.String,
-	motivation: Schema.String,
+	motivation: Schema.Array(Schema.String),
+	benefits: Schema.Array(Schema.String),
 	risks: Schema.Array(Schema.String),
 	notesForReviewers: Schema.String,
 });
@@ -103,8 +104,10 @@ function logAndValidateTitleDescription(
 			title_chars: raw.title.length,
 			title_conventional_format: matchesConventionalTitleFormat(titleTrimmed),
 			title_within_length_limit: isWithinLengthLimit(titleTrimmed),
-			motivation_chars: raw.motivation.length,
-			motivation: truncateForLog(raw.motivation, MAX_LOG_DESCRIPTION_CHARS),
+			motivation_count: raw.motivation.length,
+			motivation: raw.motivation.map((s) => truncateForLog(s, 200)),
+			benefits_count: raw.benefits.length,
+			benefits: raw.benefits.map((s) => truncateForLog(s, 200)),
 			risks_count: raw.risks.length,
 			risks: raw.risks.map((risk) => truncateForLog(risk, 200)),
 			notes_for_reviewers_chars: raw.notesForReviewers.length,
@@ -141,7 +144,7 @@ const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 
 /** Cap description length in logs (full text is still validated and used). */
-const MAX_LOG_DESCRIPTION_CHARS = 2000;
+const _MAX_LOG_DESCRIPTION_CHARS = 2000;
 
 function truncateForLog(s: string, maxChars: number): string {
 	const t = s.trim();
@@ -155,17 +158,22 @@ function normalizeRiskItems(risks: readonly string[]): readonly string[] {
 	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
 }
 
+function normalizeBulletItems(items: readonly string[]): readonly string[] {
+	return items.map((s) => s.trim().replace(/^-+\s*/, "")).filter((s) => !isBlank(s));
+}
+
+/** Callers must pre-normalize all array fields via {@link normalizeBulletItems} / {@link normalizeRiskItems}. */
 function buildDescriptionBlock(value: {
-	motivation: string;
+	motivation: readonly string[];
+	benefits: readonly string[];
 	risks: readonly string[];
 	notesForReviewers: string;
 }): string {
-	const sections = [
-		`### Motivation\n${value.motivation.trim()}`,
-		`### Risks\n${normalizeRiskItems(value.risks)
-			.map((risk) => `- ${risk}`)
-			.join("\n")}`,
-	];
+	const sections = [`### Motivation\n${value.motivation.map((s) => `- ${s}`).join("\n")}`];
+	if (value.benefits.length > 0) {
+		sections.push(`### Benefits\n${value.benefits.map((s) => `- ${s}`).join("\n")}`);
+	}
+	sections.push(`### Risks\n${value.risks.map((risk) => `- ${risk}`).join("\n")}`);
 	const notes = value.notesForReviewers.trim();
 	if (!isBlank(notes)) {
 		sections.push(`### Notes for reviewers\n${notes}`);
@@ -176,19 +184,22 @@ function buildDescriptionBlock(value: {
 function validateGeneratedContent(
 	value: TitleDescription,
 ): Result.Result<{ title: string; description: string }, DescriptionParseError> {
-	const { motivation, notesForReviewers } = value;
+	const { motivation, benefits, notesForReviewers } = value;
 	return pipe(
 		fitConventionalTitleToLengthLimit(value.title),
 		Result.flatMap((title) => {
-			if (isBlank(motivation)) {
+			const normalizedMotivation = normalizeBulletItems(motivation);
+			if (normalizedMotivation.length === 0) {
 				return Result.fail(new DescriptionParseError({ cause: "motivation is empty" }));
 			}
+			const normalizedBenefits = normalizeBulletItems(benefits);
 			const normalizedRisks = normalizeRiskItems(value.risks);
 			if (normalizedRisks.length === 0) {
 				return Result.fail(new DescriptionParseError({ cause: "risks are empty" }));
 			}
 			const description = buildDescriptionBlock({
-				motivation,
+				motivation: normalizedMotivation,
+				benefits: normalizedBenefits,
 				risks: normalizedRisks,
 				notesForReviewers,
 			});
@@ -224,7 +235,8 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 		onFailure: () => "chore: update",
 	});
 	const description = buildDescriptionBlock({
-		motivation: getDescriptionFromCommits(filtered),
+		motivation: [getDescriptionFromCommits(filtered)],
+		benefits: [],
 		risks: [
 			"None obvious from commits; review focused on changed code paths and integration boundaries.",
 		],
