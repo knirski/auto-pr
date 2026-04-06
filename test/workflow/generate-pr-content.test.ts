@@ -159,8 +159,10 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 
 const VALID_AI_RESPONSE = JSON.stringify({
 	title: "feat: add X and fix B",
-	motivation:
+	motivation: [
 		"Align CI and provider behavior so multi-commit PR generation is easier to review and operate.",
+	],
+	benefits: ["Reviewers can now validate CI changes in a single consistent place."],
 	risks: [
 		"Verify token handling and workflow permissions in reusable GitHub Actions jobs.",
 		"Double-check provider integration paths when switching between local and remote models.",
@@ -206,6 +208,83 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 			);
 		});
 
+		test("renders motivation as bullet points", async () => {
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.body).toContain(
+						"- Align CI and provider behavior so multi-commit PR generation is easier to review and operate.",
+					);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("renders benefits as bullet points", async () => {
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.body).toContain(
+						"- Reviewers can now validate CI changes in a single consistent place.",
+					);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("includes ### Benefits between ### Motivation and ### Risks", async () => {
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.body).toContain("### Benefits");
+					expect(result.body).toContain(
+						"Reviewers can now validate CI changes in a single consistent place.",
+					);
+					const motivationIdx = result.body.indexOf("### Motivation");
+					const benefitsIdx = result.body.indexOf("### Benefits");
+					const risksIdx = result.body.indexOf("### Risks");
+					expect(motivationIdx).toBeLessThan(benefitsIdx);
+					expect(benefitsIdx).toBeLessThan(risksIdx);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("omits ### Benefits section when benefits is empty array", async () => {
+			const responseEmptyBenefits = JSON.stringify({
+				title: "feat: add X and fix B",
+				motivation: ["Motivation here."],
+				benefits: [],
+				risks: ["One risk."],
+				notesForReviewers: "",
+			});
+			const p = params(twoCommits, {
+				filesContent: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: createOpenAiChatCompletionsMockFetch(responseEmptyBenefits),
+			});
+			await runEffect(layerForGeneratePrContent(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContentFromValues(p);
+					expect(result.body).not.toContain("### Benefits");
+					expect(result.body).toContain("### Motivation");
+					expect(result.body).toContain("### Risks");
+				}).pipe(Effect.scoped),
+			);
+		});
+
 		test("same generateText + JSON path for github-models provider (mocked)", async () => {
 			const p = params(twoCommits, {
 				provider: "github-models",
@@ -228,7 +307,8 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 			expect(longTitle.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
 			const longResponse = JSON.stringify({
 				title: longTitle,
-				motivation: "Short motivation for the change.",
+				motivation: ["Short motivation for the change."],
+				benefits: [],
 				risks: ["One risk bullet."],
 				notesForReviewers: "",
 			});
@@ -247,11 +327,12 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 			);
 		});
 
-		test("truncates very long motivation and risk strings in model_response logging path", async () => {
-			const longMotivation = `MOTIVATION_${"x".repeat(2100)}`;
+		test("handles very long bullet in model_response logging path", async () => {
+			const longBullet = `MOTIVATION_${"x".repeat(2100)}`;
 			const longResponse = JSON.stringify({
 				title: "feat: add X and fix B",
-				motivation: longMotivation,
+				motivation: ["Short first bullet.", longBullet],
+				benefits: [],
 				risks: ["Short risk only."],
 				notesForReviewers: "n",
 			});
@@ -264,7 +345,7 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 				Effect.gen(function* () {
 					const result = yield* generatePrContentFromValues(p);
 					expect(result.title).toBe("feat: add X and fix B");
-					expect(result.body).toContain(longMotivation.slice(0, 80));
+					expect(result.body).toContain(longBullet.slice(0, 80));
 				}).pipe(Effect.scoped),
 			);
 		});
@@ -310,10 +391,11 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 	});
 
 	describe("invalid structured fields (validation retries then fallback)", () => {
-		test("falls back when motivation is empty after 5 attempts", async () => {
+		test("falls back when motivation is empty array after 5 attempts", async () => {
 			const bad = JSON.stringify({
 				title: "feat: valid title",
-				motivation: "",
+				motivation: [],
+				benefits: [],
 				risks: ["Risk one."],
 				notesForReviewers: "",
 			});
@@ -334,7 +416,8 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 		test("falls back when risks normalize to empty after 5 attempts", async () => {
 			const bad = JSON.stringify({
 				title: "feat: valid title",
-				motivation: "Has motivation.",
+				motivation: ["Has motivation."],
+				benefits: [],
 				risks: ["", "  ", "-  "],
 				notesForReviewers: "",
 			});

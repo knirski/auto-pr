@@ -6,7 +6,7 @@
 
 ## Description
 
-<!-- Narrative (auto-pr prefers ### Motivation, ### Risks, and optional ### Notes for reviewers here). Commit subjects are under "Changes made" below. -->
+<!-- Narrative (auto-pr prefers ### Motivation, optional ### Benefits, ### Risks, and optional ### Notes for reviewers here). Commit subjects are under "Changes made" below. -->
 
 {{description}}
 
