@@ -7,14 +7,14 @@ on:
   pull_request:
     paths:
       - '.github/workflows/**'
-      - 'scripts/run-check-act.ts'
+      - 'scripts/act-local-ci.ts'
       - 'flake.nix'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/**'
-      - 'scripts/run-check-act.ts'
+      - 'scripts/act-local-ci.ts'
       - 'flake.nix'
   workflow_dispatch:
 
@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # https://github.com/nektos/gh-act — bundles an act release; run-check-act uses `gh act` when `act` is not on PATH.
+      # https://github.com/nektos/gh-act — bundles an act release; act-local-ci uses `gh act` when `act` is not on PATH.
       - name: Install act (gh extension)
         run: |
           gh extension install nektos/gh-act
@@ -50,8 +50,8 @@ jobs:
 
       - name: Dry run act (validate workflow graphs)
         run: |
-          bun scripts/run-check-act.ts --dry-run check-workflows
-          bun scripts/run-check-act.ts --dry-run check
+          bun scripts/act-local-ci.ts --dry-run check-workflows
+          bun scripts/act-local-ci.ts --dry-run check
 
       - name: Run act (check-workflows job)
-        run: bun scripts/run-check-act.ts check-workflows
+        run: bun scripts/act-local-ci.ts check-workflows

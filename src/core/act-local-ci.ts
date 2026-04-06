@@ -1,6 +1,6 @@
 /**
- * Pure model for local act runs (`run-check-act`). No Effect, no I/O — returns Result.
- * Argv is parsed only by `effect/unstable/cli` in `scripts/run-check-act.ts`; this module holds modes + `resolveRunCheckActInput` for validation.
+ * Pure model for local act runs (`act-local-ci`). No Effect, no I/O — returns Result.
+ * Argv is parsed only by `effect/unstable/cli` in `scripts/act-local-ci.ts`; this module holds modes + `resolveActLocalCiInput` for validation.
  */
 
 import { Option, Predicate, Result } from "effect";
@@ -8,7 +8,7 @@ import { ActLocalCiError } from "#core/errors.js";
 
 // ─── Modes (single source of truth for CLI) ─────────────────────────────────
 
-/** Valid positional modes for `run-check-act` (default when omitted: `all`). */
+/** Valid positional modes for `act-local-ci` (default when omitted: `all`). */
 export const ACT_LOCAL_CI_MODES = ["check", "check-workflows", "integration", "all"] as const;
 
 export type ActLocalCiMode = (typeof ACT_LOCAL_CI_MODES)[number];
@@ -129,7 +129,7 @@ export function resolveActWorkflowDispatchRepo(input: {
 	return Result.fail(
 		new ActLocalCiError({
 			reason:
-				"run-check-act: could not resolve GitHub owner/name for act event payload. Set `git remote origin` to a github.com URL or set package.json `repository` to a GitHub URL or `owner/repo`.",
+				"act-local-ci: could not resolve GitHub owner/name for act event payload. Set `git remote origin` to a github.com URL or set package.json `repository` to a GitHub URL or `owner/repo`.",
 		}),
 	);
 }
@@ -148,9 +148,9 @@ export function stringifyWorkflowDispatchEventJson(repo: ActWorkflowDispatchRepo
 
 /**
  * Resolved inputs for the local act runner. Produced only from
- * `effect/unstable/cli` (`run-check-act` command) via {@link resolveRunCheckActInput}.
+ * `effect/unstable/cli` (`act-local-ci` command) via {@link resolveActLocalCiInput}.
  */
-export type RunCheckActRun = {
+export type ActLocalCiRun = {
 	readonly dryRun: boolean;
 	readonly mode: ActLocalCiMode;
 };
@@ -158,14 +158,14 @@ export type RunCheckActRun = {
 /**
  * Map Effect CLI config to a run plan (pure). Single source of truth for mode validation.
  */
-export function resolveRunCheckActInput(
+export function resolveActLocalCiInput(
 	dryRun: boolean,
 	modeToken: string,
-): Result.Result<RunCheckActRun, ActLocalCiError> {
+): Result.Result<ActLocalCiRun, ActLocalCiError> {
 	if (!isActLocalCiMode(modeToken)) {
 		return Result.fail(
 			new ActLocalCiError({
-				reason: `run-check-act: invalid mode: ${modeToken}. Expected: ${ACT_LOCAL_CI_MODES.join(" | ")}`,
+				reason: `act-local-ci: invalid mode: ${modeToken}. Expected: ${ACT_LOCAL_CI_MODES.join(" | ")}`,
 			}),
 		);
 	}
@@ -190,6 +190,28 @@ export function resolveActRunnerImage(input: ResolveActRunnerImageArgs): string 
 		return "ghcr.io/catthehacker/ubuntu:act-24.04";
 	}
 	return "ghcr.io/catthehacker/ubuntu:full-24.04";
+}
+
+/**
+ * Reads `ACT_RUNNER_IMAGE`, `ACT_RUNS_ON_LABEL`, and `GITHUB_ACTIONS` from `env` the same way the
+ * `act-local-ci` script does, then returns the `runs-on` label and resolved container image for {@link buildActArgv}.
+ */
+export function resolveActLocalCiRunnerFromProcessEnv(
+	env: NodeJS.ProcessEnv,
+	input: { readonly mode: ActLocalCiMode; readonly dryRun: boolean },
+): { readonly runsOnLabel: string; readonly runnerImage: string } {
+	const fromRunner = env.ACT_RUNNER_IMAGE?.trim();
+	const runnerImageFromEnv =
+		fromRunner !== undefined && fromRunner.length > 0 ? fromRunner : undefined;
+	const label = env.ACT_RUNS_ON_LABEL?.trim();
+	const runsOnLabel = label !== undefined && label.length > 0 ? label : DEFAULT_ACT_RUNS_ON_LABEL;
+	const runnerImage = resolveActRunnerImage({
+		runnerImageFromEnv,
+		githubActions: env.GITHUB_ACTIONS === "true",
+		mode: input.mode,
+		dryRun: input.dryRun,
+	});
+	return { runsOnLabel, runnerImage };
 }
 
 export type ActRunPlan = {
