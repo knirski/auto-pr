@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup runtime (Node or alternative) with cache
-        uses: knirski/auto-pr/.github/actions/setup-runtime@da2303fd7e882e16d328fd7bd8451721a0b195f8
+        uses: knirski/auto-pr/.github/actions/setup-runtime@1e68acb27ac1eebb9e361dfb5418642f660da397
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
