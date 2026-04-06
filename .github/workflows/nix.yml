@@ -6,6 +6,7 @@
 #
 # Uses upstream Nix (cachix/install-nix-action).
 # Builds on x86_64-linux, aarch64-linux, and aarch64-darwin (macos-latest).
+# v31+ ships a newer Nix installer (2.34.x) with better macOS dscl behavior; it no-ops if nix is already on PATH.
 
 name: Nix
 
@@ -50,7 +51,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Nix
-        uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
+        uses: cachix/install-nix-action@96951a368ba55167b55f1c916f7d416bac6505fe # v31
         with:
           extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
 
@@ -131,7 +132,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Nix
-        uses: cachix/install-nix-action@6004951b182f8860210c8d6f0d808ec5b1a33d28 # v25
+        uses: cachix/install-nix-action@96951a368ba55167b55f1c916f7d416bac6505fe # v31
         with:
           extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
 
