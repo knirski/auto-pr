@@ -5,7 +5,7 @@
 # (GITHUB_TOKEN pushes do not trigger workflows). Same App as auto-pr (APP_ID, APP_PRIVATE_KEY).
 #
 # Uses upstream Nix (cachix/install-nix-action).
-# Builds on x86_64-linux and aarch64-linux (arm64 runners).
+# Builds on x86_64-linux, aarch64-linux, and aarch64-darwin (macos-latest).
 
 name: Nix
 
@@ -119,6 +119,8 @@ jobs:
             runner: ubuntu-24.04
           - system: aarch64-linux
             runner: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            runner: macos-latest
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:

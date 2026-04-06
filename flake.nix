@@ -9,7 +9,11 @@
   };
 
   outputs = { self, nixpkgs, flake-utils, bun2nix }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
+    flake-utils.lib.eachSystem [
+      "x86_64-linux"
+      "aarch64-linux"
+      "aarch64-darwin"
+    ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
       in

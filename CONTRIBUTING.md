@@ -43,9 +43,9 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 
 - **gh extension** (preferred): `gh extension install nektos/gh-act`
 - **act standalone**: `brew install act` (or [other install options](https://github.com/nektos/act#installation))
-- **Nix**: `act` is in this flake for **x86_64-linux** and **aarch64-linux** only (same systems as the rest of the flake). With Nix installed on those platforms, the script runs `nix run .#act` when `act` is not on your PATH (same pattern as `scripts/nix-run-if-missing.sh`). `nix develop` also puts `act` in PATH. On macOS or other hosts, use `gh act`, Homebrew `act`, or another install.
+- **Nix**: With Nix installed, `act` is available from this flake on **Linux and macOS** (see `flake.nix` systems). The helper runs `nix run .#act` when `act` is not on your PATH (same pattern as `scripts/nix-run-if-missing.sh`). `nix develop` also puts `act` in PATH. Without Nix, use `gh act`, Homebrew `act`, or another install.
 
-The script prefers standalone `act` (PATH or `nix run .#act` on Linux), so you do not need `gh extension install nektos/gh-act` unless you rely on `gh act` alone. If neither `act` nor Nix is available, it uses `gh act` when that extension is installed. In code this is the **`direct`** backend (`bash` + `scripts/nix-run-if-missing.sh` + `act`) vs **`gh`** (`gh act`); see `ActBackend` in [`act-local-ci.ts`](src/core/act-local-ci.ts).
+The script prefers standalone `act` (PATH or `nix run .#act` when the flake supports your host), so you do not need `gh extension install nektos/gh-act` unless you rely on `gh act` alone. If neither `act` nor Nix is available, it uses `gh act` when that extension is installed. In code this is the **`direct`** backend (`bash` + `scripts/nix-run-if-missing.sh` + `act`) vs **`gh`** (`gh act`); see `ActBackend` in [`act-local-ci.ts`](src/core/act-local-ci.ts).
 
 This repo’s workflows use a specific `runs-on` label (see the YAML). [act](https://github.com/nektos/act) needs **`-P <runs-on>=<container image>`** where `<runs-on>` **matches** the workflow job’s label. [scripts/act-local-ci.ts](scripts/act-local-ci.ts) defaults the label to **`ubuntu-24.04`** ([`DEFAULT_ACT_RUNS_ON_LABEL`](src/core/act-local-ci.ts)); set **`ACT_RUNS_ON_LABEL`** if your workflows use something else. It resolves a **container image** via **`ACT_RUNNER_IMAGE`** (optional) or built-in defaults tuned for this repo’s current label. Same script writes a minimal `workflow_dispatch` JSON (`-e`, from `git remote origin` or `package.json` `repository`) to `.act-artifacts/workflow_dispatch.json` so `github.event.repository` exists for actions that need it, and **`--artifact-server-path .act-artifacts/`** so [`actions/upload-artifact`](https://github.com/actions/upload-artifact) (SBOM, gitleaks SARIF) gets a local [artifact server](https://github.com/nektos/act/issues/1929) instead of GitHub’s `ACTIONS_RUNTIME_TOKEN`. If you invoke **`act` by hand**, pass **`-P`** with the same label as `runs-on` and your chosen image.
 
@@ -92,11 +92,16 @@ See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architect
 
 Nix is **not required for users**. The workflows use Node and npx only.
 
-For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. Builds on x86_64-linux and aarch64-linux (arm64 runners). The flake provides:
+For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. `nix flake check` runs on **x86_64-linux**, **aarch64-linux**, and **aarch64-darwin** (`macos-latest`). Intel Macs are not supported by the flake (use Homebrew or other installs from the table above).
+
+**direnv:** With [direnv](https://direnv.net/) installed and hooked into your shell, run **`direnv allow`** once in the repo root. The committed **`.envrc`** loads the same dev environment as **`nix develop`** on supported hosts (Linux x86_64/aarch64, Apple Silicon). Optional: [nix-direnv](https://github.com/nix-community/nix-direnv) for faster reloads. Tools then stay on `PATH` when you work in the tree (see also `scripts/nix-run-if-missing.sh` for scripts that run without direnv).
+
+The flake provides:
 
 | Use | Command | Purpose |
 |-----|---------|---------|
 | **Dev shell** | `nix develop` | Bun, act, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
+| **direnv** | `direnv allow` | Same as dev shell when you `cd` here (see `.envrc`; not on Intel Mac) |
 | **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
 | **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
 | **Local run** | `nix run .#default` | Full pipeline locally (requires `GH_TOKEN`, AI provider for 2+ commits) |
