@@ -55,6 +55,7 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 | [scorecard.yml](../.github/workflows/scorecard.yml) | push → main, schedule (Sat 01:30 UTC) | — | Scorecard analysis |
 | [stale.yml](../.github/workflows/stale.yml) | schedule (Mon 00:00 UTC), workflow_dispatch | — | Mark stale issues/PRs |
 | [act-smoke.yml](../.github/workflows/act-smoke.yml) | push, pull_request → main, workflow_dispatch | `paths: .github/workflows/**`, `scripts/act-local-ci.ts`, `flake.nix` | matrix: `--dry-run check` + `check-workflows` (parallel) via [`gh-act`](https://github.com/nektos/gh-act) (`GH_TOKEN` for `gh`) |
+| [deploy-pages.yml](../.github/workflows/deploy-pages.yml) | push → main | `paths: docs/**`, `website/**` | build (Bun install + build in website/), deploy (GitHub Pages via actions/deploy-pages) |
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 

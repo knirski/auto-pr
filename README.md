@@ -93,6 +93,8 @@ After install, or for one-offs: `npx -p github:knirski/auto-pr <command>`. CI ru
 
 ## Documentation
 
+Full documentation is available at [knirski.github.io/auto-pr](https://knirski.github.io/auto-pr/).
+
 | Audience | Documents |
 |----------|-----------|
 | **Users** | [Integration guide](docs/INTEGRATION.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [PR template](docs/PR_TEMPLATE.md) |

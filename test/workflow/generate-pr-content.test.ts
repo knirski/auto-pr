@@ -15,6 +15,7 @@ import { FillPrTemplateValidationError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
 import {
+	cleanGitEnv,
 	createGitContextMock,
 	createOpenAiChatCompletionsMockFetch,
 	createTestTempDirEffect,
@@ -574,9 +575,10 @@ function setupGitRepoForRunGeneratePrContent(
 ): Effect.Effect<void, Error, ChildProcessSpawner> {
 	return Effect.gen(function* () {
 		const spawner = yield* ChildProcessSpawner;
+		const env = cleanGitEnv();
 		const run = (args: string[]) =>
 			spawner
-				.string(ChildProcess.make("git", args, { cwd: workspace }))
+				.string(ChildProcess.make("git", args, { cwd: workspace, env, extendEnv: false }))
 				.pipe(Effect.mapError((e) => new Error(String(e))));
 
 		yield* run(["init", "-b", branchName]);

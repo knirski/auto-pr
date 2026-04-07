@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" fill="none">
+  <!-- Source branch node -->
+  <circle cx="12" cy="10" r="3" stroke="#10b981" stroke-width="2"/>
+  <!-- Target branch node -->
+  <circle cx="12" cy="26" r="3" stroke="#10b981" stroke-width="2"/>
+  <!-- Merge destination node -->
+  <circle cx="24" cy="26" r="3" stroke="#10b981" stroke-width="2"/>
+  <!-- Trunk line -->
+  <line x1="12" y1="13" x2="12" y2="23" stroke="#10b981" stroke-width="2"/>
+  <!-- Merge path (dashed) -->
+  <path d="M12 13 Q12 20 24 23" stroke="#6ee7b7" stroke-width="2" fill="none" stroke-dasharray="3 2"/>
+  <!-- AI sparkle -->
+  <path d="M26 6 L27 9 L30 10 L27 11 L26 14 L25 11 L22 10 L25 9 Z" fill="#fbbf24" opacity="0.9"/>
+</svg>

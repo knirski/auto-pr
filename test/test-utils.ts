@@ -5,7 +5,10 @@
 import { Effect, FileSystem, Layer, Logger, Path, Stream } from "effect";
 import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { AutoPrPlatformLayer } from "#auto-pr";
+import { AutoPrPlatformLayer, cleanGitEnv } from "#auto-pr";
+
+export { cleanGitEnv };
+
 import type { GitContext } from "#auto-pr/git-context.js";
 
 /**
