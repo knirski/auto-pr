@@ -65,6 +65,8 @@ jobs:
     outputs:
       auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
     steps:
+      # codeql[actions/untrusted-checkout] github.ref_name in workflow_call context is the
+      # calling workflow's own ref (a pushed branch via push trigger), never a PR head.
       - name: Checkout branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
