@@ -1,0 +1,200 @@
+---
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>auto-pr — AI-powered pull requests from conventional commits</title>
+    <meta name="description" content="Push to an ai/* branch, get a well-structured PR with title, description, and filled template — automatically." />
+    <link rel="icon" type="image/svg+xml" href="/auto-pr/favicon.svg" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #0a0a0a;
+        color: #e2e8f0;
+        line-height: 1.6;
+      }
+      a { color: #10b981; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      code {
+        background: #1e293b;
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+
+      /* Hero */
+      .hero {
+        text-align: center;
+        padding: 6rem 1.5rem 4rem;
+        max-width: 700px;
+        margin: 0 auto;
+      }
+      .hero-badge {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #10b981;
+        margin-bottom: 1rem;
+      }
+      .hero h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 1rem;
+      }
+      .hero p {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+      }
+      .cta-group {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .cta {
+        display: inline-block;
+        padding: 0.7rem 1.8rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: opacity 0.2s;
+      }
+      .cta:hover { opacity: 0.9; text-decoration: none; }
+      .cta-primary { background: #10b981; color: #0a0a0a; }
+      .cta-secondary { border: 1px solid #334155; color: #e2e8f0; }
+
+      /* Features */
+      .features {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+      }
+      .features h2 {
+        text-align: center;
+        font-size: 1.5rem;
+        margin-bottom: 2rem;
+      }
+      .feature-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      @media (max-width: 600px) {
+        .feature-grid { grid-template-columns: 1fr; }
+        .hero h1 { font-size: 1.8rem; }
+      }
+      .feature-card {
+        background: #111827;
+        border-radius: 8px;
+        padding: 1.25rem;
+      }
+      .feature-card h3 {
+        font-size: 1rem;
+        margin-bottom: 0.4rem;
+      }
+      .feature-card p {
+        color: #94a3b8;
+        font-size: 0.9rem;
+      }
+
+      /* Quick Start */
+      .quickstart {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 6rem;
+        text-align: center;
+      }
+      .quickstart h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .quickstart .subtitle {
+        color: #94a3b8;
+        margin-bottom: 1.5rem;
+      }
+      .code-block {
+        background: #0d1117;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.85rem;
+        text-align: left;
+        margin-bottom: 1.5rem;
+      }
+      .code-comment { color: #6b7280; }
+      .code-cmd { color: #e2e8f0; }
+      .code-result { color: #10b981; }
+
+      /* Footer */
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: #6b7280;
+        font-size: 0.85rem;
+        border-top: 1px solid #1e293b;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="hero">
+      <div class="hero-badge">auto-pr</div>
+      <h1>AI-powered pull requests from conventional commits</h1>
+      <p>
+        Push to an <code>ai/*</code> branch, get a well-structured PR with title,
+        description, and filled template &mdash; automatically.
+      </p>
+      <div class="cta-group">
+        <a href="/auto-pr/docs/integration/" class="cta cta-primary">Get Started</a>
+        <a href="https://github.com/knirski/auto-pr" class="cta cta-secondary">View on GitHub</a>
+      </div>
+    </section>
+
+    <section class="features">
+      <h2>Why auto-pr?</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>Zero Config</h3>
+          <p>Convention over configuration. Works with any GitHub project regardless of tech stack.</p>
+        </div>
+        <div class="feature-card">
+          <h3>AI Descriptions</h3>
+          <p>Multi-commit PRs get AI-generated summaries using GitHub Models or local LLMs.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Template Aware</h3>
+          <p>Automatically fills your PR template placeholders from commit metadata.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Secure by Design</h3>
+          <p>Two-phase workflow separates unprivileged generation from trusted PR creation.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="quickstart">
+      <h2>Get started in minutes</h2>
+      <p class="subtitle">Add to your repo with a single command</p>
+      <div class="code-block">
+        <div class="code-comment"># Initialize auto-pr in your repo</div>
+        <div class="code-cmd">npx -p github:knirski/auto-pr auto-pr-init</div>
+      </div>
+      <p class="subtitle">Then push to an ai/* branch and watch the magic happen</p>
+      <div class="code-block">
+        <div class="code-cmd">git checkout -b ai/my-feature</div>
+        <div class="code-cmd">git commit -m "feat: add new feature"</div>
+        <div class="code-cmd">git push</div>
+        <div class="code-result" style="margin-top: 0.5rem;">&#10132; PR created automatically</div>
+      </div>
+    </section>
+
+    <footer>
+      <p>MIT License &middot; <a href="https://github.com/knirski/auto-pr">GitHub</a></p>
+    </footer>
+  </body>
+</html>
