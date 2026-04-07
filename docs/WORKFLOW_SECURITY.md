@@ -26,7 +26,7 @@ The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must 
 ### Generate (Unprivileged)
 
 - **Checkout:** The pushed branch — untrusted, but acceptable because the workflow has no privileged permissions.
-- **Runs:** `auto-pr-get-commits`, `auto-pr-generate-content` (AI), artifact preparation.
+- **Runs:** `auto-pr-generate-content` (AI), artifact preparation.
 - **Output:** Artifact `pr-content` (title, body, branch, default_branch).
 - **Risk:** Limited. It cannot write to the repo. The job receives a token for GitHub Models as passed from the caller (repo **`GH_TOKEN`** secret or default **`github.token`**), not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`).
 
