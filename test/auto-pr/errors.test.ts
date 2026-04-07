@@ -9,6 +9,7 @@ import {
 	DescriptionParseError,
 	FillPrTemplateValidationError,
 	formatError,
+	isTransientAiError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -133,4 +134,43 @@ test("formatError formats FileSystemError (fallback path)", () => {
 
 test("formatError formats plain Error", () => {
 	expect(formatError(new Error("generic"))).toBe("generic");
+});
+
+test("isTransientAiError returns true for DescriptionParseError", () => {
+	expect(isTransientAiError(new DescriptionParseError({ cause: "parse failed" }))).toBe(true);
+});
+
+test("isTransientAiError returns true for AiProviderError with 429", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 429, cause: "rate limited" }))).toBe(
+		true,
+	);
+});
+
+test("isTransientAiError returns true for AiProviderError with 500", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 500, cause: "server error" }))).toBe(
+		true,
+	);
+});
+
+test("isTransientAiError returns true for AiProviderError with 503", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 503, cause: "unavailable" }))).toBe(true);
+});
+
+test("isTransientAiError returns true for AiProviderError with null status (network error)", () => {
+	expect(isTransientAiError(new AiProviderError({ cause: "connection refused" }))).toBe(true);
+});
+
+test("isTransientAiError returns false for AiProviderError with 401", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 401, cause: "unauthorized" }))).toBe(
+		false,
+	);
+});
+
+test("isTransientAiError returns false for AiProviderError with 403", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 403, cause: "forbidden" }))).toBe(false);
+});
+
+test("isTransientAiError returns true for unknown/generic errors", () => {
+	expect(isTransientAiError(new Error("schema decode failed"))).toBe(true);
+	expect(isTransientAiError("some string error")).toBe(true);
 });

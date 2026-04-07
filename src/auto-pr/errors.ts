@@ -107,3 +107,19 @@ export function formatError(e: unknown): string {
 		return unknownToMessage(e);
 	});
 }
+
+/**
+ * Returns true if the error is transient (network, rate limit, 5xx, parse/validation failures)
+ * and the caller should fall back to a commit-summary PR.
+ * Returns false for config/auth errors (401/403) that indicate bad configuration.
+ */
+export function isTransientAiError(e: unknown): boolean {
+	if (e instanceof DescriptionParseError) return true;
+	if (e instanceof AiProviderError) {
+		const { status } = e;
+		if (status == null) return true; // network / connection error
+		if (status === 429 || status >= 500) return true; // rate limit or server error
+		return false; // 401, 403 = config / auth error
+	}
+	return true; // schema decode failures and other unknown errors are transient
+}

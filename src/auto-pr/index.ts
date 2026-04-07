@@ -25,6 +25,7 @@ export {
 	DescriptionParseError,
 	FillPrTemplateValidationError,
 	formatError,
+	isTransientAiError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
