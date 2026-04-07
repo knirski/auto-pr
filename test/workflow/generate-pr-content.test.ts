@@ -3,6 +3,7 @@ import { Cause, Duration, Effect, Exit, FileSystem, Layer, Redacted, Result } fr
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
+	AutoPrConfigError,
 	aiProviderLayerFromConfig,
 	ChildProcessSpawnerLayer,
 	DiffToolkit,
@@ -528,6 +529,62 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 				Effect.gen(function* () {
 					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		});
+	});
+
+	describe("HTTP 401/403 from OpenAI-compat endpoint (auth failure)", () => {
+		test("propagates as AutoPrConfigError when local endpoint returns HTTP 401", async () => {
+			const p = makeParams(twoCommits, {
+				retryDelay: Duration.zero,
+				fetch: createOpenAiChatCompletionsMockFetch({
+					content: VALID_AI_RESPONSE,
+					status: 401,
+				}),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const exit = yield* generatePrContent(p.params).pipe(Effect.exit, Effect.scoped);
+					expect(Exit.isFailure(exit)).toBe(true);
+					if (Exit.isFailure(exit)) {
+						Result.match(Cause.findError(exit.cause), {
+							onSuccess: (err) => {
+								expect(err).toBeInstanceOf(AutoPrConfigError);
+								expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+									"AuthenticationError",
+								);
+							},
+							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+						});
+					}
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("propagates as AutoPrConfigError when local endpoint returns HTTP 403", async () => {
+			const p = makeParams(twoCommits, {
+				retryDelay: Duration.zero,
+				fetch: createOpenAiChatCompletionsMockFetch({
+					content: VALID_AI_RESPONSE,
+					status: 403,
+				}),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const exit = yield* generatePrContent(p.params).pipe(Effect.exit, Effect.scoped);
+					expect(Exit.isFailure(exit)).toBe(true);
+					if (Exit.isFailure(exit)) {
+						Result.match(Cause.findError(exit.cause), {
+							onSuccess: (err) => {
+								expect(err).toBeInstanceOf(AutoPrConfigError);
+								expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+									"AuthenticationError",
+								);
+							},
+							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+						});
+					}
 				}).pipe(Effect.scoped),
 			);
 		});

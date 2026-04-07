@@ -41,3 +41,15 @@ export function filterSemanticSubjects(subjects: string[]): string[] {
 export function isHttpError(status: number): boolean {
 	return status >= 400;
 }
+
+/**
+ * Truncate a string for log output. Returns the trimmed string if within limit,
+ * otherwise truncates and appends an indicator with the full length.
+ */
+export function truncateForLog(s: string, maxChars: number): string {
+	const t = s.trim();
+	if (t.length <= maxChars) {
+		return t;
+	}
+	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
+}

@@ -3,6 +3,7 @@
  */
 
 import { Match } from "effect";
+import { AiError as EffectAiError } from "effect/unstable/ai";
 import { CliError } from "effect/unstable/cli";
 import {
 	errorToLogMessage,
@@ -106,4 +107,25 @@ export function formatError(e: unknown): string {
 		if (err instanceof FileSystemError) return formatFileSystemError(err);
 		return unknownToMessage(e);
 	});
+}
+
+/**
+ * Returns true if the error is transient (network, rate limit, 5xx, parse/validation failures)
+ * and the caller should fall back to a commit-summary PR.
+ * Returns false for config/auth errors (401/403) that indicate bad configuration.
+ */
+export function isTransientAiError(e: unknown): boolean {
+	if (e instanceof DescriptionParseError) return true;
+	if (e instanceof AiProviderError) {
+		const { status } = e;
+		if (status === 401 || status === 403) return false; // config / auth error
+		return true; // null, 429, 5xx, and all other 4xx codes are transient
+	}
+	// Handle AiError from Effect's AI library (raised by LanguageModel.generateText).
+	// Only AuthenticationError is a permanent config error; InvalidRequestError and all
+	// other reason types (including model-limitation 400s from local servers) are transient.
+	if (EffectAiError.isAiError(e)) {
+		return e.reason._tag !== "AuthenticationError";
+	}
+	return true; // schema decode failures and other unknown errors are transient
 }

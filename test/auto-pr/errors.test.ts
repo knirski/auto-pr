@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Redacted } from "effect";
+import { AiError as EffectAiError } from "effect/unstable/ai";
 import { CliError } from "effect/unstable/cli";
 import {
 	ActLocalCiError,
@@ -9,6 +10,7 @@ import {
 	DescriptionParseError,
 	FillPrTemplateValidationError,
 	formatError,
+	isTransientAiError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -133,4 +135,111 @@ test("formatError formats FileSystemError (fallback path)", () => {
 
 test("formatError formats plain Error", () => {
 	expect(formatError(new Error("generic"))).toBe("generic");
+});
+
+test("isTransientAiError returns true for DescriptionParseError", () => {
+	expect(isTransientAiError(new DescriptionParseError({ cause: "parse failed" }))).toBe(true);
+});
+
+test("isTransientAiError returns true for AiProviderError with 429", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 429, cause: "rate limited" }))).toBe(
+		true,
+	);
+});
+
+test("isTransientAiError returns true for AiProviderError with 500", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 500, cause: "server error" }))).toBe(
+		true,
+	);
+});
+
+test("isTransientAiError returns true for AiProviderError with 503", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 503, cause: "unavailable" }))).toBe(true);
+});
+
+test("isTransientAiError returns true for AiProviderError with null status (network error)", () => {
+	expect(isTransientAiError(new AiProviderError({ cause: "connection refused" }))).toBe(true);
+});
+
+test("isTransientAiError returns false for AiProviderError with 401", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 401, cause: "unauthorized" }))).toBe(
+		false,
+	);
+});
+
+test("isTransientAiError returns false for AiProviderError with 403", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 403, cause: "forbidden" }))).toBe(false);
+});
+
+test("isTransientAiError returns true for AiProviderError with 404 (non-auth 4xx is transient)", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 404, cause: "not found" }))).toBe(true);
+});
+
+test("isTransientAiError returns true for AiProviderError with 408 (timeout is transient)", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 408, cause: "request timeout" }))).toBe(
+		true,
+	);
+});
+
+test("isTransientAiError returns true for unknown/generic errors", () => {
+	expect(isTransientAiError(new Error("schema decode failed"))).toBe(true);
+	expect(isTransientAiError("some string error")).toBe(true);
+});
+
+test("isTransientAiError returns false for non-retryable AiError (AuthenticationError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.AuthenticationError({ kind: "InvalidKey" }),
+	});
+	expect(isTransientAiError(e)).toBe(false);
+});
+
+test("isTransientAiError returns true for retryable AiError (RateLimitError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.RateLimitError({}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
+});
+
+test("isTransientAiError returns true for retryable AiError (NetworkError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.NetworkError({
+			reason: "TransportError",
+			request: {
+				method: "POST",
+				url: "https://api.example.com/chat",
+				urlParams: [],
+				hash: undefined,
+				headers: {},
+			},
+		}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
+});
+
+test("isTransientAiError returns true for retryable AiError (InternalProviderError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.InternalProviderError({
+			description: "Server error",
+		}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
+});
+
+test("isTransientAiError returns true for non-retryable AiError (InvalidRequestError) — model-limitation 400s from local servers are transient", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.InvalidRequestError({
+			description: "_Map_base::at",
+		}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
 });

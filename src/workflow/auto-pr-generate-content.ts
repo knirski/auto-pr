@@ -26,10 +26,11 @@ import {
 	Schedule,
 	Schema,
 } from "effect";
+import type { AiError } from "effect/unstable/ai";
 import { LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
-	type AutoPrConfigError,
+	AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
@@ -43,6 +44,7 @@ import {
 	GitContextLive,
 	getPrDescriptionPromptPath,
 	isBlank,
+	isTransientAiError,
 	makeDiffToolkitLayer,
 	NoSemanticCommitsError,
 	ParseError,
@@ -68,6 +70,7 @@ import {
 	renderBody as renderBodyCore,
 } from "#core/fill-pr-template-core.js";
 import { parseFirstJsonObject } from "#core/parse-model-json.js";
+import { truncateForLog } from "#core/string.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -147,14 +150,6 @@ function logAndValidateTitleDescription(
 
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
-
-function truncateForLog(s: string, maxChars: number): string {
-	const t = s.trim();
-	if (t.length <= maxChars) {
-		return t;
-	}
-	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
-}
 
 function normalizeRiskItems(risks: readonly string[]): readonly string[] {
 	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
@@ -270,6 +265,18 @@ function generateTitleAndDescriptionWithToolkit(
 			prompt_chars: prompt.length,
 		});
 		const res = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "token_usage",
+			provider,
+			model,
+			prompt_tokens: res.usage.inputTokens.total ?? null,
+			completion_tokens: res.usage.outputTokens.total ?? null,
+			total_tokens:
+				res.usage.inputTokens.total != null && res.usage.outputTokens.total != null
+					? res.usage.inputTokens.total + res.usage.outputTokens.total
+					: null,
+		});
 		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
 		return yield* logAndValidateTitleDescription(raw, provider, model);
 	}).pipe(
@@ -284,7 +291,7 @@ function generateTitleAndDescriptionWithToolkit(
 			}),
 		),
 		Effect.retry(makeRetrySchedule(retryDelay)),
-		Effect.catch(() =>
+		Effect.catchIf(isTransientAiError, () =>
 			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
 				Effect.tap(() =>
 					Effect.logWarning({
@@ -383,6 +390,16 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
 				ParseError: (e: ParseError) => Effect.fail(e),
 				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
+				AiError: (e: AiError.AiError) =>
+					!isTransientAiError(e)
+						? Effect.fail(
+								new AutoPrConfigError({
+									missing: [
+										`AI provider authentication/config error [${e.reason._tag}]: ${e.message}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
+									],
+								}),
+							)
+						: Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
 			},
 			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
 		),

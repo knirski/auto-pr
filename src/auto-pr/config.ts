@@ -23,7 +23,7 @@
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  *
  * **Convention (not env):** `generate-content` uses `GitContext` with `DEFAULT_BRANCH` and `BRANCH` to fetch commit log and diff data directly. It writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`. `create-or-update-pr` reads those paths (after `generate-content` or after restoring the artifact that copies them into the workspace). PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` (see ADR 0008).
- * Edit that file for project-specific “how to test” steps (static markdown; not filled from code).
+ * Edit that file for project-specific "how to test" steps (static markdown; not filled from code).
  */
 
 import { join } from "node:path";
@@ -105,7 +105,7 @@ export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
 
 /**
  * Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `github-models`.
- * Picks a catalog model with the lowest billing multipliers (GitHub: “Costs and multipliers for using GitHub Models directly”).
+ * Picks a catalog model with the lowest billing multipliers (GitHub: "Costs and multipliers for using GitHub Models directly").
  */
 export const DEFAULT_GITHUB_MODELS_MODEL = "microsoft/phi-4-mini-instruct";
 
@@ -165,6 +165,13 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const branch = yield* requireNonEmpty("BRANCH", base.branch);
+			if (branch === defaultBranch) {
+				return yield* Effect.fail(
+					new AutoPrConfigError({
+						missing: [`BRANCH (${branch}) must differ from DEFAULT_BRANCH (${defaultBranch})`],
+					}),
+				);
+			}
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
@@ -189,11 +196,21 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.aiOpenaiCompatUrl,
 							() => DEFAULT_OPENAI_COMPAT_URL,
 						);
+						if (Option.isNone(base.aiOpenaiCompatUrl)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
+							);
+						}
 						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
 						const model = Option.getOrElse(
 							base.aiOpenaiCompatModel,
 							() => DEFAULT_OPENAI_COMPAT_MODEL,
 						);
+						if (Option.isNone(base.aiOpenaiCompatModel)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
+							);
+						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
@@ -216,6 +233,13 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.aiOpenaiCompatModel,
 							() => DEFAULT_GITHUB_MODELS_MODEL,
 						);
+						yield* Option.match(base.aiOpenaiCompatModel, {
+							onNone: () =>
+								Effect.logWarning(
+									`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_GITHUB_MODELS_MODEL}`,
+								),
+							onSome: () => Effect.void,
+						});
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
@@ -322,6 +346,17 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
+			const resolvedBranch = Option.getOrUndefined(base.branch);
+			if (resolvedBranch !== undefined && resolvedBranch === defaultBranch) {
+				return yield* Effect.fail(
+					new AutoPrConfigError({
+						missing: [
+							`BRANCH (${resolvedBranch}) must differ from DEFAULT_BRANCH (${defaultBranch})`,
+						],
+					}),
+				);
+			}
+
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
 			yield* Option.match(base.aiProvider, {
 				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to local"),
@@ -335,7 +370,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				templatePath,
 				ghToken: base.ghToken,
 				provider,
-				branch: Option.getOrUndefined(base.branch),
+				branch: resolvedBranch,
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -345,11 +380,21 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							base.aiOpenaiCompatUrl,
 							() => DEFAULT_OPENAI_COMPAT_URL,
 						);
+						if (Option.isNone(base.aiOpenaiCompatUrl)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
+							);
+						}
 						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
 						const model = Option.getOrElse(
 							base.aiOpenaiCompatModel,
 							() => DEFAULT_OPENAI_COMPAT_MODEL,
 						);
+						if (Option.isNone(base.aiOpenaiCompatModel)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
+							);
+						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
@@ -367,6 +412,13 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							base.aiOpenaiCompatModel,
 							() => DEFAULT_GITHUB_MODELS_MODEL,
 						);
+						yield* Option.match(base.aiOpenaiCompatModel, {
+							onNone: () =>
+								Effect.logWarning(
+									`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_GITHUB_MODELS_MODEL}`,
+								),
+							onSome: () => Effect.void,
+						});
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,

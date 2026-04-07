@@ -69,3 +69,57 @@ describe("DiffToolkit handlers", () => {
 		expect(typeof makeDiffToolkitLayer).toBe("function");
 	});
 });
+
+describe("DiffToolkit error responses", () => {
+	test("get_diff handler returns [TOOL_ERROR] prefixed message on error", async () => {
+		const mockGitCtx = createGitContextMock({
+			getDiff: () => Effect.fail(new Error("git failed: no such ref")),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_diff", { path: "foo.ts" });
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = String(handlerResult.result);
+				expect(result).toContain("[TOOL_ERROR]");
+				expect(result).toContain("get_diff failed");
+				expect(result).toContain("git failed: no such ref");
+				expect(result).toContain("No diff available for this request.");
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("get_commit_diff handler returns [TOOL_ERROR] prefixed message on error", async () => {
+		const mockGitCtx = createGitContextMock({
+			getCommitDiff: () => Effect.fail(new Error("unknown commit")),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_commit_diff", { hash: "abc123" });
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = String(handlerResult.result);
+				expect(result).toContain("[TOOL_ERROR]");
+				expect(result).toContain("get_commit_diff failed");
+				expect(result).toContain("unknown commit");
+				expect(result).toContain("No diff available for this request.");
+			}).pipe(Effect.scoped),
+		);
+	});
+});
