@@ -37,6 +37,10 @@ function envNonEmpty(name: string): boolean {
 const canRunLocal =
 	envNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL") && envNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL");
 
+/** Qwen2.5-1.5B happy-path suite: separate env vars set only by the integration-qwen CI job. */
+const canRunQwen =
+	envNonEmpty("AUTO_PR_AI_QWEN_COMPAT_URL") && envNonEmpty("AUTO_PR_AI_QWEN_COMPAT_MODEL");
+
 /** GitHub Models: token with `models: read` (e.g. `GITHUB_TOKEN` in Actions). */
 const canRunGithubModels = envNonEmpty("GH_TOKEN");
 
@@ -132,6 +136,38 @@ describe.skipIf(!canRunLocal)("integration: local OpenAI-compat (llama.cpp)", ()
 					expect(result.title.trim().length).toBeGreaterThan(0);
 					expect(result.body).toContain("### Motivation");
 					expect(result.body).toContain("### Risks");
+				}),
+			);
+		},
+		{ timeout: 180_000 },
+	);
+});
+
+describe.skipIf(!canRunQwen)("integration: local llama.cpp (qwen2.5-1.5b, happy path)", () => {
+	test(
+		"generatePrContent (2 commits) uses AI and produces non-fallback PR body",
+		async () => {
+			const baseUrl = process.env.AUTO_PR_AI_QWEN_COMPAT_URL ?? "";
+			const model = process.env.AUTO_PR_AI_QWEN_COMPAT_MODEL ?? "";
+			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
+			const layer = layerLocal(model, baseUrl.replace(/\/$/, ""));
+			await runEffect(layer)(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent({
+						baseRef: "origin/main",
+						headRef: "ai/test",
+						templateContent: TEMPLATE,
+						descriptionPromptText,
+						provider: "local",
+						model,
+						retryDelay: Duration.zero,
+					});
+					expect(result.count).toBe(2);
+					expect(result.title.trim().length).toBeGreaterThan(0);
+					expect(result.body).toContain("### Motivation");
+					expect(result.body).toContain("### Risks");
+					// Qwen2.5-1.5B supports tool calls — AI generation should succeed, no fallback.
+					expect(result.body).not.toContain("AI description unavailable");
 				}),
 			);
 		},
