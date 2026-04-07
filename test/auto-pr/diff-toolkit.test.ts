@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import { DiffToolkit, makeDiffToolkitLayer } from "#auto-pr/diff-toolkit.js";
 import { GitContext } from "#auto-pr/git-context.js";
 import { runEffect } from "#test/run-effect.js";
@@ -23,12 +23,15 @@ describe("DiffToolkit handlers", () => {
 		);
 		await runEffect(TestLayer)(
 			Effect.gen(function* () {
-				const git = yield* GitContext;
-				const result = yield* git.getDiff("origin/main", "ai/feature", "foo.ts");
-				expect(result).toContain("+const x = 1;");
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_diff", { path: "foo.ts" });
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = handlerResult.result;
+				expect(String(result)).toContain("+const x = 1;");
 				expect(capturedArgs?.baseRef).toBe("origin/main");
 				expect(capturedArgs?.path).toBe("foo.ts");
-			}).pipe(Effect.provide(gitLayer), Effect.scoped),
+			}).pipe(Effect.scoped),
 		);
 	});
 
@@ -49,11 +52,14 @@ describe("DiffToolkit handlers", () => {
 		);
 		await runEffect(TestLayer)(
 			Effect.gen(function* () {
-				const git = yield* GitContext;
-				const result = yield* git.getCommitDiff("abc123");
-				expect(result).toContain("diff content");
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_commit_diff", { hash: "abc123" });
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = handlerResult.result;
+				expect(String(result)).toContain("diff content");
 				expect(capturedHash).toBe("abc123");
-			}).pipe(Effect.provide(gitLayer), Effect.scoped),
+			}).pipe(Effect.scoped),
 		);
 	});
 
