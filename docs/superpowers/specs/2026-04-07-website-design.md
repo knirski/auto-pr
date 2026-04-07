@@ -85,7 +85,7 @@ A custom Astro page (not part of Starlight's docs routing) with three sections:
 ### Section 1: Hero
 - Project name and tagline: "AI-powered pull requests from conventional commits"
 - One-sentence value prop mentioning `ai/*` branches
-- Two CTAs: "Get Started" (links to `/auto-pr/docs/getting-started/`) and "View on GitHub"
+- Two CTAs: "Get Started" (links to `/auto-pr/docs/integration/`) and "View on GitHub"
 
 ### Section 2: Feature Cards
 Four cards in a 2x2 grid:
@@ -146,7 +146,7 @@ export default defineConfig({
         {
           label: 'User Guide',
           items: [
-            { slug: 'getting-started' },
+            { slug: 'integration' },
             { slug: 'troubleshooting' },
             { slug: 'pr-template' },
           ],
