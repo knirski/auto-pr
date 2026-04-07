@@ -87,7 +87,7 @@ jobs:
         env:
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
-        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-fallback.integration.test.ts
 
       - name: Stop local llama-server
         if: always() && steps.local_llama.outcome != 'skipped'
@@ -116,7 +116,7 @@ jobs:
         env:
           INTEGRATION_GITHUB_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
           GH_TOKEN: ${{ github.token }}
-        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.github-models.integration.test.ts
 
   # Scenario: local model with reliable tool-call support → exercises real AI generation without fallback.
   # Uses Qwen3-1.7B Q4_K_M with --jinja. Asserts AI output is used (no "AI description unavailable").
@@ -179,9 +179,9 @@ jobs:
 
       - name: Run integration tests (Qwen happy path)
         env:
-          AUTO_PR_AI_QWEN_COMPAT_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
-          AUTO_PR_AI_QWEN_COMPAT_MODEL: ${{ steps.openai_model_qwen.outputs.id }}
-        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_qwen.outputs.id }}
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 
       - name: Stop local llama-server (Qwen)
         if: always() && steps.local_llama_qwen.outcome != 'skipped'
