@@ -43,7 +43,7 @@ function rewriteLinks(content: string, subdir: string = ""): string {
 		// For relative links (no directory component), prepend the subdir
 		const prefix = filePart.includes("/") ? "" : subdir;
 		const anchorSuffix = anchor ? `#${anchor}` : "";
-		return `](/auto-pr/docs/${prefix}${slug}/${anchorSuffix})`;
+		return `](/auto-pr/${prefix}${slug}/${anchorSuffix})`;
 	});
 }
 
