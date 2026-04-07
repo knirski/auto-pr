@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Duration, Effect, Exit, Fiber, Layer, Stream } from "effect";
+import { Duration, Effect, Exit, Fiber, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { ChildProcess } from "effect/unstable/process";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import {
+	ChildProcessSpawner,
+	make as makeSpawner,
+} from "effect/unstable/process/ChildProcessSpawner";
 import { ChildProcessSpawnerLayer } from "#auto-pr";
 import { GIT_COMMAND_TIMEOUT, GitContext, GitContextLive } from "#auto-pr/git-context.js";
 import { runEffect } from "#test/run-effect.js";
@@ -205,11 +208,10 @@ describe("GitContext", () => {
 		// This test verifies that the INTERNAL GIT_COMMAND_TIMEOUT (30s) inside the `run` helper
 		// fires and produces the expected error message. Using TestClock so no real time elapses.
 		// The test will FAIL if `Effect.timeout(GIT_COMMAND_TIMEOUT)` is removed from git-context.ts.
-		const hangingSpawner = Layer.succeed(ChildProcessSpawner, {
-			string: () => Effect.never,
-			streamString: () => Stream.never,
-			streamLines: () => Stream.never,
-		} as unknown as ChildProcessSpawner);
+		const hangingSpawner = Layer.succeed(
+			ChildProcessSpawner,
+			makeSpawner(() => Effect.never),
+		);
 
 		const testEffect = Effect.gen(function* () {
 			const git = yield* GitContext;
