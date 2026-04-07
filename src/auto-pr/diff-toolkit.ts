@@ -44,12 +44,24 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 				get_diff: Effect.fn("DiffToolkit.get_diff")(function* ({ path }) {
 					return yield* git
 						.getDiff(baseRef, headRef, path)
-						.pipe(Effect.catch((e) => Effect.succeed(`Error: ${e.message}`)));
+						.pipe(
+							Effect.catch((e) =>
+								Effect.succeed(
+									`[TOOL_ERROR] get_diff failed: ${e.message}\nNo diff available for this request.`,
+								),
+							),
+						);
 				}),
 				get_commit_diff: Effect.fn("DiffToolkit.get_commit_diff")(function* ({ hash }) {
 					return yield* git
 						.getCommitDiff(hash)
-						.pipe(Effect.catch((e) => Effect.succeed(`Error: ${e.message}`)));
+						.pipe(
+							Effect.catch((e) =>
+								Effect.succeed(
+									`[TOOL_ERROR] get_commit_diff failed: ${e.message}\nNo diff available for this request.`,
+								),
+							),
+						);
 				}),
 			});
 		}),
