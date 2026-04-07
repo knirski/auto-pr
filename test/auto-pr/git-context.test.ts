@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Exit, Layer, Stream } from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { ChildProcessSpawnerLayer } from "#auto-pr";
-import { GitContext, GitContextLive } from "#auto-pr/git-context.js";
+import { GIT_COMMAND_TIMEOUT, GitContext, GitContextLive } from "#auto-pr/git-context.js";
 import { runEffect } from "#test/run-effect.js";
 import {
 	cleanGitEnv,
@@ -194,5 +194,25 @@ describe("GitContext", () => {
 				expect(diff).toContain(hash);
 			}).pipe(Effect.scoped),
 		);
+	});
+
+	test("GIT_COMMAND_TIMEOUT is 30 seconds", () => {
+		expect(Duration.toMillis(GIT_COMMAND_TIMEOUT)).toBe(30_000);
+	});
+
+	test("git commands fail with a timeout error message when the spawner hangs", async () => {
+		const hangingSpawner = Layer.succeed(ChildProcessSpawner, {
+			string: () => Effect.never,
+			streamString: () => Stream.never,
+			streamLines: () => Stream.never,
+		} as unknown as ChildProcessSpawner);
+
+		const testEffect = Effect.gen(function* () {
+			const git = yield* GitContext;
+			return yield* git.getLog("HEAD~1", "HEAD").pipe(Effect.timeout(Duration.millis(50)));
+		}).pipe(Effect.provide(GitContextLive("/tmp/fake").pipe(Layer.provide(hangingSpawner))));
+
+		const exit = await Effect.runPromise(Effect.exit(testEffect));
+		expect(Exit.isFailure(exit)).toBe(true);
 	});
 });
