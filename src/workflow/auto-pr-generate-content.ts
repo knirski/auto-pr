@@ -58,7 +58,7 @@ import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
 	fitConventionalTitleToLengthLimit,
-	getDescriptionFromCommits,
+	getDescription,
 	getDescriptionPromptText,
 	getTitle as getTitleFromCommits,
 	isWithinLengthLimit,
@@ -236,12 +236,17 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 		onSuccess: (t) => t,
 		onFailure: () => "chore: update",
 	});
+	// Use each commit's description (body excerpt, or subject-after-colon) as a separate bullet.
+	// This is more readable than one blob of joined bodies.
+	const bullets = filtered
+		.map((c) => getDescription(c))
+		.filter((s) => !isBlank(s))
+		.slice(0, 8);
+	const motivation = bullets.length > 0 ? bullets : [firstSubject];
 	const description = buildDescriptionBlock({
-		motivation: [getDescriptionFromCommits(filtered)],
+		motivation,
 		benefits: [],
-		risks: [
-			"None obvious from commits; review focused on changed code paths and integration boundaries.",
-		],
+		risks: ["AI description unavailable — review changed files directly for risk assessment."],
 		notesForReviewers: "",
 	});
 	return { title, description };

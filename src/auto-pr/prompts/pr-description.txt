@@ -19,6 +19,8 @@ You have two tools available. Use them when the commit messages and diff stat ar
 
 Call tools only when you need to see actual code changes. For small or docs-only branches, commit messages and diff stat are usually sufficient.
 
+After calling any tools (or if you call none), your entire response must be the JSON object and nothing else — no commentary, no markdown, no explanation.
+
 Example 1:
 {"title":"feat(ci): harden generate workflow token fallback","motivation":["Token handling was inconsistent across reusable workflows, making AI-backed PR generation fragile without a dedicated PAT.","This aligns workflow defaults so the generate job works reliably in common CI setups."],"benefits":["Repositories without a dedicated PAT now work out of the box."],"risks":["Verify github.token precedence in reusable workflow calls.","Check models:read permission scope in GitHub Models jobs."],"notesForReviewers":"Start with .github/workflows/auto-pr-generate-reusable.yml, then related config and docs."}
 
