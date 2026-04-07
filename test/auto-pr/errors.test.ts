@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Redacted } from "effect";
+import { AiError as EffectAiError } from "effect/unstable/ai";
 import { CliError } from "effect/unstable/cli";
 import {
 	ActLocalCiError,
@@ -183,4 +184,51 @@ test("isTransientAiError returns true for AiProviderError with 408 (timeout is t
 test("isTransientAiError returns true for unknown/generic errors", () => {
 	expect(isTransientAiError(new Error("schema decode failed"))).toBe(true);
 	expect(isTransientAiError("some string error")).toBe(true);
+});
+
+test("isTransientAiError returns false for non-retryable AiError (AuthenticationError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.AuthenticationError({ kind: "InvalidKey" }),
+	});
+	expect(isTransientAiError(e)).toBe(false);
+});
+
+test("isTransientAiError returns true for retryable AiError (RateLimitError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.RateLimitError({}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
+});
+
+test("isTransientAiError returns true for retryable AiError (NetworkError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.NetworkError({
+			reason: "TransportError",
+			request: {
+				method: "POST",
+				url: "https://api.example.com/chat",
+				urlParams: [],
+				hash: undefined,
+				headers: {},
+			},
+		}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
+});
+
+test("isTransientAiError returns true for retryable AiError (InternalProviderError)", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.InternalProviderError({
+			description: "Server error",
+		}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
 });
