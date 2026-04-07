@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Duration, Effect, Exit, Layer, Redacted, Result } from "effect";
+import { Cause, Duration, Effect, Exit, FileSystem, Layer, Redacted, Result } from "effect";
+import { ChildProcess } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	aiProviderLayerFromConfig,
+	ChildProcessSpawnerLayer,
 	DiffToolkit,
 	NoSemanticCommitsError,
 	ParseError,
@@ -14,6 +17,7 @@ import { runEffect } from "#test/run-effect.js";
 import {
 	createGitContextMock,
 	createOpenAiChatCompletionsMockFetch,
+	createTestTempDirEffect,
 	SilentLoggerLayer,
 	TestBaseLayer,
 } from "#test/test-utils.js";
@@ -21,6 +25,7 @@ import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content
 import {
 	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
+	runGeneratePrContent,
 } from "#workflow/auto-pr-generate-content.js";
 
 function logContent(...blocks: Array<{ hash?: string; subject: string; body: string }>): string {
@@ -546,5 +551,134 @@ describe("catchDefect (defect → TemplateRenderError)", () => {
 				onFailure: () => expect().fail("expected Fail cause"),
 			});
 		}
+	});
+});
+
+// ─── runGeneratePrContent integration tests (real git repo) ──────────────────
+
+const IntegrationTestLayer = Layer.mergeAll(
+	TestBaseLayer,
+	SilentLoggerLayer,
+	ChildProcessSpawnerLayer,
+);
+
+/**
+ * Set up a minimal git repo in `workspace` with:
+ * - An initial commit tagged as `origin/main`
+ * - One or more commits on top (on branch `branchName`)
+ */
+function setupGitRepoForRunGeneratePrContent(
+	workspace: string,
+	commits: Array<{ message: string }>,
+	branchName: string,
+): Effect.Effect<void, Error, ChildProcessSpawner> {
+	return Effect.gen(function* () {
+		const spawner = yield* ChildProcessSpawner;
+		const run = (args: string[]) =>
+			spawner
+				.string(ChildProcess.make("git", args, { cwd: workspace }))
+				.pipe(Effect.mapError((e) => new Error(String(e))));
+
+		yield* run(["init", "-b", branchName]);
+		yield* run(["config", "user.email", "test@test.com"]);
+		yield* run(["config", "user.name", "Test"]);
+		yield* run(["config", "commit.gpgsign", "false"]);
+		// Initial commit — this becomes origin/main
+		yield* run(["commit", "--allow-empty", "-m", "chore: initial"]);
+		yield* run(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+
+		// Add the test commits on top of origin/main
+		for (const { message } of commits) {
+			yield* run(["commit", "--allow-empty", "-m", message]);
+		}
+	});
+}
+
+describe("runGeneratePrContent (integration, real git repo)", () => {
+	test("writes pr-title.txt and pr-body.md for 1 commit (no AI call)", async () => {
+		await runEffect(IntegrationTestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("run-generate-");
+				try {
+					// Set up git repo
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add x" }],
+						"ai/test",
+					);
+
+					// Write the PR template
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+					// Run the pipeline
+					yield* runGeneratePrContent({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "local",
+						model: "gpt-oss",
+					});
+
+					// Assert output files exist and have expected content
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(title.trim()).toBe("feat: add x");
+					expect(body).toContain("add x");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("writes pr-title.txt and pr-body.md for 2 commits (AI call mocked)", async () => {
+		await runEffect(IntegrationTestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("run-generate-multi-");
+				try {
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+						"ai/test",
+					);
+
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+					const mockResponse = JSON.stringify({
+						title: "feat: add A and fix B",
+						motivation: ["Improves module A and fixes bug in B."],
+						benefits: [],
+						risks: ["Low risk — covered by tests."],
+						notesForReviewers: "",
+					});
+
+					yield* runGeneratePrContent({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "local",
+						model: "gpt-oss",
+						retryDelay: Duration.zero,
+						fetch: createOpenAiChatCompletionsMockFetch(mockResponse),
+					});
+
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(title.trim()).toBe("feat: add A and fix B");
+					expect(body).toContain("### Motivation");
+					expect(body).toContain("### Risks");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
 	});
 });

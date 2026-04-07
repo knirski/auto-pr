@@ -11,10 +11,9 @@
  *
  * | Variable | Required | Config | Description |
  * |----------|----------|--------|--------------|
- * | DEFAULT_BRANCH | ✓ | GetCommits, CreateOrUpdatePr, RunAutoPr | Base branch (e.g. main) |
+ * | DEFAULT_BRANCH | ✓ | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Base branch (e.g. main) |
  * | GITHUB_WORKSPACE | ✓ | All | Repo root path |
- * | GITHUB_OUTPUT | ✓ | GetCommits | Append target for step outputs; **Actions assigns a unique path per step** (don’t reuse across steps) |
- * | BRANCH | ✓* | CreateOrUpdatePr | Current branch (*optional in RunAutoPr) |
+ * | BRANCH | ✓* | GeneratePrContent, CreateOrUpdatePr | Current branch (*optional in RunAutoPr) |
  * | GH_TOKEN | ✓* | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | GitHub token (*required for github-models) |
  * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | local \| github-models (default: local) |
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
@@ -23,7 +22,7 @@
  * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  *
- * **Convention (not env):** `generate-content` reads `{GITHUB_WORKSPACE}/commits.txt` and `{GITHUB_WORKSPACE}/files.txt` (same paths `get-commits` writes). It writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`. `create-or-update-pr` reads those paths (after `generate-content` or after restoring the artifact that copies them into the workspace). PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` (see ADR 0008).
+ * **Convention (not env):** `generate-content` uses `GitContext` with `DEFAULT_BRANCH` and `BRANCH` to fetch commit log and diff data directly. It writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`. `create-or-update-pr` reads those paths (after `generate-content` or after restoring the artifact that copies them into the workspace). PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` (see ADR 0008).
  * Edit that file for project-specific “how to test” steps (static markdown; not filled from code).
  */
 
