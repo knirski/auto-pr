@@ -1,6 +1,6 @@
 # Reusable workflow: create/update PR (privileged).
-# Checkout of default branch (trusted) with pull-requests: write.
-# Satisfies CodeQL — no untrusted checkout in this workflow.
+# No checkout — workspace is used only to stage artifact files; no repo code needed.
+# Satisfies CodeQL — no checkout in this workflow.
 #
 # Requires: needs generate job first. Artifact pr-content from generate.
 # See auto-pr.yml for the pattern.
@@ -46,20 +46,13 @@ jobs:
             exit 1
           fi
 
-      # Trusted checkout only: default branch, not PR head. See docs/WORKFLOW_SECURITY.md.
-      - name: Checkout default branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-
       - name: Download PR content artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pr-content
           path: ${{ runner.temp }}/pr-artifact
 
-      # Create job checks out default branch; workspace has no auto-pr source.
+      # No checkout: workspace has no auto-pr source.
       # Install package with bun add (runs prepare → build); run create-or-update-pr script.
       - name: Setup Bun for create job
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
