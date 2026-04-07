@@ -237,7 +237,7 @@ describe("GitContext", () => {
 	test("git commands propagate non-timeout errors with their message", async () => {
 		const failingSpawner = Layer.succeed(
 			ChildProcessSpawner,
-			makeSpawner(() => Effect.fail(new Error("git: not a repository"))),
+			makeSpawner(() => Effect.fail(new Error("git: not a repository")) as never),
 		);
 		const testEffect = Effect.gen(function* () {
 			const git = yield* GitContext;
