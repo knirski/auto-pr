@@ -170,6 +170,16 @@ test("isTransientAiError returns false for AiProviderError with 403", () => {
 	expect(isTransientAiError(new AiProviderError({ status: 403, cause: "forbidden" }))).toBe(false);
 });
 
+test("isTransientAiError returns true for AiProviderError with 404 (non-auth 4xx is transient)", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 404, cause: "not found" }))).toBe(true);
+});
+
+test("isTransientAiError returns true for AiProviderError with 408 (timeout is transient)", () => {
+	expect(isTransientAiError(new AiProviderError({ status: 408, cause: "request timeout" }))).toBe(
+		true,
+	);
+});
+
 test("isTransientAiError returns true for unknown/generic errors", () => {
 	expect(isTransientAiError(new Error("schema decode failed"))).toBe(true);
 	expect(isTransientAiError("some string error")).toBe(true);
