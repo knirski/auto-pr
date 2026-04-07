@@ -17,6 +17,9 @@ env:
   INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
   # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
   INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
+  # Qwen2.5-1.5B Q4_K_M (~986 MiB) — smallest model with reliable tool-call support in llama.cpp.
+  # Tests the happy path: real AI generation without fallback. Cached between runs.
+  INTEGRATION_LLAMA_QWEN_MODEL_URL: https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 
 jobs:
   integration:
@@ -90,3 +93,73 @@ jobs:
         uses: ./.github/actions/llama-ci-local-server-stop
         with:
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+
+  # Runs in parallel with `integration`. Tests the happy path: real AI generation with tool calls.
+  # Uses Qwen2.5-1.5B (smallest model with reliable tool-call support in llama.cpp), cached.
+  integration-qwen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve llama-server image tag
+        id: llama_cpp_release
+        uses: ./.github/actions/resolve-llama-server-tag
+        with:
+          always_resolve_tag: "true"
+
+      - name: Setup runtime (Bun) with cache
+        uses: ./.github/actions/setup-runtime
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Qwen model — cache key
+        id: qwen_cache_key
+        env:
+          MODEL_URL: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
+        run: |
+          h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
+          echo "hash=$h" >> "$GITHUB_OUTPUT"
+
+      - name: Cache llama.cpp (Qwen model)
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/auto-pr-llama-qwen
+          key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.qwen_cache_key.outputs.hash }}-docker-qwen
+
+      - name: Start local llama.cpp with Qwen model
+        id: local_llama_qwen
+        uses: ./.github/actions/llama-ci-local-server-start
+        with:
+          llama_release: ${{ steps.llama_cpp_release.outputs.tag }}
+          model_url: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-qwen
+          llama_port: "8080"
+
+      - name: Resolve OpenAI model id from llama-server
+        id: openai_model_qwen
+        env:
+          BASE_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
+        run: |
+          id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
+          if [[ -z "$id" ]]; then
+            echo "::error::Could not read model id from $BASE_URL/models"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Run integration tests (Qwen happy path)
+        env:
+          AUTO_PR_AI_QWEN_COMPAT_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
+          AUTO_PR_AI_QWEN_COMPAT_MODEL: ${{ steps.openai_model_qwen.outputs.id }}
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
+
+      - name: Stop local llama-server (Qwen)
+        if: always() && steps.local_llama_qwen.outcome != 'skipped'
+        uses: ./.github/actions/llama-ci-local-server-stop
+        with:
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-qwen
