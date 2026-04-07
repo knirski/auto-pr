@@ -68,6 +68,7 @@ import {
 	renderBody as renderBodyCore,
 } from "#core/fill-pr-template-core.js";
 import { parseFirstJsonObject } from "#core/parse-model-json.js";
+import { truncateForLog } from "#core/string.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -147,14 +148,6 @@ function logAndValidateTitleDescription(
 
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
-
-function truncateForLog(s: string, maxChars: number): string {
-	const t = s.trim();
-	if (t.length <= maxChars) {
-		return t;
-	}
-	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
-}
 
 function normalizeRiskItems(risks: readonly string[]): readonly string[] {
 	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
