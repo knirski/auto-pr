@@ -50,6 +50,7 @@ export {
 	AutoPrLoggerLayer,
 	appendGhOutput,
 	ChildProcessSpawnerLayer,
+	cleanGitEnv,
 	getDebugHint,
 	PlatformLayer as AutoPrPlatformLayer,
 	runCommand,

@@ -20,6 +20,29 @@ export const ChildProcessSpawnerLayer = BunChildProcessSpawner.layer.pipe(
 	Layer.provide(PlatformLayer),
 );
 
+/**
+ * Returns process.env without git hook isolation vars.
+ *
+ * Git sets GIT_DIR (and friends) when running hooks. Any subprocess spawned
+ * from within a hook inherits these vars and operates on the outer repo instead
+ * of the intended working directory. Stripping them ensures that the explicit
+ * `cwd` passed to runCommand is always respected.
+ */
+export function cleanGitEnv(): Record<string, string | undefined> {
+	const env = { ...process.env } as Record<string, string | undefined>;
+	for (const key of [
+		"GIT_DIR",
+		"GIT_WORK_TREE",
+		"GIT_INDEX_FILE",
+		"GIT_COMMON_DIR",
+		"GIT_OBJECT_DIRECTORY",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES",
+	]) {
+		delete env[key];
+	}
+	return env;
+}
+
 /** Run a command and return stdout. Maps PlatformError to PullRequestFailedError. */
 export const runCommand = Effect.fn("runCommand")(function* (
 	command: string,
@@ -28,7 +51,7 @@ export const runCommand = Effect.fn("runCommand")(function* (
 ) {
 	const spawner = yield* ChildProcessSpawner;
 	return yield* spawner
-		.string(ChildProcess.make(command, args, { cwd }))
+		.string(ChildProcess.make(command, args, { cwd, env: cleanGitEnv(), extendEnv: false }))
 		.pipe(Effect.mapError((e) => new PullRequestFailedError({ cause: String(e) })));
 });
 
