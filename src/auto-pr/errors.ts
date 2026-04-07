@@ -121,9 +121,11 @@ export function isTransientAiError(e: unknown): boolean {
 		if (status === 401 || status === 403) return false; // config / auth error
 		return true; // null, 429, 5xx, and all other 4xx codes are transient
 	}
-	// Handle AiError from Effect's AI library (raised by LanguageModel.generateText)
+	// Handle AiError from Effect's AI library (raised by LanguageModel.generateText).
+	// Only AuthenticationError is a permanent config error; InvalidRequestError and all
+	// other reason types (including model-limitation 400s from local servers) are transient.
 	if (EffectAiError.isAiError(e)) {
-		return e.isRetryable;
+		return e.reason._tag !== "AuthenticationError";
 	}
 	return true; // schema decode failures and other unknown errors are transient
 }
