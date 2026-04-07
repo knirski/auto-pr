@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Cause, Duration, Effect, Exit, Fiber, Layer, Result } from "effect";
+import { systemError } from "effect/PlatformError";
 import { TestClock } from "effect/testing";
 import { ChildProcess } from "effect/unstable/process";
 import {
@@ -237,7 +238,16 @@ describe("GitContext", () => {
 	test("git commands propagate non-timeout errors with their message", async () => {
 		const failingSpawner = Layer.succeed(
 			ChildProcessSpawner,
-			makeSpawner(() => Effect.fail(new Error("git: not a repository")) as never),
+			makeSpawner(() =>
+				Effect.fail(
+					systemError({
+						_tag: "Unknown",
+						module: "ChildProcess",
+						method: "spawn",
+						description: "git: not a repository",
+					}),
+				),
+			),
 		);
 		const testEffect = Effect.gen(function* () {
 			const git = yield* GitContext;
