@@ -399,3 +399,91 @@ describe("GeneratePrContentConfigLayer rejects invalid provider", () => {
 		}
 	});
 });
+
+describe("GeneratePrContentConfigLayer rejects branch === defaultBranch", () => {
+	test("fails when BRANCH equals DEFAULT_BRANCH", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/workspace",
+				DEFAULT_BRANCH: "main",
+				BRANCH: "main",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain("BRANCH");
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain("DEFAULT_BRANCH");
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
+	});
+});
+
+describe("RunAutoPrConfigLayer rejects branch === defaultBranch when BRANCH is set", () => {
+	test("fails when BRANCH equals DEFAULT_BRANCH", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				BRANCH: "main",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* RunAutoPrConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain("BRANCH");
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
+	});
+
+	test("succeeds when BRANCH is not set (optional in RunAutoPr)", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				// No BRANCH set
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.branch).toBeUndefined();
+			}),
+		);
+	});
+});
