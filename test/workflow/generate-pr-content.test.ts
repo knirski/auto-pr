@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Duration, Effect, Exit, FileSystem, Layer, Redacted, Result } from "effect";
+import { Cause, Duration, Effect, Exit, FileSystem, Layer, Logger, Redacted, Result } from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	AutoPrConfigError,
+	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	ChildProcessSpawnerLayer,
 	DiffToolkit,
@@ -609,6 +610,45 @@ describe("catchDefect (defect → TemplateRenderError)", () => {
 				onFailure: () => expect().fail("expected Fail cause"),
 			});
 		}
+	});
+});
+
+describe("token usage logging", () => {
+	test("logs token_usage event after successful AI generation", async () => {
+		const captured: Array<unknown> = [];
+		const CapturingLoggerLayer = Logger.layer([
+			Logger.make(({ message }) => {
+				for (const m of message) {
+					captured.push(m);
+				}
+			}),
+		]);
+
+		const p = makeParams(twoCommits, {
+			fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
+		});
+
+		const testLayer = Layer.mergeAll(
+			AutoPrPlatformLayer,
+			CapturingLoggerLayer,
+			Layer.succeed(GitContext, p.gitCtx),
+			MockDiffToolkitLayer,
+			aiProviderLayerFromConfig(
+				{ provider: p.params.provider, model: p.params.model },
+				p.fetch !== undefined ? { fetch: p.fetch } : undefined,
+			),
+		);
+
+		await runEffect(testLayer)(
+			Effect.gen(function* () {
+				yield* generatePrContent(p.params).pipe(Effect.scoped);
+				const msgs = captured
+					.map((m) => (typeof m === "object" ? JSON.stringify(m) : String(m)))
+					.join(" ");
+				expect(msgs).toContain("token_usage");
+				expect(msgs).toContain("generate_pr_content");
+			}).pipe(Effect.scoped),
+		);
 	});
 });
 
