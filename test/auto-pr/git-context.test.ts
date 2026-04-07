@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Cause, Duration, Effect, Exit, Fiber, Layer, Result } from "effect";
+import { systemError } from "effect/PlatformError";
+import { TestClock } from "effect/testing";
 import { ChildProcess } from "effect/unstable/process";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import {
+	ChildProcessSpawner,
+	make as makeSpawner,
+} from "effect/unstable/process/ChildProcessSpawner";
 import { ChildProcessSpawnerLayer } from "#auto-pr";
-import { GitContext, GitContextLive } from "#auto-pr/git-context.js";
+import { GIT_COMMAND_TIMEOUT, GitContext, GitContextLive } from "#auto-pr/git-context.js";
 import { runEffect } from "#test/run-effect.js";
 import {
 	cleanGitEnv,
@@ -194,5 +199,73 @@ describe("GitContext", () => {
 				expect(diff).toContain(hash);
 			}).pipe(Effect.scoped),
 		);
+	});
+
+	test("GIT_COMMAND_TIMEOUT is 30 seconds", () => {
+		expect(Duration.toMillis(GIT_COMMAND_TIMEOUT)).toBe(30_000);
+	});
+
+	test("git commands fail with a timeout error message when the spawner hangs", async () => {
+		// This test verifies that the INTERNAL GIT_COMMAND_TIMEOUT (30s) inside the `run` helper
+		// fires and produces the expected error message. Using TestClock so no real time elapses.
+		// The test will FAIL if `Effect.timeout(GIT_COMMAND_TIMEOUT)` is removed from git-context.ts.
+		const hangingSpawner = Layer.succeed(
+			ChildProcessSpawner,
+			makeSpawner(() => Effect.never),
+		);
+
+		const testEffect = Effect.gen(function* () {
+			const git = yield* GitContext;
+			// Fork the git call so we can advance the test clock without blocking
+			const fiber = yield* Effect.forkChild(git.getLog("HEAD~1", "HEAD"));
+			// Advance test clock past the internal 30s GIT_COMMAND_TIMEOUT
+			yield* TestClock.adjust(Duration.seconds(31));
+			return yield* Fiber.join(fiber).pipe(Effect.exit);
+		}).pipe(
+			Effect.provide(GitContextLive("/tmp/fake").pipe(Layer.provide(hangingSpawner))),
+			Effect.provide(TestClock.layer()),
+			Effect.scoped,
+		);
+
+		const exit = await Effect.runPromise(testEffect);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			const message = String(exit.cause);
+			expect(message).toContain("timed out after 30s");
+		}
+	});
+
+	test("git commands propagate non-timeout errors with their message", async () => {
+		const failingSpawner = Layer.succeed(
+			ChildProcessSpawner,
+			makeSpawner(() =>
+				Effect.fail(
+					systemError({
+						_tag: "Unknown",
+						module: "ChildProcess",
+						method: "spawn",
+						description: "git: not a repository",
+					}),
+				),
+			),
+		);
+		const testEffect = Effect.gen(function* () {
+			const git = yield* GitContext;
+			return yield* git.getLog("HEAD~1", "HEAD").pipe(Effect.exit);
+		}).pipe(
+			Effect.provide(GitContextLive("/tmp/fake").pipe(Layer.provide(failingSpawner))),
+			Effect.scoped,
+		);
+
+		const exit = await Effect.runPromise(testEffect);
+		// The spawner error is wrapped in PullRequestFailedError by runCommand, then re-wrapped
+		// in Error by the mapError non-timeout branch (lines 45-46 in git-context.ts).
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => expect(err).toBeInstanceOf(Error),
+				onFailure: () => expect.unreachable("expected Error in cause"),
+			});
+		}
 	});
 });

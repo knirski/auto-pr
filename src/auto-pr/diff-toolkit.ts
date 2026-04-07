@@ -7,6 +7,7 @@
 import { Effect, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import { GitContext } from "#auto-pr/git-context.js";
+import { sanitizeDiffForAi } from "#core/sanitize-diff.js";
 import { truncateForLog } from "#core/string.js";
 
 const GetDiff = Tool.make("get_diff", {
@@ -64,14 +65,15 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 							),
 						),
 					);
+					const sanitized = sanitizeDiffForAi(result);
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_diff",
 						status: "response",
-						response_chars: result.length,
-						response_preview: truncateForLog(result, 500),
+						response_chars: sanitized.length,
+						response_preview: truncateForLog(sanitized, 500),
 					});
-					return result;
+					return sanitized;
 				}),
 				get_commit_diff: Effect.fn("DiffToolkit.get_commit_diff")(function* ({ hash }) {
 					yield* Effect.log({
@@ -95,14 +97,15 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 							),
 						),
 					);
+					const sanitized = sanitizeDiffForAi(result);
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_commit_diff",
 						status: "response",
-						response_chars: result.length,
-						response_preview: truncateForLog(result, 500),
+						response_chars: sanitized.length,
+						response_preview: truncateForLog(sanitized, 500),
 					});
-					return result;
+					return sanitized;
 				}),
 			});
 		}),

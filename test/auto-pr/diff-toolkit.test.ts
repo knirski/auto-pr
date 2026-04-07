@@ -123,3 +123,59 @@ describe("DiffToolkit error responses", () => {
 		);
 	});
 });
+
+describe("DiffToolkit diff sanitization", () => {
+	test("get_diff handler replaces binary file marker in output", async () => {
+		const mockGitCtx = createGitContextMock({
+			getDiff: () =>
+				Effect.succeed(
+					"diff --git a/assets/img.png b/assets/img.png\nindex abc..def 100644\nBinary files a/assets/img.png and b/assets/img.png differ\n",
+				),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_diff", {});
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = String(handlerResult.result);
+				expect(result).toContain("[binary file: assets/img.png]");
+				expect(result).not.toContain("Binary files");
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("get_commit_diff handler replaces binary file marker in output", async () => {
+		const mockGitCtx = createGitContextMock({
+			getCommitDiff: () =>
+				Effect.succeed(
+					"commit abc123\nfeat: add image\n\ndiff --git a/logo.png b/logo.png\nindex 000..111 100644\nBinary files a/logo.png and b/logo.png differ\n",
+				),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_commit_diff", { hash: "abc123" });
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = String(handlerResult.result);
+				expect(result).toContain("[binary file: logo.png]");
+				expect(result).not.toContain("Binary files");
+			}).pipe(Effect.scoped),
+		);
+	});
+});
