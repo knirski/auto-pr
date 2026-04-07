@@ -6,6 +6,7 @@ import { Effect, FileSystem, Layer, Logger, Path, Stream } from "effect";
 import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { AutoPrPlatformLayer } from "#auto-pr";
+import { GitContext } from "#auto-pr/git-context.js";
 
 /**
  * Silent logger for tests. Suppresses all log output.
@@ -116,6 +117,20 @@ export function createOpenAiChatCompletionsMockFetch(
 		return new Response(JSON.stringify(body), { status });
 	}) as typeof fetch;
 }
+
+/** Mock GitContext for tests. Override individual methods as needed. */
+export function createGitContextMock(overrides?: Partial<GitContext>): GitContext {
+	const noOp = () => Effect.succeed("");
+	return {
+		getLog: overrides?.getLog ?? noOp,
+		getChangedFiles: overrides?.getChangedFiles ?? noOp,
+		getDiffStat: overrides?.getDiffStat ?? noOp,
+		getDiff: overrides?.getDiff ?? noOp,
+		getCommitDiff: overrides?.getCommitDiff ?? noOp,
+	};
+}
+
+export const GitContextTestMock = Layer.succeed(GitContext, createGitContextMock());
 
 /** Effect-based temp dir for use with layer() / it.effect. */
 export const createTestTempDirEffect = (prefix = "auto-pr-") =>

@@ -18,6 +18,7 @@ export {
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr/config.js";
+export { DiffToolkit, makeDiffToolkitLayer } from "#auto-pr/diff-toolkit.js";
 export {
 	ActLocalCiError,
 	AiProviderError,
