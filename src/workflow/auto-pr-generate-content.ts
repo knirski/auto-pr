@@ -1,7 +1,7 @@
 /**
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
- * Requires env: GITHUB_WORKSPACE. Reads `commits.txt` and `files.txt` under workspace (from `get-commits`).
+ * Requires env: GITHUB_WORKSPACE, DEFAULT_BRANCH, BRANCH. Uses GitContext to fetch commit log and diff data directly.
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
@@ -609,10 +609,7 @@ export function runGeneratePrContent(config: {
 		);
 
 		const gitLayer = GitContextLive(workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
-		const toolkitLayer = makeDiffToolkitLayer(baseRef, branch).pipe(
-			Layer.provide(GitContextLive(workspace)),
-			Layer.provide(ChildProcessSpawnerLayer),
-		);
+		const toolkitLayer = makeDiffToolkitLayer(baseRef, branch).pipe(Layer.provide(gitLayer));
 
 		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
 
