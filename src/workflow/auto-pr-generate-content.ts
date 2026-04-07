@@ -29,7 +29,7 @@ import {
 import { LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
-	type AutoPrConfigError,
+	AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
@@ -43,6 +43,7 @@ import {
 	GitContextLive,
 	getPrDescriptionPromptPath,
 	isBlank,
+	isTransientAiError,
 	makeDiffToolkitLayer,
 	NoSemanticCommitsError,
 	ParseError,
@@ -289,7 +290,7 @@ function generateTitleAndDescriptionWithToolkit(
 			}),
 		),
 		Effect.retry(makeRetrySchedule(retryDelay)),
-		Effect.catch(() =>
+		Effect.catchIf(isTransientAiError, () =>
 			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
 				Effect.tap(() =>
 					Effect.logWarning({
@@ -388,6 +389,25 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
 				ParseError: (e: ParseError) => Effect.fail(e),
 				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
+				AiProviderError: (e) =>
+					Effect.fail(
+						new AutoPrConfigError({
+							missing: [
+								`AI provider authentication/config error (HTTP ${e.status ?? "unknown"}): ${e.cause}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
+							],
+						}),
+					),
+				AiError: (e) => {
+					const status = (e.reason as { http?: { response?: { status?: number } } }).http?.response
+						?.status;
+					return Effect.fail(
+						new AutoPrConfigError({
+							missing: [
+								`AI provider authentication/config error (HTTP ${status ?? "unknown"}): ${e.reason._tag}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
+							],
+						}),
+					);
+				},
 			},
 			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
 		),
