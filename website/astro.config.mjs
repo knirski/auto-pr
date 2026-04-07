@@ -7,6 +7,9 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'auto-pr',
+      logo: {
+        src: './src/assets/logo.svg',
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/knirski/auto-pr' },
       ],
