@@ -400,7 +400,7 @@ export function generatePrContent(params: GeneratePrContentParams) {
 						}),
 					),
 				AiError: (e: AiError.AiError) =>
-					!e.isRetryable
+					!isTransientAiError(e)
 						? Effect.fail(
 								new AutoPrConfigError({
 									missing: [

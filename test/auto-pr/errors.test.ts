@@ -232,3 +232,14 @@ test("isTransientAiError returns true for retryable AiError (InternalProviderErr
 	});
 	expect(isTransientAiError(e)).toBe(true);
 });
+
+test("isTransientAiError returns true for non-retryable AiError (InvalidRequestError) — model-limitation 400s from local servers are transient", () => {
+	const e = EffectAiError.make({
+		module: "LanguageModel",
+		method: "generateText",
+		reason: new EffectAiError.InvalidRequestError({
+			description: "_Map_base::at",
+		}),
+	});
+	expect(isTransientAiError(e)).toBe(true);
+});
