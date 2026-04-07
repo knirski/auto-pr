@@ -263,6 +263,18 @@ function generateTitleAndDescriptionWithToolkit(
 			prompt_chars: prompt.length,
 		});
 		const res = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "token_usage",
+			provider,
+			model,
+			prompt_tokens: res.usage.inputTokens.total ?? null,
+			completion_tokens: res.usage.outputTokens.total ?? null,
+			total_tokens:
+				res.usage.inputTokens.total != null && res.usage.outputTokens.total != null
+					? res.usage.inputTokens.total + res.usage.outputTokens.total
+					: null,
+		});
 		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
 		return yield* logAndValidateTitleDescription(raw, provider, model);
 	}).pipe(
