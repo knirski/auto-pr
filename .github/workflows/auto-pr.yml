@@ -6,9 +6,10 @@
 #
 # Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
 #
-# Reusable workflow refs: use @<branch> while developing (resolves to branch tip). After merge to main,
-# pin both lines to the merge commit SHA (same as update-workflow-pins / INTEGRATION).
-# Composite actions in generate + check: use @<branch> while developing; pin to merge SHA on main after merge.
+# Reusable workflow refs: always use a commit SHA — branch name refs do not resolve reliably for same-repo
+# reusable workflows. Update both SHA pins to the current HEAD after each push. After merge to main,
+# pin to the merge commit SHA (same as update-workflow-pins / INTEGRATION).
+# Composite actions in generate + check: same rule — always pin to a SHA, never a branch name.
 
 name: Auto-PR
 
@@ -29,7 +30,7 @@ jobs:
     permissions:
       contents: read
       models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@ai/diff-tool-use
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@d551d1b92c8eeb5e9ad2760eac34659da61535b4
     secrets:
       # GitHub API token for the generate job. This workflow grants `models: read` so the default
       # `github.token` works. If you use a PAT, set repo secret `GH_TOKEN` and pass
@@ -41,7 +42,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@ai/diff-tool-use
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@d551d1b92c8eeb5e9ad2760eac34659da61535b4
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit
