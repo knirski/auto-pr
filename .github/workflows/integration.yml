@@ -17,9 +17,10 @@ env:
   INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
   # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
   INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
-  # Qwen2.5-1.5B Q4_K_M (~986 MiB) — smallest model with reliable tool-call support in llama.cpp.
+  # Qwen3-1.7B Q4_K_M (~1.1 GiB) — highest tool-call reliability (0.960) at sub-2B size.
   # Tests the happy path: real AI generation without fallback. Cached between runs.
-  INTEGRATION_LLAMA_QWEN_MODEL_URL: https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
+  # Requires --jinja for Qwen3 tool-call chat template support (passed via extra_flags below).
+  INTEGRATION_LLAMA_QWEN_MODEL_URL: https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf
 
 jobs:
   integration:
@@ -131,7 +132,7 @@ jobs:
           path: ${{ runner.temp }}/auto-pr-llama-qwen
           key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.qwen_cache_key.outputs.hash }}-docker-qwen
 
-      - name: Start local llama.cpp with Qwen model
+      - name: Start local llama.cpp with Qwen3 model
         id: local_llama_qwen
         uses: ./.github/actions/llama-ci-local-server-start
         with:
@@ -139,6 +140,7 @@ jobs:
           model_url: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama-qwen
           llama_port: "8080"
+          extra_flags: "--jinja"
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model_qwen

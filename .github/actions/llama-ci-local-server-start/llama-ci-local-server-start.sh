@@ -8,6 +8,7 @@ LLAMA_RELEASE="${LLAMA_RELEASE:?LLAMA_RELEASE required}"
 MODEL_URL="${MODEL_URL:?MODEL_URL required}"
 LLAMA_CI_ROOT="${LLAMA_CI_ROOT:?LLAMA_CI_ROOT required}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
+EXTRA_FLAGS="${EXTRA_FLAGS:-}"
 
 if [[ ! "$MODEL_URL" =~ ^https:// ]]; then
 	echo "::error::MODEL_URL must be an https URL"
@@ -50,7 +51,8 @@ if [[ -f "$PID_FILE" ]]; then
 	fi
 fi
 
-nohup ./llama-server -m "$MODEL_FILE" --host 127.0.0.1 --port "$LLAMA_PORT" >"$LOG_FILE" 2>&1 &
+# shellcheck disable=SC2086 — EXTRA_FLAGS is intentionally word-split to allow multiple flags
+nohup ./llama-server -m "$MODEL_FILE" --host 127.0.0.1 --port "$LLAMA_PORT" $EXTRA_FLAGS >"$LOG_FILE" 2>&1 &
 echo $! >"$PID_FILE"
 
 compat="http://127.0.0.1:${LLAMA_PORT}/v1"
