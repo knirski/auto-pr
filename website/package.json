@@ -1,0 +1,13 @@
+{
+  "name": "auto-pr-website",
+  "private": true,
+  "scripts": {
+    "dev": "bun run scripts/copy-docs.ts && astro dev",
+    "build": "bun run scripts/copy-docs.ts && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.38.3",
+    "astro": "^6.1.4"
+  }
+}
