@@ -1,10 +1,10 @@
-# Composite action: run get-commits or generate-content (workspace or npx/bunx package).
+# Composite action: run generate-content (workspace or npx/bunx package).
 name: Run auto-pr command
-description: Run get-commits or generate-content via bun workspace or npx/bunx package
+description: Run generate-content via bun workspace or npx/bunx package
 
 inputs:
   command:
-    description: get-commits or generate-content
+    description: generate-content
     required: true
   use_workspace:
     description: "true to use bun run from workspace"
@@ -15,22 +15,6 @@ inputs:
   runner:
     description: npx or bunx (from setup-runtime)
     required: true
-  default_branch:
-    description: Base branch name (required for get-commits)
-    required: false
-    default: ""
-
-# Caller workflows read steps.<id>.outputs.* — composite actions must forward step outputs explicitly.
-outputs:
-  commits:
-    description: Path to commits.txt (get-commits only)
-    value: ${{ steps.run.outputs.commits }}
-  files:
-    description: Path to files.txt (get-commits only)
-    value: ${{ steps.run.outputs.files }}
-  count:
-    description: Semantic commit count (get-commits only)
-    value: ${{ steps.run.outputs.count }}
 
 runs:
   using: composite
@@ -43,4 +27,3 @@ runs:
         USE_WORKSPACE: ${{ inputs.use_workspace }}
         AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
         RUNNER: ${{ inputs.runner }}
-        DEFAULT_BRANCH: ${{ inputs.default_branch }}

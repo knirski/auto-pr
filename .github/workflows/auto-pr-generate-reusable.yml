@@ -100,15 +100,13 @@ jobs:
         if: steps.auto-pr-pkg.outputs.use_workspace == 'true'
         run: bun install --frozen-lockfile
 
-      - name: Get commit log and changed files
+      - name: Count non-merge commits
         id: commits
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@77b219173225b29d67f0bd0220942c6b0fd9cd80
-        with:
-          command: get-commits
-          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
-          runner: ${{ steps.setup.outputs.runner }}
-          default_branch: ${{ github.event.repository.default_branch }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          count=$(git log --format=%s "origin/$DEFAULT_BRANCH..HEAD" | grep -cvE '^Merge ' || true)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Resolve llama-server image tag
         id: llama_release
@@ -155,6 +153,8 @@ jobs:
           auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
           runner: ${{ steps.setup.outputs.runner }}
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BRANCH: ${{ github.ref_name }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url != '' && steps.local_llama.outputs.compat_url || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
