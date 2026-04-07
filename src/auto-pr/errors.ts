@@ -3,6 +3,7 @@
  */
 
 import { Match } from "effect";
+import { AiError as EffectAiError } from "effect/unstable/ai";
 import { CliError } from "effect/unstable/cli";
 import {
 	errorToLogMessage,
@@ -119,6 +120,13 @@ export function isTransientAiError(e: unknown): boolean {
 		const { status } = e;
 		if (status === 401 || status === 403) return false; // config / auth error
 		return true; // null, 429, 5xx, and all other 4xx codes are transient
+	}
+	// Handle AiError from Effect's AI library (raised by LanguageModel.generateText)
+	if (EffectAiError.isAiError(e)) {
+		const status = (e.reason as { http?: { response?: { status?: number } } }).http?.response
+			?.status;
+		if (status === 401 || status === 403) return false; // config / auth error
+		return true; // network, rate limit, 5xx etc. are transient
 	}
 	return true; // schema decode failures and other unknown errors are transient
 }
