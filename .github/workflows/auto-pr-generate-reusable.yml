@@ -154,7 +154,7 @@ jobs:
           runner: ${{ steps.setup.outputs.runner }}
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url != '' && steps.local_llama.outputs.compat_url || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
@@ -171,7 +171,7 @@ jobs:
       - name: Prepare artifact
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           mkdir -p pr-content

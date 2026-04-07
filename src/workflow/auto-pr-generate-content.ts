@@ -312,9 +312,17 @@ export function generatePrContent(params: GeneratePrContentParams) {
 		const git = yield* GitContext;
 
 		// Fetch git data via GitContext
-		const logOutput = yield* git.getLog(baseRef, headRef);
-		const filesOutput = yield* git.getChangedFiles(baseRef, headRef);
-		const diffStatOutput = yield* git.getDiffStat(baseRef, headRef);
+		const toGitError = (op: string) => (e: Error) =>
+			new UnexpectedError({ cause: `${op}: ${e.message}` });
+		const logOutput = yield* git
+			.getLog(baseRef, headRef)
+			.pipe(Effect.mapError(toGitError("git log")));
+		const filesOutput = yield* git
+			.getChangedFiles(baseRef, headRef)
+			.pipe(Effect.mapError(toGitError("git diff --name-only")));
+		const diffStatOutput = yield* git
+			.getDiffStat(baseRef, headRef)
+			.pipe(Effect.mapError(toGitError("git diff --stat")));
 
 		// Parse (pure core)
 		const parseResult = parseCommits(logOutput);
@@ -534,9 +542,7 @@ const program = Effect.gen(function* () {
 				}
 			: {}),
 	};
-	yield* runGeneratePrContent(params).pipe(
-		Effect.provide(Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer)),
-	);
+	yield* runGeneratePrContent(params).pipe(Effect.provide(AutoPrPlatformLayer));
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
 
 /* c8 ignore next 3 */

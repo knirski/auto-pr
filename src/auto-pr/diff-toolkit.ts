@@ -42,10 +42,14 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 			const git = yield* GitContext;
 			return DiffToolkit.of({
 				get_diff: Effect.fn("DiffToolkit.get_diff")(function* ({ path }) {
-					return yield* git.getDiff(baseRef, headRef, path).pipe(Effect.orDie);
+					return yield* git
+						.getDiff(baseRef, headRef, path)
+						.pipe(Effect.catch((e) => Effect.succeed(`Error: ${e.message}`)));
 				}),
 				get_commit_diff: Effect.fn("DiffToolkit.get_commit_diff")(function* ({ hash }) {
-					return yield* git.getCommitDiff(hash).pipe(Effect.orDie);
+					return yield* git
+						.getCommitDiff(hash)
+						.pipe(Effect.catch((e) => Effect.succeed(`Error: ${e.message}`)));
 				}),
 			});
 		}),
