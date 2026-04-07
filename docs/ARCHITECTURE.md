@@ -13,8 +13,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLI entry points (src/workflow/*.ts, src/tools/*.ts)           │
-│  workflow: auto-pr-get-commits, generate-pr-content,            │
-│  create-or-update-pr, run-auto-pr                               │
+│  workflow: generate-pr-content, create-or-update-pr, run-auto-pr│
 │  tools: fill-pr-template, init                                 │
 └────────────────────────────┬────────────────────────────────────┘
                              │
@@ -31,26 +30,27 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Pipeline Flow
 
-1. **get-commits** — `git log` + `git diff` → `commits.txt`, `files.txt` under workspace; append `commits`, `files`, `count` to `GITHUB_OUTPUT`
-2. **generate-content** — Parse commits → 1 commit: fill from body; 2+: `LanguageModel.generateText` with the PR description prompt, parse assistant JSON, validate with Effect Schema (`TitleDescriptionSchema`), using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config). Not `generateObject` (OpenAI `json_schema` is unsupported on GitHub Models and flaky on some compat servers). Retries → commit-derived fallback on failure → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
-3. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `gh pr view` → `gh pr edit` or `gh pr create`
+1. **generate-content** — `GitContext` fetches commits, files, and diff stat directly from git. 1 commit: fill from body; 2+: `LanguageModel.generateText` with `DiffToolkit` (`get_diff`, `get_commit_diff` tools), parse assistant JSON, validate with Effect Schema (`TitleDescriptionSchema`), using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config). Not `generateObject` (OpenAI `json_schema` is unsupported on GitHub Models and flaky on some compat servers). Retries → commit-derived fallback on failure → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
+2. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `gh pr view` → `gh pr edit` or `gh pr create`
 
 ## Functional Core / Imperative Shell (FC/IS)
 
-- **`src/workflow/*.ts`** — Main auto-PR workflow. get-commits, generate-content, create-or-update-pr, run-auto-pr.
+- **`src/workflow/*.ts`** — Main auto-PR workflow. generate-content, create-or-update-pr, run-auto-pr.
 - **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init.
 - **`src/core/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs, init-core, string, gh-output, errors, **act-local-ci** (local [act](https://github.com/nektos/act) argv, `workflow_dispatch` payload shape, runner image defaults; no I/O).
 - **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Uses `@effect/platform-bun` for FileSystem, Path, ChildProcessSpawner, Runtime. Orchestrates I/O.
 - **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets. `getPrDescriptionPromptPath` resolves `dist/prompts/pr-description.txt` (relative to shared chunk in `dist/`).
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
 - **`src/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).
-- **`src/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production. Per Effect idiom, layers are attached to services: `FillPrTemplate.Live`. Workflow-specific config layers (GetCommitsConfig, GeneratePrContentConfig, etc.) provide per-workflow env validation.
+- **`src/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production. Per Effect idiom, layers are attached to services: `FillPrTemplate.Live`. Workflow-specific config layers (GeneratePrContentConfig, etc.) provide per-workflow env validation.
+- **`GitContext`** — Typed Effect service for git reads (commits, files, diff stat). Used by generate-content instead of pre-written text files.
+- **`DiffToolkit`** — Tool use for AI: exposes `get_diff` and `get_commit_diff` tools so the language model can fetch diff data on demand during generation.
 
 **Bridge:** Core returns `Result`; shell calls `Effect.fromResult` at the boundary.
 
 ## Where to Start
 
-- **Entry points:** `src/workflow/auto-pr-get-commits.ts`, `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
+- **Entry points:** `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
 - **Local CI parity (optional):** `scripts/act-local-ci.ts` (`bun run act`) — Docker + nektos act or `gh act`; pure planning in `src/core/act-local-ci.ts`. See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job).
 - **Core logic:** `src/core/*.ts` (fill-pr-template-core, gh-output, string, etc.)
 - **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateText` and decodes JSON to `TitleDescriptionSchema` (see file header). CI uses composite actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
@@ -62,7 +62,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Error Handling
 
-Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. **get-commits** only appends to `GITHUB_OUTPUT` after it succeeds; **generate-content** writes workspace files on success.
+Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. **generate-content** writes workspace files on success.
 
 ## Glossary
 
@@ -71,7 +71,7 @@ Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.T
 | **FC/IS** | Functional Core / Imperative Shell. The core (`src/core/*.ts`) contains pure functions returning `Result`; no Effect, no I/O. The shell (`src/auto-pr/shell.ts`) orchestrates I/O and bridges via `Effect.fromResult`. |
 | **Tagless Final** | Effect idiom: define service interfaces (e.g. `FillPrTemplate`); implement as live interpreters in `live/`; tests swap mocks. |
 | **Conventional commits** | Commit message format: `type(scope): subject` (e.g. `feat: add X`, `fix(scope): resolve Y`). See [conventionalcommits.org](https://www.conventionalcommits.org/). |
-| **GITHUB_OUTPUT** | GitHub Actions mechanism for passing data between steps. Key-value pairs appended to a file; later steps read via `${{ steps.id.outputs.key }}`. auto-pr's **get-commits** step writes `commits`, `files`, and `count` here. Title/body for the PR use workspace files (`pr-title.txt`, `pr-body.md`), not `GITHUB_OUTPUT`. |
+| **GITHUB_OUTPUT** | GitHub Actions mechanism for passing data between steps. Key-value pairs appended to a file; later steps read via `${{ steps.id.outputs.key }}`. Title/body for the PR use workspace files (`pr-title.txt`, `pr-body.md`), not `GITHUB_OUTPUT`. |
 | **GitHub App** | OAuth app for GitHub; creates tokens with repository permissions. auto-pr uses it for PR creation (not `GITHUB_TOKEN`) so PRs are attributed to the app. |
 | **Two-phase workflow** | Split into generate (unprivileged checkout) and create (trusted checkout, PR write). Satisfies CodeQL/CWE-829; see [WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). |
 | **ai/\* branch** | Branch name pattern that triggers the auto-pr workflow. Push to `ai/feature-x` → workflow creates/updates PR. |

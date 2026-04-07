@@ -1,30 +1,39 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Duration, Effect, Exit, FileSystem, Layer, Path, Redacted, Result } from "effect";
+import { Cause, Duration, Effect, Exit, FileSystem, Layer, Redacted, Result } from "effect";
+import { ChildProcess } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	aiProviderLayerFromConfig,
+	ChildProcessSpawnerLayer,
+	DiffToolkit,
 	NoSemanticCommitsError,
 	ParseError,
 	TemplateRenderError,
-	UnexpectedError,
 } from "#auto-pr";
+import { GitContext } from "#auto-pr/git-context.js";
 import { FillPrTemplateValidationError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
 import {
+	createGitContextMock,
 	createOpenAiChatCompletionsMockFetch,
 	createTestTempDirEffect,
 	SilentLoggerLayer,
 	TestBaseLayer,
 } from "#test/test-utils.js";
-import type { GeneratePrContentFromValuesParams } from "#workflow/auto-pr-generate-content.js";
+import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content.js";
 import {
-	generatePrContentFromValues,
+	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
 	runGeneratePrContent,
 } from "#workflow/auto-pr-generate-content.js";
 
-function logContent(...blocks: Array<{ subject: string; body: string }>): string {
-	const formatted = blocks.map((b) => (b.body ? `${b.subject}\n\n${b.body}`.trim() : b.subject));
+function logContent(...blocks: Array<{ hash?: string; subject: string; body: string }>): string {
+	const formatted = blocks.map((b) => {
+		const hash = b.hash ?? "0000000000000000000000000000000000000000";
+		const msg = b.body ? `${b.subject}\n\n${b.body}`.trim() : b.subject;
+		return `${hash}\n${msg}`;
+	});
 	return `---COMMIT---\n${formatted.join("\n---COMMIT---\n")}`;
 }
 
@@ -33,45 +42,84 @@ const TEMPLATE_WITH_CHANGES = "# PR\n\n{{description}}\n\n## Changes\n{{changes}
 const DEFAULT_DESCRIPTION_PROMPT =
 	"Summarize these commits. Return JSON with title and description.";
 
-function params(
-	commits: Array<{ subject: string; body: string }>,
-	overrides?: Partial<GeneratePrContentFromValuesParams>,
-): GeneratePrContentFromValuesParams {
+function mockGitContext(
+	commits: Array<{ hash?: string; subject: string; body: string }>,
+	files = "src/foo.ts\n",
+	diffStat = " src/foo.ts | 5 +++++\n 1 file changed, 5 insertions(+)",
+): GitContext {
+	return createGitContextMock({
+		getLog: () => Effect.succeed(logContent(...commits)),
+		getChangedFiles: () => Effect.succeed(files),
+		getDiffStat: () => Effect.succeed(diffStat),
+		getDiff: () => Effect.succeed(""),
+		getCommitDiff: () => Effect.succeed(""),
+	});
+}
+
+function makeParams(
+	commits: Array<{ hash?: string; subject: string; body: string }>,
+	overrides?: Partial<GeneratePrContentParams> & {
+		files?: string;
+		diffStat?: string;
+		fetch?: typeof fetch;
+	},
+): { params: GeneratePrContentParams; gitCtx: GitContext; fetch: typeof fetch | undefined } {
 	return {
-		commitsContent: logContent(...commits),
-		filesContent: "src/foo.ts\n",
-		templateContent: DEFAULT_TEMPLATE,
-		descriptionPromptText: DEFAULT_DESCRIPTION_PROMPT,
-		provider: "local" as const,
-		model: "gpt-oss",
-		...overrides,
+		params: {
+			baseRef: "origin/main",
+			headRef: "ai/test",
+			templateContent: DEFAULT_TEMPLATE,
+			descriptionPromptText: DEFAULT_DESCRIPTION_PROMPT,
+			provider: "local" as const,
+			model: "gpt-oss",
+			retryDelay: Duration.zero,
+			...overrides,
+		},
+		gitCtx: mockGitContext(commits, overrides?.files, overrides?.diffStat),
+		fetch: overrides?.fetch,
 	};
 }
 
 const ValueBasedLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 
-function layerForGeneratePrContent(params: GeneratePrContentFromValuesParams) {
+/** Mock DiffToolkit handler layer — tools return empty strings (never called by mock AI). */
+const MockDiffToolkitLayer = DiffToolkit.toLayer(
+	Effect.succeed(
+		DiffToolkit.of({
+			get_diff: () => Effect.succeed(""),
+			get_commit_diff: () => Effect.succeed(""),
+		}),
+	),
+);
+
+function layerForTest(p: {
+	params: GeneratePrContentParams;
+	gitCtx: GitContext;
+	fetch: typeof fetch | undefined;
+}) {
 	return Layer.mergeAll(
 		ValueBasedLayer,
+		Layer.succeed(GitContext, p.gitCtx),
+		MockDiffToolkitLayer,
 		aiProviderLayerFromConfig(
 			{
-				provider: params.provider,
-				model: params.model,
-				...(params.provider === "github-models"
+				provider: p.params.provider,
+				model: p.params.model,
+				...(p.params.provider === "github-models"
 					? { ghToken: Redacted.make("mock-github-token") }
 					: {}),
 			},
-			params.fetch !== undefined ? { fetch: params.fetch } : undefined,
+			p.fetch !== undefined ? { fetch: p.fetch } : undefined,
 		),
 	);
 }
 
-describe("generatePrContentFromValues (value-based, no file I/O)", () => {
-	test("returns title and body for 1 commit (no local LLM call)", async () => {
-		const p = params([{ subject: "feat: add x", body: "" }]);
-		await runEffect(layerForGeneratePrContent(p))(
+describe("generatePrContent (GitContext-based, no file I/O)", () => {
+	test("returns title and body for 1 commit (no AI call)", async () => {
+		const p = makeParams([{ subject: "feat: add x", body: "" }]);
+		await runEffect(layerForTest(p))(
 			Effect.gen(function* () {
-				const result = yield* generatePrContentFromValues(p);
+				const result = yield* generatePrContent(p.params);
 				expect(result.title).toBe("feat: add x");
 				expect(result.body).toContain("add x");
 				expect(result.count).toBe(1);
@@ -80,13 +128,13 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 	});
 
 	test("fails with NoSemanticCommitsError when all commits are merge", async () => {
-		const p = params([
+		const p = makeParams([
 			{ subject: "Merge branch 'main' into feature", body: "" },
 			{ subject: "Merge pull request #1", body: "" },
 		]);
-		await runEffect(layerForGeneratePrContent(p))(
+		await runEffect(layerForTest(p))(
 			Effect.gen(function* () {
-				const exit = yield* generatePrContentFromValues(p).pipe(Effect.exit, Effect.scoped);
+				const exit = yield* generatePrContent(p.params).pipe(Effect.exit, Effect.scoped);
 				expect(Exit.isFailure(exit)).toBe(true);
 				if (Exit.isFailure(exit)) {
 					Result.match(Cause.findError(exit.cause), {
@@ -99,12 +147,12 @@ describe("generatePrContentFromValues (value-based, no file I/O)", () => {
 	});
 
 	test("fails with TemplateRenderError when template is malformed", async () => {
-		const p = params([{ subject: "feat: add x", body: "" }], {
+		const p = makeParams([{ subject: "feat: add x", body: "" }], {
 			templateContent: "# PR\n\n{{description",
 		});
-		await runEffect(layerForGeneratePrContent(p))(
+		await runEffect(layerForTest(p))(
 			Effect.gen(function* () {
-				const exit = yield* generatePrContentFromValues(p).pipe(Effect.exit, Effect.scoped);
+				const exit = yield* generatePrContent(p.params).pipe(Effect.exit, Effect.scoped);
 				expect(Exit.isFailure(exit)).toBe(true);
 				if (Exit.isFailure(exit)) {
 					Result.match(Cause.findError(exit.cause), {
@@ -177,17 +225,17 @@ const twoCommits = [
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
 
-describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () => {
+describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 	describe("valid title", () => {
 		test("returns AI title and body with structured description sections (local provider)", async () => {
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
 					expect(result.body).toContain(
@@ -209,14 +257,14 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 		});
 
 		test("renders motivation as bullet points", async () => {
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.body).toContain(
 						"- Align CI and provider behavior so multi-commit PR generation is easier to review and operate.",
 					);
@@ -225,14 +273,14 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 		});
 
 		test("renders benefits as bullet points", async () => {
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.body).toContain(
 						"- Reviewers can now validate CI changes in a single consistent place.",
 					);
@@ -241,14 +289,14 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 		});
 
 		test("includes ### Benefits between ### Motivation and ### Risks", async () => {
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.body).toContain("### Benefits");
 					expect(result.body).toContain(
 						"Reviewers can now validate CI changes in a single consistent place.",
@@ -270,14 +318,14 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 				risks: ["One risk."],
 				notesForReviewers: "",
 			});
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(responseEmptyBenefits),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.body).not.toContain("### Benefits");
 					expect(result.body).toContain("### Motivation");
 					expect(result.body).toContain("### Risks");
@@ -286,16 +334,16 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 		});
 
 		test("same generateText + JSON path for github-models provider (mocked)", async () => {
-			const p = params(twoCommits, {
+			const p = makeParams(twoCommits, {
 				provider: "github-models",
 				model: "microsoft/phi-mock",
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
 				}).pipe(Effect.scoped),
@@ -312,14 +360,14 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 				risks: ["One risk bullet."],
 				notesForReviewers: "",
 			});
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(longResponse),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title.length).toBe(PR_TITLE_LINE_MAX_LENGTH);
 					expect(result.title.startsWith("feat(generate-content): ")).toBe(true);
 					expect(result.body).toContain("### Motivation");
@@ -336,14 +384,14 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 				risks: ["Short risk only."],
 				notesForReviewers: "n",
 			});
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				fetch: createOpenAiChatCompletionsMockFetch(longResponse),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain(longBullet.slice(0, 80));
 				}).pipe(Effect.scoped),
@@ -353,15 +401,15 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 
 	describe("invalid title (fallback)", () => {
 		test("falls back to first commit subject when local LLM returns invalid title 5 times", async () => {
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
 					expect(result.body).toContain("### Motivation");
 					expect(result.body).toContain("### Risks");
@@ -371,7 +419,7 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 		});
 
 		test("falls back to chore: update when first commit subject is non-conventional", async () => {
-			const p = params(
+			const p = makeParams(
 				[
 					{ subject: "Add feature", body: "" },
 					{ subject: "Fix bug", body: "" },
@@ -381,9 +429,9 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 					fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE),
 				},
 			);
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("chore: update");
 				}).pipe(Effect.scoped),
 			);
@@ -399,15 +447,15 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 				risks: ["Risk one."],
 				notesForReviewers: "",
 			});
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(bad),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
 			);
@@ -421,15 +469,15 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 				risks: ["", "  ", "-  "],
 				notesForReviewers: "",
 			});
-			const p = params(twoCommits, {
-				filesContent: "src/a.ts\nsrc/b.ts\n",
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
 				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(bad),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
 			);
@@ -438,13 +486,13 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 
 	describe("empty assistant content", () => {
 		test("falls back when local LLM returns empty content 5 times", async () => {
-			const p = params(twoCommits, {
+			const p = makeParams(twoCommits, {
 				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch(""),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
 			);
@@ -453,13 +501,13 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 
 	describe("invalid JSON in assistant content", () => {
 		test("falls back when local LLM returns invalid JSON 5 times", async () => {
-			const p = params(twoCommits, {
+			const p = makeParams(twoCommits, {
 				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch("feat: x\n\n"),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
 			);
@@ -468,16 +516,16 @@ describe("generatePrContentFromValues (2+ commits, mocked OpenAI-compat)", () =>
 
 	describe("HTTP 500 from OpenAI-compat endpoint", () => {
 		test("falls back when local endpoint returns HTTP 500 five times", async () => {
-			const p = params(twoCommits, {
+			const p = makeParams(twoCommits, {
 				retryDelay: Duration.zero,
 				fetch: createOpenAiChatCompletionsMockFetch({
 					content: VALID_AI_RESPONSE,
 					status: 500,
 				}),
 			});
-			await runEffect(layerForGeneratePrContent(p))(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues(p);
+					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add module A");
 				}).pipe(Effect.scoped),
 			);
@@ -506,117 +554,130 @@ describe("catchDefect (defect → TemplateRenderError)", () => {
 	});
 });
 
-const RunIntegrationLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
+// ─── runGeneratePrContent integration tests (real git repo) ──────────────────
 
-describe("runGeneratePrContent (integration, file I/O)", () => {
-	test("fails with UnexpectedError when commits file is missing", async () => {
-		await runEffect(RunIntegrationLayer)(
+const IntegrationTestLayer = Layer.mergeAll(
+	TestBaseLayer,
+	SilentLoggerLayer,
+	ChildProcessSpawnerLayer,
+);
+
+/**
+ * Set up a minimal git repo in `workspace` with:
+ * - An initial commit tagged as `origin/main`
+ * - One or more commits on top (on branch `branchName`)
+ */
+function setupGitRepoForRunGeneratePrContent(
+	workspace: string,
+	commits: Array<{ message: string }>,
+	branchName: string,
+): Effect.Effect<void, Error, ChildProcessSpawner> {
+	return Effect.gen(function* () {
+		const spawner = yield* ChildProcessSpawner;
+		const run = (args: string[]) =>
+			spawner
+				.string(ChildProcess.make("git", args, { cwd: workspace }))
+				.pipe(Effect.mapError((e) => new Error(String(e))));
+
+		yield* run(["init", "-b", branchName]);
+		yield* run(["config", "user.email", "test@test.com"]);
+		yield* run(["config", "user.name", "Test"]);
+		yield* run(["config", "commit.gpgsign", "false"]);
+		// Initial commit — this becomes origin/main
+		yield* run(["commit", "--allow-empty", "-m", "chore: initial"]);
+		yield* run(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+
+		// Add the test commits on top of origin/main
+		for (const { message } of commits) {
+			yield* run(["commit", "--allow-empty", "-m", message]);
+		}
+	});
+}
+
+describe("runGeneratePrContent (integration, real git repo)", () => {
+	test("writes pr-title.txt and pr-body.md for 1 commit (no AI call)", async () => {
+		await runEffect(IntegrationTestLayer)(
 			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("generate-pr-missing-commits-");
-				const pathApi = yield* Path.Path;
-				const missingCommits = pathApi.join(tmp.path, "does-not-exist-commits.txt");
-				const filesPath = pathApi.join(tmp.path, "files.txt");
-				const templatePath = pathApi.join(tmp.path, "template.md");
-				const fs = yield* FileSystem.FileSystem;
-				yield* fs.writeFileString(filesPath, "src/a.ts\n");
-				yield* fs.writeFileString(templatePath, DEFAULT_TEMPLATE);
+				const tmp = yield* createTestTempDirEffect("run-generate-");
+				try {
+					// Set up git repo
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add x" }],
+						"ai/test",
+					);
 
-				const exit = yield* runGeneratePrContent({
-					commits: missingCommits,
-					files: filesPath,
-					workspace: tmp.path,
-					templatePath,
-					provider: "local",
-					model: "gpt-oss",
-					fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
-				}).pipe(Effect.exit);
+					// Write the PR template
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
 
-				expect(Exit.isFailure(exit)).toBe(true);
-				if (Exit.isFailure(exit)) {
-					Result.match(Cause.findError(exit.cause), {
-						onSuccess: (err) => {
-							expect(err).toBeInstanceOf(UnexpectedError);
-							expect((err as UnexpectedError).cause).toContain("commits");
-						},
-						onFailure: () => expect().fail("expected UnexpectedError"),
+					// Run the pipeline
+					yield* runGeneratePrContent({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "local",
+						model: "gpt-oss",
 					});
+
+					// Assert output files exist and have expected content
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(title.trim()).toBe("feat: add x");
+					expect(body).toContain("add x");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
 				}
 			}).pipe(Effect.scoped),
 		);
 	});
 
-	test("reads files, writes pr-title.txt and pr-body.md (github-models + ghToken)", async () => {
-		await runEffect(RunIntegrationLayer)(
+	test("writes pr-title.txt and pr-body.md for 2 commits (AI call mocked)", async () => {
+		await runEffect(IntegrationTestLayer)(
 			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("generate-pr-content-github-models-");
-				const fs = yield* FileSystem.FileSystem;
-				const pathApi = yield* Path.Path;
+				const tmp = yield* createTestTempDirEffect("run-generate-multi-");
+				try {
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+						"ai/test",
+					);
 
-				const commitsPath = pathApi.join(tmp.path, "commits.txt");
-				const filesPath = pathApi.join(tmp.path, "files.txt");
-				const templatePath = pathApi.join(tmp.path, "template.md");
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
 
-				yield* fs.writeFileString(
-					commitsPath,
-					logContent(
-						{ subject: "feat: add module A", body: "Adds A." },
-						{ subject: "fix: fix bug in B", body: "Fixes B." },
-					),
-				);
-				yield* fs.writeFileString(filesPath, "src/a.ts\nsrc/b.ts\n");
-				yield* fs.writeFileString(templatePath, TEMPLATE_WITH_CHANGES);
+					const mockResponse = JSON.stringify({
+						title: "feat: add A and fix B",
+						motivation: ["Improves module A and fixes bug in B."],
+						benefits: [],
+						risks: ["Low risk — covered by tests."],
+						notesForReviewers: "",
+					});
 
-				yield* runGeneratePrContent({
-					commits: commitsPath,
-					files: filesPath,
-					workspace: tmp.path,
-					templatePath,
-					provider: "github-models",
-					model: "openai/gpt-4.1-mini",
-					ghToken: Redacted.make("ghp_integration_test"),
-					retryDelay: Duration.zero,
-					fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
-				});
+					yield* runGeneratePrContent({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "local",
+						model: "gpt-oss",
+						retryDelay: Duration.zero,
+						fetch: createOpenAiChatCompletionsMockFetch(mockResponse),
+					});
 
-				const titlePath = pathApi.join(tmp.path, "pr-title.txt");
-				const titleContent = yield* fs.readFileString(titlePath);
-				expect(titleContent).toContain("feat: add X and fix B");
-			}).pipe(Effect.scoped),
-		);
-	});
-
-	test("reads files, writes pr-title.txt and pr-body.md", async () => {
-		await runEffect(RunIntegrationLayer)(
-			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("generate-pr-content-integration-");
-				const fs = yield* FileSystem.FileSystem;
-				const pathApi = yield* Path.Path;
-
-				const commitsPath = pathApi.join(tmp.path, "commits.txt");
-				const filesPath = pathApi.join(tmp.path, "files.txt");
-				const templatePath = pathApi.join(tmp.path, "template.md");
-
-				yield* fs.writeFileString(commitsPath, logContent({ subject: "feat: add x", body: "" }));
-				yield* fs.writeFileString(filesPath, "src/foo.ts\n");
-				yield* fs.writeFileString(templatePath, DEFAULT_TEMPLATE);
-
-				yield* runGeneratePrContent({
-					commits: commitsPath,
-					files: filesPath,
-					workspace: tmp.path,
-					templatePath,
-					provider: "local",
-					model: "gpt-oss",
-					fetch: createOpenAiChatCompletionsMockFetch(""),
-				});
-
-				const titlePath = pathApi.join(tmp.path, "pr-title.txt");
-				const titleContent = yield* fs.readFileString(titlePath);
-				expect(titleContent).toContain("feat: add x");
-
-				const bodyPath = pathApi.join(tmp.path, "pr-body.md");
-				const bodyContent = yield* fs.readFileString(bodyPath);
-				expect(bodyContent).toContain("add x");
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(title.trim()).toBe("feat: add A and fix B");
+					expect(body).toContain("### Motivation");
+					expect(body).toContain("### Risks");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
 			}).pipe(Effect.scoped),
 		);
 	});

@@ -1,7 +1,7 @@
 /**
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
- * Requires env: GITHUB_WORKSPACE. Reads `commits.txt` and `files.txt` under workspace (from `get-commits`).
+ * Requires env: GITHUB_WORKSPACE, DEFAULT_BRANCH, BRANCH. Uses GitContext to fetch commit log and diff data directly.
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
@@ -33,12 +33,17 @@ import {
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
+	ChildProcessSpawnerLayer,
 	DescriptionParseError,
+	DiffToolkit,
 	formatError,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
+	GitContext,
+	GitContextLive,
 	getPrDescriptionPromptPath,
 	isBlank,
+	makeDiffToolkitLayer,
 	NoSemanticCommitsError,
 	ParseError,
 	PR_BODY_FILE_NAME,
@@ -53,7 +58,7 @@ import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
 	fitConventionalTitleToLengthLimit,
-	getDescriptionFromCommits,
+	getDescription,
 	getDescriptionPromptText,
 	getTitle as getTitleFromCommits,
 	isWithinLengthLimit,
@@ -231,25 +236,30 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 		onSuccess: (t) => t,
 		onFailure: () => "chore: update",
 	});
+	// Use each commit's description (body excerpt, or subject-after-colon) as a separate bullet.
+	// This is more readable than one blob of joined bodies.
+	const bullets = filtered
+		.map((c) => getDescription(c))
+		.filter((s) => !isBlank(s))
+		.slice(0, 8);
+	const motivation = bullets.length > 0 ? bullets : [firstSubject];
 	const description = buildDescriptionBlock({
-		motivation: [getDescriptionFromCommits(filtered)],
+		motivation,
 		benefits: [],
-		risks: [
-			"None obvious from commits; review focused on changed code paths and integration boundaries.",
-		],
+		risks: ["AI description unavailable — review changed files directly for risk assessment."],
 		notesForReviewers: "",
 	});
 	return { title, description };
 }
 
-/** Generate title and description via `generateText` + JSON parse + schema validation (see file-level doc). */
-function generateTitleAndDescription(
+/** Generate title and description via `generateText` + DiffToolkit + JSON parse + schema validation. */
+function generateTitleAndDescriptionWithToolkit(
 	prompt: string,
 	filtered: readonly CommitInfo[],
 	retryDelay: Duration.Duration,
 	provider: AiProvider,
 	model: string,
-): Effect.Effect<{ title: string; description: string }, unknown, LanguageModel.LanguageModel> {
+) {
 	return Effect.gen(function* () {
 		yield* Effect.log({
 			event: "generate_pr_content",
@@ -259,7 +269,7 @@ function generateTitleAndDescription(
 			model,
 			prompt_chars: prompt.length,
 		});
-		const res = yield* LanguageModel.generateText({ prompt });
+		const res = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
 		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
 		return yield* logAndValidateTitleDescription(raw, provider, model);
 	}).pipe(
@@ -288,52 +298,39 @@ function generateTitleAndDescription(
 	);
 }
 
-// ─── Value-based API (no file I/O) ────────────────────────────────────────
+// ─── GitContext-based API ─────────────────────────────────────────────────
 
-/** Parameters for generatePrContentFromValues. All content as strings. */
-export type GeneratePrContentFromValuesParams = {
-	commitsContent: string;
-	filesContent: string;
+/** Parameters for generatePrContent. Uses GitContext instead of file content. */
+export type GeneratePrContentParams = {
+	baseRef: string;
+	headRef: string;
 	templateContent: string;
 	descriptionPromptText: string;
 	provider: AiProvider;
 	model: string;
-	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
 	retryDelay?: Duration.Duration;
-	/** Custom fetch for tests. Omit for production. */
-	fetch?: typeof fetch;
 };
 
-/** Schema union for value-based errors (single source of truth). No UnexpectedError. */
-export const GeneratePrContentFromValuesErrorSchema = Schema.Union([
-	NoSemanticCommitsError,
-	ParseError,
-	TemplateRenderError,
-]);
-
-/** Errors from generatePrContentFromValues (value-based, no file I/O). */
-export type GeneratePrContentFromValuesError = Schema.Schema.Type<
-	typeof GeneratePrContentFromValuesErrorSchema
->;
-
-/** Errors from runGeneratePrContent (includes file I/O, AI provider config). */
-export type GeneratePrContentError =
-	| GeneratePrContentFromValuesError
-	| UnexpectedError
-	| AutoPrConfigError;
-
-export function generatePrContentFromValues(
-	params: GeneratePrContentFromValuesParams,
-): Effect.Effect<
-	{ title: string; body: string; count: number },
-	GeneratePrContentFromValuesError,
-	LanguageModel.LanguageModel
-> {
+export function generatePrContent(params: GeneratePrContentParams) {
 	return Effect.gen(function* () {
-		const { commitsContent, filesContent, templateContent, descriptionPromptText, retryDelay } =
-			params;
+		const { baseRef, headRef, templateContent, descriptionPromptText, retryDelay } = params;
+		const git = yield* GitContext;
 
-		const parseResult = parseCommits(commitsContent);
+		// Fetch git data via GitContext
+		const toGitError = (op: string) => (e: Error) =>
+			new UnexpectedError({ cause: `${op}: ${e.message}` });
+		const logOutput = yield* git
+			.getLog(baseRef, headRef)
+			.pipe(Effect.mapError(toGitError("git log")));
+		const filesOutput = yield* git
+			.getChangedFiles(baseRef, headRef)
+			.pipe(Effect.mapError(toGitError("git diff --name-only")));
+		const diffStatOutput = yield* git
+			.getDiffStat(baseRef, headRef)
+			.pipe(Effect.mapError(toGitError("git diff --stat")));
+
+		// Parse (pure core)
+		const parseResult = parseCommits(logOutput);
 		const rawCommits = yield* Effect.fromResult(parseResult);
 		const filtered = filterMergeCommits(rawCommits);
 		const count = filtered.length;
@@ -347,16 +344,16 @@ export function generatePrContentFromValues(
 			);
 		}
 
-		const files = parseFilesContent(filesContent);
+		const files = parseFilesContent(filesOutput);
 
 		let title: string;
 		let descriptionOverride: string | undefined;
 
 		if (count >= 2) {
 			const commitContent = getDescriptionPromptText(filtered);
-			const prompt = buildDescriptionPrompt(descriptionPromptText, commitContent);
+			const prompt = buildDescriptionPrompt(descriptionPromptText, diffStatOutput, commitContent);
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
-			const result = yield* generateTitleAndDescription(
+			const result = yield* generateTitleAndDescriptionWithToolkit(
 				prompt,
 				filtered,
 				delay,
@@ -374,7 +371,6 @@ export function generatePrContentFromValues(
 		const body = yield* Effect.fromResult(bodyResult);
 		return { title, body, count };
 	}).pipe(
-		// Defects (unexpected throws) → TemplateRenderError at boundary. Log before converting.
 		Effect.catchDefect((defect) =>
 			Effect.logError({
 				event: "generate_pr_content",
@@ -382,7 +378,6 @@ export function generatePrContentFromValues(
 				cause: unknownToMessage(defect),
 			}).pipe(Effect.flatMap(() => Effect.fail(normalizeUnknownToGeneratePrContentError(defect)))),
 		),
-		// Exhaustive tag handling: known domain errors pass through; unknown normalized via Schema or fallback.
 		Effect.catchTags(
 			{
 				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
@@ -394,11 +389,26 @@ export function generatePrContentFromValues(
 	);
 }
 
-/** Normalize unknown (defect or non-tagged failure) to GeneratePrContentFromValuesError. Exported for tests. */
+/** Schema union for generate-content errors (single source of truth). No UnexpectedError. */
+const GeneratePrContentErrorSchema = Schema.Union([
+	NoSemanticCommitsError,
+	ParseError,
+	TemplateRenderError,
+]);
+
+/** Errors from runGeneratePrContent (includes file I/O, AI provider config). */
+export type GeneratePrContentError =
+	| NoSemanticCommitsError
+	| ParseError
+	| TemplateRenderError
+	| UnexpectedError
+	| AutoPrConfigError;
+
+/** Normalize unknown (defect or non-tagged failure) to a GeneratePrContentError. Exported for tests. */
 export function normalizeUnknownToGeneratePrContentError(
 	e: unknown,
-): GeneratePrContentFromValuesError {
-	const decoded = Schema.decodeUnknownOption(GeneratePrContentFromValuesErrorSchema)(e);
+): NoSemanticCommitsError | ParseError | TemplateRenderError {
+	const decoded = Schema.decodeUnknownOption(GeneratePrContentErrorSchema)(e);
 	return Option.getOrElse(
 		decoded,
 		() =>
@@ -412,8 +422,8 @@ export function normalizeUnknownToGeneratePrContentError(
 // ─── Main pipeline ───────────────────────────────────────────────────────
 
 export function runGeneratePrContent(config: {
-	commits: string;
-	files: string;
+	defaultBranch: string;
+	branch: string;
 	workspace: string;
 	templatePath: string;
 	provider: AiProvider;
@@ -433,8 +443,8 @@ export function runGeneratePrContent(config: {
 
 	return Effect.gen(function* () {
 		const {
-			commits,
-			files,
+			defaultBranch,
+			branch,
 			workspace,
 			templatePath,
 			provider,
@@ -447,45 +457,46 @@ export function runGeneratePrContent(config: {
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
 
-		const [commitsContent, filesContent, templateContent, descriptionPromptText] =
-			yield* Effect.all([
-				fs.readFileString(commits).pipe(Effect.mapError(toUnexpected("commits"))),
-				fs.readFileString(files).pipe(Effect.mapError(toUnexpected("files"))),
-				fs.readFileString(templatePath).pipe(Effect.mapError(toUnexpected("template"))),
-				getPrDescriptionPromptPath().pipe(
-					Effect.mapError(toUnexpected("getPrDescriptionPromptPath")),
-					Effect.flatMap((p) =>
-						fs.readFileString(p).pipe(Effect.mapError(toUnexpected("pr-description.txt"))),
-					),
-				),
-			]);
+		const baseRef = `origin/${defaultBranch}`;
 
-		const generateLayer = Layer.mergeAll(
-			AutoPrPlatformLayer,
-			aiProviderLayerFromConfig(
-				{
-					provider,
-					model,
-					...(ghToken !== undefined ? { ghToken } : {}),
-					...(provider === "local"
-						? {
-								...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
-								...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
-							}
-						: {}),
-				},
-				config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+		const [templateContent, descriptionPromptText] = yield* Effect.all([
+			fs.readFileString(templatePath).pipe(Effect.mapError(toUnexpected("template"))),
+			getPrDescriptionPromptPath().pipe(
+				Effect.mapError(toUnexpected("getPrDescriptionPromptPath")),
+				Effect.flatMap((p) =>
+					fs.readFileString(p).pipe(Effect.mapError(toUnexpected("pr-description.txt"))),
+				),
 			),
+		]);
+
+		const aiLayer = aiProviderLayerFromConfig(
+			{
+				provider,
+				model,
+				...(ghToken !== undefined ? { ghToken } : {}),
+				...(provider === "local"
+					? {
+							...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
+							...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
+						}
+					: {}),
+			},
+			config.fetch !== undefined ? { fetch: config.fetch } : undefined,
 		);
-		const { title, body, count } = yield* generatePrContentFromValues({
-			commitsContent,
-			filesContent,
+
+		const gitLayer = GitContextLive(workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
+		const toolkitLayer = makeDiffToolkitLayer(baseRef, branch).pipe(Layer.provide(gitLayer));
+
+		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
+
+		const { title, body, count } = yield* generatePrContent({
+			baseRef,
+			headRef: branch,
 			templateContent,
 			descriptionPromptText,
 			provider,
 			model,
 			...(retryDelay !== undefined && { retryDelay }),
-			...(config.fetch !== undefined && { fetch: config.fetch }),
 		}).pipe(Effect.provide(generateLayer));
 
 		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
@@ -515,13 +526,11 @@ export function runGeneratePrContent(config: {
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const GeneratePrContentLayer = AutoPrPlatformLayer;
-
 const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;
 	const params = {
-		commits: config.commits,
-		files: config.files,
+		defaultBranch: config.defaultBranch,
+		branch: config.branch,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		provider: config.provider,
@@ -538,9 +547,10 @@ const program = Effect.gen(function* () {
 				}
 			: {}),
 	};
-	yield* runGeneratePrContent(params).pipe(Effect.provide(GeneratePrContentLayer));
+	yield* runGeneratePrContent(params).pipe(Effect.provide(AutoPrPlatformLayer));
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
 
+/* c8 ignore next 3 */
 if (import.meta.main) {
 	runMain(program, "generate_pr_content_failed");
 }

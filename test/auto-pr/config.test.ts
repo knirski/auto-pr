@@ -9,8 +9,6 @@ import {
 	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
-	GetCommitsConfig,
-	GetCommitsConfigLayer,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr";
@@ -29,35 +27,11 @@ function expectConfigFailure<A>(
 		.pipe(Effect.flatMap((exit) => Effect.sync(() => expect(Exit.isFailure(exit)).toBe(true))));
 }
 
-const GetCommitsConfigProviderLayer = ConfigProvider.layer(
-	ConfigProvider.fromUnknown({
-		DEFAULT_BRANCH: "main",
-		GITHUB_WORKSPACE: "/workspace",
-		GITHUB_OUTPUT: "/tmp/gh-output",
-	}),
-);
-
-const GetCommitsLayer = Layer.mergeAll(
-	TestBaseLayer,
-	GetCommitsConfigLayer.pipe(Layer.provide(GetCommitsConfigProviderLayer)),
-);
-
-describe("GetCommitsConfigLayer succeeds when all vars present", () => {
-	test("returns config with non-empty values", async () => {
-		await runEffect(GetCommitsLayer)(
-			Effect.gen(function* () {
-				const config = yield* GetCommitsConfig;
-				expect(config.defaultBranch).toBe("main");
-				expect(config.workspace).toBe("/workspace");
-				expect(config.ghOutput).toBe("/tmp/gh-output");
-			}),
-		);
-	});
-});
-
 const GeneratePrContentConfigProviderLayer = ConfigProvider.layer(
 	ConfigProvider.fromUnknown({
 		GITHUB_WORKSPACE: "/workspace",
+		DEFAULT_BRANCH: "main",
+		BRANCH: "ai/feature",
 		AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
 	}),
 );
@@ -72,8 +46,6 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 		await runEffect(GeneratePrContentLayer)(
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
-				expect(config.commits).toBe(join("/workspace", "commits.txt"));
-				expect(config.files).toBe(join("/workspace", "files.txt"));
 				expect(config.templatePath).toBe(join("/workspace", ".github/PULL_REQUEST_TEMPLATE.md"));
 				expect(config.provider).toBe("local");
 				expect(config.model).toBe("llama3.1:8b");
@@ -84,6 +56,8 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 
 const generatePrContentBaseEnv = {
 	GITHUB_WORKSPACE: "/workspace",
+	DEFAULT_BRANCH: "main",
+	BRANCH: "ai/feature",
 };
 
 describe("GeneratePrContentConfigLayer for github-models", () => {
@@ -244,17 +218,6 @@ describe("CreateOrUpdatePrConfigLayer succeeds when all vars present", () => {
 });
 
 describe("config layers fail when required env vars missing", () => {
-	test("GetCommitsConfigLayer fails when GITHUB_OUTPUT missing", async () => {
-		await Effect.runPromise(
-			expectConfigFailure(
-				Effect.gen(function* () {
-					return yield* GetCommitsConfig;
-				}),
-				GetCommitsConfigLayer,
-			),
-		);
-	});
-
 	test("GeneratePrContentConfigLayer fails when GITHUB_WORKSPACE missing", async () => {
 		await Effect.runPromise(
 			expectConfigFailure(
@@ -375,11 +338,38 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 	});
 });
 
+describe("GeneratePrContentConfig reads DEFAULT_BRANCH and BRANCH", () => {
+	test("reads DEFAULT_BRANCH and BRANCH from env", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/tmp/ws",
+				AUTO_PR_AI_PROVIDER: "local",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				DEFAULT_BRANCH: "main",
+				BRANCH: "ai/test-branch",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.defaultBranch).toBe("main");
+				expect(config.branch).toBe("ai/test-branch");
+			}),
+		);
+	});
+});
+
 describe("GeneratePrContentConfigLayer rejects invalid provider", () => {
 	test("fails when AUTO_PR_AI_PROVIDER is not local or github-models", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				GITHUB_WORKSPACE: "/workspace",
+				DEFAULT_BRANCH: "main",
+				BRANCH: "ai/feature",
 				AUTO_PR_AI_PROVIDER: "ollama",
 				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "m",
 			}),

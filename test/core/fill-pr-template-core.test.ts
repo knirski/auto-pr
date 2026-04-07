@@ -65,8 +65,9 @@ const TEST_TEMPLATE = `## Description
 const commit = (
 	subject: string,
 	body: string,
-	opts?: { type?: string; references?: string[]; breakingNote?: string | null },
+	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string | null },
 ): CommitInfo => ({
+	hash: opts?.hash ?? "",
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
@@ -798,5 +799,75 @@ Made-with: Cursor`;
 				onFailure: () => expect().fail("expected success"),
 			});
 		});
+	});
+});
+
+describe("parseCommits (hash extraction)", () => {
+	test("extracts full SHA hash from log format with %H", () => {
+		const log = [
+			"---COMMIT---",
+			"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+			"feat: add feature",
+			"",
+			"Body of commit.",
+		].join("\n");
+		pipe(
+			parseCommits(log),
+			Result.match({
+				onSuccess: (commits) => {
+					expect(commits).toHaveLength(1);
+					expect(commits[0]?.hash).toBe("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
+					expect(commits[0]?.subject).toBe("feat: add feature");
+					expect(commits[0]?.body).toContain("Body of commit.");
+				},
+				onFailure: () => expect().fail("should parse"),
+			}),
+		);
+	});
+
+	test("handles multiple commits with hashes", () => {
+		const log = [
+			"---COMMIT---",
+			"aaaa000000000000000000000000000000000001",
+			"feat: first",
+			"",
+			"",
+			"---COMMIT---",
+			"bbbb000000000000000000000000000000000002",
+			"fix: second",
+			"",
+			"",
+		].join("\n");
+		pipe(
+			parseCommits(log),
+			Result.match({
+				onSuccess: (commits) => {
+					expect(commits).toHaveLength(2);
+					expect(commits[0]?.hash).toBe("aaaa000000000000000000000000000000000001");
+					expect(commits[0]?.subject).toBe("feat: first");
+					expect(commits[1]?.hash).toBe("bbbb000000000000000000000000000000000002");
+					expect(commits[1]?.subject).toBe("fix: second");
+				},
+				onFailure: () => expect().fail("should parse"),
+			}),
+		);
+	});
+});
+
+describe("getDescriptionPromptText (with hashes)", () => {
+	test("includes truncated hash prefix in output", () => {
+		const commits = [
+			commit("feat: add x", "Body.", { hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" }),
+			commit("fix: fix y", "", { hash: "bbbb000000000000000000000000000000000002" }),
+		];
+		const text = getDescriptionPromptText(commits);
+		expect(text).toContain("- a1b2c3d feat: add x");
+		expect(text).toContain("- bbbb000 fix: fix y");
+	});
+
+	test("omits hash prefix when hash is empty (backwards compat)", () => {
+		const commits = [commit("feat: add z", "")];
+		const text = getDescriptionPromptText(commits);
+		expect(text).toBe("- feat: add z");
 	});
 });

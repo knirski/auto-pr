@@ -140,7 +140,7 @@ When a change addresses an issue, include `Closes #<issue>` in the commit body s
 
 **AI-assisted workflow:** Push to `ai/**` branches to auto-create PRs with title and body from conventional commits. See [docs/INTEGRATION.md](docs/INTEGRATION.md) for setup.
 
-- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run act` (nektos act / `gh act`) for local testing. (2) If pushing to CI, update all `@SHA` refs to the current commit (`git rev-parse HEAD`): auto-pr.yml (both workflow refs), and the setup-runtime ref in auto-pr-generate-reusable.yml and check.yml. **After merging:** Pins are updated automatically by update-workflow-pins. See [docs/CI.md](docs/CI.md#workflow-pin-automation).
+- **Same-repo contributors:** Workflow runs automatically. When testing workflow changes on a new branch: (1) Prefer `bun run act` (nektos act / `gh act`) for local testing. (2) If pushing to CI, update **all** `@SHA` refs to the current commit (`git rev-parse HEAD`) — branch name refs are not allowed by the repo's pinning policy. Update: both `uses:` lines in auto-pr.yml, all composite action refs in auto-pr-generate-reusable.yml, and the setup-runtime ref in check.yml. Run `sed -i "s|@<old-sha>|@<new-sha>|g"` on the workflow files after each push. **After merging:** Pins are updated automatically by update-workflow-pins. See [docs/CI.md](docs/CI.md#workflow-pin-automation).
 - **Fork contributors:** Workflow runs on your fork. Add `APP_ID` and `APP_PRIVATE_KEY` to your fork's secrets to enable auto-PR; otherwise create the PR manually.
 
 1. Run `bun run check` before submitting.
