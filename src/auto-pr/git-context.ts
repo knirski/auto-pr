@@ -4,7 +4,7 @@
  * Workspace (cwd) is baked into the live layer — not a per-method parameter.
  */
 
-import { Effect, Layer, ServiceMap } from "effect";
+import { Cause, Duration, Effect, Layer, ServiceMap } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { runCommand } from "#auto-pr/shell.js";
 
@@ -24,6 +24,8 @@ export const GitContext = ServiceMap.Service<GitContext>("GitContext");
 
 const LOG_FORMAT = "---COMMIT---%n%H%n%s%n%n%b";
 
+export const GIT_COMMAND_TIMEOUT = Duration.seconds(30);
+
 /** Build live GitContext with workspace baked in. Returns a Layer. */
 export function GitContextLive(
 	workspace: string,
@@ -36,7 +38,13 @@ export function GitContextLive(
 
 			const run = (cmd: string, args: string[]) =>
 				runCommand(cmd, args, workspace).pipe(
-					Effect.mapError((e) => new Error(e instanceof Error ? e.message : String(e))),
+					Effect.timeout(GIT_COMMAND_TIMEOUT),
+					Effect.mapError((e) => {
+						if (Cause.isTimeoutError(e)) {
+							return new Error(`git ${args[0] ?? cmd} timed out after 30s`);
+						}
+						return new Error(e instanceof Error ? e.message : String(e));
+					}),
 					Effect.provideService(ChildProcessSpawner, spawner),
 				);
 
