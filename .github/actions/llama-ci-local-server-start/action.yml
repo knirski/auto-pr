@@ -16,6 +16,10 @@ inputs:
     description: TCP port for llama-server
     required: false
     default: "8080"
+  extra_flags:
+    description: Extra flags appended to the llama-server command (e.g. "--jinja" for models requiring Jinja tool-call templates)
+    required: false
+    default: ""
 
 outputs:
   compat_url:
@@ -36,3 +40,4 @@ runs:
         MODEL_URL: ${{ inputs.model_url }}
         LLAMA_CI_ROOT: ${{ inputs.llama_ci_root }}
         LLAMA_PORT: ${{ inputs.llama_port }}
+        EXTRA_FLAGS: ${{ inputs.extra_flags }}

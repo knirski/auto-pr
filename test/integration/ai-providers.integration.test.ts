@@ -143,7 +143,7 @@ describe.skipIf(!canRunLocal)("integration: local OpenAI-compat (llama.cpp)", ()
 	);
 });
 
-describe.skipIf(!canRunQwen)("integration: local llama.cpp (qwen2.5-1.5b, happy path)", () => {
+describe.skipIf(!canRunQwen)("integration: local llama.cpp (qwen3-1.7b, happy path)", () => {
 	test(
 		"generatePrContent (2 commits) uses AI and produces non-fallback PR body",
 		async () => {
@@ -166,7 +166,7 @@ describe.skipIf(!canRunQwen)("integration: local llama.cpp (qwen2.5-1.5b, happy 
 					expect(result.title.trim().length).toBeGreaterThan(0);
 					expect(result.body).toContain("### Motivation");
 					expect(result.body).toContain("### Risks");
-					// Qwen2.5-1.5B supports tool calls — AI generation should succeed, no fallback.
+					// Qwen3-1.7B has 0.960 tool-call reliability — AI generation should succeed, no fallback.
 					expect(result.body).not.toContain("AI description unavailable");
 				}),
 			);
