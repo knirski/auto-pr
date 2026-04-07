@@ -47,8 +47,11 @@ function rewriteLinks(content: string, subdir: string = ""): string {
 	});
 }
 
-function buildFrontmatter(title: string, meta?: DocMeta): string {
+function buildFrontmatter(title: string, meta?: DocMeta, editUrl?: string): string {
 	const lines = ["---", `title: "${title}"`];
+	if (editUrl) {
+		lines.push(`editUrl: "${editUrl}"`);
+	}
 	if (meta?.label) {
 		lines.push(`sidebar:`);
 		lines.push(`  label: "${meta.label}"`);
@@ -70,10 +73,14 @@ async function processFile(
 	destPath: string,
 	meta?: DocMeta,
 	subdir: string = "",
+	repoRelativePath?: string,
 ): Promise<void> {
 	const raw = await readFile(srcPath, "utf-8");
 	const title = extractTitle(raw);
-	const frontmatter = buildFrontmatter(title, meta);
+	const editUrl = repoRelativePath
+		? `https://github.com/knirski/auto-pr/edit/main/${repoRelativePath}`
+		: undefined;
+	const frontmatter = buildFrontmatter(title, meta, editUrl);
 	const rewritten = rewriteLinks(stripH1(raw), subdir);
 	await mkdir(dirname(destPath), { recursive: true });
 	await writeFile(destPath, frontmatter + rewritten);
@@ -93,7 +100,13 @@ async function main(): Promise<void> {
 	for (const file of topLevel) {
 		if (!file.endsWith(".md") || EXCLUDED_FILES.has(file)) continue;
 		const destName = file.toLowerCase().replace(/_/g, "-");
-		await processFile(join(DOCS_DIR, file), join(OUTPUT_DIR, destName), docsMeta[file]);
+		await processFile(
+			join(DOCS_DIR, file),
+			join(OUTPUT_DIR, destName),
+			docsMeta[file],
+			"",
+			`docs/${file}`,
+		);
 	}
 
 	// Process ADRs
@@ -103,7 +116,13 @@ async function main(): Promise<void> {
 		if (!file.endsWith(".md")) continue;
 		if (file === "adr-template.md") continue;
 		const destName = file === "README.md" ? "index.md" : file.toLowerCase();
-		await processFile(join(adrDir, file), join(OUTPUT_DIR, "adr", destName), undefined, "adr/");
+		await processFile(
+			join(adrDir, file),
+			join(OUTPUT_DIR, "adr", destName),
+			undefined,
+			"adr/",
+			`docs/adr/${file}`,
+		);
 	}
 
 	const topCount = topLevel.filter((f) => f.endsWith(".md") && !EXCLUDED_FILES.has(f)).length;

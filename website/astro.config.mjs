@@ -14,9 +14,6 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/knirski/auto-pr' },
       ],
       customCss: ['./src/styles/custom.css'],
-      editLink: {
-        baseUrl: 'https://github.com/knirski/auto-pr/edit/main/docs/',
-      },
       sidebar: [
         {
           label: 'User Guide',
