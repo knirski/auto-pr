@@ -181,10 +181,12 @@ test("isTransientAiError returns true for AiProviderError with 408 (timeout is t
 	);
 });
 
+
 test("isTransientAiError returns true for unknown/generic errors", () => {
 	expect(isTransientAiError(new Error("schema decode failed"))).toBe(true);
 	expect(isTransientAiError("some string error")).toBe(true);
 });
+<<<<<<< HEAD
 
 test("isTransientAiError returns false for non-retryable AiError (AuthenticationError)", () => {
 	const e = EffectAiError.make({
