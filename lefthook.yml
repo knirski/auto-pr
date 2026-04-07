@@ -13,4 +13,6 @@ commit-msg:
 
 pre-push:
   jobs:
-    - run: bun run check:code
+    # Unset git hook env vars (GIT_DIR etc.) so integration tests that spawn
+    # git subprocesses operate on their isolated temp repos, not this repo.
+    - run: unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; bun run check:code

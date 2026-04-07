@@ -130,6 +130,29 @@ export function createGitContextMock(overrides?: Partial<GitContext>): GitContex
 	};
 }
 
+/**
+ * Returns process.env with git isolation env vars removed.
+ *
+ * Git sets GIT_DIR (and friends) when running hooks. Any git subprocess
+ * spawned from within tests inherits these vars and operates on the outer
+ * repo instead of the isolated temp dir. Passing this env to ChildProcess.make
+ * with extendEnv: false ensures test git repos stay isolated.
+ */
+export function cleanGitEnv(): Record<string, string | undefined> {
+	const env = { ...process.env } as Record<string, string | undefined>;
+	for (const key of [
+		"GIT_DIR",
+		"GIT_WORK_TREE",
+		"GIT_INDEX_FILE",
+		"GIT_COMMON_DIR",
+		"GIT_OBJECT_DIRECTORY",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES",
+	]) {
+		delete env[key];
+	}
+	return env;
+}
+
 /** Effect-based temp dir for use with layer() / it.effect. */
 export const createTestTempDirEffect = (prefix = "auto-pr-") =>
 	Effect.gen(function* () {

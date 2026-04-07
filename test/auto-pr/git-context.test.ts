@@ -5,7 +5,12 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import { ChildProcessSpawnerLayer } from "#auto-pr";
 import { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 import { runEffect } from "#test/run-effect.js";
-import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
+import {
+	cleanGitEnv,
+	createTestTempDirEffect,
+	SilentLoggerLayer,
+	TestBaseLayer,
+} from "#test/test-utils.js";
 
 const TestLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, ChildProcessSpawnerLayer);
 
@@ -15,9 +20,10 @@ function setupGitRepoWithFiles(
 ): Effect.Effect<void, Error, ChildProcessSpawner> {
 	return Effect.gen(function* () {
 		const spawner = yield* ChildProcessSpawner;
+		const env = cleanGitEnv();
 		const run = (args: string[]) =>
 			spawner
-				.string(ChildProcess.make("git", args, { cwd: workspace }))
+				.string(ChildProcess.make("git", args, { cwd: workspace, env, extendEnv: false }))
 				.pipe(Effect.mapError((e) => new Error(String(e))));
 
 		yield* run(["init"]);
@@ -31,10 +37,14 @@ function setupGitRepoWithFiles(
 				for (const { path, content } of files) {
 					yield* spawner
 						.string(
-							ChildProcess.make("bash", [
-								"-c",
-								`mkdir -p "$(dirname "${workspace}/${path}")" && printf '%s' ${JSON.stringify(content)} > "${workspace}/${path}"`,
-							]),
+							ChildProcess.make(
+								"bash",
+								[
+									"-c",
+									`mkdir -p "$(dirname "${workspace}/${path}")" && printf '%s' ${JSON.stringify(content)} > "${workspace}/${path}"`,
+								],
+								{ env, extendEnv: false },
+							),
 						)
 						.pipe(Effect.mapError((e) => new Error(String(e))));
 				}
