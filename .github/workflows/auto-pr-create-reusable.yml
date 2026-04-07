@@ -77,6 +77,7 @@ jobs:
       - name: Create or update PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
           GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
           AUTO_PR_DIR: ${{ steps.install.outputs.dir }}
