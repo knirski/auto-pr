@@ -12,7 +12,8 @@ permissions:
   models: read
 
 env:
-  # Mozilla minimal GGUF (~27 KiB) for llama-server smoke — see Mozilla/llama-test-model on Hugging Face.
+  # Mozilla smoke-test stub (~27 KiB) — no tool-call support by design. Expected to fail AI generation
+  # and exercise the commit-summary fallback path. Real AI quality is tested via GitHub Models below.
   INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
   # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
   INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
