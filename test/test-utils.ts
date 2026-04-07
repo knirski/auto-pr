@@ -7,7 +7,7 @@ import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { AutoPrPlatformLayer, cleanGitEnv } from "#auto-pr";
 
-export { cleanGitEnv };
+export { AutoPrPlatformLayer, cleanGitEnv };
 
 import type { GitContext } from "#auto-pr/git-context.js";
 
