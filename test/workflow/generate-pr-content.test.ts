@@ -551,7 +551,9 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 						Result.match(Cause.findError(exit.cause), {
 							onSuccess: (err) => {
 								expect(err).toBeInstanceOf(AutoPrConfigError);
-								expect((err as AutoPrConfigError).missing.join(" ")).toContain("401");
+								expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+									"AuthenticationError",
+								);
 							},
 							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
 						});
@@ -576,6 +578,9 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 						Result.match(Cause.findError(exit.cause), {
 							onSuccess: (err) => {
 								expect(err).toBeInstanceOf(AutoPrConfigError);
+								expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+									"AuthenticationError",
+								);
 							},
 							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
 						});
