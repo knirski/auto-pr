@@ -33,12 +33,17 @@ import {
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
+	ChildProcessSpawnerLayer,
 	DescriptionParseError,
+	DiffToolkit,
 	formatError,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
+	GitContext,
+	GitContextLive,
 	getPrDescriptionPromptPath,
 	isBlank,
+	makeDiffToolkitLayer,
 	NoSemanticCommitsError,
 	ParseError,
 	PR_BODY_FILE_NAME,
@@ -288,6 +293,135 @@ function generateTitleAndDescription(
 	);
 }
 
+/** Generate title and description via `generateText` + DiffToolkit + JSON parse + schema validation. */
+function generateTitleAndDescriptionWithToolkit(
+	prompt: string,
+	filtered: readonly CommitInfo[],
+	retryDelay: Duration.Duration,
+	provider: AiProvider,
+	model: string,
+) {
+	return Effect.gen(function* () {
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "ai_query",
+			status: "start",
+			provider,
+			model,
+			prompt_chars: prompt.length,
+		});
+		const res = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
+		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
+		return yield* logAndValidateTitleDescription(raw, provider, model);
+	}).pipe(
+		Effect.tapError((e) =>
+			Effect.logWarning({
+				event: "generate_pr_content",
+				step: e instanceof DescriptionParseError ? "validation" : "ai_query",
+				status: "failed",
+				provider,
+				model,
+				reason: formatError(e),
+			}),
+		),
+		Effect.retry(makeRetrySchedule(retryDelay)),
+		Effect.catch(() =>
+			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
+				Effect.tap(() =>
+					Effect.logWarning({
+						event: "generate_pr_content",
+						status: "fallback",
+						message: "Using fallback title after 5 invalid attempts",
+					}),
+				),
+			),
+		),
+	);
+}
+
+// ─── GitContext-based API ─────────────────────────────────────────────────
+
+/** Parameters for generatePrContent. Uses GitContext instead of file content. */
+export type GeneratePrContentParams = {
+	baseRef: string;
+	headRef: string;
+	templateContent: string;
+	descriptionPromptText: string;
+	provider: AiProvider;
+	model: string;
+	retryDelay?: Duration.Duration;
+};
+
+export function generatePrContent(params: GeneratePrContentParams) {
+	return Effect.gen(function* () {
+		const { baseRef, headRef, templateContent, descriptionPromptText, retryDelay } = params;
+		const git = yield* GitContext;
+
+		// Fetch git data via GitContext
+		const logOutput = yield* git.getLog(baseRef, headRef);
+		const filesOutput = yield* git.getChangedFiles(baseRef, headRef);
+		const diffStatOutput = yield* git.getDiffStat(baseRef, headRef);
+
+		// Parse (pure core)
+		const parseResult = parseCommits(logOutput);
+		const rawCommits = yield* Effect.fromResult(parseResult);
+		const filtered = filterMergeCommits(rawCommits);
+		const count = filtered.length;
+
+		if (count === 0) {
+			return yield* Effect.fail(
+				new NoSemanticCommitsError({
+					message:
+						"No semantic commits (all merge or non-semantic). Add at least one non-merge commit before pushing.",
+				}),
+			);
+		}
+
+		const files = parseFilesContent(filesOutput);
+
+		let title: string;
+		let descriptionOverride: string | undefined;
+
+		if (count >= 2) {
+			const commitContent = getDescriptionPromptText(filtered);
+			const prompt = buildDescriptionPrompt(descriptionPromptText, diffStatOutput, commitContent);
+			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
+			const result = yield* generateTitleAndDescriptionWithToolkit(
+				prompt,
+				filtered,
+				delay,
+				params.provider,
+				params.model,
+			);
+			title = result.title;
+			descriptionOverride = result.description;
+		} else {
+			title = getTitleFromCommits(filtered);
+			descriptionOverride = undefined;
+		}
+
+		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride, title);
+		const body = yield* Effect.fromResult(bodyResult);
+		return { title, body, count };
+	}).pipe(
+		Effect.catchDefect((defect) =>
+			Effect.logError({
+				event: "generate_pr_content",
+				status: "defect",
+				cause: unknownToMessage(defect),
+			}).pipe(Effect.flatMap(() => Effect.fail(normalizeUnknownToGeneratePrContentError(defect)))),
+		),
+		Effect.catchTags(
+			{
+				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
+				ParseError: (e: ParseError) => Effect.fail(e),
+				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
+			},
+			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
+		),
+	);
+}
+
 // ─── Value-based API (no file I/O) ────────────────────────────────────────
 
 /** Parameters for generatePrContentFromValues. All content as strings. */
@@ -412,8 +546,8 @@ export function normalizeUnknownToGeneratePrContentError(
 // ─── Main pipeline ───────────────────────────────────────────────────────
 
 export function runGeneratePrContent(config: {
-	commits: string;
-	files: string;
+	defaultBranch: string;
+	branch: string;
 	workspace: string;
 	templatePath: string;
 	provider: AiProvider;
@@ -433,8 +567,8 @@ export function runGeneratePrContent(config: {
 
 	return Effect.gen(function* () {
 		const {
-			commits,
-			files,
+			defaultBranch,
+			branch,
 			workspace,
 			templatePath,
 			provider,
@@ -447,45 +581,49 @@ export function runGeneratePrContent(config: {
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
 
-		const [commitsContent, filesContent, templateContent, descriptionPromptText] =
-			yield* Effect.all([
-				fs.readFileString(commits).pipe(Effect.mapError(toUnexpected("commits"))),
-				fs.readFileString(files).pipe(Effect.mapError(toUnexpected("files"))),
-				fs.readFileString(templatePath).pipe(Effect.mapError(toUnexpected("template"))),
-				getPrDescriptionPromptPath().pipe(
-					Effect.mapError(toUnexpected("getPrDescriptionPromptPath")),
-					Effect.flatMap((p) =>
-						fs.readFileString(p).pipe(Effect.mapError(toUnexpected("pr-description.txt"))),
-					),
-				),
-			]);
+		const baseRef = `origin/${defaultBranch}`;
 
-		const generateLayer = Layer.mergeAll(
-			AutoPrPlatformLayer,
-			aiProviderLayerFromConfig(
-				{
-					provider,
-					model,
-					...(ghToken !== undefined ? { ghToken } : {}),
-					...(provider === "local"
-						? {
-								...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
-								...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
-							}
-						: {}),
-				},
-				config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+		const [templateContent, descriptionPromptText] = yield* Effect.all([
+			fs.readFileString(templatePath).pipe(Effect.mapError(toUnexpected("template"))),
+			getPrDescriptionPromptPath().pipe(
+				Effect.mapError(toUnexpected("getPrDescriptionPromptPath")),
+				Effect.flatMap((p) =>
+					fs.readFileString(p).pipe(Effect.mapError(toUnexpected("pr-description.txt"))),
+				),
 			),
+		]);
+
+		const aiLayer = aiProviderLayerFromConfig(
+			{
+				provider,
+				model,
+				...(ghToken !== undefined ? { ghToken } : {}),
+				...(provider === "local"
+					? {
+							...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
+							...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
+						}
+					: {}),
+			},
+			config.fetch !== undefined ? { fetch: config.fetch } : undefined,
 		);
-		const { title, body, count } = yield* generatePrContentFromValues({
-			commitsContent,
-			filesContent,
+
+		const gitLayer = GitContextLive(workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
+		const toolkitLayer = makeDiffToolkitLayer(baseRef, branch).pipe(
+			Layer.provide(GitContextLive(workspace)),
+			Layer.provide(ChildProcessSpawnerLayer),
+		);
+
+		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
+
+		const { title, body, count } = yield* generatePrContent({
+			baseRef,
+			headRef: branch,
 			templateContent,
 			descriptionPromptText,
 			provider,
 			model,
 			...(retryDelay !== undefined && { retryDelay }),
-			...(config.fetch !== undefined && { fetch: config.fetch }),
 		}).pipe(Effect.provide(generateLayer));
 
 		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
@@ -515,13 +653,11 @@ export function runGeneratePrContent(config: {
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const GeneratePrContentLayer = AutoPrPlatformLayer;
-
 const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;
 	const params = {
-		commits: config.commits,
-		files: config.files,
+		defaultBranch: config.defaultBranch,
+		branch: config.branch,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		provider: config.provider,
@@ -538,7 +674,9 @@ const program = Effect.gen(function* () {
 				}
 			: {}),
 	};
-	yield* runGeneratePrContent(params).pipe(Effect.provide(GeneratePrContentLayer));
+	yield* runGeneratePrContent(params).pipe(
+		Effect.provide(Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer)),
+	);
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
 
 if (import.meta.main) {

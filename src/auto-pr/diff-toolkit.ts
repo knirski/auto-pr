@@ -11,7 +11,7 @@ import { GitContext } from "#auto-pr/git-context.js";
 const GetDiff = Tool.make("get_diff", {
 	description: "Get the git diff for changed files. Provide path for one file, omit for all.",
 	parameters: Schema.Struct({
-		path: Schema.optional(
+		path: Schema.optionalKey(
 			Schema.String.annotate({ description: "File path to diff. Omit for all changed files." }),
 		),
 	}),

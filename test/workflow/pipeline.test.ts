@@ -70,8 +70,8 @@ describe("get-commits → generate-pr-content pipeline", () => {
 				yield* fs.writeFileString(templatePath, "# PR\n\n{{description}}\n\n{{changes}}");
 
 				yield* runGeneratePrContent({
-					commits: join(tmp.path, "commits.txt"),
-					files: join(tmp.path, "files.txt"),
+					defaultBranch: "main",
+					branch: "HEAD",
 					workspace: tmp.path,
 					templatePath,
 					provider: "local",

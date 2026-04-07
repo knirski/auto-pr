@@ -17,12 +17,10 @@ import {
 	FillPrTemplate,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
-	parseGhOutput,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 	runCommand,
 	runMain,
-	validateGetCommitsOutput,
 } from "#auto-pr";
 import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
 import { runGeneratePrContent } from "#workflow/auto-pr-generate-content.js";
@@ -50,14 +48,10 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 		yield* Effect.log({ event: "run_auto_pr", step: "get_commits" });
 		yield* runAutoPrGetCommits(defaultBranch, workspace, ghOutput);
 
-		const content1 = yield* fs.readFileString(ghOutput);
-		const parsed1 = parseGhOutput(content1);
-		const { commits, files } = yield* Effect.fromResult(validateGetCommitsOutput(parsed1));
-
 		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
 		yield* runGeneratePrContent({
-			commits,
-			files,
+			defaultBranch,
+			branch: branchVal,
 			workspace,
 			templatePath,
 			provider,
