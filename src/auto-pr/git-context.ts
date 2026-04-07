@@ -7,6 +7,7 @@
 import { Cause, Duration, Effect, Layer, ServiceMap } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { runCommand } from "#auto-pr/shell.js";
+import { unknownToMessage } from "#core/string.js";
 
 export interface GitContext {
 	readonly getLog: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
@@ -43,7 +44,7 @@ export function GitContextLive(
 						if (Cause.isTimeoutError(e)) {
 							return new Error(`git ${args[0] ?? cmd} timed out after 30s`);
 						}
-						return new Error(e instanceof Error ? e.message : String(e));
+						return new Error(unknownToMessage(e));
 					}),
 					Effect.provideService(ChildProcessSpawner, spawner),
 				);
