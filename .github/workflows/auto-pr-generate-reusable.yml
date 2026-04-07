@@ -82,7 +82,7 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@77b219173225b29d67f0bd0220942c6b0fd9cd80
+        uses: knirski/auto-pr/.github/actions/setup-runtime@a8caf6a27b63a698ee74d1eea8646c4f2baf3364
 
       - name: Fetch base branch
         env:
@@ -91,7 +91,7 @@ jobs:
 
       - name: Set auto-pr package ref
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@77b219173225b29d67f0bd0220942c6b0fd9cd80
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@a8caf6a27b63a698ee74d1eea8646c4f2baf3364
         with:
           repository: ${{ github.repository }}
           ref_name: ${{ github.ref_name }}
@@ -100,19 +100,17 @@ jobs:
         if: steps.auto-pr-pkg.outputs.use_workspace == 'true'
         run: bun install --frozen-lockfile
 
-      - name: Get commit log and changed files
+      - name: Count non-merge commits
         id: commits
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@77b219173225b29d67f0bd0220942c6b0fd9cd80
-        with:
-          command: get-commits
-          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
-          runner: ${{ steps.setup.outputs.runner }}
-          default_branch: ${{ github.event.repository.default_branch }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          count=$(git log --format=%s "origin/$DEFAULT_BRANCH..HEAD" | grep -cvE '^Merge ' || true)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Resolve llama-server image tag
         id: llama_release
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@77b219173225b29d67f0bd0220942c6b0fd9cd80
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@a8caf6a27b63a698ee74d1eea8646c4f2baf3364
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -139,7 +137,7 @@ jobs:
       - name: Start local llama.cpp (llama-server)
         id: local_llama
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-start@77b219173225b29d67f0bd0220942c6b0fd9cd80
+        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-start@a8caf6a27b63a698ee74d1eea8646c4f2baf3364
         with:
           llama_release: ${{ steps.llama_release.outputs.tag }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -148,13 +146,15 @@ jobs:
 
       - name: Generate PR content
         id: generate
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@77b219173225b29d67f0bd0220942c6b0fd9cd80
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@a8caf6a27b63a698ee74d1eea8646c4f2baf3364
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
           auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
           runner: ${{ steps.setup.outputs.runner }}
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url != '' && steps.local_llama.outputs.compat_url || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
@@ -164,14 +164,14 @@ jobs:
 
       - name: Stop local llama-server
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-stop@77b219173225b29d67f0bd0220942c6b0fd9cd80
+        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-stop@a8caf6a27b63a698ee74d1eea8646c4f2baf3364
         with:
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama
 
       - name: Prepare artifact
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           mkdir -p pr-content

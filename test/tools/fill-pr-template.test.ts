@@ -45,8 +45,9 @@ const TEST_TEMPLATE = `## Description
 const commit = (
 	subject: string,
 	body: string,
-	opts?: { type?: string; references?: string[]; breakingNote?: string | null },
+	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string | null },
 ): CommitInfo => ({
+	hash: opts?.hash ?? "",
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),

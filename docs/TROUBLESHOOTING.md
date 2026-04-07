@@ -32,11 +32,11 @@
 
 ### "Missing required env: …"
 
-**Cause:** Each script validates only the env vars it needs (see [src/auto-pr/config.ts](../src/auto-pr/config.ts)). For example, **get-commits** requires `GITHUB_OUTPUT`; **generate-content** does not. A message listing `DEFAULT_BRANCH` / `GITHUB_OUTPUT` usually means **get-commits** or **run-auto-pr** without a full Actions env.
+**Cause:** Each script validates only the env vars it needs (see [src/auto-pr/config.ts](../src/auto-pr/config.ts)). A message listing `DEFAULT_BRANCH` / `GITHUB_WORKSPACE` usually means **generate-content** or **run-auto-pr** without a full Actions env.
 
 **Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md) (local env via `.env` and [`src/auto-pr/config.ts`](../src/auto-pr/config.ts)) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
 
-## Get commits / Generate content fails
+## Generate content fails
 
 ### "No semantic commits" or "PR title is empty"
 
@@ -60,7 +60,7 @@
 
 **Cause:** The generate-content step failed or didn't produce `pr-body.md` under the workspace.
 
-**Fix:** Check the "Generate PR content" step logs. Set `AUTO_PR_DEBUG=1` in the workflow env for verbose output. Ensure the get-commits step ran and wrote `commits.txt` and `files.txt` under the workspace, then generate-content wrote `pr-title.txt` and `pr-body.md`.
+**Fix:** Check the "Generate PR content" step logs. Set `AUTO_PR_DEBUG=1` in the workflow env for verbose output. Verify that generate-content wrote `pr-title.txt` and `pr-body.md` under the workspace.
 
 ## Create or update PR fails
 

@@ -41,7 +41,7 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
 | [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**'` | check (reusable: `check` + `integration`), dependency-review |
 | [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
-| [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check-workflows + [check-integration.yml](../.github/workflows/check-integration.yml) |
+| [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check-workflows + [integration.yml](../.github/workflows/integration.yml) |
 | [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
 | [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
@@ -109,7 +109,7 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 Configure main branch protection to require:
 
 - **`check / check`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), [ci-docs.yml](../.github/workflows/ci-docs.yml) (pass-through), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-workflows.yml](../.github/workflows/check-workflows.yml)).
-- **`check / integration`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-integration.yml](../.github/workflows/check-integration.yml)). Not reported by ci-docs (docs-only path).
+- **`check / integration`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [integration.yml](../.github/workflows/integration.yml)). Not reported by ci-docs (docs-only path).
 
 Do not require `dependency-review` (PR-only), `nix` (path-filtered), or `act-smoke` (path-filtered smoke test); they would block when skipped or unrelated paths change.
 

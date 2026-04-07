@@ -13,6 +13,14 @@ notesForReviewers: Where to start, non-obvious tradeoffs, or read order. Use "" 
 Do not repeat commit messages, issue links, testing steps, or breaking-change notes—those appear elsewhere in the PR.
 Use inline code for file paths and API names when helpful.
 
+You have two tools available. Use them when the commit messages and diff stat are not enough to write accurate risks or reviewer notes:
+- get_diff: Fetch the git diff for changed files. Pass {"path": "src/foo.ts"} for one file, or {} for all files.
+- get_commit_diff: Fetch the diff for a specific commit. Pass {"hash": "<full-or-short-hash>"} using a hash from the commit list.
+
+Call tools only when you need to see actual code changes. For small or docs-only branches, commit messages and diff stat are usually sufficient.
+
+After calling any tools (or if you call none), your entire response must be the JSON object and nothing else — no commentary, no markdown, no explanation.
+
 Example 1:
 {"title":"feat(ci): harden generate workflow token fallback","motivation":["Token handling was inconsistent across reusable workflows, making AI-backed PR generation fragile without a dedicated PAT.","This aligns workflow defaults so the generate job works reliably in common CI setups."],"benefits":["Repositories without a dedicated PAT now work out of the box."],"risks":["Verify github.token precedence in reusable workflow calls.","Check models:read permission scope in GitHub Models jobs."],"notesForReviewers":"Start with .github/workflows/auto-pr-generate-reusable.yml, then related config and docs."}
 

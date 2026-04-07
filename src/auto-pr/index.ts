@@ -13,11 +13,10 @@ export {
 	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
-	GetCommitsConfig,
-	GetCommitsConfigLayer,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr/config.js";
+export { DiffToolkit, makeDiffToolkitLayer } from "#auto-pr/diff-toolkit.js";
 export {
 	ActLocalCiError,
 	AiProviderError,
@@ -34,6 +33,7 @@ export {
 	TemplateRenderError,
 	UnexpectedError,
 } from "#auto-pr/errors.js";
+export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export {
@@ -66,16 +66,12 @@ export { validateTitleDescription } from "#core/fill-pr-template-core.js";
 export type { GhOutputValue } from "#core/gh-output.js";
 export {
 	buildDescriptionPrompt,
-	buildGetCommitsGhEntries,
 	decodeGhOutputTitle,
-	filterSemanticSubjects,
 	formatGhOutput,
 	getGhOutputValue,
 	isBlank,
 	isHttpError,
 	isMergeCommitSubject,
 	parseGhOutput,
-	parseSubjects,
 	sanitizeForGhOutput,
-	validateGetCommitsOutput,
 } from "#core/index.js";
