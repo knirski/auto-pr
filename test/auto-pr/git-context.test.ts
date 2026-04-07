@@ -172,8 +172,15 @@ describe("GitContext", () => {
 				]);
 
 				const spawner = yield* ChildProcessSpawner;
+				const env = cleanGitEnv();
 				const hashRaw = yield* spawner
-					.string(ChildProcess.make("git", ["rev-parse", "HEAD"], { cwd: tmp.path }))
+					.string(
+						ChildProcess.make("git", ["rev-parse", "HEAD"], {
+							cwd: tmp.path,
+							env,
+							extendEnv: false,
+						}),
+					)
 					.pipe(Effect.mapError((e) => new Error(String(e))));
 				const hash = hashRaw.trim();
 
