@@ -26,9 +26,11 @@ import {
 	Schedule,
 	Schema,
 } from "effect";
+import type { AiError } from "effect/unstable/ai";
 import { LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
+	type AiProviderError,
 	AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
@@ -389,7 +391,7 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
 				ParseError: (e: ParseError) => Effect.fail(e),
 				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
-				AiProviderError: (e) =>
+				AiProviderError: (e: AiProviderError) =>
 					Effect.fail(
 						new AutoPrConfigError({
 							missing: [
@@ -397,7 +399,7 @@ export function generatePrContent(params: GeneratePrContentParams) {
 							],
 						}),
 					),
-				AiError: (e) =>
+				AiError: (e: AiError.AiError) =>
 					!e.isRetryable
 						? Effect.fail(
 								new AutoPrConfigError({
