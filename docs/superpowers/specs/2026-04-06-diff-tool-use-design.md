@@ -1,6 +1,7 @@
 # Diff Tool Use for AI-Generated PR Descriptions
 
 **Date:** 2026-04-06
+**Status:** Implemented — branch `ai/diff-tool-use` (see [ADR 0011](../../adr/0011-gitcontext-and-diff-tool-use.md))
 
 ## Problem
 
