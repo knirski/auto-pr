@@ -16,10 +16,6 @@ sbom.json
 result
 .cursor/worktrees.json
 .cursor/debug-*.log
-
-# Website build artifacts
-website/src/content/docs/*.md
-website/src/content/docs/adr/
-website/dist/
-website/node_modules/
 website/.astro/
+website/src/content/docs/
+.superpowers/
