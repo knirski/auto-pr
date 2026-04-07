@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Duration, Effect, Exit, Layer, Stream } from "effect";
+import { Duration, Effect, Exit, Fiber, Layer, Stream } from "effect";
+import { TestClock } from "effect/testing";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { ChildProcessSpawnerLayer } from "#auto-pr";
@@ -201,6 +202,9 @@ describe("GitContext", () => {
 	});
 
 	test("git commands fail with a timeout error message when the spawner hangs", async () => {
+		// This test verifies that the INTERNAL GIT_COMMAND_TIMEOUT (30s) inside the `run` helper
+		// fires and produces the expected error message. Using TestClock so no real time elapses.
+		// The test will FAIL if `Effect.timeout(GIT_COMMAND_TIMEOUT)` is removed from git-context.ts.
 		const hangingSpawner = Layer.succeed(ChildProcessSpawner, {
 			string: () => Effect.never,
 			streamString: () => Stream.never,
@@ -209,10 +213,22 @@ describe("GitContext", () => {
 
 		const testEffect = Effect.gen(function* () {
 			const git = yield* GitContext;
-			return yield* git.getLog("HEAD~1", "HEAD").pipe(Effect.timeout(Duration.millis(50)));
-		}).pipe(Effect.provide(GitContextLive("/tmp/fake").pipe(Layer.provide(hangingSpawner))));
+			// Fork the git call so we can advance the test clock without blocking
+			const fiber = yield* Effect.forkChild(git.getLog("HEAD~1", "HEAD"));
+			// Advance test clock past the internal 30s GIT_COMMAND_TIMEOUT
+			yield* TestClock.adjust(Duration.seconds(31));
+			return yield* Fiber.join(fiber).pipe(Effect.exit);
+		}).pipe(
+			Effect.provide(GitContextLive("/tmp/fake").pipe(Layer.provide(hangingSpawner))),
+			Effect.provide(TestClock.layer()),
+			Effect.scoped,
+		);
 
-		const exit = await Effect.runPromise(Effect.exit(testEffect));
+		const exit = await Effect.runPromise(testEffect);
 		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			const message = String(exit.cause);
+			expect(message).toContain("timed out after 30s");
+		}
 	});
 });
