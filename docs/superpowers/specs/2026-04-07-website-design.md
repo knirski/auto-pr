@@ -212,7 +212,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -226,7 +226,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
