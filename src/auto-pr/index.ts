@@ -13,8 +13,6 @@ export {
 	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
-	GetCommitsConfig,
-	GetCommitsConfigLayer,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr/config.js";
@@ -68,16 +66,12 @@ export { validateTitleDescription } from "#core/fill-pr-template-core.js";
 export type { GhOutputValue } from "#core/gh-output.js";
 export {
 	buildDescriptionPrompt,
-	buildGetCommitsGhEntries,
 	decodeGhOutputTitle,
-	filterSemanticSubjects,
 	formatGhOutput,
 	getGhOutputValue,
 	isBlank,
 	isHttpError,
 	isMergeCommitSubject,
 	parseGhOutput,
-	parseSubjects,
 	sanitizeForGhOutput,
-	validateGetCommitsOutput,
 } from "#core/index.js";

@@ -9,8 +9,6 @@ import {
 	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
-	GetCommitsConfig,
-	GetCommitsConfigLayer,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr";
@@ -28,32 +26,6 @@ function expectConfigFailure<A>(
 		.pipe(Effect.provide(configLayer), Effect.provide(EmptyConfigProviderLayer), Effect.exit)
 		.pipe(Effect.flatMap((exit) => Effect.sync(() => expect(Exit.isFailure(exit)).toBe(true))));
 }
-
-const GetCommitsConfigProviderLayer = ConfigProvider.layer(
-	ConfigProvider.fromUnknown({
-		DEFAULT_BRANCH: "main",
-		GITHUB_WORKSPACE: "/workspace",
-		GITHUB_OUTPUT: "/tmp/gh-output",
-	}),
-);
-
-const GetCommitsLayer = Layer.mergeAll(
-	TestBaseLayer,
-	GetCommitsConfigLayer.pipe(Layer.provide(GetCommitsConfigProviderLayer)),
-);
-
-describe("GetCommitsConfigLayer succeeds when all vars present", () => {
-	test("returns config with non-empty values", async () => {
-		await runEffect(GetCommitsLayer)(
-			Effect.gen(function* () {
-				const config = yield* GetCommitsConfig;
-				expect(config.defaultBranch).toBe("main");
-				expect(config.workspace).toBe("/workspace");
-				expect(config.ghOutput).toBe("/tmp/gh-output");
-			}),
-		);
-	});
-});
 
 const GeneratePrContentConfigProviderLayer = ConfigProvider.layer(
 	ConfigProvider.fromUnknown({
@@ -74,8 +46,6 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 		await runEffect(GeneratePrContentLayer)(
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
-				expect(config.commits).toBe(join("/workspace", "commits.txt"));
-				expect(config.files).toBe(join("/workspace", "files.txt"));
 				expect(config.templatePath).toBe(join("/workspace", ".github/PULL_REQUEST_TEMPLATE.md"));
 				expect(config.provider).toBe("local");
 				expect(config.model).toBe("llama3.1:8b");
@@ -248,17 +218,6 @@ describe("CreateOrUpdatePrConfigLayer succeeds when all vars present", () => {
 });
 
 describe("config layers fail when required env vars missing", () => {
-	test("GetCommitsConfigLayer fails when GITHUB_OUTPUT missing", async () => {
-		await Effect.runPromise(
-			expectConfigFailure(
-				Effect.gen(function* () {
-					return yield* GetCommitsConfig;
-				}),
-				GetCommitsConfigLayer,
-			),
-		);
-	});
-
 	test("GeneratePrContentConfigLayer fails when GITHUB_WORKSPACE missing", async () => {
 		await Effect.runPromise(
 			expectConfigFailure(

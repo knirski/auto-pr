@@ -24,7 +24,6 @@ import {
 } from "#auto-pr";
 import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
 import { runGeneratePrContent } from "#workflow/auto-pr-generate-content.js";
-import { runAutoPrGetCommits } from "#workflow/auto-pr-get-commits.js";
 
 // ─── Pipeline ────────────────────────────────────────────────────────────────
 
@@ -42,11 +41,6 @@ function runPipeline(): Effect.Effect<void, unknown, never> {
 		const resolvedBranch =
 			branch !== undefined ? Effect.succeed(branch) : getCurrentBranch(workspace);
 		const branchVal = yield* resolvedBranch;
-
-		const ghOutput = yield* fs.makeTempFile();
-
-		yield* Effect.log({ event: "run_auto_pr", step: "get_commits" });
-		yield* runAutoPrGetCommits(defaultBranch, workspace, ghOutput);
 
 		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
 		yield* runGeneratePrContent({

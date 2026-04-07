@@ -94,35 +94,6 @@ function mapConfigError<A, R>(
 	);
 }
 
-// ─── GetCommitsConfig ────────────────────────────────────────────────────────
-
-export interface GetCommitsConfig {
-	readonly defaultBranch: string;
-	readonly workspace: string;
-	readonly ghOutput: string;
-}
-
-export const GetCommitsConfig = ServiceMap.Service<GetCommitsConfig>("GetCommitsConfig");
-
-const GetCommitsConfigDef = Config.all({
-	defaultBranch: Config.string("DEFAULT_BRANCH"),
-	workspace: Config.string("GITHUB_WORKSPACE"),
-	ghOutput: Config.string("GITHUB_OUTPUT"),
-});
-
-export const GetCommitsConfigLayer = Layer.effect(
-	GetCommitsConfig,
-	mapConfigError(
-		Effect.gen(function* () {
-			const base = yield* GetCommitsConfigDef;
-			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
-			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
-			const ghOutput = yield* requireNonEmpty("GITHUB_OUTPUT", base.ghOutput);
-			return { defaultBranch, workspace, ghOutput };
-		}),
-	),
-);
-
 // ─── GeneratePrContentConfig ─────────────────────────────────────────────────
 
 export type AiProvider = "local" | "github-models";
@@ -140,8 +111,6 @@ export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
 export const DEFAULT_GITHUB_MODELS_MODEL = "microsoft/phi-4-mini-instruct";
 
 export interface GeneratePrContentConfig {
-	readonly commits: string;
-	readonly files: string;
 	readonly workspace: string;
 	readonly templatePath: string;
 	readonly defaultBranch: string;
@@ -197,8 +166,6 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const branch = yield* requireNonEmpty("BRANCH", base.branch);
-			const commits = join(workspace, "commits.txt");
-			const files = join(workspace, "files.txt");
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
@@ -209,8 +176,6 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const provider = yield* parseProviderOrDefault(providerRaw);
 
 			const shared = {
-				commits,
-				files,
 				workspace,
 				templatePath,
 				defaultBranch,

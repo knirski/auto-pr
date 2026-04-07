@@ -8,16 +8,16 @@
  * Uses `bun --config=bunfig.integration.toml` in CI so coverage threshold from the main bunfig
  * does not fail narrow integration-only runs.
  *
- * Exercises `generatePrContentFromValues` (same orchestration as production) with real providers.
+ * Exercises `generatePrContent` (same orchestration as production) with real providers.
  * Production uses `generateText` + JSON parse (not `generateObject`). Local llama may still reject some
  * OpenAI-compat request shapes or return unusable JSON; the pipeline retries and may fall back — we assert a coherent PR-shaped result.
  */
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect, Layer, Redacted } from "effect";
-import { aiProviderLayerFromConfig } from "#auto-pr";
+import { aiProviderLayerFromConfig, DiffToolkit, GitContext } from "#auto-pr";
 import { runEffect } from "#test/run-effect.js";
-import { TestBaseLayer } from "#test/test-utils.js";
-import { generatePrContentFromValues } from "#workflow/auto-pr-generate-content.js";
+import { createGitContextMock, TestBaseLayer } from "#test/test-utils.js";
+import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
 
 function envNonEmpty(name: string): boolean {
 	const v = process.env[name];
@@ -46,7 +46,27 @@ Fixes B.
 `;
 
 const FILES = "src/a.ts\nsrc/b.ts\n";
+const DIFF_STAT = " src/a.ts | 5 +++++\n src/b.ts | 3 +++\n 2 files changed, 8 insertions(+)";
 const TEMPLATE = "# PR\n\n{{description}}\n\n## Changes\n{{changes}}";
+
+/** Mock DiffToolkit handler layer — tools return empty strings (never called by mock AI). */
+const MockDiffToolkitLayer = DiffToolkit.toLayer(
+	Effect.succeed(
+		DiffToolkit.of({
+			get_diff: () => Effect.succeed(""),
+			get_commit_diff: () => Effect.succeed(""),
+		}),
+	),
+);
+
+function makeGitContextLayer(): Layer.Layer<GitContext> {
+	const ctx = createGitContextMock({
+		getLog: () => Effect.succeed(TWO_COMMITS),
+		getChangedFiles: () => Effect.succeed(FILES),
+		getDiffStat: () => Effect.succeed(DIFF_STAT),
+	});
+	return Layer.succeed(GitContext, ctx);
+}
 
 function layerGithubModels(model: string, ghToken: string) {
 	return Layer.mergeAll(
@@ -56,6 +76,8 @@ function layerGithubModels(model: string, ghToken: string) {
 			model,
 			ghToken: Redacted.make(ghToken),
 		}),
+		makeGitContextLayer(),
+		MockDiffToolkitLayer,
 	);
 }
 
@@ -67,12 +89,14 @@ function layerLocal(model: string, openaiCompatUrl: string) {
 			model,
 			openaiCompatUrl,
 		}),
+		makeGitContextLayer(),
+		MockDiffToolkitLayer,
 	);
 }
 
 describe.skipIf(!canRunLocal)("integration: local OpenAI-compat (llama.cpp)", () => {
 	test(
-		"generatePrContentFromValues (2 commits) completes with PR-shaped body",
+		"generatePrContent (2 commits) completes with PR-shaped body",
 		async () => {
 			const baseUrl = process.env.AUTO_PR_AI_OPENAI_COMPAT_URL;
 			const model = process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL;
@@ -86,9 +110,9 @@ describe.skipIf(!canRunLocal)("integration: local OpenAI-compat (llama.cpp)", ()
 			const layer = layerLocal(model, baseUrl.replace(/\/$/, ""));
 			await runEffect(layer)(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues({
-						commitsContent: TWO_COMMITS,
-						filesContent: FILES,
+					const result = yield* generatePrContent({
+						baseRef: "origin/main",
+						headRef: "ai/test",
 						templateContent: TEMPLATE,
 						descriptionPromptText,
 						provider: "local",
@@ -108,7 +132,7 @@ describe.skipIf(!canRunLocal)("integration: local OpenAI-compat (llama.cpp)", ()
 
 describe.skipIf(!canRunGithubModels)("integration: github-models", () => {
 	test(
-		"generatePrContentFromValues (2 commits) returns title and structured description",
+		"generatePrContent (2 commits) returns title and structured description",
 		async () => {
 			const model = process.env.INTEGRATION_GITHUB_MODEL?.trim() || "microsoft/phi-4-mini-instruct";
 			const token = process.env.GH_TOKEN;
@@ -119,9 +143,9 @@ describe.skipIf(!canRunGithubModels)("integration: github-models", () => {
 			const layer = layerGithubModels(model, token);
 			await runEffect(layer)(
 				Effect.gen(function* () {
-					const result = yield* generatePrContentFromValues({
-						commitsContent: TWO_COMMITS,
-						filesContent: FILES,
+					const result = yield* generatePrContent({
+						baseRef: "origin/main",
+						headRef: "ai/test",
 						templateContent: TEMPLATE,
 						descriptionPromptText,
 						provider: "github-models",

@@ -22,7 +22,6 @@
 	},
 	"type": "module",
 	"bin": {
-		"auto-pr-get-commits": "./dist/workflow/auto-pr-get-commits.js",
 		"auto-pr-generate-content": "./dist/workflow/auto-pr-generate-content.js",
 		"auto-pr-create-or-update-pr": "./dist/workflow/auto-pr-create-or-update-pr.js",
 		"auto-pr-run": "./dist/workflow/auto-pr-run.js",
@@ -55,7 +54,6 @@
 		"format": "biome format --write .",
 		"knip": "knip",
 		"typecheck": "tsgo --noEmit",
-		"get-commits": "bun run src/workflow/auto-pr-get-commits.ts",
 		"generate-content": "bun run src/workflow/auto-pr-generate-content.ts",
 		"create-or-update-pr": "bun run src/workflow/auto-pr-create-or-update-pr.ts",
 		"fill-pr-template": "bun run src/tools/auto-pr-fill-pr-template.ts",

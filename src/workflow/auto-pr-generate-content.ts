@@ -247,52 +247,6 @@ function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
 	return { title, description };
 }
 
-/** Generate title and description via `generateText` + JSON parse + schema validation (see file-level doc). */
-function generateTitleAndDescription(
-	prompt: string,
-	filtered: readonly CommitInfo[],
-	retryDelay: Duration.Duration,
-	provider: AiProvider,
-	model: string,
-): Effect.Effect<{ title: string; description: string }, unknown, LanguageModel.LanguageModel> {
-	return Effect.gen(function* () {
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "ai_query",
-			status: "start",
-			provider,
-			model,
-			prompt_chars: prompt.length,
-		});
-		const res = yield* LanguageModel.generateText({ prompt });
-		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
-		return yield* logAndValidateTitleDescription(raw, provider, model);
-	}).pipe(
-		Effect.tapError((e) =>
-			Effect.logWarning({
-				event: "generate_pr_content",
-				step: e instanceof DescriptionParseError ? "validation" : "ai_query",
-				status: "failed",
-				provider,
-				model,
-				reason: formatError(e),
-			}),
-		),
-		Effect.retry(makeRetrySchedule(retryDelay)),
-		Effect.catch(() =>
-			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
-				Effect.tap(() =>
-					Effect.logWarning({
-						event: "generate_pr_content",
-						status: "fallback",
-						message: "Using fallback title after 5 invalid attempts",
-					}),
-				),
-			),
-		),
-	);
-}
-
 /** Generate title and description via `generateText` + DiffToolkit + JSON parse + schema validation. */
 function generateTitleAndDescriptionWithToolkit(
 	prompt: string,
@@ -422,117 +376,26 @@ export function generatePrContent(params: GeneratePrContentParams) {
 	);
 }
 
-// ─── Value-based API (no file I/O) ────────────────────────────────────────
-
-/** Parameters for generatePrContentFromValues. All content as strings. */
-export type GeneratePrContentFromValuesParams = {
-	commitsContent: string;
-	filesContent: string;
-	templateContent: string;
-	descriptionPromptText: string;
-	provider: AiProvider;
-	model: string;
-	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
-	retryDelay?: Duration.Duration;
-	/** Custom fetch for tests. Omit for production. */
-	fetch?: typeof fetch;
-};
-
-/** Schema union for value-based errors (single source of truth). No UnexpectedError. */
-export const GeneratePrContentFromValuesErrorSchema = Schema.Union([
+/** Schema union for generate-content errors (single source of truth). No UnexpectedError. */
+const GeneratePrContentErrorSchema = Schema.Union([
 	NoSemanticCommitsError,
 	ParseError,
 	TemplateRenderError,
 ]);
 
-/** Errors from generatePrContentFromValues (value-based, no file I/O). */
-export type GeneratePrContentFromValuesError = Schema.Schema.Type<
-	typeof GeneratePrContentFromValuesErrorSchema
->;
-
 /** Errors from runGeneratePrContent (includes file I/O, AI provider config). */
 export type GeneratePrContentError =
-	| GeneratePrContentFromValuesError
+	| NoSemanticCommitsError
+	| ParseError
+	| TemplateRenderError
 	| UnexpectedError
 	| AutoPrConfigError;
 
-export function generatePrContentFromValues(
-	params: GeneratePrContentFromValuesParams,
-): Effect.Effect<
-	{ title: string; body: string; count: number },
-	GeneratePrContentFromValuesError,
-	LanguageModel.LanguageModel
-> {
-	return Effect.gen(function* () {
-		const { commitsContent, filesContent, templateContent, descriptionPromptText, retryDelay } =
-			params;
-
-		const parseResult = parseCommits(commitsContent);
-		const rawCommits = yield* Effect.fromResult(parseResult);
-		const filtered = filterMergeCommits(rawCommits);
-		const count = filtered.length;
-
-		if (count === 0) {
-			return yield* Effect.fail(
-				new NoSemanticCommitsError({
-					message:
-						"No semantic commits (all merge or non-semantic). Add at least one non-merge commit before pushing.",
-				}),
-			);
-		}
-
-		const files = parseFilesContent(filesContent);
-
-		let title: string;
-		let descriptionOverride: string | undefined;
-
-		if (count >= 2) {
-			const commitContent = getDescriptionPromptText(filtered);
-			const prompt = buildDescriptionPrompt(descriptionPromptText, "", commitContent);
-			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
-			const result = yield* generateTitleAndDescription(
-				prompt,
-				filtered,
-				delay,
-				params.provider,
-				params.model,
-			);
-			title = result.title;
-			descriptionOverride = result.description;
-		} else {
-			title = getTitleFromCommits(filtered);
-			descriptionOverride = undefined;
-		}
-
-		const bodyResult = renderBodyCore(filtered, files, templateContent, descriptionOverride, title);
-		const body = yield* Effect.fromResult(bodyResult);
-		return { title, body, count };
-	}).pipe(
-		// Defects (unexpected throws) → TemplateRenderError at boundary. Log before converting.
-		Effect.catchDefect((defect) =>
-			Effect.logError({
-				event: "generate_pr_content",
-				status: "defect",
-				cause: unknownToMessage(defect),
-			}).pipe(Effect.flatMap(() => Effect.fail(normalizeUnknownToGeneratePrContentError(defect)))),
-		),
-		// Exhaustive tag handling: known domain errors pass through; unknown normalized via Schema or fallback.
-		Effect.catchTags(
-			{
-				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
-				ParseError: (e: ParseError) => Effect.fail(e),
-				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
-			},
-			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
-		),
-	);
-}
-
-/** Normalize unknown (defect or non-tagged failure) to GeneratePrContentFromValuesError. Exported for tests. */
+/** Normalize unknown (defect or non-tagged failure) to a GeneratePrContentError. Exported for tests. */
 export function normalizeUnknownToGeneratePrContentError(
 	e: unknown,
-): GeneratePrContentFromValuesError {
-	const decoded = Schema.decodeUnknownOption(GeneratePrContentFromValuesErrorSchema)(e);
+): NoSemanticCommitsError | ParseError | TemplateRenderError {
+	const decoded = Schema.decodeUnknownOption(GeneratePrContentErrorSchema)(e);
 	return Option.getOrElse(
 		decoded,
 		() =>
