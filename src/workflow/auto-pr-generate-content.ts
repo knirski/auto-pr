@@ -397,17 +397,16 @@ export function generatePrContent(params: GeneratePrContentParams) {
 							],
 						}),
 					),
-				AiError: (e) => {
-					const status = (e.reason as { http?: { response?: { status?: number } } }).http?.response
-						?.status;
-					return Effect.fail(
-						new AutoPrConfigError({
-							missing: [
-								`AI provider authentication/config error (HTTP ${status ?? "unknown"}): ${e.reason._tag}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
-							],
-						}),
-					);
-				},
+				AiError: (e) =>
+					!e.isRetryable
+						? Effect.fail(
+								new AutoPrConfigError({
+									missing: [
+										`AI provider authentication/config error [${e.reason._tag}]: ${e.message}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
+									],
+								}),
+							)
+						: Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
 			},
 			(e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
 		),
