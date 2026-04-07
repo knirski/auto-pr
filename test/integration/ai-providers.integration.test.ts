@@ -11,6 +11,15 @@
  * Exercises `generatePrContent` (same orchestration as production) with real providers.
  * Production uses `generateText` + JSON parse (not `generateObject`). Local llama may still reject some
  * OpenAI-compat request shapes or return unusable JSON; the pipeline retries and may fall back — we assert a coherent PR-shaped result.
+ *
+ * Two-tier CI strategy (intentional):
+ *   - Local llama (tiny-llama.gguf, ~27 KiB) — a Mozilla smoke-test stub with no tool-call support.
+ *     Expected to fail the AI call and exercise the commit-summary fallback path. Verifies the
+ *     pipeline handles model errors gracefully and still produces a coherent PR body.
+ *   - GitHub Models (phi-4-mini-instruct) — exercises the real AI generation path (tool calls,
+ *     JSON parse, schema validation). This is the only provider that tests actual AI output.
+ * Replacing tiny-llama with a real model is intentionally avoided: the fallback path needs its own
+ * test, and real AI quality is already covered by GitHub Models.
  */
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect, Layer, Redacted } from "effect";
