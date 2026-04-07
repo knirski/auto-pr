@@ -41,8 +41,30 @@ Handlers capture `baseRef`/`headRef` at layer construction via `makeDiffToolkitL
 
 **CI change**: the `get-commits` step replaced by a single inline bash count (`git log | grep -cvE '^Merge '`) to drive the llama.cpp startup conditional. The two-workflow security split (generate unprivileged / create privileged) is unaffected — see [ADR 0002](0002-two-phase-auto-pr-workflow.md).
 
+## Resilience additions (2026-04)
+
+Two hardening changes were added after the initial tool-use implementation.
+
+### Git command timeouts
+
+All `GitContext` methods apply a hard 30-second timeout (`GIT_COMMAND_TIMEOUT`) via `Effect.timeout`. Without it, a `git` process waiting for credentials on a remote ref (e.g. if `extendEnv` accidentally inherits a credential helper) would block the workflow indefinitely. The timeout maps to a named error message (`git <subcommand> timed out after 30s`); non-timeout errors are forwarded via `unknownToMessage`.
+
+30 seconds was chosen as comfortably above worst-case local repo latency (git log on a 10-year repo takes <1s; git show on a large binary commit takes <5s) while still catching hangs within the CI job timeout.
+
+### Diff sanitization at the DiffToolkit boundary
+
+`DiffToolkit` applies `sanitizeDiffForAi` (`src/core/sanitize-diff.ts`) to every tool response before returning it to the model. The sanitizer:
+
+- Strips binary file hunks entirely (binary diffs carry no information the model can use and inflate token counts)
+- Truncates per-file and total output to configurable size caps
+
+**Why at the DiffToolkit boundary, not in GitContext or the prompt builder:**
+- `GitContext` is a general-purpose git read service; imposing AI-specific limits there would leak concerns.
+- Applying it in the prompt builder would require passing raw diffs up the call stack and then trimming — the model would still spend tool-call round trips on data that gets discarded.
+- The toolkit boundary is the natural place: it owns the contract between the model's tool calls and the git data, and it already handles error responses (`[TOOL_ERROR]` prefix).
+
 ## References
 
 * Design spec: [docs/superpowers/specs/2026-04-06-diff-tool-use-design.md](../superpowers/specs/2026-04-06-diff-tool-use-design.md)
-* Implementation: `src/auto-pr/git-context.ts`, `src/auto-pr/diff-toolkit.ts`, `src/workflow/auto-pr-generate-content.ts`
-* Related: [ADR 0001](0001-functional-core-imperative-shell.md) (Effect / FC-IS), [ADR 0002](0002-two-phase-auto-pr-workflow.md) (two-phase CI), [ADR 0007](0007-ai-abstraction-layer.md) (AI provider abstraction)
+* Implementation: `src/auto-pr/git-context.ts`, `src/auto-pr/diff-toolkit.ts`, `src/core/sanitize-diff.ts`, `src/workflow/auto-pr-generate-content.ts`
+* Related: [ADR 0001](0001-functional-core-imperative-shell.md) (Effect / FC-IS), [ADR 0002](0002-two-phase-auto-pr-workflow.md) (two-phase CI), [ADR 0007](0007-ai-abstraction-layer.md) (AI provider abstraction), [ADR 0013](0013-transient-vs-permanent-ai-errors.md) (AI error classification)

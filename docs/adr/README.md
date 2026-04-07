@@ -25,6 +25,7 @@ When creating or editing ADRs, follow the workflow in [AGENTS.md](../../AGENTS.m
 | 0010 | [Extract auto-pr from paperless-ingestion-bot](0010-extract-from-paperless-ingestion-bot.md) |
 | 0011 | [GitContext service and AI diff tool use](0011-gitcontext-and-diff-tool-use.md) |
 | 0012 | [Documentation website with Starlight on GitHub Pages](0012-documentation-website.md) |
+| 0013 | [Transient vs permanent AI error classification](0013-transient-vs-permanent-ai-errors.md) |
 
 ## Supporting documents (research and plans)
 
@@ -38,3 +39,4 @@ These documents inform or support decisions but are not ADRs. They live in [supp
 | [nix-ci-research.md](supporting/nix-ci-research.md) | Research: Nix CI best practices assessment |
 | [nix-workflow-upstream-actions.md](supporting/nix-workflow-upstream-actions.md) | Research: replacing nix.yml steps with upstream actions |
 | [workflow-best-practices.md](supporting/workflow-best-practices.md) | Research: GitHub Actions workflow best practices |
+| [commit-ordering-for-ai-prompt.md](supporting/commit-ordering-for-ai-prompt.md) | Design: sort/filter commits by type before AI prompt to reduce position bias |
