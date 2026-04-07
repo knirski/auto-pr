@@ -51,7 +51,8 @@ if [[ -f "$PID_FILE" ]]; then
 	fi
 fi
 
-# shellcheck disable=SC2086 — EXTRA_FLAGS is intentionally word-split to allow multiple flags
+# EXTRA_FLAGS is intentionally word-split to allow multiple flags (e.g. "--jinja --arg")
+# shellcheck disable=SC2086
 nohup ./llama-server -m "$MODEL_FILE" --host 127.0.0.1 --port "$LLAMA_PORT" $EXTRA_FLAGS >"$LOG_FILE" 2>&1 &
 echo $! >"$PID_FILE"
 

@@ -1,4 +1,4 @@
-# Real HTTP integration tests: llama.cpp (Mozilla tiny GGUF) and GitHub Models in one job.
+# Real HTTP integration tests — three scenario-focused jobs run in parallel.
 # Not published by auto-pr-init — knirski/auto-pr CI only; adopters do not copy this workflow.
 # Called via workflow_call by ci.yml and ci-workflows.yml; workflow_dispatch for manual runs.
 name: Integration
@@ -13,7 +13,7 @@ permissions:
 
 env:
   # Mozilla smoke-test stub (~27 KiB) — no tool-call support by design. Expected to fail AI generation
-  # and exercise the commit-summary fallback path. Real AI quality is tested via GitHub Models below.
+  # and exercise the commit-summary fallback path. Real AI quality is tested by integration-github-models.
   INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
   # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
   INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
@@ -23,7 +23,9 @@ env:
   INTEGRATION_LLAMA_QWEN_MODEL_URL: https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf
 
 jobs:
-  integration:
+  # Scenario: local model with no tool-call support → exercises the commit-summary fallback path.
+  # Uses Mozilla tiny-llama (~27 KiB stub). Expected to fail AI generation; asserts graceful fallback.
+  integration-local-fallback:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -81,12 +83,10 @@ jobs:
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
-      - name: Run integration tests (local llama + GitHub Models)
+      - name: Run integration tests (local llama fallback path)
         env:
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
-          INTEGRATION_GITHUB_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
-          GH_TOKEN: ${{ github.token }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
 
       - name: Stop local llama-server
@@ -95,9 +95,32 @@ jobs:
         with:
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama
 
-  # Runs in parallel with `integration`. Tests the happy path: real AI generation with tool calls.
-  # Uses Qwen2.5-1.5B (smallest model with reliable tool-call support in llama.cpp), cached.
-  integration-qwen:
+  # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
+  # Uses phi-4-mini-instruct. No local model needed — lightweight job.
+  integration-github-models:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup runtime (Bun) with cache
+        uses: ./.github/actions/setup-runtime
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run integration tests (GitHub Models)
+        env:
+          INTEGRATION_GITHUB_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.integration.test.ts
+
+  # Scenario: local model with reliable tool-call support → exercises real AI generation without fallback.
+  # Uses Qwen3-1.7B Q4_K_M with --jinja. Asserts AI output is used (no "AI description unavailable").
+  integration-local-happy:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
