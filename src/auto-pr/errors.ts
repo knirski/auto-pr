@@ -117,9 +117,8 @@ export function isTransientAiError(e: unknown): boolean {
 	if (e instanceof DescriptionParseError) return true;
 	if (e instanceof AiProviderError) {
 		const { status } = e;
-		if (status == null) return true; // network / connection error
-		if (status === 429 || status >= 500) return true; // rate limit or server error
-		return false; // 401, 403 = config / auth error
+		if (status === 401 || status === 403) return false; // config / auth error
+		return true; // null, 429, 5xx, and all other 4xx codes are transient
 	}
 	return true; // schema decode failures and other unknown errors are transient
 }
