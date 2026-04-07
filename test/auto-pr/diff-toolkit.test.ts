@@ -201,4 +201,41 @@ describe("DiffToolkit tool use logging", () => {
 			}).pipe(Effect.scoped),
 		);
 	});
+
+	test("get_commit_diff logs request and response events", async () => {
+		const captured: Array<unknown> = [];
+		const CapturingLoggerLayer = Logger.layer([
+			Logger.make(({ message }) => {
+				for (const m of message) {
+					captured.push(m);
+				}
+			}),
+		]);
+
+		const mockGitCtx = createGitContextMock({
+			getCommitDiff: () => Effect.succeed("commit abc\nfeat: add x\n\ndiff content"),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			AutoPrPlatformLayer,
+			CapturingLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_commit_diff", { hash: "abc123" });
+				yield* Stream.runLast(stream);
+				const msgs = captured
+					.map((m) => (typeof m === "object" ? JSON.stringify(m) : String(m)))
+					.join(" ");
+				expect(msgs).toContain("diff_toolkit");
+				expect(msgs).toContain("get_commit_diff");
+				expect(msgs).toContain("request");
+				expect(msgs).toContain("response");
+				expect(msgs).toContain("abc123");
+			}).pipe(Effect.scoped),
+		);
+	});
 });
