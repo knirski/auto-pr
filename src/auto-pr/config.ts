@@ -144,6 +144,8 @@ export interface GeneratePrContentConfig {
 	readonly files: string;
 	readonly workspace: string;
 	readonly templatePath: string;
+	readonly defaultBranch: string;
+	readonly branch: string;
 	readonly provider: AiProvider;
 	readonly model: string;
 	/** Set when `provider` is `github-models`. */
@@ -160,6 +162,8 @@ const DEFAULT_AI_PROVIDER: AiProvider = "local";
 
 const GeneratePrContentConfigDef = Config.all({
 	workspace: Config.string("GITHUB_WORKSPACE"),
+	defaultBranch: Config.string("DEFAULT_BRANCH"),
+	branch: Config.string("BRANCH"),
 	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
 	ghToken: Config.option(Config.redacted("GH_TOKEN")),
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
@@ -191,6 +195,8 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 		Effect.gen(function* () {
 			const base = yield* GeneratePrContentConfigDef;
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
+			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
+			const branch = yield* requireNonEmpty("BRANCH", base.branch);
 			const commits = join(workspace, "commits.txt");
 			const files = join(workspace, "files.txt");
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
@@ -207,6 +213,8 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 				files,
 				workspace,
 				templatePath,
+				defaultBranch,
+				branch,
 				provider,
 			};
 
