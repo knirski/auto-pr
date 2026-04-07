@@ -165,6 +165,13 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const branch = yield* requireNonEmpty("BRANCH", base.branch);
+			if (branch === defaultBranch) {
+				return yield* Effect.fail(
+					new AutoPrConfigError({
+						missing: [`BRANCH (${branch}) must differ from DEFAULT_BRANCH (${defaultBranch})`],
+					}),
+				);
+			}
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
@@ -322,6 +329,17 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
+			const resolvedBranch = Option.getOrUndefined(base.branch);
+			if (resolvedBranch !== undefined && resolvedBranch === defaultBranch) {
+				return yield* Effect.fail(
+					new AutoPrConfigError({
+						missing: [
+							`BRANCH (${resolvedBranch}) must differ from DEFAULT_BRANCH (${defaultBranch})`,
+						],
+					}),
+				);
+			}
+
 			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
 			yield* Option.match(base.aiProvider, {
 				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to local"),
@@ -335,7 +353,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				templatePath,
 				ghToken: base.ghToken,
 				provider,
-				branch: Option.getOrUndefined(base.branch),
+				branch: resolvedBranch,
 			};
 
 			return yield* Match.value(provider).pipe(
