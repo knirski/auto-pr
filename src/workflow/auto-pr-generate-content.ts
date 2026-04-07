@@ -30,7 +30,6 @@ import type { AiError } from "effect/unstable/ai";
 import { LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
-	type AiProviderError,
 	AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
@@ -391,14 +390,6 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
 				ParseError: (e: ParseError) => Effect.fail(e),
 				TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
-				AiProviderError: (e: AiProviderError) =>
-					Effect.fail(
-						new AutoPrConfigError({
-							missing: [
-								`AI provider authentication/config error (HTTP ${e.status ?? "unknown"}): ${e.cause}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
-							],
-						}),
-					),
 				AiError: (e: AiError.AiError) =>
 					!isTransientAiError(e)
 						? Effect.fail(

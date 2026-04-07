@@ -196,25 +196,21 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.aiOpenaiCompatUrl,
 							() => DEFAULT_OPENAI_COMPAT_URL,
 						);
-						yield* Option.match(base.aiOpenaiCompatUrl, {
-							onNone: () =>
-								Effect.logWarning(
-									`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
-								),
-							onSome: () => Effect.void,
-						});
+						if (Option.isNone(base.aiOpenaiCompatUrl)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
+							);
+						}
 						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
 						const model = Option.getOrElse(
 							base.aiOpenaiCompatModel,
 							() => DEFAULT_OPENAI_COMPAT_MODEL,
 						);
-						yield* Option.match(base.aiOpenaiCompatModel, {
-							onNone: () =>
-								Effect.logWarning(
-									`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
-								),
-							onSome: () => Effect.void,
-						});
+						if (Option.isNone(base.aiOpenaiCompatModel)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
+							);
+						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
@@ -384,25 +380,21 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							base.aiOpenaiCompatUrl,
 							() => DEFAULT_OPENAI_COMPAT_URL,
 						);
-						yield* Option.match(base.aiOpenaiCompatUrl, {
-							onNone: () =>
-								Effect.logWarning(
-									`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
-								),
-							onSome: () => Effect.void,
-						});
+						if (Option.isNone(base.aiOpenaiCompatUrl)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
+							);
+						}
 						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
 						const model = Option.getOrElse(
 							base.aiOpenaiCompatModel,
 							() => DEFAULT_OPENAI_COMPAT_MODEL,
 						);
-						yield* Option.match(base.aiOpenaiCompatModel, {
-							onNone: () =>
-								Effect.logWarning(
-									`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
-								),
-							onSome: () => Effect.void,
-						});
+						if (Option.isNone(base.aiOpenaiCompatModel)) {
+							yield* Effect.logWarning(
+								`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
+							);
+						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
