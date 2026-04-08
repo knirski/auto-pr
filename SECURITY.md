@@ -8,7 +8,7 @@ Security updates are provided for the latest major version.
 | ------- | ------------------ |
 | 0.x     | :white_check_mark: |
 
-**Node.js:** We support Node.js 24+ (see `engines` in `package.json`).
+**Node.js:** We support Node.js 20+ (see `engines` in `package.json`).
 
 ## Reporting a Vulnerability
 
