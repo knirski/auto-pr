@@ -165,7 +165,23 @@ jobs:
           llama_port: "8080"
           extra_flags: "--jinja"
 
+      - name: Resolve OpenAI model id from llama-server
+        id: openai_model_qwen
+        env:
+          BASE_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
+        run: |
+          id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
+          if [[ -z "$id" ]]; then
+            echo "::error::Could not read model id from $BASE_URL/models"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
+      - name: Run integration tests (local llama happy path)
+        env:
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_qwen.outputs.id }}
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 
       - name: Stop local llama-server (Qwen)
         if: always() && steps.local_llama_qwen.outcome != 'skipped'
