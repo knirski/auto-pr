@@ -9,7 +9,7 @@
 [![Liberapay](https://img.shields.io/badge/Liberapay-Support-yellow.svg)](https://liberapay.com/knirski/)
 [![CII Best Practices](https://img.shields.io/badge/CII%20Best%20Practices-register-green)](https://www.bestpractices.dev/en/projects/new?project_url=https%3A%2F%2Fgithub.com%2Fknirski%2Fauto-pr)
 
-Auto-create pull requests from conventional commits on `ai/*` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider (GitHub Models by default in CI; local OpenAI-compatible servers for self-hosted or dev) to generate descriptions for multi-commit PRs.
+Auto-create pull requests from conventional commits on `ai/**` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider (GitHub Models by default in CI; local OpenAI-compatible servers for self-hosted or dev) to generate descriptions for multi-commit PRs.
 
 **Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done — most adopters only use GitHub Actions and do not add this package to `package.json` unless they want the CLIs locally. Defaults work for most projects; override via workflow inputs only when needed.
 

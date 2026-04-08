@@ -1,5 +1,5 @@
 {
-  description = "Auto-PR: create PRs from conventional commits on ai/* branches";
+  description = "Auto-PR: create PRs from conventional commits on ai/** branches";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";

@@ -84,7 +84,7 @@ A custom Astro page (not part of Starlight's docs routing) with three sections:
 
 ### Section 1: Hero
 - Project name and tagline: "AI-powered pull requests from conventional commits"
-- One-sentence value prop mentioning `ai/*` branches
+- One-sentence value prop mentioning `ai/**` branches
 - Two CTAs: "Get Started" (links to `/auto-pr/integration/`) and "View on GitHub"
 
 ### Section 2: Feature Cards

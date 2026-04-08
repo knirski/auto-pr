@@ -1,4 +1,4 @@
-# Auto-PR — uses two reusable workflows (generate + create). Push to ai/* to auto-create a PR.
+# Auto-PR — uses two reusable workflows (generate + create). Push to ai/** to auto-create a PR.
 # No package.json required. Run: npx -p github:knirski/auto-pr auto-pr-init (creates this file, template, .nvmrc)
 #
 # Two workflows: generate (unprivileged, checkout branch) + create (privileged, checkout default).

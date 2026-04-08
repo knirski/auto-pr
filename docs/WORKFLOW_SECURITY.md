@@ -4,7 +4,7 @@ This document describes the security model for the auto-pr GitHub Actions workfl
 
 ## Threat Model
 
-When a workflow runs on a push to an `ai/*` branch, the pushed code may be from any collaborator or fork. An attacker could:
+When a workflow runs on a push to an `ai/**` branch, the pushed code may be from any collaborator or fork. An attacker could:
 
 - Push malicious code that runs during the workflow (e.g. modified `package.json` scripts, build scripts)
 - Poison artifacts that a privileged job later consumes
