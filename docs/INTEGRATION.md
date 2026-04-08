@@ -11,7 +11,7 @@ This guide walks through adding auto-pr to any repository so that pushes to `ai/
 3. **Generate** a private key in the app settings and save the `.pem` file
 4. **Install** the app on your repository
 5. **Add** `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
-6. **Test** — push to an `ai/*` branch: `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push`
+6. **Test** — push to an `ai/**` branch: `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push`
 
 No `package.json` required. Works with any project (Node, Python, Rust, etc.). No Nix required.
 

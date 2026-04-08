@@ -14,7 +14,7 @@ bun run build
 bun x lefthook install
 ```
 
-**Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/*` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
+**Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/**` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
 ### Optional: typos, lychee, and actionlint for full local check
 

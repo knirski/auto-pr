@@ -9,7 +9,7 @@ REF_NAME="${REF_NAME:?}"
 GITHUB_OUTPUT="${GITHUB_OUTPUT:?}"
 
 # Validate ref_name: only allow safe branch chars to prevent code injection.
-# For knirski/auto-pr on ai/* branches, use branch; else use published package.
+# For knirski/auto-pr on ai/** branches, use branch; else use published package.
 if [ "$REPO" = "knirski/auto-pr" ] && [[ "$REF_NAME" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
 	value="github:knirski/auto-pr#$REF_NAME"
 else

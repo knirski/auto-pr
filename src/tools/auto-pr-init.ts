@@ -69,7 +69,7 @@ function runInit(cwd: string): Effect.Effect<void, Error, FileSystem.FileSystem 
    - APP_ID (from app settings → About)
    - APP_PRIVATE_KEY (full contents of the .pem file)
 
-Then push to ai/* to test:
+Then push to ai/** to test:
   git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push
 
 See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md for full instructions.`,

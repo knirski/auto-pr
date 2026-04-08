@@ -1,6 +1,6 @@
 # AI Agent Instructions
 
-auto-pr creates PRs from conventional commits on `ai/*` branches. TypeScript, Effect v4 beta, Tagless Final, FC/IS.
+auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, Effect v4 beta, Tagless Final, FC/IS.
 
 **Execution order:** apply rules → make changes → run `bun run check` → fix until pass.
 
