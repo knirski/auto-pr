@@ -83,7 +83,7 @@ export function decodeGhOutputTitle(raw: string): Result.Result<string, Error> {
 	}
 }
 
-/** Validate get-commits GITHUB_OUTPUT. Returns Result with commits and files paths. */
+/** Validate GITHUB_OUTPUT containing `commits` and `files` paths (legacy shape; not produced by a separate step since ADR 0011). */
 export function validateGetCommitsOutput(
 	parsed: Record<string, string>,
 ): Result.Result<{ commits: string; files: string }, Error> {
@@ -102,7 +102,7 @@ export function validateGetCommitsOutput(
 	);
 }
 
-/** Build GITHUB_OUTPUT entries for get-commits step. */
+/** Build GITHUB_OUTPUT entries for `commits`, `files`, and semantic `count` (same keys as the former get-commits step). */
 export function buildGetCommitsGhEntries(
 	commitsPath: string,
 	filesPath: string,

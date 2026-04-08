@@ -4,7 +4,7 @@
 **Date:** 2026-03-16  
 **Context:** Fix CI failure when package used as dependency; adopt standard build-before-publish pattern.
 
-**Optimality:** tsdown is the best fit for 2026: Rolldown-based (2–8× faster than tsup), ESM-first, auto-reads `engines.node`. Alternatives (pkgroll, bunup) either complicate our path-alias/copy setup or require Bun. The plan incorporates gaps (prompt copy, npmDepsHash, .nvmrc in files) and modern tips (tsdown option names, `sideEffects`, migration path).
+**Optimality:** tsdown is the best fit for 2026: Rolldown-based (2–8× faster than tsup), ESM-first, auto-reads `engines.node`. Alternatives (pkgroll, bunup) either complicate our path-alias/copy setup or require Bun. The plan incorporates gaps (prompt copy, Nix lockfile story — **current repo:** `bun.nix` via bun2nix, not npm `npmDepsHash`), `.nvmrc` in `files`, and modern tips (tsdown option names, `sideEffects`, migration path).
 
 **Current implementation:** The build uses Bun.build (scripts/build.ts), not tsdown. Output is `dist/*.js`. This ADR documents the research; the chosen implementation diverged to Bun.build.
 
@@ -54,7 +54,7 @@
    ```
 
 2. **Create `tsdown.config.ts`**
-   - Entry points: 6 scripts — 5 bins + `run-auto-pr` (used by default.nix). Use explicit `entry` mapping to preserve `src/workflow/` → `dist/workflow/` and `src/tools/` → `dist/tools/` structure.
+   - Entry points: workflow + tools CLIs and `auto-pr-run` (used by default.nix). Use explicit `entry` mapping to preserve `src/workflow/` → `dist/workflow/` and `src/tools/` → `dist/tools/` structure.
    - Format: ESM only (package has `"type": "module"`)
    - Target: `node20` (match engines)
    - Sourcemap: true
@@ -71,19 +71,19 @@
 ### Phase 2: Update package structure
 
 4. **Change `bin` to point to `dist/`**
-   - `auto-pr-get-commits` → `./dist/workflow/auto-pr-get-commits.mjs`
-   - `auto-pr-generate-content` → `./dist/workflow/auto-pr-generate-content.mjs`
-   - `auto-pr-create-or-update-pr` → `./dist/workflow/auto-pr-create-or-update-pr.mjs`
-   - `auto-pr-fill-pr-template` → `./dist/tools/auto-pr-fill-pr-template.mjs`
-   - `auto-pr-init` → `./dist/tools/auto-pr-init.mjs`
-   - (run-auto-pr: no bin; Nix runs `node dist/workflow/auto-pr-run.mjs`)
-   - **Note:** tsdown outputs `.mjs` for ESM (package has `"type": "module"`).
+   - `auto-pr-generate-content` → `./dist/workflow/auto-pr-generate-content.js`
+   - `auto-pr-create-or-update-pr` → `./dist/workflow/auto-pr-create-or-update-pr.js`
+   - `auto-pr-run` → `./dist/workflow/auto-pr-run.js`
+   - `auto-pr-fill-pr-template` → `./dist/tools/auto-pr-fill-pr-template.js`
+   - `auto-pr-init` → `./dist/tools/auto-pr-init.js`
+   - **Removed:** `auto-pr-get-commits` (see [ADR 0011](../0011-gitcontext-and-diff-tool-use.md)).
+   - **Note:** Current build uses Bun.build and `.js` outputs; this plan originally assumed tsdown and `.mjs`.
 
 5. **Add `files` field**
    - `["dist", ".github", "docs", ".nvmrc"]` — init copies `.nvmrc` from the package. `dist/` includes `workflow/`, `tools/`, `prompts/`. Add other assets if needed at runtime.
 
 6. **Remove**
-   - `bin/*.mjs` (all 5 wrappers + run-ts.mjs)
+   - `bin/*.mjs` (legacy wrappers + run-ts.mjs)
    - `tsx` from dependencies (move to devDependencies for dev scripts)
 
 ### Phase 3: GitHub installs
@@ -100,20 +100,23 @@
 
 ### Phase 4: Nix and CI
 
-9. **default.nix**
-   - `installPhase` currently copies `src` and runs `npx tsx src/workflow/auto-pr-run.ts`
-   - Change to: copy `dist` (not `src`), `package.json`, `package-lock.json`, `node_modules`, `.github`; run `node dist/workflow/auto-pr-run.mjs`. Example:
+> **Implementation note:** The **current** [default.nix](../../../default.nix) uses **bun2nix** (`bun.lock`, `bun.nix`), `bun run build`, and ships `node dist/workflow/auto-pr-run.js` — not npm/`package-lock.json`, `tsx`, or `npmDepsHash`. See [0003-bun-package-manager.md](../0003-bun-package-manager.md) and [bun-migration-plan.md](bun-migration-plan.md). The bullets below are the **original npm-era migration sketch** (kept for history).
+
+9. **default.nix** (historical sketch)
+   - `installPhase` previously copied `src` and ran `npx tsx src/workflow/auto-pr-run.ts`.
+   - Intended change: copy `dist` (not `src`), package metadata, lockfile + `node_modules`, `.github`; run `node dist/workflow/auto-pr-run.js`. Example:
 
      ```nix
-     cp -r package.json package-lock.json node_modules dist .github $out/lib/node_modules/auto-pr/
+     cp -r package.json bun.lock node_modules dist .github $out/lib/node_modules/auto-pr/
      ...
-     exec node dist/workflow/auto-pr-run.mjs "$@"
+     exec node dist/workflow/auto-pr-run.js "$@"
      ```
 
-   - `npmBuildScript = "build"` already runs build; `dist/` exists in the build directory after build phase.
+   - `buildPhase` runs the package build; `dist/` exists after the build phase.
 
-10. **npmDepsHash**
-    - After adding tsdown and moving tsx to devDependencies, run `npm run update-npm-deps-hash` (or `nix run .#update-npm-deps-hash`) and commit the updated `npmDepsHash` in `default.nix`.
+10. **Dependency hashing** (historical vs current)
+    - **Original plan:** after moving off `tsx`, update `npmDepsHash` for npm-based Nix.
+    - **Current:** dependency closure is **`bun.nix`** (regenerate when `bun.lock` changes — CI or `nix run .#update-bun-nix`). See [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 11. **CI**
     - check job already runs check:code; build will run as first step
@@ -140,7 +143,7 @@
 | `bin/*.mjs` | Delete (6 files) |
 | `check:code` | Prepend `npm run build` |
 | `.gitignore` | Do NOT add dist |
-| `default.nix` | Update installPhase (copy dist not src, run node), update npmDepsHash |
+| `default.nix` | Update installPhase (copy `dist`, run `node`); Nix deps via `bun.nix` / bun2nix (not npm `npmDepsHash`) |
 | `AGENTS.md` | Update build note |
 | `CONTRIBUTING.md` | Add build/commit note |
 

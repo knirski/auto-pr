@@ -89,7 +89,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 .github/actions/   — composite actions. Workflows use full path (knirski/auto-pr/...)
 .github/workflows/ — ci, release-please, auto-pr, auto-pr-*-reusable
 src/auto-pr/       — config, core (re-exports), errors (formatError; classes in core/errors), interfaces, live, paths, shell, utils
-src/workflow/      — get-commits, generate-content, create-or-update-pr, run
+src/workflow/      — generate-content, create-or-update-pr, run
 src/tools/         — fill-pr-template, init
 src/core/          — pure core (fill-pr-template-core, collapse-prose-paragraphs, init-core, string, gh-output, errors)
 scripts/           — shell only
