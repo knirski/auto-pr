@@ -56,7 +56,7 @@
 2. **Create `tsdown.config.ts`**
    - Entry points: 6 scripts — 5 bins + `run-auto-pr` (used by default.nix). Use explicit `entry` mapping to preserve `src/workflow/` → `dist/workflow/` and `src/tools/` → `dist/tools/` structure.
    - Format: ESM only (package has `"type": "module"`)
-   - Target: `node24` (match engines)
+   - Target: `node20` (match engines)
    - Sourcemap: true
    - Clean: true
    - No dts for CLI entries (consumers run JS; types not needed at runtime)

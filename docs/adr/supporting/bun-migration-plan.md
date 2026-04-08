@@ -165,7 +165,7 @@ default = pkgs.callPackage ./default.nix {
 - Remove `prefetch-npm-deps`, `update-npm-deps-hash` app
 - Add `update-bun-nix` app: `bun install && bun2nix -o bun.nix`
 - Expose `bun2nix` for `nix run .#bun2nix`
-- Dev shell: `bun` instead of `nodejs_24` + `nodePackages.npm`
+- Dev shell: `bun` instead of `nodejs_20` + `nodePackages.npm`
 - Apps.default: `bun run src/workflow/auto-pr-run.ts` instead of `npx tsx`
 
 ### 2.4 Replace check-nix-hash.sh
