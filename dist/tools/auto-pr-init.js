@@ -9,10 +9,10 @@ import{Ca as f,D as t,Da as y,Ia as g,L as d,M as m,Xa as h,e as p,ua as a,za as
    - APP_ID (from app settings → About)
    - APP_PRIVATE_KEY (full contents of the .pem file)
 
-Then push to ai/* to test:
+Then push to ai/** to test:
   git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push
 
 See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md for full instructions.`})})}if(p.main==p.module)y(t.gen(function*(){let r=yield*t.sync(()=>process.cwd());yield*v(r)}).pipe(t.provide(u),t.provide(f)),"init");export{v as runInit};
 
-//# debugId=E6397B59C92DE7C664756E2164756E21
+//# debugId=A19AC42E56673A6164756E2164756E21
 //# sourceMappingURL=auto-pr-init.js.map
