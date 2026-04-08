@@ -54,7 +54,7 @@ Add auto-pr to any repo in 6 steps:
 3. **Generate** — Private key in app settings → save `.pem`
 4. **Install** — Install the app on your repository
 5. **Secrets** — Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
-6. **Test** — `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push`
+6. **Test** — `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push -u origin HEAD`
 
 No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
