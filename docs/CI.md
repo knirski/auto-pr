@@ -9,6 +9,7 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | Push to `ai/**` | auto-pr creates/updates PR |
 | PR to main (code changes) | ci → check (`check` + `integration` jobs), dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
+| PR to main (website only) | ci-website → check-website (Astro build) |
 | PR to main (.github only) | ci-workflows → `check-workflows` (actionlint, shellcheck, shfmt) |
 | PR to main (nix/deps) | ci-nix → nix flake check (Linux x64 + arm64, macOS arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
@@ -39,8 +40,9 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 | Workflow | Trigger | Path filter | Jobs |
 |----------|---------|-------------|------|
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
-| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**'` | check (reusable: `check` + `integration`), dependency-review |
+| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**', 'website/**'` | check (reusable: `check` + `integration`), dependency-review |
 | [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
+| [ci-website.yml](../.github/workflows/ci-website.yml) | push, pull_request → main | `paths: 'website/**'` | check (reusable: [check-website.yml](../.github/workflows/check-website.yml)) |
 | [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check-workflows |
 | [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
 | [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
@@ -59,9 +61,11 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
-**ci.yml** runs when any non-.md, non-.github file changes. Skips when only docs or only .github changes.
+**ci.yml** runs when any file changes outside ignored paths (`**/*.md`, `.github/**`, `website/**`). Skips when only docs, only .github, or only the Astro site under `website/` changes.
 
 **ci-docs.yml** is complementary: runs when only `*.md` files change. Reports a passing `check` job so branch protection allows merge.
+
+**ci-website.yml** is complementary: triggers on `website/**` changes and runs an Astro production build (same idea as [deploy-pages.yml](../.github/workflows/deploy-pages.yml)). Does not run unit tests, integration tests, or act-smoke. If a PR also changes non-ignored paths, **`ci.yml` runs too** (mixed PR): you get both workflows; only **check-website** runs the Astro build.
 
 **ci-workflows.yml** is complementary: runs when only `.github/**` changes. Runs **check-workflows** (actionlint, shellcheck, shfmt on `.github/actions`). Integration tests do not run for workflow-only changes — they test AI provider HTTP behavior, which is unaffected by workflow YAML.
 
@@ -97,7 +101,7 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 **Act on GitHub:** [act-smoke.yml](../.github/workflows/act-smoke.yml) runs on pushes/PRs that touch act-related paths (`.github/workflows`, `scripts/act-local-ci.ts`, `flake.nix`, etc.). It uses a **strategy matrix** so **`--dry-run check`** (**ci.yml** graph) and **`check-workflows`** run **in parallel** on separate runners (each installs [**nektos/gh-act**](https://github.com/nektos/gh-act) and runs [act-local-ci.ts](../scripts/act-local-ci.ts); **`GH_TOKEN`** = **`github.token`** for [GitHub CLI in Actions](https://docs.github.com/en/actions/using-workflows/using-github-cli-in-workflows)). There is no **`--dry-run check-workflows`** because the matrix **`check-workflows`** cell covers that graph. **`gh act`** is used when `act` is not on `PATH`; a **smaller default container image** applies for both cells unless **`ACT_RUNNER_IMAGE`** is set. It does **not** run full **`check`** in act (too slow), **`integration`**, or **`dependency-review`** (GitHub-only). It does **not** replace hosted `check` or prove full parity with `bun run act`.
 
-**What we do not run in act-smoke:** Full **`ci.yml` `check`** in act (long, duplicates hosted CI), **`integration.yml`** (heavy, secrets/models), **`ci-docs`** / **`check-docs`** (thin wrappers), and **`dependency-review`** (needs GitHub APIs). Use **`bun run check`** and hosted Actions for those.
+**What we do not run in act-smoke:** Full **`ci.yml` `check`** in act (long, duplicates hosted CI), **`integration.yml`** (heavy, secrets/models), **`ci-docs`** / **`check-docs`**, **`ci-website`** / **`check-website`** (thin wrappers), and **`dependency-review`** (needs GitHub APIs). Use **`bun run check`** and hosted Actions for those.
 
 Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
 
@@ -109,8 +113,8 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 
 Configure main branch protection to require:
 
-- **`check / check`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), [ci-docs.yml](../.github/workflows/ci-docs.yml) (pass-through), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-workflows.yml](../.github/workflows/check-workflows.yml)).
-- **`check / integration`** — from [ci.yml](../.github/workflows/ci.yml) and [ci-release-please.yml](../.github/workflows/ci-release-please.yml). Not reported by ci-docs or ci-workflows (docs/workflow-only paths do not run integration).
+- **`check / check`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), [ci-docs.yml](../.github/workflows/ci-docs.yml) (pass-through), [ci-website.yml](../.github/workflows/ci-website.yml) (pass-through), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-workflows.yml](../.github/workflows/check-workflows.yml)).
+- **`check / integration`** — from [ci.yml](../.github/workflows/ci.yml) and [ci-release-please.yml](../.github/workflows/ci-release-please.yml). Not reported by ci-docs, ci-website, or ci-workflows (docs/website/workflow-only paths do not run integration).
 
 Do not require `dependency-review` (PR-only), `nix` (path-filtered), or `act-smoke` (path-filtered smoke test); they would block when skipped or unrelated paths change.
 
