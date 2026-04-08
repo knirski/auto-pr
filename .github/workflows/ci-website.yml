@@ -1,0 +1,29 @@
+# Complementary to ci.yml: runs when website/** changes.
+# Calls check-website.yml so both report "check / check" for branch protection.
+# Mixed PRs (code + website) also run ci.yml — Astro build runs here only; accept the extra workflow run.
+# See docs/CI.md.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'website/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'website/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/check-website.yml
