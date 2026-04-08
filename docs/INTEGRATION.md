@@ -223,7 +223,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 
 For branches with **2+ commits**, auto-pr generates the PR description via an AI backend. Choose a provider with `ai_provider` on the generate reusable workflow (maps to `AUTO_PR_AI_PROVIDER`), or set env when running locally.
 
-**How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, because GitHub Models does not support that response format and other OpenAI-compatible servers are inconsistent with it. On repeated parse or HTTP failures, auto-pr falls back to commit-derived title and description.
+**How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, because GitHub Models does not support that response format and other OpenAI-compatible servers are inconsistent with it. On repeated parse or transient HTTP failures (network, rate limit, 5xx), auto-pr falls back to commit-derived title and description. **Authentication errors (HTTP 401/403) surface directly as a configuration error** rather than silently falling back — check your `GH_TOKEN` or `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` if you see an auth error in the generate step.
 
 ### `local` (OpenAI-compatible HTTP)
 

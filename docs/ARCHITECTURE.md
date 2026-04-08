@@ -43,8 +43,8 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.
 - **`src/auto-pr/interfaces/`** — Tagless Final service interfaces (FillPrTemplate).
 - **`src/auto-pr/live/`** — Live interpreters. Implements FillPrTemplate for production. Per Effect idiom, layers are attached to services: `FillPrTemplate.Live`. Workflow-specific config layers (GeneratePrContentConfig, etc.) provide per-workflow env validation.
-- **`GitContext`** — Typed Effect service for git reads (commits, files, diff stat). Used by generate-content instead of pre-written text files.
-- **`DiffToolkit`** — Tool use for AI: exposes `get_diff` and `get_commit_diff` tools so the language model can fetch diff data on demand during generation.
+- **`GitContext`** — Typed Effect service for git reads (commits, files, diff stat). Used by generate-content instead of pre-written text files. All methods apply a hard 30-second timeout; a hung process surfaces as a named error rather than blocking indefinitely.
+- **`DiffToolkit`** — Tool use for AI: exposes `get_diff` and `get_commit_diff` tools so the language model can fetch diff data on demand during generation. All responses pass through `sanitizeDiffForAi` (strips binary hunks, caps per-file and total size) before being returned to the model.
 
 **Bridge:** Core returns `Result`; shell calls `Effect.fromResult` at the boundary.
 
@@ -63,6 +63,8 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Error Handling
 
 Domain errors (e.g. `NoSemanticCommitsError`, `AutoPrConfigError`) use `Schema.TaggedErrorClass` in `src/core/errors.ts`. The shell formats them via `formatError` (in `src/auto-pr/errors.ts`) and logs to stderr before exiting non-zero. In GitHub Actions, failures surface as step failures; `AUTO_PR_DEBUG=1` adds a hint to the log. **generate-content** writes workspace files on success.
+
+AI errors are split into **permanent** and **transient** via `isTransientAiError` (`src/auto-pr/errors.ts`). Permanent failures (HTTP 401/403, `AuthenticationError`) surface immediately as `AutoPrConfigError` — they indicate bad credentials that retrying cannot fix. Transient failures (network, rate limit, 5xx, parse errors) continue to the existing retry-then-fallback path. See [ADR 0013](adr/0013-transient-vs-permanent-ai-errors.md).
 
 ## Glossary
 
