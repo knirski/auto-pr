@@ -16,7 +16,7 @@ if [[ "$always_lc" != "true" && "$always_lc" != "1" && "$always_lc" != "yes" ]];
 	# Empty count/provider can happen if a caller omits composite outputs; treat as non-NEED.
 	C="${COMMITS_COUNT:-}"
 	# Composite actions do not always surface GITHUB_OUTPUT from child processes (e.g. bun) to
-	# steps.run.outputs.* — mirror get-commits: semantic_subjects.txt line count == semantic count.
+	# steps.run.outputs.* — fall back: semantic_subjects.txt line count == semantic commit count.
 	if [[ -z "$C" && -f "$GITHUB_WORKSPACE/semantic_subjects.txt" ]]; then
 		C=$(wc -l <"$GITHUB_WORKSPACE/semantic_subjects.txt" | tr -d ' \n\r')
 	fi

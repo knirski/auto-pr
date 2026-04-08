@@ -13,7 +13,7 @@ Auto-create pull requests from conventional commits on `ai/**` branches. Parses 
 
 **Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done — most adopters only use GitHub Actions and do not add this package to `package.json` unless they want the CLIs locally. Defaults work for most projects; override via workflow inputs only when needed.
 
-**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying — workflows fetch everything from knirski/auto-pr. **No Nix required** — users use Node/npx only.
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying — workflows fetch everything from knirski/auto-pr.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, the AI provider summarizes the changes into a coherent description.
 
@@ -32,13 +32,14 @@ Auto-create pull requests from conventional commits on `ai/**` branches. Parses 
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
 - **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **local** (OpenAI-compatible HTTP, e.g. llama.cpp) or **github-models**
 - **gh CLI** — Thin wrapper around `gh pr create` / `gh pr edit`
-- **CI-agnostic** — **get-commits** appends paths and count to `GITHUB_OUTPUT`; **generate-content** writes `pr-title.txt` and `pr-body.md` under the workspace. Works with GitHub Actions or any orchestrator that sets the same env conventions.
+- **CI-agnostic** — **generate-content** reads git state in the workspace and writes `pr-title.txt` and `pr-body.md`; **create-or-update-pr** reads those files and runs `gh`. Works with GitHub Actions or any orchestrator that sets the same env conventions.
 
 ## How it works
 
-1. **Get commits** — `auto-pr-get-commits` runs `git log` and `git diff` to produce `commits.txt`, `files.txt`, and outputs paths to `GITHUB_OUTPUT`
-2. **Generate content** — `auto-pr-generate-content` parses commits, counts semantic commits. For 1 commit: fills template from body. For 2+: calls the AI provider to summarize, then fills template. Writes `pr-title.txt` and `pr-body.md` under `{GITHUB_WORKSPACE}`
-3. **Create or update PR** — `auto-pr-create-or-update-pr` reads those files, then runs `gh pr view` → `gh pr edit` or `gh pr create`
+1. **Generate content** — `auto-pr-generate-content` uses git in the workspace (`git log`, diffs as needed), parses commits, and counts semantic (non-merge) commits. For one commit: fills the PR template from the commit body. For two or more: calls the AI provider to summarize, then fills the template. Writes `pr-title.txt` and `pr-body.md` under `{GITHUB_WORKSPACE}`.
+2. **Create or update PR** — `auto-pr-create-or-update-pr` reads those files, then runs `gh pr view` → `gh pr edit` or `gh pr create`.
+
+For local runs, `auto-pr-run` orchestrates generate → create with the same env contract.
 
 Merge commits are filtered out. Non-conventional commits are included; type falls back to "Chore".
 
@@ -83,9 +84,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup, Nix flake, and pre-push h
 
 | Command | Purpose |
 |--------|---------|
-| `npx auto-pr-get-commits` | Get commit log and changed files; append `commits`, `files`, `count` to `GITHUB_OUTPUT` |
 | `npx auto-pr-generate-content` | Generate PR title and filled body (AI for 2+ commits) |
 | `npx auto-pr-create-or-update-pr` | Create or update PR via `gh` |
+| `npx auto-pr-run` | Run generate → create with the same env contract |
 | `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
 | `npx auto-pr-init` | Create workflow, PR template, and .nvmrc in current repo |
 

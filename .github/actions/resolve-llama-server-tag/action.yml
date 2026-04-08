@@ -13,7 +13,9 @@ inputs:
     required: false
     default: "false"
   commits_count:
-    description: get-commits output count (when always_resolve_tag is false)
+    description: >-
+      Semantic (non-merge) commit count for generate-job gating when always_resolve_tag is false. If empty, the
+      action may derive the count from semantic_subjects.txt in the workspace.
     required: false
     default: ""
   ai_provider:

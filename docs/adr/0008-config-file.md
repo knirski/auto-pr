@@ -96,7 +96,7 @@ Validate file + merged config with **Effect Schema** (`Schema.Struct` / `Schema.
 
 #### What would not go into a future config file
 
-Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`GITHUB_OUTPUT`, workspace-relative files from `get-commits`, …), runtime (`NO_COLOR`, `AUTO_PR_DEBUG`), internal script vars (`AUTO_PR_PKG`, …). See earlier drafts for full tables.
+Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`GITHUB_OUTPUT`, workspace outputs from generate-content such as `pr-title.txt` / `pr-body.md`, …), runtime (`NO_COLOR`, `AUTO_PR_DEBUG`), internal script vars (`AUTO_PR_PKG`, …). See earlier drafts for full tables.
 
 #### Env keys mirrored by a future file
 
