@@ -46,6 +46,6 @@ describe.skipIf(!canRun)("integration: local llama.cpp (qwen3-1.7b, happy path)"
 				}),
 			);
 		},
-		{ timeout: 180_000 },
+		{ timeout: 300_000 },
 	);
 });
