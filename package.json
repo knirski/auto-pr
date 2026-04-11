@@ -65,7 +65,7 @@
 	},
 	"dependencies": {
 		"@effect/ai-openai-compat": "^4.0.0-beta.42",
-		"@effect/platform-bun": "^4.0.0-beta.42",
+		"@effect/platform-bun": "^4.0.0-beta.46",
 		"conventional-commits-parser": "^6.3.0",
 		"effect": "^4.0.0-beta.42",
 		"micromustache": "^8.0.3",

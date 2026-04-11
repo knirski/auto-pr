@@ -6,7 +6,7 @@
       "name": "auto-pr",
       "dependencies": {
         "@effect/ai-openai-compat": "^4.0.0-beta.42",
-        "@effect/platform-bun": "^4.0.0-beta.42",
+        "@effect/platform-bun": "^4.0.0-beta.46",
         "conventional-commits-parser": "^6.3.0",
         "effect": "^4.0.0-beta.42",
         "micromustache": "^8.0.3",
@@ -94,9 +94,9 @@
 
     "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.42", "", { "peerDependencies": { "effect": "^4.0.0-beta.42" } }, "sha512-xq7c8DXeb6VkeMJ6rFdDq2PU+1Ov+H7p2jlc1IflZ5Oy9J4kvqT7Z3e0DafGLpubQgzaWZFtyEHAzOQEEvCkXg=="],
 
-    "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.42", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.42" }, "peerDependencies": { "effect": "^4.0.0-beta.42" } }, "sha512-8ovGjkjtRPZrUIalE0/6HUOUkzK0PcddZcbjLI8BGO2P0TUI84JKufrlBbuO9+j7Mha3emAh9jpuPjsS7UTjRA=="],
+    "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.46", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.46" }, "peerDependencies": { "effect": "^4.0.0-beta.46" } }, "sha512-yvGZ3poX6dVYu9r3EM1E4/cbJB0VXQ5R9HlkgvVXbI0cQl0B1Mc/PnP+9Ep8iZOdB5SPdn1HppItEX9/HA+BQw=="],
 
-    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.42", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.19.0" }, "peerDependencies": { "effect": "^4.0.0-beta.42" } }, "sha512-PC+lxLsrwob3+nBChAPrQq32olCeyApgXBvs1NrRsoArLViNT76T/68CttuCAksCZj5e1bZ1ZibLPel3vUmx2g=="],
+    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.46", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.19.0" }, "peerDependencies": { "effect": "^4.0.0-beta.46" } }, "sha512-Yzci82XbZ1W3tuiownsJawrJZTGeTrTZKLD0uxdBWCBzlVyqDwoSwRwO5qh33DurJj9B7iS8MDf14fpGRBPNGQ=="],
 
     "@emnapi/core": ["@emnapi/core@1.9.0", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.0", "tslib": "^2.4.0" } }, "sha512-0DQ98G9ZQZOxfUcQn1waV2yS8aWdZ6kJMbYCJB3oUBecjWYO1fqJ+a1DRfPF3O5JEkwqwP1A9QEN/9mYm2Yd0w=="],
 
