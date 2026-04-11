@@ -64,7 +64,7 @@
 		"stage-group": "bun run src/workflow/auto-pr-stage-group.ts"
 	},
 	"dependencies": {
-		"@effect/ai-openai-compat": "^4.0.0-beta.42",
+		"@effect/ai-openai-compat": "^4.0.0-beta.46",
 		"@effect/platform-bun": "^4.0.0-beta.42",
 		"conventional-commits-parser": "^6.3.0",
 		"effect": "^4.0.0-beta.42",
