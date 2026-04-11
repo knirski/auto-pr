@@ -38,7 +38,7 @@ jobs:
       - name: Generate GitHub App token
         if: inputs.push_allowed
         id: app-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Nix
-        uses: cachix/install-nix-action@96951a368ba55167b55f1c916f7d416bac6505fe # v31
+        uses: cachix/install-nix-action@616559265b40713947b9c190a8ff4b507b5df49b # v31
         with:
           extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
 
@@ -134,7 +134,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Nix
-        uses: cachix/install-nix-action@96951a368ba55167b55f1c916f7d416bac6505fe # v31
+        uses: cachix/install-nix-action@616559265b40713947b9c190a8ff4b507b5df49b # v31
         with:
           extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
 
