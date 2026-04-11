@@ -2,7 +2,7 @@
  * Live FillPrTemplate interpreter. Uses fill-pr-template core, FileSystem, and Path.
  */
 
-import { Effect, FileSystem, Layer, Path, pipe, ServiceMap } from "effect";
+import { Context, Effect, FileSystem, Layer, Path, pipe } from "effect";
 import type {
 	FillPrTemplateParams,
 	FillPrTemplateService,
@@ -131,7 +131,7 @@ function loadTemplateAndParams(
 }
 
 /** FillPrTemplate service tag. */
-export class FillPrTemplate extends ServiceMap.Service<FillPrTemplate, FillPrTemplateService>()(
+export class FillPrTemplate extends Context.Service<FillPrTemplate, FillPrTemplateService>()(
 	"auto-pr/fill-pr-template",
 ) {
 	/** Live layer for FillPrTemplate. No dependencies. */

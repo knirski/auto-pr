@@ -4,7 +4,7 @@
  * Workspace (cwd) is baked into the live layer — not a per-method parameter.
  */
 
-import { Cause, Duration, Effect, Layer, ServiceMap } from "effect";
+import { Cause, Context, Duration, Effect, Layer } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { runCommand } from "#auto-pr/shell.js";
 import { unknownToMessage } from "#core/string.js";
@@ -21,7 +21,7 @@ export interface GitContext {
 	readonly getCommitDiff: (hash: string) => Effect.Effect<string, Error>;
 }
 
-export const GitContext = ServiceMap.Service<GitContext>("GitContext");
+export const GitContext = Context.Service<GitContext>("GitContext");
 
 const LOG_FORMAT = "---COMMIT---%n%H%n%s%n%n%b";
 
