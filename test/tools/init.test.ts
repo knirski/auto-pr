@@ -5,7 +5,7 @@ import { createTestTempDirEffect, TestBaseLayer } from "#test/test-utils.js";
 import { runInit } from "#tools/auto-pr-init.js";
 
 describe("runInit", () => {
-	test("creates workflow, PR template, and .nvmrc in target directory", async () => {
+	test("creates workflow, PR template, .nvmrc, and llama-ci.json in target directory", async () => {
 		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-init-");
@@ -13,15 +13,17 @@ describe("runInit", () => {
 				yield* runInit(tmp.path);
 
 				const fs = yield* FileSystem.FileSystem;
-				const [workflowExists, templateExists, nvmrcExists] = yield* Effect.all([
+				const [workflowExists, templateExists, nvmrcExists, llamaCiExists] = yield* Effect.all([
 					fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
 					fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
 					fs.exists(tmp.join(".nvmrc")),
+					fs.exists(tmp.join(".github", "llama-ci", "llama-ci.json")),
 				]);
 
 				expect(workflowExists).toBe(true);
 				expect(templateExists).toBe(true);
 				expect(nvmrcExists).toBe(true);
+				expect(llamaCiExists).toBe(true);
 
 				const workflowContent = yield* fs.readFileString(
 					tmp.join(".github", "workflows", "auto-pr.yml"),

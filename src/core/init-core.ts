@@ -20,5 +20,9 @@ export function getInitFileSpecs(): readonly InitFileSpec[] {
 			from: ".github/PULL_REQUEST_TEMPLATE.md",
 		},
 		{ dest: ".nvmrc", from: ".nvmrc" },
+		{
+			dest: ".github/llama-ci/llama-ci.json",
+			from: ".github/llama-ci/llama-ci.json",
+		},
 	];
 }

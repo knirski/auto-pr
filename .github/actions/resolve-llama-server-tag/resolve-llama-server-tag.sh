@@ -7,7 +7,7 @@ set -euo pipefail
 : "${GITHUB_WORKSPACE:?}"
 : "${GITHUB_ACTION_PATH:?}"
 
-READ_IMAGE="$GITHUB_ACTION_PATH/read-dockerfile-image.sh"
+READ_IMAGE="$GITHUB_ACTION_PATH/read-llama-ci-json.sh"
 
 cache_slug_from_image() {
 	local img="$1"
@@ -54,10 +54,10 @@ if [[ -n "$INPUT_TAG" ]]; then
 	else
 		IMAGE="ghcr.io/ggml-org/llama.cpp:server-${INPUT_TAG}"
 	fi
-elif [[ -f "$GITHUB_WORKSPACE/.github/llama-ci/Dockerfile" ]]; then
+elif [[ -f "$GITHUB_WORKSPACE/.github/llama-ci/llama-ci.json" ]]; then
 	IMAGE="$(bash "$READ_IMAGE" "$GITHUB_WORKSPACE")"
 else
-	echo "::error::Local llama requires .github/llama-ci/Dockerfile (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
+	echo "::error::Local llama requires .github/llama-ci/llama-ci.json (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
 	exit 1
 fi
 

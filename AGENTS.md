@@ -41,7 +41,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
 | `bun test` | Unit tests with coverage (`test/integration/**` excluded in [bunfig.toml](bunfig.toml)) — this is what `check:code` runs |
-| `bun run test:integration` | Real HTTP AI provider tests (`bunfig.integration.toml`); needs env — see `test/integration/ai-providers.integration.test.ts` |
+| `bun run test:integration` | Real HTTP AI provider tests (`bunfig.integration.toml`); Docker + Testcontainers for local llama — see `test/integration/*.integration.test.ts` |
 | `bun run test:all` | `bun test` then `test:integration` |
 | `bun run lint` / `lint:fix` | Lint (Biome) |
 | `bun run lint:scripts` | Shellcheck + shfmt check |
@@ -62,6 +62,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Composite action | `.github/actions/<name>/` |
+| Local llama image pin (CI + init) | `.github/llama-ci/llama-ci.json` (`image` field) |
 | New prompt | `src/auto-pr/prompts/` |
 
 ### Key Rules

@@ -1,49 +1,66 @@
 /**
  * Scenario: local model with reliable tool-call support → real AI generation, no fallback.
  *
- * Uses Qwen3-1.7B Q4_K_M via llama.cpp with --jinja (required for Qwen3 chat template).
- * Tool-call reliability: 0.960 — at 5 retries, P(all fail) ≈ 0.0001%.
- * Asserts that AI output is used directly (no "AI description unavailable" fallback marker).
+ * Uses Qwen3-1.7B Q4_K_M via llama-server (`--jinja`) in Testcontainers + `.github/llama-ci/llama-ci.json`.
  *
- * Run via `integration-local-happy` CI job (see .github/workflows/integration.yml).
- * Requires: AUTO_PR_AI_OPENAI_COMPAT_URL, AUTO_PR_AI_OPENAI_COMPAT_MODEL
+ * Run via `integration-local` CI job (see .github/workflows/integration.yml).
+ * Requires Docker. Set `INTEGRATION_SKIP_DOCKER=1` to skip.
  */
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect } from "effect";
-import { runEffect } from "#test/run-effect.js";
 import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
 import { layerLocal, PR_DESCRIPTION_PROMISE, TEMPLATE } from "./helpers.js";
+import { acquireLlamaLocalContainer, FsPath } from "./llama-local-container.js";
 
-const canRun =
-	(process.env.AUTO_PR_AI_OPENAI_COMPAT_URL ?? "").trim() !== "" &&
-	(process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL ?? "").trim() !== "";
+const DEFAULT_QWEN_MODEL_URL =
+	"https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf";
 
-describe.skipIf(!canRun)("integration: local llama.cpp (qwen3-1.7b, happy path)", () => {
+const skipDocker = process.env.INTEGRATION_SKIP_DOCKER === "1";
+
+describe.skipIf(skipDocker)("integration: local llama.cpp (qwen3-1.7b, happy path)", () => {
 	test(
 		"generatePrContent (2 commits) uses AI and produces non-fallback PR body",
 		async () => {
-			const baseUrl = process.env.AUTO_PR_AI_OPENAI_COMPAT_URL ?? "";
-			const model = process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL ?? "";
+			const modelUrl = new URL(
+				process.env.INTEGRATION_LLAMA_MODEL_URL?.trim() || DEFAULT_QWEN_MODEL_URL,
+			);
+			const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
+			const modelCacheDir =
+				cacheRaw !== undefined && cacheRaw.length > 0 ? FsPath(cacheRaw) : undefined;
 			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
-			const layer = layerLocal(model, baseUrl.replace(/\/$/, ""));
-			await runEffect(layer)(
-				Effect.gen(function* () {
-					const result = yield* generatePrContent({
-						baseRef: "origin/main",
-						headRef: "ai/test",
-						templateContent: TEMPLATE,
-						descriptionPromptText,
-						provider: "local",
-						model,
-						retryDelay: Duration.zero,
-					});
-					expect(result.count).toBe(2);
-					expect(result.title.trim().length).toBeGreaterThan(0);
-					expect(result.body).toContain("### Motivation");
-					expect(result.body).toContain("### Risks");
-					// Qwen3-1.7B has 0.960 tool-call reliability — AI generation should succeed, no fallback.
-					expect(result.body).not.toContain("AI description unavailable");
-				}),
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const { openAiCompatBaseUrl, modelId } = yield* acquireLlamaLocalContainer({
+							modelUrl,
+							modelCacheDir,
+							extraLlamaArgs: ["--jinja"],
+						});
+						const layer = layerLocal(modelId, openAiCompatBaseUrl);
+						yield* Effect.provide(
+							generatePrContent({
+								baseRef: "origin/main",
+								headRef: "ai/test",
+								templateContent: TEMPLATE,
+								descriptionPromptText,
+								provider: "local",
+								model: modelId,
+								retryDelay: Duration.zero,
+							}),
+							layer,
+						).pipe(
+							Effect.tap((result) =>
+								Effect.sync(() => {
+									expect(result.count).toBe(2);
+									expect(result.title.trim().length).toBeGreaterThan(0);
+									expect(result.body).toContain("### Motivation");
+									expect(result.body).toContain("### Risks");
+									expect(result.body).not.toContain("AI description unavailable");
+								}),
+							),
+						);
+					}),
+				),
 			);
 		},
 		{ timeout: 300_000 },

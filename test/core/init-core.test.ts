@@ -3,9 +3,9 @@ import { getInitFileSpecs } from "#core/init-core.js";
 
 describe("init-core", () => {
 	describe("getInitFileSpecs", () => {
-		test("returns specs for workflow, template, and nvmrc", () => {
+		test("returns specs for workflow, template, nvmrc, and llama-ci.json", () => {
 			const specs = getInitFileSpecs();
-			expect(specs).toHaveLength(3);
+			expect(specs).toHaveLength(4);
 		});
 		test("workflow spec has dest and from", () => {
 			const specs = getInitFileSpecs();
@@ -17,6 +17,11 @@ describe("init-core", () => {
 			const specs = getInitFileSpecs();
 			const nvmrc = specs.find((s) => s.dest === ".nvmrc");
 			expect(nvmrc?.from).toBe(".nvmrc");
+		});
+		test("llama-ci.json spec copies from package", () => {
+			const specs = getInitFileSpecs();
+			const llama = specs.find((s) => s.dest === ".github/llama-ci/llama-ci.json");
+			expect(llama?.from).toBe(".github/llama-ci/llama-ci.json");
 		});
 	});
 });

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Start llama.cpp llama-server in Docker (OpenAI-compatible /v1). Container listens on 8080; host maps LLAMA_PORT.
+# Uses docker/llama-ci-image.tar under LLAMA_CI_ROOT when present (from actions/cache); otherwise pull + save.
 set -euo pipefail
 
 DOCKER_IMAGE="${DOCKER_IMAGE:?DOCKER_IMAGE required}"
@@ -10,6 +11,7 @@ EXTRA_FLAGS="${EXTRA_FLAGS:-}"
 CONTAINER_NAME="${CONTAINER_NAME:-auto-pr-llama}"
 
 CONTAINER_INTERNAL_PORT=8080
+IMAGE_TAR="$LLAMA_CI_ROOT/docker/llama-ci-image.tar"
 
 if [[ ! "$MODEL_URL" =~ ^https:// ]]; then
 	echo "::error::MODEL_URL must be an https URL"
@@ -19,7 +21,18 @@ fi
 ROOT="$LLAMA_CI_ROOT"
 MODEL_FILE="$ROOT/model/model.gguf"
 
-mkdir -p "$ROOT/model"
+mkdir -p "$ROOT/model" "$ROOT/docker"
+
+if [[ -f "$IMAGE_TAR" ]] && [[ -s "$IMAGE_TAR" ]]; then
+	echo "Loading cached Docker image from $IMAGE_TAR…"
+	docker load -i "$IMAGE_TAR"
+else
+	echo "Pulling ${DOCKER_IMAGE}…"
+	docker pull "$DOCKER_IMAGE"
+	echo "Saving image to $IMAGE_TAR for cache…"
+	docker save "$DOCKER_IMAGE" -o "$IMAGE_TAR.part"
+	mv "$IMAGE_TAR.part" "$IMAGE_TAR"
+fi
 
 if [[ ! -f "$MODEL_FILE" || ! -s "$MODEL_FILE" ]]; then
 	echo "Downloading model…"
@@ -27,9 +40,6 @@ if [[ ! -f "$MODEL_FILE" || ! -s "$MODEL_FILE" ]]; then
 	curl -fsSL -o "$tmp" "$MODEL_URL"
 	mv "$tmp" "$MODEL_FILE"
 fi
-
-echo "Pulling ${DOCKER_IMAGE}…"
-docker pull "$DOCKER_IMAGE"
 
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
