@@ -30,13 +30,13 @@ import { join } from "node:path";
 import type { Redacted } from "effect";
 import {
 	Config,
+	Context,
 	Effect,
 	FileSystem,
 	Layer,
 	Match,
 	Option,
 	Redacted as RedactedValue,
-	ServiceMap,
 } from "effect";
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
 import { AutoPrConfigError } from "#core/errors.js";
@@ -124,7 +124,7 @@ export interface GeneratePrContentConfig {
 }
 
 export const GeneratePrContentConfig =
-	ServiceMap.Service<GeneratePrContentConfig>("GeneratePrContentConfig");
+	Context.Service<GeneratePrContentConfig>("GeneratePrContentConfig");
 
 const DEFAULT_AI_PROVIDER: AiProvider = "local";
 
@@ -266,7 +266,7 @@ export interface CreateOrUpdatePrConfig {
 }
 
 export const CreateOrUpdatePrConfig =
-	ServiceMap.Service<CreateOrUpdatePrConfig>("CreateOrUpdatePrConfig");
+	Context.Service<CreateOrUpdatePrConfig>("CreateOrUpdatePrConfig");
 
 const CreateOrUpdatePrConfigDef = Config.all({
 	branch: Config.string("BRANCH"),
@@ -324,7 +324,7 @@ export interface RunAutoPrConfig {
 	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
 }
 
-export const RunAutoPrConfig = ServiceMap.Service<RunAutoPrConfig>("RunAutoPrConfig");
+export const RunAutoPrConfig = Context.Service<RunAutoPrConfig>("RunAutoPrConfig");
 
 const RunAutoPrConfigDef = Config.all({
 	defaultBranch: Config.string("DEFAULT_BRANCH"),
