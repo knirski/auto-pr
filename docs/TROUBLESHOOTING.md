@@ -22,6 +22,12 @@
 
 **Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo, or copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to the path shown in the error.
 
+### "Local llama requires .github/llama-ci/Dockerfile" (or generate fails for local Docker llama)
+
+**Cause:** The reusable workflow expects a `Dockerfile` under `.github/llama-ci/` with a `FROM` line for `llama-server`. Older `auto-pr-init` templates used `llama-ci.json` instead.
+
+**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh scaffolded files, or add [`.github/llama-ci/Dockerfile`](../.github/llama-ci/Dockerfile) yourself (see [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin)).
+
 ### "Missing secrets APP_ID or APP_PRIVATE_KEY"
 
 **Cause:** The workflow needs a GitHub App token to create PRs.

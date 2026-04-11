@@ -2,13 +2,13 @@
 name: Resolve llama-server image tag
 description: >-
   When the bundled local llama path is active: outputs image= and tag= (short cache slug, often digest prefix).
-  Optional inputs.ai_llamacpp_release_tag overrides. Otherwise reads .image from .github/llama-ci/llama-ci.json.
+  Optional inputs.ai_llamacpp_release_tag overrides. Otherwise reads the image from the first FROM line in .github/llama-ci/Dockerfile.
   Same gating as cache/start in auto-pr-generate-reusable.
 
 inputs:
   always_resolve_tag:
     description: >-
-      Advanced: if true, always resolve the tag (override or llama-ci.json), skipping generate-job gating. Omit for
+      Advanced: if true, always resolve the tag (override or Dockerfile), skipping generate-job gating. Omit for
       standard auto-pr workflows (default false).
     required: false
     default: "false"

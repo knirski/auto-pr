@@ -33,7 +33,9 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 ### Integration tests
 
-**`bun run test:integration`** runs integration smoke tests with `--no-coverage` (coverage is tracked on the unit job only). Local llama tests use Testcontainers with the image pin in `.github/llama-ci/llama-ci.json` (Docker required). Set `INTEGRATION_SKIP_DOCKER=1` to skip them. GitHub Models tests need `GH_TOKEN` with `models: read` (for example the repo token in Actions).
+**`bun run test:integration`** runs integration smoke tests with `--no-coverage` (coverage is tracked on the unit job only). Local llama tests use Testcontainers with the image pin in `.github/llama-ci/Dockerfile` (Docker required). Set `INTEGRATION_SKIP_DOCKER=1` to skip them. GitHub Models tests need `GH_TOKEN` with `models: read` (for example the repo token in Actions).
+
+**Dockerfile pin:** The canonical parser for the image ref is [`parseFirstFromImageDockerfileContent`](../src/core/dockerfile-from-image.ts); CI uses [read-dockerfile-image.sh](../.github/actions/resolve-llama-server-tag/read-dockerfile-image.sh). [`test/core/dockerfile-from-image.test.ts`](../test/core/dockerfile-from-image.test.ts) keeps them aligned. Same limitations as [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin) (first `FROM` only; no `\\` continuation).
 
 ## Workflows
 

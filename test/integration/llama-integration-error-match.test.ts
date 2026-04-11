@@ -4,13 +4,13 @@
 import { describe, expect, test } from "bun:test";
 import { Match } from "effect";
 import {
-	LlamaIntegrationLlamaCiJsonError,
+	LlamaIntegrationDockerfileError,
 	type LlamaIntegrationTestError,
 } from "./llama-local-container.js";
 
 function formatIntegrationError(e: LlamaIntegrationTestError): string {
 	return Match.valueTags(e, {
-		LlamaIntegrationLlamaCiJsonError: (x) => x.message,
+		LlamaIntegrationDockerfileError: (x) => x.message,
 		LlamaIntegrationModelUrlError: (x) => x.message,
 		LlamaIntegrationHttpError: (x) => `${x.operation}`,
 		LlamaIntegrationModelsSchemaError: (x) => x.message,
@@ -21,8 +21,8 @@ function formatIntegrationError(e: LlamaIntegrationTestError): string {
 }
 
 describe("LlamaIntegrationTestError", () => {
-	test("Match.valueTags is exhaustive for llama-ci.json error", () => {
-		const err: LlamaIntegrationTestError = new LlamaIntegrationLlamaCiJsonError({
+	test("Match.valueTags is exhaustive for Dockerfile pin error", () => {
+		const err: LlamaIntegrationTestError = new LlamaIntegrationDockerfileError({
 			message: "missing image",
 			cause: undefined,
 		});

@@ -46,13 +46,14 @@ function makeGitContextLayer(): Layer.Layer<GitContext> {
 	return Layer.succeed(GitContext, ctx);
 }
 
-export function layerLocal(model: string, openaiCompatUrl: string) {
+export function layerLocal(model: string, openaiCompatUrl: URL) {
+	const openaiCompatUrlStr = openaiCompatUrl.href.replace(/\/$/, "");
 	return Layer.mergeAll(
 		TestBaseLayer,
 		aiProviderLayerFromConfig({
 			provider: "local",
 			model,
-			openaiCompatUrl,
+			openaiCompatUrl: openaiCompatUrlStr,
 		}),
 		makeGitContextLayer(),
 		MockDiffToolkitLayer,

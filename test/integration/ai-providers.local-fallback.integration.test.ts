@@ -1,7 +1,7 @@
 /**
  * Scenario: local model with no tool-call support → commit-summary fallback path.
  *
- * Uses Mozilla tiny-llama (~27 KiB stub) in llama-server (Testcontainers + `.github/llama-ci/llama-ci.json`).
+ * Uses Mozilla tiny-llama (~27 KiB stub) in llama-server (Testcontainers + `.github/llama-ci/Dockerfile`).
  * The model cannot produce tool calls or valid JSON, so `generatePrContent` retries then falls back.
  *
  * Run via `integration-local` CI job (see .github/workflows/integration.yml).

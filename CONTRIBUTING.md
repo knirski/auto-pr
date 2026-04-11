@@ -66,7 +66,7 @@ Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integr
 | `bun run act -- check-workflows` | Only [ci-workflows.yml](.github/workflows/ci-workflows.yml) → [check-workflows.yml](.github/workflows/check-workflows.yml) (actionlint + shellcheck on `.github`; fast). |
 | `bun run act -- --dry-run check` | `act --dryrun` for [ci.yml](.github/workflows/ci.yml) → [check.yml](.github/workflows/check.yml) (validates workflow graph; not a full run). Equivalent: `bun scripts/act-local-ci.ts --dry-run check` (or `-n check`). |
 | `bun run act -- --dry-run check-workflows` | `act --dryrun` for the **ci-workflows** path only. Equivalent: `bun scripts/act-local-ci.ts --dry-run check-workflows`. |
-| `bun run act -- integration` | Only the `integration` workflow job (llama-server + GitHub Models) |
+| `bun run act -- integration` | Only the `integration` workflow job (Testcontainers llama + GitHub Models) |
 
 **GitHub Actions** runs [act-smoke.yml](.github/workflows/act-smoke.yml) on pushes/PRs that touch act-related paths: a **matrix** runs **`--dry-run check`** and **`check-workflows`** **in parallel** (each job installs [**nektos/gh-act**](https://github.com/nektos/gh-act) and [act-local-ci.ts](scripts/act-local-ci.ts); `gh act` when `act` is not on `PATH`). There is no **`--dry-run check-workflows`** because the **`check-workflows`** matrix cell covers that graph. A **smaller default container image** applies for both unless **`ACT_RUNNER_IMAGE`** is set. It does **not** replace full `check` on GitHub—optional smoke test. See [docs/CI.md](docs/CI.md#run-ci-locally) for what is intentionally out of scope.
 

@@ -21,8 +21,8 @@ export function getInitFileSpecs(): readonly InitFileSpec[] {
 		},
 		{ dest: ".nvmrc", from: ".nvmrc" },
 		{
-			dest: ".github/llama-ci/llama-ci.json",
-			from: ".github/llama-ci/llama-ci.json",
+			dest: ".github/llama-ci/Dockerfile",
+			from: ".github/llama-ci/Dockerfile",
 		},
 	];
 }

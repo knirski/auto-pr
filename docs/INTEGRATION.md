@@ -6,7 +6,7 @@ This guide walks through adding auto-pr to any repository so that pushes to `ai/
 
 ## Getting started
 
-1. **Run** `npx -p github:knirski/auto-pr auto-pr-init` in your repo — creates the workflow, PR template, and `.nvmrc`
+1. **Run** `npx -p github:knirski/auto-pr auto-pr-init` in your repo — creates the workflow, PR template, `.nvmrc`, and `.github/llama-ci/Dockerfile` (llama-server image pin when using local Docker llama)
 2. **Create** a [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
 3. **Generate** a private key in the app settings and save the `.pem` file
 4. **Install** the app on your repository
@@ -19,7 +19,7 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 | Requirement | How to set up |
 |-------------|---------------|
-| **Workflow + template** | Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo. Creates `.github/workflows/auto-pr.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.nvmrc`. [Step 6](#step-6-add-the-workflow-file) |
+| **Workflow + template** | Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo. Creates `.github/workflows/auto-pr.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.nvmrc`, and `.github/llama-ci/Dockerfile`. [Step 6](#step-6-add-the-workflow-file) |
 | **GitHub App** | Create at [github.com/settings/apps/new](https://github.com/settings/apps/new). Permissions: Contents, Pull requests (Read and write). [Step 2](#step-2-create-the-github-app) |
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
@@ -85,7 +85,7 @@ Optional: **`GH_TOKEN`** — use only if you want a specific token for [GitHub M
 
 ## Step 6: Add the workflow file
 
-**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, and `.nvmrc` in one command. The reusable generate job runs shell via **composite actions** pinned in `knirski/auto-pr`; you do not need `scripts/` in your repository.
+**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, `.nvmrc`, and `.github/llama-ci/Dockerfile` in one command. The reusable generate job runs shell via **composite actions** pinned in `knirski/auto-pr`; you do not need `scripts/` in your repository.
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
@@ -216,8 +216,14 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | Use my project's check command in "How to test" | Edit the **How to test** section in `.github/PULL_REQUEST_TEMPLATE.md` |
 | Use a different GitHub Models id | `ai_openai_compat_model` (e.g. `openai/gpt-4.1`) |
 | Point **local** at another host or gateway | `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` |
-| Run **local** on GitHub-hosted runners with llama.cpp | `ai_provider: local`, leave `ai_openai_compat_url` empty, set **`ai_llamacpp_model_url`** (HTTPS link to a `.gguf` file). Optional: `ai_llamacpp_release_tag` (Docker image override), `ai_llamacpp_port`. The workflow uses `.github/llama-ci/llama-ci.json`, caches the GGUF and Docker image tar, and runs `llama-server` in Docker. |
+| Run **local** on GitHub-hosted runners with llama.cpp | `ai_provider: local`, leave `ai_openai_compat_url` empty, set **`ai_llamacpp_model_url`** (HTTPS link to a `.gguf` file). Optional: `ai_llamacpp_release_tag` (Docker image override), `ai_llamacpp_port`. The workflow uses `.github/llama-ci/Dockerfile` for the image pin, caches the GGUF and Docker image tar, and runs `llama-server` in Docker. |
 | Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
+
+### Local llama Dockerfile pin
+
+- **Purpose:** Pins the `llama-server` Docker image when the reusable workflow runs llama in Docker (`ai_llamacpp_model_url` set, `ai_openai_compat_url` empty).
+- **Tag vs digest:** The template uses a **tag** on `FROM` (e.g. `ghcr.io/ggml-org/llama.cpp:server`) so [Dependabot](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#docker) can propose image updates. For a **stricter immutable** pin, use `image@sha256:…` on the same line (Dependabot behavior may differ from tag-only pins).
+- **Parser limits (workflow + tests):** Only the **first** `FROM` is used, after optional `--` flags (e.g. `--platform=…`). There is **no** support for backslash line continuation or for picking a later stage in a **multi-stage** file—keep this file **single-stage**, or ensure the image you need appears on the **first** `FROM`.
 
 ## AI providers (`local`, `github-models`)
 
@@ -229,8 +235,8 @@ For branches with **2+ commits**, auto-pr generates the PR description via an AI
 
 Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.) using the same env names as in [`src/auto-pr/config.ts`](../src/auto-pr/config.ts): `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
 
-- **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow uses `.github/llama-ci/llama-ci.json`, caches the GGUF and image tar, and starts `llama-server` in Docker on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
-- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + `llama-ci.json` pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly.
+- **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow uses `.github/llama-ci/Dockerfile` for the image pin, caches the GGUF and image tar, and starts `llama-server` in Docker on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
+- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + `Dockerfile` pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly.
 - **Local dev:** Defaults target `http://127.0.0.1:8080/v1` and model `gpt-oss` (override via env).
 
 ### `github-models`

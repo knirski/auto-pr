@@ -53,7 +53,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 
 | Adding… | Put in |
 |---------|--------|
-| Pure validation, helpers | `src/core/*.ts` (fill-pr-template-core, string, gh-output, etc.) |
+| Pure validation, helpers | `src/core/*.ts` (fill-pr-template-core, dockerfile-from-image, string, gh-output, etc.) |
 | New config/env | `src/auto-pr/config.ts` |
 | New tagged error class | `src/core/errors.ts`; add `formatError` branch in `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
@@ -62,7 +62,8 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Composite action | `.github/actions/<name>/` |
-| Local llama image pin (CI + init) | `.github/llama-ci/llama-ci.json` (`image` field) |
+| Local llama image pin (CI + init) | `.github/llama-ci/Dockerfile` — `FROM` line; tag for Dependabot |
+| Dockerfile `FROM` parser + shell parity | `src/core/dockerfile-from-image.ts`; CI: [read-dockerfile-image.sh](.github/actions/resolve-llama-server-tag/read-dockerfile-image.sh); tests: `test/core/dockerfile-from-image.test.ts` |
 | New prompt | `src/auto-pr/prompts/` |
 
 ### Key Rules

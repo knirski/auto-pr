@@ -1,5 +1,5 @@
 /**
- * Local llama-server via Testcontainers: image ref from `.github/llama-ci/llama-ci.json`,
+ * Local llama-server via Testcontainers: image ref from the first `FROM` line in `.github/llama-ci/Dockerfile`,
  * bind-mount a downloaded `.gguf`, OpenAI-compat `/v1` for integration tests.
  *
  * Uses Effect {@link FileSystem}, {@link Path}, and {@link HttpClient} via Node-compatible platform layers (runs on Bun or Node).
@@ -22,6 +22,7 @@ import * as Brand from "effect/Brand";
 import { HttpClient } from "effect/unstable/http";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { GenericContainer, Wait } from "testcontainers";
+import { parseFirstFromImageDockerfileContent } from "#core/dockerfile-from-image.js";
 
 /** Non-empty model id from `/v1/models` (validated before branding). */
 export type OpenAiModelId = Brand.Branded<string, "OpenAiModelId">;
@@ -38,8 +39,8 @@ export const FsPath = Brand.nominal<FsPath>();
 
 // --- Error hierarchy (tagged union: LlamaIntegrationTestError)
 
-export class LlamaIntegrationLlamaCiJsonError extends Schema.TaggedErrorClass<LlamaIntegrationLlamaCiJsonError>()(
-	"LlamaIntegrationLlamaCiJsonError",
+export class LlamaIntegrationDockerfileError extends Schema.TaggedErrorClass<LlamaIntegrationDockerfileError>()(
+	"LlamaIntegrationDockerfileError",
 	{
 		message: Schema.String,
 		cause: Schema.optional(Schema.Unknown),
@@ -95,7 +96,7 @@ export class LlamaIntegrationContainerError extends Schema.TaggedErrorClass<Llam
 
 /** Discriminated union of all integration harness failures. */
 export type LlamaIntegrationTestError =
-	| LlamaIntegrationLlamaCiJsonError
+	| LlamaIntegrationDockerfileError
 	| LlamaIntegrationModelUrlError
 	| LlamaIntegrationHttpError
 	| LlamaIntegrationModelsSchemaError
@@ -133,47 +134,6 @@ const sha256Hex = (input: string): Effect.Effect<string, never> =>
 		const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
 		return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 	});
-
-const LlamaCiConfig = Schema.Struct({
-	image: Schema.String,
-});
-
-/** Pure: llama-ci.json text → pinned image reference or error. */
-function parsePinnedImageFromLlamaCiJsonContent(
-	content: string,
-): Result.Result<string, LlamaIntegrationLlamaCiJsonError> {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(content) as unknown;
-	} catch (e: unknown) {
-		return Result.fail(
-			new LlamaIntegrationLlamaCiJsonError({
-				message: "Failed to parse .github/llama-ci/llama-ci.json as JSON",
-				cause: e,
-			}),
-		);
-	}
-	return pipe(
-		Schema.decodeUnknownResult(LlamaCiConfig)(parsed),
-		Result.mapError(
-			(cause) =>
-				new LlamaIntegrationLlamaCiJsonError({
-					message: ".github/llama-ci/llama-ci.json did not match { image: string }",
-					cause,
-				}),
-		),
-		Result.flatMap((cfg) =>
-			cfg.image.trim().length > 0
-				? Result.succeed(cfg.image.trim())
-				: Result.fail(
-						new LlamaIntegrationLlamaCiJsonError({
-							message: ".image must be non-empty in .github/llama-ci/llama-ci.json",
-							cause: undefined,
-						}),
-					),
-		),
-	);
-}
 
 const OpenAiModelsListResponse = Schema.Struct({
 	data: Schema.Array(
@@ -244,28 +204,38 @@ function openAiModelsListUrl(openAiCompatBase: URL): URL {
 	return new URL("models", base);
 }
 
-const readPinnedImageFromLlamaCiJson = Effect.fn("readPinnedImageFromLlamaCiJson")(function* () {
+const readPinnedImageFromDockerfile = Effect.fn("readPinnedImageFromDockerfile")(function* () {
 	const integrationTestDir = yield* integrationTestDirectory();
 	const p = yield* Path.Path;
 	const fs = yield* FileSystem.FileSystem;
-	const jsonPath = p.resolve(
+	const dockerfilePath = p.resolve(
 		integrationTestDir,
 		"..",
 		"..",
 		".github",
 		"llama-ci",
-		"llama-ci.json",
+		"Dockerfile",
 	);
-	const content = yield* fs.readFileString(jsonPath).pipe(
+	const content = yield* fs.readFileString(dockerfilePath).pipe(
 		Effect.mapError(
 			(cause) =>
-				new LlamaIntegrationLlamaCiJsonError({
-					message: "Failed to read .github/llama-ci/llama-ci.json",
+				new LlamaIntegrationDockerfileError({
+					message: "Failed to read .github/llama-ci/Dockerfile",
 					cause,
 				}),
 		),
 	);
-	return yield* Effect.fromResult(parsePinnedImageFromLlamaCiJsonContent(content));
+	return yield* Effect.fromResult(
+		parseFirstFromImageDockerfileContent(content).pipe(
+			Result.mapError(
+				(message) =>
+					new LlamaIntegrationDockerfileError({
+						message: `Invalid .github/llama-ci/Dockerfile: ${message}`,
+						cause: undefined,
+					}),
+			),
+		),
+	);
 });
 
 const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options: {
@@ -373,7 +343,7 @@ const acquireLlamaLocalContainerCore = Effect.fn("acquireLlamaLocalContainer")(f
 		modelUrl: options.modelUrl,
 		modelCacheDir: options.modelCacheDir,
 	});
-	const imageRef = yield* readPinnedImageFromLlamaCiJson();
+	const imageRef = yield* readPinnedImageFromDockerfile();
 	const extra = options.extraLlamaArgs ?? [];
 	return yield* Effect.acquireRelease(
 		Effect.gen(function* () {
@@ -418,7 +388,7 @@ const acquireLlamaLocalContainerCore = Effect.fn("acquireLlamaLocalContainer")(f
 });
 
 /**
- * Acquire a running llama-server container (llama-ci.json image pin + bind-mounted GGUF), release on scope close.
+ * Acquire a running llama-server container (Dockerfile FROM pin + bind-mounted GGUF), release on scope close.
  * Uses {@link Effect.acquireRelease} so teardown runs with `Effect.scoped`.
  * Provides Node-compatible platform layers (FileSystem, Path, Fetch HTTP client) at the boundary.
  */

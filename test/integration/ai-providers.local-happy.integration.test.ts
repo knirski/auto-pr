@@ -1,7 +1,7 @@
 /**
  * Scenario: local model with reliable tool-call support → real AI generation, no fallback.
  *
- * Uses Qwen3-1.7B Q4_K_M via llama-server (`--jinja`) in Testcontainers + `.github/llama-ci/llama-ci.json`.
+ * Uses Qwen3-1.7B Q4_K_M via llama-server (`--jinja`) in Testcontainers + `.github/llama-ci/Dockerfile`.
  *
  * Run via `integration-local` CI job (see .github/workflows/integration.yml).
  * Requires Docker. Set `INTEGRATION_SKIP_DOCKER=1` to skip.
