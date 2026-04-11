@@ -92,7 +92,7 @@ See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architect
 
 Nix is **not required for users**. The workflows use Node and npx only.
 
-For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to `nixos-25.11`. `nix flake check` runs on **x86_64-linux**, **aarch64-linux**, and **aarch64-darwin** (`macos-latest`). Intel Macs are not supported by the flake (use Homebrew or other installs from the table above).
+For contributors to this repo, the project includes an optional Nix flake. CI uses upstream Nix (cachix/install-nix-action) with nixpkgs pinned to **`nixpkgs-unstable`** (via `flake.lock`). `nix flake check` runs on **x86_64-linux**, **aarch64-linux**, and **aarch64-darwin** (`macos-latest`). Intel Macs are not supported by the flake (use Homebrew or other installs from the table above).
 
 **direnv:** With [direnv](https://direnv.net/) installed and hooked into your shell, run **`direnv allow`** once in the repo root. The committed **`.envrc`** loads the same dev environment as **`nix develop`** on supported hosts (Linux x86_64/aarch64, Apple Silicon). Optional: [nix-direnv](https://github.com/nix-community/nix-direnv) for faster reloads. Tools then stay on `PATH` when you work in the tree (see also `scripts/nix-run-if-missing.sh` for scripts that run without direnv).
 

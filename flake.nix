@@ -2,7 +2,7 @@
   description = "Auto-PR: create PRs from conventional commits on ai/** branches";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     bun2nix.url = "github:nix-community/bun2nix?tag=2.0.8";
     bun2nix.inputs.nixpkgs.follows = "nixpkgs";
