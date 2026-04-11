@@ -1,9 +1,9 @@
-# Composite: resolve GHCR llama.cpp server-<tag> for workflows that start llama-server (e.g. auto-pr generate).
+# Composite: resolve Docker image ref + cache slug for local llama (auto-pr generate).
 name: Resolve llama-server image tag
 description: >-
-  For normal auto-pr PR generation: when the bundled Docker llama-server path is active, outputs the tag from
-  inputs.ai_llamacpp_release_tag or .github/llama-ci/Dockerfile; otherwise outputs an empty tag. Matches the same
-  gating as cache/start steps in auto-pr-generate-reusable (no silent default pin).
+  When the bundled local llama path is active: outputs image= (docker pull ref) and tag= (short cache slug, often
+  digest prefix). Optional inputs.ai_llamacpp_release_tag overrides with a full image ref or server-<suffix>.
+  Otherwise outputs empty tag and image. Same gating as cache/start in auto-pr-generate-reusable.
 
 inputs:
   always_resolve_tag:
@@ -34,9 +34,12 @@ inputs:
 outputs:
   tag:
     description: >-
-      GHCR server tag (image suffix). When always_resolve_tag is false (default): empty unless the bundled local
-      llama path is active. When always_resolve_tag is true: set from override or Dockerfile when resolution runs.
+      Short cache slug (e.g. first 12 hex chars of digest). Empty when local llama is not needed.
     value: ${{ steps.resolve.outputs.tag }}
+  image:
+    description: >-
+      Full Docker image reference for docker pull. Empty when local llama is not needed.
+    value: ${{ steps.resolve.outputs.image }}
 
 runs:
   using: composite

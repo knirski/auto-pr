@@ -1,3 +1,3 @@
-# Pin for resolve-llama-server-tag + integration cache key; must match a ggml-org/llama.cpp
-# GitHub release that publishes llama-<tag>-bin-ubuntu-x64.tar.gz (see llama-ci-local-server-start).
-FROM ghcr.io/ggml-org/llama.cpp:server-b8646
+# Pin ghcr.io/ggml-org/llama.cpp llama-server image for integration Testcontainers + resolve-llama-server-tag.
+# Prefer digest for reproducible pulls; rolling :server tags move.
+FROM ghcr.io/ggml-org/llama.cpp:server@sha256:ecae7bd78e01432b6803d37de4f0b591400b2e85d47100ae47850985dcf3cf96

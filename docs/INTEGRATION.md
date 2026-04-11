@@ -216,7 +216,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | Use my project's check command in "How to test" | Edit the **How to test** section in `.github/PULL_REQUEST_TEMPLATE.md` |
 | Use a different GitHub Models id | `ai_openai_compat_model` (e.g. `openai/gpt-4.1`) |
 | Point **local** at another host or gateway | `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` |
-| Run **local** on GitHub-hosted runners with llama.cpp | `ai_provider: local`, leave `ai_openai_compat_url` empty, set **`ai_llamacpp_model_url`** (HTTPS link to a `.gguf` file). Optional: `ai_llamacpp_release_tag`, `ai_llamacpp_port`. The workflow caches the binary + model and starts `llama-server`. |
+| Run **local** on GitHub-hosted runners with llama.cpp | `ai_provider: local`, leave `ai_openai_compat_url` empty, set **`ai_llamacpp_model_url`** (HTTPS link to a `.gguf` file). Optional: `ai_llamacpp_release_tag` (Docker image override), `ai_llamacpp_port`. The workflow pulls the pinned image from `.github/llama-ci/Dockerfile`, caches the model, and runs `llama-server` in Docker. |
 | Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
 
 ## AI providers (`local`, `github-models`)
@@ -229,8 +229,8 @@ For branches with **2+ commits**, auto-pr generates the PR description via an AI
 
 Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.) using the same env names as in [`src/auto-pr/config.ts`](../src/auto-pr/config.ts): `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
 
-- **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow downloads llama.cpp (prebuilt ubuntu-x64), caches the binary and model, and starts `llama-server` on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
-- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (bundled llama.cpp setup + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly.
+- **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow pulls the image from `.github/llama-ci/Dockerfile`, caches the model, and starts `llama-server` in Docker on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
+- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + bundled Dockerfile pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly.
 - **Local dev:** Defaults target `http://127.0.0.1:8080/v1` and model `gpt-oss` (override via env).
 
 ### `github-models`

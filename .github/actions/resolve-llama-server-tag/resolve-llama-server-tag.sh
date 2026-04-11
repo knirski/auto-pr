@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Composite step: write tag= to GITHUB_OUTPUT (empty when local llama not needed).
+# Composite step: write tag= (cache slug) and image= (docker pull ref) to GITHUB_OUTPUT when local llama is needed.
 # NEED rule must stay in sync with cache/start local llama if: in auto-pr-generate-reusable.yml.
 set -euo pipefail
 
@@ -7,7 +7,17 @@ set -euo pipefail
 : "${GITHUB_WORKSPACE:?}"
 : "${GITHUB_ACTION_PATH:?}"
 
-READ_TAG="$GITHUB_ACTION_PATH/read-dockerfile-tag.sh"
+READ_IMAGE="$GITHUB_ACTION_PATH/read-dockerfile-image.sh"
+
+cache_slug_from_image() {
+	local img="$1"
+	if [[ "$img" =~ @sha256:([a-f0-9]{64}) ]]; then
+		local d="${BASH_REMATCH[1]}"
+		printf '%s' "${d:0:12}"
+		return
+	fi
+	printf '%s' "$img" | sha256sum | awk '{print substr($1,1,12)}'
+}
 
 # Accept true / True / TRUE / 1 / yes (GitHub sometimes coerces booleans oddly).
 always_raw="${ALWAYS_RESOLVE_TAG:-false}"
@@ -29,18 +39,30 @@ if [[ "$always_lc" != "true" && "$always_lc" != "1" && "$always_lc" != "yes" ]];
 		NEED=true
 	fi
 	if [[ "$NEED" == "false" ]]; then
-		echo "tag=" >>"$GITHUB_OUTPUT"
+		{
+			echo "tag="
+			echo "image="
+		} >>"$GITHUB_OUTPUT"
 		exit 0
 	fi
 fi
 
 INPUT_TAG="${AI_LLAMACPP_RELEASE_TAG:-}"
 if [[ -n "$INPUT_TAG" ]]; then
-	echo "tag=$INPUT_TAG" >>"$GITHUB_OUTPUT"
+	if [[ "$INPUT_TAG" == */* || "$INPUT_TAG" == *:* || "$INPUT_TAG" == *@* ]]; then
+		IMAGE="$INPUT_TAG"
+	else
+		IMAGE="ghcr.io/ggml-org/llama.cpp:server-${INPUT_TAG}"
+	fi
 elif [[ -f "$GITHUB_WORKSPACE/.github/llama-ci/Dockerfile" ]]; then
-	tag=$(bash "$READ_TAG" "$GITHUB_WORKSPACE")
-	echo "tag=$tag" >>"$GITHUB_OUTPUT"
+	IMAGE="$(bash "$READ_IMAGE" "$GITHUB_WORKSPACE")"
 else
 	echo "::error::Local llama requires .github/llama-ci/Dockerfile (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
 	exit 1
 fi
+
+SLUG="$(cache_slug_from_image "$IMAGE")"
+{
+	echo "tag=$SLUG"
+	echo "image=$IMAGE"
+} >>"$GITHUB_OUTPUT"
