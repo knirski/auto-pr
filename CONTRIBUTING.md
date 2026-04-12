@@ -59,7 +59,7 @@ Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integr
 |---------|-----------|
 | `bun test` | Unit tests only |
 | `bun run check:code` | Unit tests (same as above), plus build, audit, lint, knip, typecheck |
-| `bun run test:integration` | HTTP integration tests only |
+| `bun run test:integration` | HTTP integration tests only (see [Integration test env](#integration-test-env-this-repository) below) |
 | `bun run test:all` | Unit tests, then integration |
 | `bun run act` | CI `check` then `integration` in Docker (not the same as `test:all`). [package.json](package.json) exposes a single **`act`** script; pass a mode after `--` (see below). |
 | `bun run act -- check` | Only the CI `check` job (faster; skips integration) |
@@ -67,6 +67,14 @@ Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integr
 | `bun run act -- --dry-run check` | `act --dryrun` for [ci.yml](.github/workflows/ci.yml) → [check.yml](.github/workflows/check.yml) (validates workflow graph; not a full run). Equivalent: `bun scripts/act-local-ci.ts --dry-run check` (or `-n check`). |
 | `bun run act -- --dry-run check-workflows` | `act --dryrun` for the **ci-workflows** path only. Equivalent: `bun scripts/act-local-ci.ts --dry-run check-workflows`. |
 | `bun run act -- integration` | Only the `integration` workflow job (Testcontainers llama + GitHub Models) |
+
+#### Integration test env (this repository)
+
+[`bun run test:integration`](package.json) loads **[`.env.ci`](.env.ci)** (committed), then an optional **`.env.local`** at the repo root (gitignored; same keys as `.env.ci`; overrides). This matches the Vite/Next pattern for local-only env. See [`.env.example`](.env.example) for commented variable names. Hosted CI uses the same pins from `.env.ci` in the workflow; it does not read `.env.local`.
+
+For the **GitHub Models** test file, set **`GH_TOKEN`** when running locally. **Docker** is required for local-llama tests unless you set **`INTEGRATION_SKIP_DOCKER=1`**.
+
+More detail: [docs/CI.md](docs/CI.md#integration-tests).
 
 **GitHub Actions** runs [act-smoke.yml](.github/workflows/act-smoke.yml) on pushes/PRs that touch act-related paths: a **matrix** runs **`--dry-run check`** and **`check-workflows`** **in parallel** (each job installs [**nektos/gh-act**](https://github.com/nektos/gh-act) and [act-local-ci.ts](scripts/act-local-ci.ts); `gh act` when `act` is not on `PATH`). There is no **`--dry-run check-workflows`** because the **`check-workflows`** matrix cell covers that graph. A **smaller default container image** applies for both unless **`ACT_RUNNER_IMAGE`** is set. It does **not** replace full `check` on GitHub—optional smoke test. See [docs/CI.md](docs/CI.md#run-ci-locally) for what is intentionally out of scope.
 

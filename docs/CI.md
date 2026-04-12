@@ -33,9 +33,18 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 ### Integration tests
 
-**`bun run test:integration`** runs integration smoke tests with `--no-coverage` (coverage is tracked on the unit job only). Local llama tests use Testcontainers with the image pin in `.github/llama-ci/Dockerfile` (Docker required). Set `INTEGRATION_SKIP_DOCKER=1` to skip them. GitHub Models tests need `GH_TOKEN` with `models: read` (for example the repo token in Actions).
+**Local command:** [`package.json`](../package.json) defines **`test:integration`** as:
+
+`bun --env-file=.env.ci --env-file=.env.local --config=bunfig.integration.toml test test/integration`
+
+- **[`.env.ci`](../.env.ci)** — committed pins (`INTEGRATION_LLAMA_PORT`, `INTEGRATION_*` URLs/model id). Same keys are injected in GitHub Actions from this file (see [integration.yml](../.github/workflows/integration.yml)).
+- **`.env.local`** — optional, gitignored (matches `.env.*`). Same variable names as `.env.ci`; the second `--env-file` wins on duplicates. Omit the file if you do not need overrides (Bun does not require it to exist).
+
+**`bun run test:integration`** runs those tests with `--no-coverage` ([`bunfig.integration.toml`](../bunfig.integration.toml); coverage is tracked on the unit job only). Local llama scenarios use Testcontainers with the image pin in `.github/llama-server/Dockerfile` (**Docker** required). Set **`INTEGRATION_SKIP_DOCKER=1`** to skip Docker-based tests. The **GitHub Models** integration test needs **`GH_TOKEN`** with **`models: read`** in your environment when running locally (for example export a PAT); in Actions the default token is sufficient.
 
 **Dockerfile pin:** The canonical parser for the image ref is [`parseFirstFromImageDockerfileContent`](../src/core/dockerfile-from-image.ts); CI uses [read-dockerfile-image.sh](../.github/actions/resolve-llama-server-tag/read-dockerfile-image.sh). [`test/core/dockerfile-from-image.test.ts`](../test/core/dockerfile-from-image.test.ts) keeps them aligned. Same limitations as [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin) (first `FROM` only; no `\\` continuation).
+
+**GitHub Actions (integration + generate):** Jobs that run llama in Docker use the **`llama-server-docker-start`** / **`llama-server-docker-stop`** composite actions, **`llama_server_root`**, and `docker/llama-server-image.tar` under that directory — see [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin).
 
 ## Workflows
 

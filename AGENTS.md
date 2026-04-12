@@ -41,7 +41,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
 | `bun test` | Unit tests with coverage (`test/integration/**` excluded in [bunfig.toml](bunfig.toml)) — this is what `check:code` runs |
-| `bun run test:integration` | Real HTTP AI provider tests (`bunfig.integration.toml`); Docker + Testcontainers for local llama — see `test/integration/*.integration.test.ts` |
+| `bun run test:integration` | Real HTTP AI provider tests: `--env-file=.env.ci` then optional `.env.local` ([`bunfig.integration.toml`](bunfig.integration.toml)); Docker + Testcontainers for local llama — see [docs/CI.md](docs/CI.md#integration-tests), `test/integration/*.integration.test.ts` |
 | `bun run test:all` | `bun test` then `test:integration` |
 | `bun run lint` / `lint:fix` | Lint (Biome) |
 | `bun run lint:scripts` | Shellcheck + shfmt check |
@@ -62,7 +62,8 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Composite action | `.github/actions/<name>/` |
-| Local llama image pin (CI + init) | `.github/llama-ci/Dockerfile` — `FROM` line; tag for Dependabot |
+| Local llama image pin (CI + init) | `.github/llama-server/Dockerfile` — `FROM` line; tag for Dependabot |
+| Llama in Docker on the runner (CI) | `.github/actions/llama-server-docker-start`, `.github/actions/llama-server-docker-stop` — input `llama_server_root`; cached image at `docker/llama-server-image.tar` |
 | Dockerfile `FROM` parser + shell parity | `src/core/dockerfile-from-image.ts`; CI: [read-dockerfile-image.sh](.github/actions/resolve-llama-server-tag/read-dockerfile-image.sh); tests: `test/core/dockerfile-from-image.test.ts` |
 | New prompt | `src/auto-pr/prompts/` |
 

@@ -28,11 +28,17 @@
 
 **Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo, or copy [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) to the path shown in the error.
 
-### "Local llama requires .github/llama-ci/Dockerfile" (or generate fails for local Docker llama)
+### "Local llama requires .github/llama-server/Dockerfile" (or generate fails for local Docker llama)
 
-**Cause:** The reusable workflow expects a `Dockerfile` under `.github/llama-ci/` with a `FROM` line for `llama-server`. Older `auto-pr-init` templates used `llama-ci.json` instead.
+**Cause:** The reusable workflow expects a `Dockerfile` under `.github/llama-server/` with a `FROM` line for `llama-server`. Older `auto-pr-init` templates used `llama-ci.json` or paths under `.github/llama-ci/`.
 
-**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh scaffolded files, or add [`.github/llama-ci/Dockerfile`](../.github/llama-ci/Dockerfile) yourself (see [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin)).
+**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh scaffolded files, or add [`.github/llama-server/Dockerfile`](../.github/llama-server/Dockerfile) yourself (see [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin)).
+
+### Unknown composite action or input (`llama-ci-docker-server-*`, `llama_ci_root`, `.github/llama-ci/`)
+
+**Cause:** Composite actions, the Dockerfile directory, the cached image filename, and the start-action input were renamed for consistency (`llama-server-docker-*`, `llama_server_root`, `.github/llama-server/`, `docker/llama-server-image.tar`).
+
+**Fix:** In any **custom or forked** workflow, update `uses:` to `knirski/auto-pr/.github/actions/llama-server-docker-start@<SHA>` and `…/llama-server-docker-stop@<SHA>`, pass **`llama_server_root`** (not `llama_ci_root`), and use the Dockerfile path above. See [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin).
 
 ### "Missing secrets APP_ID or APP_PRIVATE_KEY"
 
@@ -47,6 +53,12 @@
 **Cause:** Each script validates only the env vars it needs (see [src/auto-pr/config.ts](../src/auto-pr/config.ts)). A message listing `DEFAULT_BRANCH` / `GITHUB_WORKSPACE` usually means **generate-content** or **run-auto-pr** without a full Actions env.
 
 **Fix:** Run inside the reusable workflow, or set the vars for the command you invoke. See [README.md](../README.md) (local env via `.env` and [`src/auto-pr/config.ts`](../src/auto-pr/config.ts)) and [INTEGRATION.md](INTEGRATION.md#environment-variables-reference).
+
+### Integration test: "`INTEGRATION_*` is not set" or "`INTEGRATION_LLAMA_PORT` is not set"
+
+**Cause:** [`bun run test:integration`](../package.json) loads [`.env.ci`](../.env.ci) via `--env-file`. If those variables are missing, the file is absent, or you ran tests without the same entrypoint (for example `bun test test/integration` without the env files), `process.env` will not have the pins.
+
+**Fix:** Run **`bun run test:integration`** from the repo root (not raw `bun test …` on integration files unless you pass the same `--env-file` flags). Ensure [`.env.ci`](../.env.ci) exists. Optionally add a gitignored **`.env.local`** with overrides (same keys). For GitHub Models tests locally, set **`GH_TOKEN`**. See [CI.md](CI.md#integration-tests) and [CONTRIBUTING.md](../CONTRIBUTING.md#integration-test-env-this-repository).
 
 ## Generate content fails
 

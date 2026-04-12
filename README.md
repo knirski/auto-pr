@@ -68,11 +68,14 @@ bun run check
 
 For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` and set variables. The authoritative list is the environment table at the top of [`src/auto-pr/config.ts`](src/auto-pr/config.ts).
 
+**Integration tests** (`bun run test:integration`) load committed [`.env.ci`](.env.ci) plus an optional gitignored `.env.local` for overrides (see [docs/CI.md](docs/CI.md#integration-tests) and [CONTRIBUTING.md](CONTRIBUTING.md#integration-test-env-this-repository)).
+
 | Command | Purpose |
 |---------|---------|
 | `bun run check` | Local checks (Bun, statix, deadnix, typos, lychee, actionlint) |
 | `bun run check:code` | Code only: build, audit, **unit** tests, lint, knip, typecheck. Runs on pre-push (no integration). |
-| `bun run test:all` | `bun test` then `test:integration` (integration needs env) |
+| `bun run test:integration` | HTTP integration tests: `.env.ci` + optional `.env.local`; Docker + `GH_TOKEN` as needed — see [docs/CI.md](docs/CI.md#integration-tests) |
+| `bun run test:all` | `bun test` then `test:integration` |
 | `bun run act` | `check` + `integration` jobs in Docker (`gh act` or nektos `act`; with Nix, `nix run .#act` on supported platforms — see [CONTRIBUTING.md](CONTRIBUTING.md)) |
 | `bun run act -- check` / `bun run act -- integration` | Only CI `check`, or only `integration` — see [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-check-job) |
 | `bun run check:with-links` | Full check + lychee link verification (can fail on broken external URLs) |
