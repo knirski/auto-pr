@@ -121,6 +121,10 @@ jobs:
   integration-local-happy:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      # ai-providers.local-happy reads INTEGRATION_LLAMA_MODEL_URL; workflow default is the Mozilla stub.
+      # This job runs Qwen — point the test + Testcontainers at the same GGUF as the Docker server.
+      INTEGRATION_LLAMA_MODEL_URL: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
