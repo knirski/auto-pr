@@ -12,15 +12,12 @@ permissions:
   models: read
 
 env:
-  # Mozilla smoke-test stub (~27 KiB) — no tool-call support by design. Expected to fail AI generation
-  # and exercise the commit-summary fallback path. Real AI quality is tested by integration-github-models.
-  INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
+  # Mozilla tiny stub (~27 KiB) — no tool-call support. integration-local-fallback + ai-providers.local-fallback.
+  INTEGRATION_LLAMA_STUB_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
   # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
   INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
-  # Qwen3-1.7B Q4_K_M (~1.1 GiB) — highest tool-call reliability (0.960) at sub-2B size.
-  # Tests the happy path: real AI generation without fallback. Cached between runs.
-  # Requires --jinja for Qwen3 tool-call chat template support (passed via extra_flags below).
-  INTEGRATION_LLAMA_QWEN_MODEL_URL: https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf
+  # Full GGUF with tool-call + `--jinja` support — integration-local-happy + ai-providers.local-happy.
+  INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf
 
 jobs:
   # Scenario: local model with no tool-call support → exercises the commit-summary fallback path.
@@ -48,33 +45,34 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Local llama — cache key
-        id: llama_cache_key
+      - name: Stub model — cache key
+        id: llama_stub_cache_key
         env:
-          MODEL_URL: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
+          MODEL_URL: ${{ env.INTEGRATION_LLAMA_STUB_MODEL_URL }}
         run: |
           h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
-      - name: Cache llama.cpp (GGUF model + Docker image tar)
+      - name: Cache llama.cpp (stub GGUF + Docker image tar)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/auto-pr-llama
-          key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.llama_cache_key.outputs.hash }}-docker-integration
+          path: ${{ runner.temp }}/auto-pr-llama-stub
+          key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.llama_stub_cache_key.outputs.hash }}-docker-stub
 
       - name: Start local llama.cpp (Docker)
-        id: local_llama
+        id: local_llama_stub
         uses: ./.github/actions/llama-ci-docker-server-start
         with:
           docker_image: ${{ steps.llama_cpp_release.outputs.image }}
-          model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+          model_url: ${{ env.INTEGRATION_LLAMA_STUB_MODEL_URL }}
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-stub
           llama_port: "8080"
+          container_name: auto-pr-llama-stub
 
       - name: Resolve OpenAI model id from llama-server
-        id: openai_model
+        id: openai_model_stub
         env:
-          BASE_URL: ${{ steps.local_llama.outputs.compat_url }}
+          BASE_URL: ${{ steps.local_llama_stub.outputs.compat_url }}
         run: |
           id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
           if [[ -z "$id" ]]; then
@@ -85,13 +83,15 @@ jobs:
 
       - name: Run integration tests (local llama fallback path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url }}
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_stub.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_stub.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-fallback.integration.test.ts
 
       - name: Stop local llama-server (Docker)
-        if: always() && steps.local_llama.outcome != 'skipped'
+        if: always() && steps.local_llama_stub.outcome != 'skipped'
         uses: ./.github/actions/llama-ci-docker-server-stop
+        with:
+          container_name: auto-pr-llama-stub
 
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
@@ -116,15 +116,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.github-models.integration.test.ts
 
-  # Scenario: local model with reliable tool-call support → exercises real AI generation without fallback.
-  # Uses Qwen3-1.7B Q4_K_M with --jinja. Asserts AI output is used (no "AI description unavailable").
+  # Scenario: local full model with tool-call support → exercises real AI generation without fallback.
+  # Asserts AI output is used (no "AI description unavailable"). `--jinja` for chat-template tooling.
   integration-local-happy:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      # ai-providers.local-happy reads INTEGRATION_LLAMA_MODEL_URL; workflow default is the Mozilla stub.
-      # This job runs Qwen — point the test + Testcontainers at the same GGUF as the Docker server.
-      INTEGRATION_LLAMA_MODEL_URL: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -143,35 +139,35 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Qwen model — cache key
-        id: qwen_cache_key
+      - name: Model — cache key
+        id: llama_model_cache_key
         env:
-          MODEL_URL: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
+          MODEL_URL: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
         run: |
           h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
-      - name: Cache llama.cpp (Qwen model + Docker image tar)
+      - name: Cache llama.cpp (model GGUF + Docker image tar)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/auto-pr-llama-qwen
-          key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.qwen_cache_key.outputs.hash }}-docker-qwen
+          path: ${{ runner.temp }}/auto-pr-llama-model
+          key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.llama_model_cache_key.outputs.hash }}-docker-model
 
-      - name: Start local llama.cpp with Qwen3 model (Docker)
-        id: local_llama_qwen
+      - name: Start local llama.cpp (Docker)
+        id: local_llama_model
         uses: ./.github/actions/llama-ci-docker-server-start
         with:
           docker_image: ${{ steps.llama_cpp_release.outputs.image }}
-          model_url: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-qwen
+          model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
+          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-model
           llama_port: "8080"
           extra_flags: "--jinja"
-          container_name: auto-pr-llama-qwen
+          container_name: auto-pr-llama-model
 
       - name: Resolve OpenAI model id from llama-server
-        id: openai_model_qwen
+        id: openai_model
         env:
-          BASE_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
+          BASE_URL: ${{ steps.local_llama_model.outputs.compat_url }}
         run: |
           id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
           if [[ -z "$id" ]]; then
@@ -182,12 +178,12 @@ jobs:
 
       - name: Run integration tests (local llama happy path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_qwen.outputs.compat_url }}
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_qwen.outputs.id }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_model.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 
-      - name: Stop local llama-server (Qwen, Docker)
-        if: always() && steps.local_llama_qwen.outcome != 'skipped'
+      - name: Stop local llama-server (Docker)
+        if: always() && steps.local_llama_model.outcome != 'skipped'
         uses: ./.github/actions/llama-ci-docker-server-stop
         with:
-          container_name: auto-pr-llama-qwen
+          container_name: auto-pr-llama-model

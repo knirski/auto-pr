@@ -1,7 +1,7 @@
 /**
- * Scenario: local model with reliable tool-call support → real AI generation, no fallback.
+ * Scenario: local full model with tool-call support → real AI generation, no fallback.
  *
- * Uses Qwen3-1.7B Q4_K_M via llama-server (`--jinja`) in Testcontainers + `.github/llama-ci/Dockerfile`.
+ * Uses `INTEGRATION_LLAMA_MODEL_URL` (default: workflow pin) via llama-server (`--jinja`) in Testcontainers + `.github/llama-ci/Dockerfile`.
  *
  * Run via `integration-local` CI job (see .github/workflows/integration.yml).
  * Requires Docker. Set `INTEGRATION_SKIP_DOCKER=1` to skip.
@@ -12,17 +12,18 @@ import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
 import { layerLocal, PR_DESCRIPTION_PROMISE, TEMPLATE } from "./helpers.js";
 import { acquireLlamaLocalContainer, FsPath } from "./llama-local-container.js";
 
-const DEFAULT_QWEN_MODEL_URL =
+/** Default GGUF when `INTEGRATION_LLAMA_MODEL_URL` is unset (matches integration workflow pin). */
+const DEFAULT_LLAMA_MODEL_URL =
 	"https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf";
 
 const skipDocker = process.env.INTEGRATION_SKIP_DOCKER === "1";
 
-describe.skipIf(skipDocker)("integration: local llama.cpp (qwen3-1.7b, happy path)", () => {
+describe.skipIf(skipDocker)("integration: local llama.cpp (model, happy path)", () => {
 	test(
 		"generatePrContent (2 commits) uses AI and produces non-fallback PR body",
 		async () => {
 			const modelUrl = new URL(
-				process.env.INTEGRATION_LLAMA_MODEL_URL?.trim() || DEFAULT_QWEN_MODEL_URL,
+				process.env.INTEGRATION_LLAMA_MODEL_URL?.trim() || DEFAULT_LLAMA_MODEL_URL,
 			);
 			const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
 			const modelCacheDir =
