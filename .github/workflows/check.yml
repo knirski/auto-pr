@@ -56,6 +56,9 @@ jobs:
 
       - name: Lint scripts (shellcheck, shfmt)
         uses: luizm/action-sh-checker@883217215b11c1fabbf00eb1a9a041f62d74c744 # v0.10.0
+        with:
+          # shfmt -f . would otherwise list scripts under node_modules after bun install
+          sh_checker_exclude: node_modules dist coverage .worktrees website/node_modules
         env:
           SHFMT_OPTS: -d
 

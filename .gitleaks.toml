@@ -4,7 +4,11 @@ title = "auto-pr"
 useDefault = true
 
 [allowlist]
-description = "Documented env placeholders only"
+description = "Documented env placeholders; skip dependency and build output trees"
 paths = [
 	'''\.env\.example$''',
+	'''(^|/)node_modules(/|$)''',
+	'''(^|/)dist(/|$)''',
+	'''(^|/)coverage(/|$)''',
+	'''(^|/)\.worktrees(/|$)''',
 ]

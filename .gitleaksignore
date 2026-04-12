@@ -1,0 +1,5 @@
+# Paths gitleaks must not scan (same intent as .gitleaks.toml allowlist).
+node_modules/
+dist/
+coverage/
+.worktrees/
