@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start llama.cpp llama-server on localhost for CI (OpenAI-compatible /v1).
 # Expects: LLAMA_RELEASE (e.g. b8575), MODEL_URL (https .gguf), LLAMA_CI_ROOT, optional LLAMA_PORT (default 8080).
-# Writes GITHUB_OUTPUT: compat_url, started=true on success.
+# OpenAI-compat base URL: http://127.0.0.1:${LLAMA_PORT}/v1
 set -euo pipefail
 
 LLAMA_RELEASE="${LLAMA_RELEASE:?LLAMA_RELEASE required}"
@@ -59,12 +59,6 @@ echo $! >"$PID_FILE"
 compat="http://127.0.0.1:${LLAMA_PORT}/v1"
 for _ in $(seq 1 90); do
 	if curl -fsS "$compat/models" >/dev/null 2>&1; then
-		if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-			{
-				echo "compat_url=$compat"
-				echo "started=true"
-			} >>"$GITHUB_OUTPUT"
-		fi
 		echo "llama-server ready at $compat"
 		exit 0
 	fi

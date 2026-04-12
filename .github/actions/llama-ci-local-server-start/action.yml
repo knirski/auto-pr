@@ -13,21 +13,14 @@ inputs:
     description: Directory for cache (binary, model, pid, logs)
     required: true
   llama_port:
-    description: TCP port for llama-server
+    description: >-
+      TCP port for llama-server. Contract: OpenAI-compatible base URL is http://127.0.0.1:{this port}/v1
     required: false
     default: "8080"
   extra_flags:
     description: Extra flags appended to the llama-server command (e.g. "--jinja" for models requiring Jinja tool-call templates)
     required: false
     default: ""
-
-outputs:
-  compat_url:
-    description: OpenAI-compatible base URL (e.g. http://127.0.0.1:8080/v1)
-    value: ${{ steps.run.outputs.compat_url }}
-  started:
-    description: "true when server responded to /v1/models"
-    value: ${{ steps.run.outputs.started }}
 
 runs:
   using: composite

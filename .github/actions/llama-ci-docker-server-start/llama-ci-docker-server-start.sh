@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Start llama.cpp llama-server in Docker (OpenAI-compatible /v1). Container listens on 8080; host maps LLAMA_PORT.
+# On the host, OpenAI-compat base URL is http://127.0.0.1:${LLAMA_PORT}/v1 (same port as the action input).
 # Uses docker/llama-ci-image.tar under LLAMA_CI_ROOT when present (from actions/cache); otherwise pull + save.
 set -euo pipefail
 
@@ -60,12 +61,6 @@ fi
 compat="http://127.0.0.1:${LLAMA_PORT}/v1"
 for _ in $(seq 1 90); do
 	if curl -fsS "$compat/models" >/dev/null 2>&1; then
-		if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-			{
-				echo "compat_url=$compat"
-				echo "started=true"
-			} >>"$GITHUB_OUTPUT"
-		fi
 		echo "llama-server ready at $compat"
 		exit 0
 	fi

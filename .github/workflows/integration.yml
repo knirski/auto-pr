@@ -25,6 +25,8 @@ jobs:
   integration-local-fallback:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      LLAMA_CI_PORT: "8080"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -66,12 +68,12 @@ jobs:
           docker_image: ${{ steps.llama_cpp_release.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_STUB_MODEL_URL }}
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama-stub
-          llama_port: "8080"
+          llama_port: ${{ env.LLAMA_CI_PORT }}
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model_stub
         env:
-          BASE_URL: ${{ steps.local_llama_stub.outputs.compat_url }}
+          BASE_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
         run: |
           id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
           if [[ -z "$id" ]]; then
@@ -82,7 +84,7 @@ jobs:
 
       - name: Run integration tests (local llama fallback path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_stub.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_stub.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-fallback.integration.test.ts
 
@@ -118,6 +120,8 @@ jobs:
   integration-local-happy:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      LLAMA_CI_PORT: "8080"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -157,13 +161,13 @@ jobs:
           docker_image: ${{ steps.llama_cpp_release.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama-model
-          llama_port: "8080"
+          llama_port: ${{ env.LLAMA_CI_PORT }}
           extra_flags: "--jinja"
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model
         env:
-          BASE_URL: ${{ steps.local_llama_model.outputs.compat_url }}
+          BASE_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
         run: |
           id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
           if [[ -z "$id" ]]; then
@@ -174,7 +178,7 @@ jobs:
 
       - name: Run integration tests (local llama happy path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama_model.outputs.compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 

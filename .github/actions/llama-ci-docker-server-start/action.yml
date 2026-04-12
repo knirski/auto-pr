@@ -15,21 +15,15 @@ inputs:
     description: Directory for model/, docker/llama-ci-image.tar (Actions cache), and optional logs
     required: true
   llama_port:
-    description: Host TCP port mapped to llama-server inside the container (container listens on 8080)
+    description: >-
+      Host TCP port mapped to llama-server (container listens on 8080 inside). Contract: OpenAI-compatible
+      base URL is http://127.0.0.1:{this_port}/v1
     required: false
     default: "8080"
   extra_flags:
     description: Extra flags appended to llama-server (e.g. "--jinja")
     required: false
     default: ""
-
-outputs:
-  compat_url:
-    description: OpenAI-compatible base URL (e.g. http://127.0.0.1:8080/v1)
-    value: ${{ steps.run.outputs.compat_url }}
-  started:
-    description: "true when server responded to /v1/models"
-    value: ${{ steps.run.outputs.started }}
 
 runs:
   using: composite
