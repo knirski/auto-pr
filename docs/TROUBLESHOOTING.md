@@ -6,6 +6,12 @@
 
 ## Workflow fails immediately
 
+### gitleaks or shellcheck/shfmt reports issues under `node_modules`
+
+**Cause:** The check job installs dependencies; tools that walk the tree must not lint vendor trees.
+
+**Fix:** The repo configures gitleaks and [action-sh-checker](https://github.com/luizm/action-sh-checker) to exclude `node_modules`, `dist`, `coverage`, and `.worktrees` (see [docs/CI.md](CI.md#secret-scan-and-shell-lint-paths)). If you still see failures, confirm your branch includes those exclusions.
+
 ### "workflow was not found" or "failed to fetch workflow"
 
 **Cause:** The reusable workflow is pinned to a commit SHA. If that SHA doesn't exist in the repo (e.g. force-pushed history, or testing on a branch), GitHub can't fetch it.

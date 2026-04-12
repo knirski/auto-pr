@@ -111,6 +111,10 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 
 `bun run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge. Lychee accepts 200 and 429 (rate limit) via `--accept 200,429`.
 
+## Secret scan and shell lint paths
+
+[check.yml](../.github/workflows/check.yml) and [check-workflows.yml](../.github/workflows/check-workflows.yml) skip dependency and build output trees for **gitleaks** and **[luizm/action-sh-checker](https://github.com/luizm/action-sh-checker)** (shellcheck + shfmt). After `bun install`, `shfmt -f .` would otherwise discover shell scripts under `node_modules`; `sh_checker_exclude` filters those paths. Gitleaks uses the same intent via [.gitleaks.toml](../.gitleaks.toml) allowlist paths and [.gitleaksignore](../.gitleaksignore) (`node_modules/`, `dist/`, `coverage/`, `.worktrees/`). Typos ([_typos.toml](../_typos.toml)) also extends excludes for those directories.
+
 ## Branch Protection
 
 Configure main branch protection to require:
