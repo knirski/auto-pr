@@ -56,17 +56,17 @@ jobs:
           h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
-      - name: Cache llama.cpp (model)
+      - name: Cache llama.cpp (GGUF model + Docker image tar)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ runner.temp }}/auto-pr-llama
           key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.llama_cache_key.outputs.hash }}-docker-integration
 
-      - name: Start local llama.cpp (llama-server)
+      - name: Start local llama.cpp (Docker)
         id: local_llama
-        uses: ./.github/actions/llama-ci-local-server-start
+        uses: ./.github/actions/llama-ci-docker-server-start
         with:
-          llama_release: ${{ steps.llama_cpp_release.outputs.tag }}
+          docker_image: ${{ steps.llama_cpp_release.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama
           llama_port: "8080"
@@ -89,11 +89,9 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-fallback.integration.test.ts
 
-      - name: Stop local llama-server
+      - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: ./.github/actions/llama-ci-local-server-stop
-        with:
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+        uses: ./.github/actions/llama-ci-docker-server-stop
 
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
@@ -149,21 +147,22 @@ jobs:
           h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
-      - name: Cache llama.cpp (Qwen model)
+      - name: Cache llama.cpp (Qwen model + Docker image tar)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ runner.temp }}/auto-pr-llama-qwen
           key: llama-${{ steps.llama_cpp_release.outputs.tag }}-${{ steps.qwen_cache_key.outputs.hash }}-docker-qwen
 
-      - name: Start local llama.cpp with Qwen3 model
+      - name: Start local llama.cpp with Qwen3 model (Docker)
         id: local_llama_qwen
-        uses: ./.github/actions/llama-ci-local-server-start
+        uses: ./.github/actions/llama-ci-docker-server-start
         with:
-          llama_release: ${{ steps.llama_cpp_release.outputs.tag }}
+          docker_image: ${{ steps.llama_cpp_release.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_QWEN_MODEL_URL }}
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama-qwen
           llama_port: "8080"
           extra_flags: "--jinja"
+          container_name: auto-pr-llama-qwen
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model_qwen
@@ -183,8 +182,8 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_qwen.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 
-      - name: Stop local llama-server (Qwen)
+      - name: Stop local llama-server (Qwen, Docker)
         if: always() && steps.local_llama_qwen.outcome != 'skipped'
-        uses: ./.github/actions/llama-ci-local-server-stop
+        uses: ./.github/actions/llama-ci-docker-server-stop
         with:
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-qwen
+          container_name: auto-pr-llama-qwen
