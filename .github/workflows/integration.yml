@@ -11,27 +11,23 @@ permissions:
   contents: read
   models: read
 
-env:
-  # Mozilla tiny stub (~27 KiB) — no tool-call support. integration-local-fallback + ai-providers.local-fallback.
-  INTEGRATION_LLAMA_STUB_MODEL_URL: https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf
-  # Smallest Phi catalog entry with `rate_limit_tier: low` (no phi-4-nano id in GitHub Models catalog).
-  INTEGRATION_GITHUB_MODEL: microsoft/phi-4-mini-instruct
-  # Full GGUF with tool-call + `--jinja` support — integration-local-happy + ai-providers.local-happy.
-  INTEGRATION_LLAMA_MODEL_URL: https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf
-
 jobs:
   # Scenario: local model with no tool-call support → exercises the commit-summary fallback path.
   # Uses Mozilla tiny-llama (~27 KiB stub). Expected to fail AI generation; asserts graceful fallback.
   integration-local-fallback:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      LLAMA_CI_PORT: "8080"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      - name: Load CI environment (.env.ci)
+        run: |
+          awk '!/^[[:space:]]*#/ && NF' .env.ci >> "$GITHUB_ENV"
+          port=$(grep -E '^INTEGRATION_LLAMA_PORT=' .env.ci | head -1 | cut -d= -f2-)
+          echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 
       # always_resolve_tag: CI always starts llama here (no auto-pr generate NEED gate).
       - name: Resolve llama-server image tag
@@ -63,34 +59,31 @@ jobs:
 
       - name: Start local llama.cpp (Docker)
         id: local_llama_stub
-        uses: ./.github/actions/llama-ci-docker-server-start
+        uses: ./.github/actions/llama-server-docker-start
         with:
           docker_image: ${{ steps.llama_cpp_release.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_STUB_MODEL_URL }}
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-stub
-          llama_port: ${{ env.LLAMA_CI_PORT }}
+          llama_server_root: ${{ runner.temp }}/auto-pr-llama-stub
+          llama_port: ${{ env.INTEGRATION_LLAMA_PORT }}
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model_stub
-        env:
-          BASE_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
         run: |
-          id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
+          id=$(curl -fsS "$AUTO_PR_AI_OPENAI_COMPAT_URL/models" | jq -r '.data[0].id // empty')
           if [[ -z "$id" ]]; then
-            echo "::error::Could not read model id from $BASE_URL/models"
+            echo "::error::Could not read model id from $AUTO_PR_AI_OPENAI_COMPAT_URL/models"
             exit 1
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
       - name: Run integration tests (local llama fallback path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_stub.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-fallback.integration.test.ts
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama_stub.outcome != 'skipped'
-        uses: ./.github/actions/llama-ci-docker-server-stop
+        uses: ./.github/actions/llama-server-docker-stop
 
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
@@ -102,6 +95,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      - name: Load CI environment (.env.ci)
+        run: |
+          awk '!/^[[:space:]]*#/ && NF' .env.ci >> "$GITHUB_ENV"
+          port=$(grep -E '^INTEGRATION_LLAMA_PORT=' .env.ci | head -1 | cut -d= -f2-)
+          echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 
       - name: Setup runtime (Bun) with cache
         uses: ./.github/actions/setup-runtime
@@ -120,13 +119,17 @@ jobs:
   integration-local-happy:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      LLAMA_CI_PORT: "8080"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      - name: Load CI environment (.env.ci)
+        run: |
+          awk '!/^[[:space:]]*#/ && NF' .env.ci >> "$GITHUB_ENV"
+          port=$(grep -E '^INTEGRATION_LLAMA_PORT=' .env.ci | head -1 | cut -d= -f2-)
+          echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 
       - name: Resolve llama-server image tag
         id: llama_cpp_release
@@ -156,32 +159,29 @@ jobs:
 
       - name: Start local llama.cpp (Docker)
         id: local_llama_model
-        uses: ./.github/actions/llama-ci-docker-server-start
+        uses: ./.github/actions/llama-server-docker-start
         with:
           docker_image: ${{ steps.llama_cpp_release.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama-model
-          llama_port: ${{ env.LLAMA_CI_PORT }}
+          llama_server_root: ${{ runner.temp }}/auto-pr-llama-model
+          llama_port: ${{ env.INTEGRATION_LLAMA_PORT }}
           extra_flags: "--jinja"
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model
-        env:
-          BASE_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
         run: |
-          id=$(curl -fsS "$BASE_URL/models" | jq -r '.data[0].id // empty')
+          id=$(curl -fsS "$AUTO_PR_AI_OPENAI_COMPAT_URL/models" | jq -r '.data[0].id // empty')
           if [[ -z "$id" ]]; then
-            echo "::error::Could not read model id from $BASE_URL/models"
+            echo "::error::Could not read model id from $AUTO_PR_AI_OPENAI_COMPAT_URL/models"
             exit 1
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
       - name: Run integration tests (local llama happy path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_URL: http://127.0.0.1:${{ env.LLAMA_CI_PORT }}/v1
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama_model.outcome != 'skipped'
-        uses: ./.github/actions/llama-ci-docker-server-stop
+        uses: ./.github/actions/llama-server-docker-stop

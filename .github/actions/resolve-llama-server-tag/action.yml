@@ -2,7 +2,7 @@
 name: Resolve llama-server image tag
 description: >-
   When the bundled local llama path is active: outputs image= and tag= (short cache slug, often digest prefix).
-  Optional inputs.ai_llamacpp_release_tag overrides. Otherwise reads the image from the first FROM line in .github/llama-ci/Dockerfile.
+  Optional inputs.ai_llamacpp_release_tag overrides. Otherwise reads the image from the first FROM line in .github/llama-server/Dockerfile.
   Same gating as cache/start in auto-pr-generate-reusable.
 
 inputs:

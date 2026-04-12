@@ -1,9 +1,0 @@
-# Composite: stop llama-server container started by llama-ci-docker-server-start.
-name: Stop local llama.cpp (Docker)
-description: Best-effort docker rm for container from llama-ci-docker-server-start
-
-runs:
-  using: composite
-  steps:
-    - shell: bash
-      run: docker rm -f auto-pr-llama 2>/dev/null || true

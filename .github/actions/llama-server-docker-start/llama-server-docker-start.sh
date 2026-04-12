@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # Start llama.cpp llama-server in Docker (OpenAI-compatible /v1). Container listens on 8080; host maps LLAMA_PORT.
 # On the host, OpenAI-compat base URL is http://127.0.0.1:${LLAMA_PORT}/v1 (same port as the action input).
-# Uses docker/llama-ci-image.tar under LLAMA_CI_ROOT when present (from actions/cache); otherwise pull + save.
+# Uses docker/llama-server-image.tar under LLAMA_SERVER_ROOT when present (from actions/cache); otherwise pull + save.
 set -euo pipefail
 
 DOCKER_IMAGE="${DOCKER_IMAGE:?DOCKER_IMAGE required}"
 MODEL_URL="${MODEL_URL:?MODEL_URL required}"
-LLAMA_CI_ROOT="${LLAMA_CI_ROOT:?LLAMA_CI_ROOT required}"
+LLAMA_SERVER_ROOT="${LLAMA_SERVER_ROOT:?LLAMA_SERVER_ROOT required}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 EXTRA_FLAGS="${EXTRA_FLAGS:-}"
 CONTAINER_NAME=auto-pr-llama
 
 CONTAINER_INTERNAL_PORT=8080
-IMAGE_TAR="$LLAMA_CI_ROOT/docker/llama-ci-image.tar"
+IMAGE_TAR="$LLAMA_SERVER_ROOT/docker/llama-server-image.tar"
 
 if [[ ! "$MODEL_URL" =~ ^https:// ]]; then
 	echo "::error::MODEL_URL must be an https URL"
 	exit 1
 fi
 
-ROOT="$LLAMA_CI_ROOT"
+ROOT="$LLAMA_SERVER_ROOT"
 MODEL_FILE="$ROOT/model/model.gguf"
 
 mkdir -p "$ROOT/model" "$ROOT/docker"

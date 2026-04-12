@@ -1,7 +1,7 @@
 # Composite: start llama-server from ghcr.io/ggml-org/llama.cpp (Docker CLI) for CI.
 name: Start local llama.cpp (Docker)
 description: >-
-  docker load from docker/llama-ci-image.tar when present (actions/cache), else docker pull + docker save.
+  docker load from docker/llama-server-image.tar when present (actions/cache), else docker pull + docker save.
   Bind-mount .gguf, run llama-server with OpenAI-compat /v1 (same layout as integration Testcontainers).
 
 inputs:
@@ -11,8 +11,8 @@ inputs:
   model_url:
     description: HTTPS URL to a .gguf model file
     required: true
-  llama_ci_root:
-    description: Directory for model/, docker/llama-ci-image.tar (Actions cache), and optional logs
+  llama_server_root:
+    description: Directory for model/, docker/llama-server-image.tar (Actions cache), and optional logs
     required: true
   llama_port:
     description: >-
@@ -30,10 +30,10 @@ runs:
   steps:
     - id: run
       shell: bash
-      run: bash "$GITHUB_ACTION_PATH/llama-ci-docker-server-start.sh"
+      run: bash "$GITHUB_ACTION_PATH/llama-server-docker-start.sh"
       env:
         DOCKER_IMAGE: ${{ inputs.docker_image }}
         MODEL_URL: ${{ inputs.model_url }}
-        LLAMA_CI_ROOT: ${{ inputs.llama_ci_root }}
+        LLAMA_SERVER_ROOT: ${{ inputs.llama_server_root }}
         LLAMA_PORT: ${{ inputs.llama_port }}
         EXTRA_FLAGS: ${{ inputs.extra_flags }}

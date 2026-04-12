@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Print the image ref from the first FROM line in .github/llama-ci/Dockerfile (repo root = $1).
+# Print the image ref from the first FROM line in .github/llama-server/Dockerfile (repo root = $1).
 # Matches TS parsePinnedImageFromDockerfileContent: optional --flags, then first image token.
 set -euo pipefail
 
 ROOT="${1:?}"
-DOCKERFILE="$ROOT/.github/llama-ci/Dockerfile"
+DOCKERFILE="$ROOT/.github/llama-server/Dockerfile"
 
 if [[ ! -f "$DOCKERFILE" ]]; then
 	echo "error: missing $DOCKERFILE" >&2

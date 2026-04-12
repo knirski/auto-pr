@@ -54,10 +54,10 @@ if [[ -n "$INPUT_TAG" ]]; then
 	else
 		IMAGE="ghcr.io/ggml-org/llama.cpp:server-${INPUT_TAG}"
 	fi
-elif [[ -f "$GITHUB_WORKSPACE/.github/llama-ci/Dockerfile" ]]; then
+elif [[ -f "$GITHUB_WORKSPACE/.github/llama-server/Dockerfile" ]]; then
 	IMAGE="$(bash "$READ_IMAGE" "$GITHUB_WORKSPACE")"
 else
-	echo "::error::Local llama requires .github/llama-ci/Dockerfile (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
+	echo "::error::Local llama requires .github/llama-server/Dockerfile (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
 	exit 1
 fi
 
