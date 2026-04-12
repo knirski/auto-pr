@@ -67,7 +67,6 @@ jobs:
           model_url: ${{ env.INTEGRATION_LLAMA_STUB_MODEL_URL }}
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama-stub
           llama_port: "8080"
-          container_name: auto-pr-llama-stub
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model_stub
@@ -90,8 +89,6 @@ jobs:
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama_stub.outcome != 'skipped'
         uses: ./.github/actions/llama-ci-docker-server-stop
-        with:
-          container_name: auto-pr-llama-stub
 
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
@@ -162,7 +159,6 @@ jobs:
           llama_ci_root: ${{ runner.temp }}/auto-pr-llama-model
           llama_port: "8080"
           extra_flags: "--jinja"
-          container_name: auto-pr-llama-model
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model
@@ -185,5 +181,3 @@ jobs:
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama_model.outcome != 'skipped'
         uses: ./.github/actions/llama-ci-docker-server-stop
-        with:
-          container_name: auto-pr-llama-model

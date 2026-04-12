@@ -2,6 +2,4 @@
 # Remove llama-server container started by llama-ci-docker-server-start.
 set -euo pipefail
 
-CONTAINER_NAME="${CONTAINER_NAME:-auto-pr-llama}"
-
-docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+docker rm -f auto-pr-llama 2>/dev/null || true

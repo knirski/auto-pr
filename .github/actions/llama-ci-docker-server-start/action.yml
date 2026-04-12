@@ -22,10 +22,6 @@ inputs:
     description: Extra flags appended to llama-server (e.g. "--jinja")
     required: false
     default: ""
-  container_name:
-    description: Docker container name (must be unique on the runner)
-    required: false
-    default: auto-pr-llama
 
 outputs:
   compat_url:
@@ -47,4 +43,3 @@ runs:
         LLAMA_CI_ROOT: ${{ inputs.llama_ci_root }}
         LLAMA_PORT: ${{ inputs.llama_port }}
         EXTRA_FLAGS: ${{ inputs.extra_flags }}
-        CONTAINER_NAME: ${{ inputs.container_name }}

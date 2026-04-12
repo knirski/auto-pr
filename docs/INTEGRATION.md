@@ -224,6 +224,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 - **Purpose:** Pins the `llama-server` Docker image when the reusable workflow runs llama in Docker (`ai_llamacpp_model_url` set, `ai_openai_compat_url` empty).
 - **Tag vs digest:** The template uses a **tag** on `FROM` (e.g. `ghcr.io/ggml-org/llama.cpp:server`) so [Dependabot](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#docker) can propose image updates. For a **stricter immutable** pin, use `image@sha256:…` on the same line (Dependabot behavior may differ from tag-only pins).
 - **Parser limits (workflow + tests):** Only the **first** `FROM` is used, after optional `--` flags (e.g. `--platform=…`). There is **no** support for backslash line continuation or for picking a later stage in a **multi-stage** file—keep this file **single-stage**, or ensure the image you need appears on the **first** `FROM`.
+- **Docker llama composite actions:** The reusable workflow’s start/stop steps use a **fixed** Docker container name (`auto-pr-llama`). Assume **one** `llama-server` container per generate job. If you copy those composite actions into a custom workflow and need two local servers in the **same** job, fork the actions or run them in **separate** jobs (each runner has its own Docker daemon).
 
 ## AI providers (`local`, `github-models`)
 
