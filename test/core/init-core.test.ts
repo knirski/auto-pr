@@ -3,7 +3,7 @@ import { getInitFileSpecs } from "#core/init-core.js";
 
 describe("init-core", () => {
 	describe("getInitFileSpecs", () => {
-		test("returns specs for workflow, template, nvmrc, and llama-ci Dockerfile", () => {
+		test("returns specs for workflow, template, nvmrc, and llama-server Dockerfile", () => {
 			const specs = getInitFileSpecs();
 			expect(specs).toHaveLength(4);
 		});
@@ -18,10 +18,10 @@ describe("init-core", () => {
 			const nvmrc = specs.find((s) => s.dest === ".nvmrc");
 			expect(nvmrc?.from).toBe(".nvmrc");
 		});
-		test("llama-ci Dockerfile spec copies from package", () => {
+		test("llama-server Dockerfile spec copies from package", () => {
 			const specs = getInitFileSpecs();
-			const llama = specs.find((s) => s.dest === ".github/llama-ci/Dockerfile");
-			expect(llama?.from).toBe(".github/llama-ci/Dockerfile");
+			const llama = specs.find((s) => s.dest === ".github/llama-server/Dockerfile");
+			expect(llama?.from).toBe(".github/llama-server/Dockerfile");
 		});
 	});
 });

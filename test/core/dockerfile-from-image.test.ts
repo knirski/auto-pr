@@ -20,8 +20,8 @@ const readDockerfileImageSh = join(
 async function imageViaReadDockerfileImageScript(dockerfileContent: string): Promise<string> {
 	const dir = await mkdtemp(join(tmpdir(), "dockerfile-pin-"));
 	try {
-		await mkdir(join(dir, ".github", "llama-ci"), { recursive: true });
-		await writeFile(join(dir, ".github", "llama-ci", "Dockerfile"), dockerfileContent, "utf8");
+		await mkdir(join(dir, ".github", "llama-server"), { recursive: true });
+		await writeFile(join(dir, ".github", "llama-server", "Dockerfile"), dockerfileContent, "utf8");
 		const r = spawnSync("bash", [readDockerfileImageSh, dir], {
 			encoding: "utf8",
 			windowsHide: true,

@@ -1,5 +1,5 @@
 /**
- * Local llama-server via Testcontainers: image ref from the first `FROM` line in `.github/llama-ci/Dockerfile`,
+ * Local llama-server via Testcontainers: image ref from the first `FROM` line in `.github/llama-server/Dockerfile`,
  * bind-mount a downloaded `.gguf`, OpenAI-compat `/v1` for integration tests.
  *
  * Uses Effect {@link FileSystem}, {@link Path}, and {@link HttpClient} via Node-compatible platform layers (runs on Bun or Node).
@@ -111,8 +111,33 @@ const integrationPlatformLayer = Layer.mergeAll(
 	FetchHttpClient.layer,
 );
 
-const CONTAINER_PORT = 8080;
 const STARTUP_TIMEOUT_MS = 300_000;
+
+/** Host/container llama-server port from `INTEGRATION_LLAMA_PORT` (`.env.ci`); not hardcoded. */
+function llamaPortFromEnv(): Effect.Effect<number, LlamaIntegrationContainerError, never> {
+	return Effect.gen(function* () {
+		const raw = process.env.INTEGRATION_LLAMA_PORT?.trim();
+		if (raw === undefined || raw === "") {
+			return yield* Effect.fail(
+				new LlamaIntegrationContainerError({
+					message:
+						"INTEGRATION_LLAMA_PORT is not set. Ensure .env.ci is loaded (bun run test:integration), use .env.local overrides, or export it; CI loads .env.ci.",
+					cause: undefined,
+				}),
+			);
+		}
+		const n = Number.parseInt(raw, 10);
+		if (!Number.isFinite(n) || n < 1 || n > 65535) {
+			return yield* Effect.fail(
+				new LlamaIntegrationContainerError({
+					message: `INTEGRATION_LLAMA_PORT must be a TCP port 1–65535, got: ${raw}`,
+					cause: undefined,
+				}),
+			);
+		}
+		return n;
+	});
+}
 
 /** `test/integration/` as a native path via {@link Path.Path.fromFileUrl} (no `node:url`). */
 const integrationTestDirectory = Effect.fn("integrationTestDirectory")(function* () {
@@ -213,14 +238,14 @@ const readPinnedImageFromDockerfile = Effect.fn("readPinnedImageFromDockerfile")
 		"..",
 		"..",
 		".github",
-		"llama-ci",
+		"llama-server",
 		"Dockerfile",
 	);
 	const content = yield* fs.readFileString(dockerfilePath).pipe(
 		Effect.mapError(
 			(cause) =>
 				new LlamaIntegrationDockerfileError({
-					message: "Failed to read .github/llama-ci/Dockerfile",
+					message: "Failed to read .github/llama-server/Dockerfile",
 					cause,
 				}),
 		),
@@ -230,7 +255,7 @@ const readPinnedImageFromDockerfile = Effect.fn("readPinnedImageFromDockerfile")
 			Result.mapError(
 				(message) =>
 					new LlamaIntegrationDockerfileError({
-						message: `Invalid .github/llama-ci/Dockerfile: ${message}`,
+						message: `Invalid .github/llama-server/Dockerfile: ${message}`,
 						cause: undefined,
 					}),
 			),
@@ -339,6 +364,7 @@ export type LlamaLocalContainerReady = {
 const acquireLlamaLocalContainerCore = Effect.fn("acquireLlamaLocalContainer")(function* (
 	options: LlamaLocalContainerOptions,
 ) {
+	const containerPort = yield* llamaPortFromEnv();
 	const modelPath = yield* ensureGgufModelFile({
 		modelUrl: options.modelUrl,
 		modelCacheDir: options.modelCacheDir,
@@ -350,18 +376,18 @@ const acquireLlamaLocalContainerCore = Effect.fn("acquireLlamaLocalContainer")(f
 			const started = yield* Effect.tryPromise({
 				try: () =>
 					new GenericContainer(imageRef)
-						.withExposedPorts(CONTAINER_PORT)
+						.withExposedPorts(containerPort)
 						.withBindMounts([{ source: modelPath, target: "/models/model.gguf", mode: "ro" }])
 						.withCommand([
 							"-m",
 							"/models/model.gguf",
 							"--port",
-							String(CONTAINER_PORT),
+							String(containerPort),
 							"--host",
 							"0.0.0.0",
 							...extra,
 						])
-						.withWaitStrategy(Wait.forHttp("/v1/models", CONTAINER_PORT))
+						.withWaitStrategy(Wait.forHttp("/v1/models", containerPort))
 						.withStartupTimeout(STARTUP_TIMEOUT_MS)
 						.start(),
 				catch: (cause) =>
@@ -371,7 +397,7 @@ const acquireLlamaLocalContainerCore = Effect.fn("acquireLlamaLocalContainer")(f
 					}),
 			});
 			const host = started.getHost();
-			const port = started.getMappedPort(CONTAINER_PORT);
+			const port = started.getMappedPort(containerPort);
 			const openAiCompatBaseUrl = new URL(`http://${host}:${port}/v1`);
 			const modelId = yield* fetchFirstModelId(openAiCompatBaseUrl);
 			return { started, openAiCompatBaseUrl, modelId };

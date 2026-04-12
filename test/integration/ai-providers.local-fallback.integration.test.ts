@@ -1,7 +1,7 @@
 /**
  * Scenario: local model with no tool-call support → commit-summary fallback path.
  *
- * Uses Mozilla tiny-llama (~27 KiB stub) in llama-server (Testcontainers + `.github/llama-ci/Dockerfile`).
+ * Uses Mozilla tiny-llama (~27 KiB stub) in llama-server (Testcontainers + `.github/llama-server/Dockerfile`).
  * The model cannot produce tool calls or valid JSON, so `generatePrContent` retries then falls back.
  *
  * Run via `integration-local` CI job (see .github/workflows/integration.yml).
@@ -12,10 +12,8 @@ import { describe, expect, test } from "bun:test";
 import { Duration, Effect } from "effect";
 import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
 import { layerLocal, PR_DESCRIPTION_PROMISE, TEMPLATE } from "./helpers.js";
+import { requireIntegrationEnv } from "./integration-env.js";
 import { acquireLlamaLocalContainer, FsPath } from "./llama-local-container.js";
-
-const DEFAULT_MODEL_URL =
-	"https://huggingface.co/Mozilla/llama-test-model/resolve/main/tiny-llama.gguf";
 
 const skipDocker = process.env.INTEGRATION_SKIP_DOCKER === "1";
 
@@ -23,9 +21,7 @@ describe.skipIf(skipDocker)("integration: local llama.cpp (tiny-llama, fallback 
 	test(
 		"generatePrContent (2 commits) completes with PR-shaped body",
 		async () => {
-			const modelUrl = new URL(
-				process.env.INTEGRATION_LLAMA_STUB_MODEL_URL?.trim() || DEFAULT_MODEL_URL,
-			);
+			const modelUrl = new URL(requireIntegrationEnv("INTEGRATION_LLAMA_STUB_MODEL_URL"));
 			const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
 			const modelCacheDir =
 				cacheRaw !== undefined && cacheRaw.length > 0 ? FsPath(cacheRaw) : undefined;

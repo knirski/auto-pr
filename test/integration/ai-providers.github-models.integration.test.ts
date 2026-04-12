@@ -1,7 +1,7 @@
 /**
  * Scenario: cloud AI provider (GitHub Models) → real AI generation, tool calls, JSON parse.
  *
- * Uses microsoft/phi-4-mini-instruct via GitHub Models API. Exercises the full
+ * Uses `INTEGRATION_GITHUB_MODEL` (from `.env.ci`) via GitHub Models API. Exercises the full
  * happy path: tool calls, structured JSON output, schema validation.
  *
  * Run via `integration-github-models` CI job (see .github/workflows/integration.yml).
@@ -12,6 +12,7 @@ import { Effect } from "effect";
 import { runEffect } from "#test/run-effect.js";
 import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
 import { layerGithubModels, PR_DESCRIPTION_PROMISE, TEMPLATE } from "./helpers.js";
+import { requireIntegrationEnv } from "./integration-env.js";
 
 const canRun = (process.env.GH_TOKEN ?? "").trim() !== "";
 
@@ -19,7 +20,7 @@ describe.skipIf(!canRun)("integration: github-models", () => {
 	test(
 		"generatePrContent (2 commits) returns title and structured description",
 		async () => {
-			const model = process.env.INTEGRATION_GITHUB_MODEL?.trim() || "microsoft/phi-4-mini-instruct";
+			const model = requireIntegrationEnv("INTEGRATION_GITHUB_MODEL");
 			const token = process.env.GH_TOKEN ?? "";
 			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
 			const layer = layerGithubModels(model, token);

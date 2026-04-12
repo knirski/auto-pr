@@ -6,6 +6,7 @@ useDefault = true
 [allowlist]
 description = "Documented env placeholders; skip dependency and build output trees"
 paths = [
+	'''\.env\.ci$''',
 	'''\.env\.example$''',
 	'''(^|/)node_modules(/|$)''',
 	'''(^|/)dist(/|$)''',

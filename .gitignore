@@ -5,6 +5,7 @@ package-lock.json
 *.log
 .env
 .env.*
+!.env.ci
 !.env.example
 .direnv/
 .DS_Store

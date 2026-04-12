@@ -3,7 +3,7 @@
  *
  * Three scenarios (one file each):
  *   - ai-providers.local-fallback   stub model (no tool calls) → commit-summary fallback path
- *   - ai-providers.github-models    GitHub Models (phi-4-mini) → real AI generation via cloud
+ *   - ai-providers.github-models    GitHub Models (`INTEGRATION_GITHUB_MODEL`) → real AI generation via cloud
  *   - ai-providers.local-happy      full model (`INTEGRATION_LLAMA_MODEL_URL`, `--jinja`) → real AI via local llama
  */
 import { Effect, Layer, Redacted } from "effect";
