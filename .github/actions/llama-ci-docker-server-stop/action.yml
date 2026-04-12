@@ -6,4 +6,4 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: bash "$GITHUB_ACTION_PATH/llama-ci-docker-server-stop.sh"
+      run: docker rm -f auto-pr-llama 2>/dev/null || true
