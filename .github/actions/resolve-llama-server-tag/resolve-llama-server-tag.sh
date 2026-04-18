@@ -1,13 +1,63 @@
 #!/usr/bin/env bash
-# Composite step: write tag= (cache slug) and image= (docker pull ref) to GITHUB_OUTPUT when local llama is needed.
-# NEED rule must stay in sync with cache/start local llama if: in auto-pr-generate-reusable.yml.
+# Composite: write tag= / image= to GITHUB_OUTPUT when local llama is needed (NEED rule matches auto-pr-generate-reusable).
+# CLI: --dockerfile-image <repo-root> → print image ref from first FROM (parity tests). --help → usage.
+# Matches test/integration/dockerfile-from-image.ts (optional --flags, then first image token).
+
+readonly LLAMA_SERVER_DOCKERFILE_REL='.github/llama-server/Dockerfile'
+
+read_llama_server_dockerfile_image_from_root() {
+	local root="$1"
+	local dockerfile="$root/$LLAMA_SERVER_DOCKERFILE_REL"
+
+	if [[ ! -f "$dockerfile" ]]; then
+		echo "error: missing $dockerfile" >&2
+		return 1
+	fi
+
+	local image
+	image="$(
+		awk '
+			/^[[:space:]]*#/ { next }
+			/^[[:space:]]*FROM[[:space:]]/ {
+				line = $0
+				sub(/^[[:space:]]*[Ff][Rr][Oo][Mm][[:space:]]+/, "", line)
+				sub(/[[:space:]]+[Aa][Ss][[:space:]].*$/, "", line)
+				while (match(line, /^[[:space:]]*--[a-zA-Z0-9_-]+(=[^[:space:]]+)?[[:space:]]+/)) {
+					line = substr(line, RSTART + RLENGTH)
+				}
+				gsub(/^[[:space:]]+/, "", line)
+				match(line, /^[^[:space:]]+/)
+				if (RSTART > 0) print substr(line, RSTART, RLENGTH)
+				exit
+			}
+		' "$dockerfile" | tr -d '\r'
+	)"
+
+	if [[ -z "$image" ]]; then
+		echo "error: no usable FROM line in $dockerfile" >&2
+		return 1
+	fi
+
+	printf '%s' "$image"
+}
+
+case "${1:-}" in
+--dockerfile-image)
+	set -euo pipefail
+	read_llama_server_dockerfile_image_from_root "${2:?}"
+	exit
+	;;
+--help | -h)
+	printf '%s\n' "Usage: ${0##*/} [--dockerfile-image <repo-root> | --help]" >&2
+	printf '%s\n' "  (no args)  GitHub Actions composite: write tag= and image= to GITHUB_OUTPUT." >&2
+	exit 0
+	;;
+esac
+
 set -euo pipefail
 
 : "${GITHUB_OUTPUT:?}"
 : "${GITHUB_WORKSPACE:?}"
-: "${GITHUB_ACTION_PATH:?}"
-
-READ_IMAGE="$GITHUB_ACTION_PATH/read-dockerfile-image.sh"
 
 cache_slug_from_image() {
 	local img="$1"
@@ -54,10 +104,10 @@ if [[ -n "$INPUT_TAG" ]]; then
 	else
 		IMAGE="ghcr.io/ggml-org/llama.cpp:server-${INPUT_TAG}"
 	fi
-elif [[ -f "$GITHUB_WORKSPACE/.github/llama-server/Dockerfile" ]]; then
-	IMAGE="$(bash "$READ_IMAGE" "$GITHUB_WORKSPACE")"
+elif [[ -f "$GITHUB_WORKSPACE/$LLAMA_SERVER_DOCKERFILE_REL" ]]; then
+	IMAGE="$(read_llama_server_dockerfile_image_from_root "$GITHUB_WORKSPACE")"
 else
-	echo "::error::Local llama requires .github/llama-server/Dockerfile (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
+	echo "::error::Local llama requires $LLAMA_SERVER_DOCKERFILE_REL (run auto-pr-init) or inputs.ai_llamacpp_release_tag." >&2
 	exit 1
 fi
 

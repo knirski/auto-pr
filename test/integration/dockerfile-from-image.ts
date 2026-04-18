@@ -1,11 +1,11 @@
 /**
  * Pure: extract the Docker image ref from the first `FROM` line in a Dockerfile fragment.
- * Used by integration tests; CI uses read-dockerfile-image.sh — keep in sync (see test/core/dockerfile-from-image.test.ts).
+ * Integration-only helper; CI uses resolve-llama-server-tag.sh --dockerfile-image — keep in sync (see dockerfile-from-image.test.ts).
  */
 
 import { Result } from "effect";
 
-/** First FROM line: optional `--` flags, then image ref (aligned with read-dockerfile-image.sh). */
+/** First FROM line: optional `--` flags, then image ref (aligned with resolve-llama-server-tag.sh awk). */
 const FROM_IMAGE_REGEX = /^FROM\s+(?:(?:--[a-zA-Z0-9_-]+(?:=\S+)?)\s+)*(\S+)/i;
 
 /**

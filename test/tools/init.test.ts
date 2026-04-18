@@ -13,17 +13,18 @@ describe("runInit", () => {
 				yield* runInit(tmp.path);
 
 				const fs = yield* FileSystem.FileSystem;
-				const [workflowExists, templateExists, nvmrcExists, llamaCiExists] = yield* Effect.all([
-					fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
-					fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
-					fs.exists(tmp.join(".nvmrc")),
-					fs.exists(tmp.join(".github", "llama-server", "Dockerfile")),
-				]);
+				const [workflowExists, templateExists, nvmrcExists, llamaServerDockerfileExists] =
+					yield* Effect.all([
+						fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
+						fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
+						fs.exists(tmp.join(".nvmrc")),
+						fs.exists(tmp.join(".github", "llama-server", "Dockerfile")),
+					]);
 
 				expect(workflowExists).toBe(true);
 				expect(templateExists).toBe(true);
 				expect(nvmrcExists).toBe(true);
-				expect(llamaCiExists).toBe(true);
+				expect(llamaServerDockerfileExists).toBe(true);
 
 				const workflowContent = yield* fs.readFileString(
 					tmp.join(".github", "workflows", "auto-pr.yml"),

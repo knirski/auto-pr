@@ -36,7 +36,6 @@ export {
 	collapseProseParagraphs,
 	fallbackWhenParseFails,
 } from "#core/collapse-prose-paragraphs.js";
-export { parseFirstFromImageDockerfileContent } from "#core/dockerfile-from-image.js";
 export {
 	ActLocalCiError,
 	AiProviderError,

@@ -1,5 +1,5 @@
 /**
- * Canonical parser: src/core/dockerfile-from-image.ts. CI: read-dockerfile-image.sh must match (parity tests).
+ * Canonical parser: test/integration/dockerfile-from-image.ts. CI: resolve-llama-server-tag.sh --dockerfile-image must match (parity tests).
  */
 
 import { describe, expect, test } from "bun:test";
@@ -9,12 +9,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Result } from "effect";
-import { parseFirstFromImageDockerfileContent } from "#core/dockerfile-from-image.js";
+import { parseFirstFromImageDockerfileContent } from "./dockerfile-from-image.js";
 
 const repoRoot = join(fileURLToPath(new URL("../../", import.meta.url)));
-const readDockerfileImageSh = join(
+const resolveLlamaServerTagSh = join(
 	repoRoot,
-	".github/actions/resolve-llama-server-tag/read-dockerfile-image.sh",
+	".github/actions/resolve-llama-server-tag/resolve-llama-server-tag.sh",
 );
 
 async function imageViaReadDockerfileImageScript(dockerfileContent: string): Promise<string> {
@@ -22,7 +22,7 @@ async function imageViaReadDockerfileImageScript(dockerfileContent: string): Pro
 	try {
 		await mkdir(join(dir, ".github", "llama-server"), { recursive: true });
 		await writeFile(join(dir, ".github", "llama-server", "Dockerfile"), dockerfileContent, "utf8");
-		const r = spawnSync("bash", [readDockerfileImageSh, dir], {
+		const r = spawnSync("bash", [resolveLlamaServerTagSh, "--dockerfile-image", dir], {
 			encoding: "utf8",
 			windowsHide: true,
 		});

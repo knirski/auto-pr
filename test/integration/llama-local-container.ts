@@ -22,7 +22,7 @@ import * as Brand from "effect/Brand";
 import { HttpClient } from "effect/unstable/http";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { GenericContainer, Wait } from "testcontainers";
-import { parseFirstFromImageDockerfileContent } from "#core/dockerfile-from-image.js";
+import { parseFirstFromImageDockerfileContent } from "./dockerfile-from-image.js";
 
 /** Non-empty model id from `/v1/models` (validated before branding). */
 export type OpenAiModelId = Brand.Branded<string, "OpenAiModelId">;
