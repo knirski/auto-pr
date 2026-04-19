@@ -84,7 +84,7 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 **update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, ci-nix handles updates automatically.
 
-**update-workflow-pins.yml** runs on push to main when workflows or actions change, and on workflow_dispatch. Updates **only** self-referential `knirski/auto-pr/...@SHA` refs to the push commit (not marketplace actions or Dockerfiles). Loop prevention: skips when the push commit message starts with `chore(workflows): update self-referential pins`. Only runs in knirski/auto-pr (skips forks). **check** and **check-workflows** validate pins with `check_only: true`. Full matrix and contributor steps: [Workflow pin automation](#workflow-pin-automation); action reference: [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
+**update-workflow-pins.yml** runs on push to main when workflows or actions change, and on workflow_dispatch. Updates **only** self-referential `knirski/auto-pr/...@SHA` refs to the push commit (not marketplace actions or Dockerfiles). Loop prevention: skips when the push commit message starts with `chore(workflows): update self-referential pins` and the author is `github-actions[bot]`. Only runs in knirski/auto-pr (skips forks). **check** and **check-workflows** validate pins with `check_only: true`. Full matrix and contributor steps: [Workflow pin automation](#workflow-pin-automation); action reference: [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
 
 **update-dist.yml** runs on push to main when `src/`, `package.json`, `scripts/build.ts`, or `bun.lock` change, and on workflow_dispatch. Uses [build-and-commit-dist](../.github/actions/build-and-commit-dist) to build and commit `dist/` so `npx -p github:knirski/auto-pr` works for Node-only users (no Bun). `dist/` is in `.gitignore` locally—the action uses `git add -f dist/` to override. Loop prevention: skips when commit message starts with `chore: update dist`. Only runs in knirski/auto-pr. See [Dist and .gitignore](#dist-and-gitignore).
 
@@ -174,13 +174,27 @@ The [update-workflow-pins](../.github/actions/update-workflow-pins/update-pins.s
 
 ### Self-referential pins (knirski/auto-pr → knirski/auto-pr)
 
-All matching `uses:` lines must share **exactly one** 40-character SHA. That commit must exist in the clone, be an **ancestor of `HEAD`** for the workflow run, and contain **every** referenced `.github/...` path at that commit (so you cannot point at an older tree that lacks a composite you call). Tags and branch names are not valid for these refs—the regex and CI expect a full SHA.
+All matching `uses:` lines must share **exactly one** 40-character SHA. That commit must exist in the clone, be an **ancestor of `HEAD`** for the workflow run, and contain **every** referenced `.github/...` path at that commit (so you cannot point at an older tree that lacks a composite you call). Tags and branch names are not valid for these refs—the regex and CI expect a full SHA. See [Why this automation cannot be deleted](#why-this-automation-cannot-be-deleted) for which workflow files must carry these pins.
 
-**On `main` after merge:** [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) sets every self-ref to the push commit and pushes. Loop prevention: skip when the commit message starts with `chore(workflows): update self-referential pins`. **Manual run:** Actions → **Update workflow pins** → Run workflow (e.g. if only `src/` changed but pins should still advance—rare).
+**On `main` after merge:** [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) sets every self-ref to the push commit and pushes. Loop prevention: skip when the commit message starts with `chore(workflows): update self-referential pins` **and** the commit author is `github-actions[bot]` (so a human reusing the prefix still runs the updater). **Manual run:** Actions → **Update workflow pins** → Run workflow (e.g. if only `src/` changed but pins should still advance—rare).
 
 **On a PR branch:** CI runs the same checks as `check_only`; align pins before push. From repo root after your changes are committed, you can run the composite in write mode with `target_sha: $(git rev-parse HEAD)` (see **Same-repo contributors** under [Pull Requests](../CONTRIBUTING.md#pull-requests)) or run `update-pins.sh` with `INPUT_CHECK_ONLY=false` and `INPUT_TARGET_SHA` set. [Lefthook](../lefthook.yml) runs [smoke-update-pins-check-only.sh](../scripts/smoke-update-pins-check-only.sh) when you stage workflow/action YAML.
 
 **Forks:** The update workflow runs only when `github.repository == 'knirski/auto-pr'`. Fork maintainers must keep self-refs consistent themselves if they run these workflows.
+
+### Why this automation cannot be deleted
+
+Three files contain self-referential `knirski/auto-pr/…@<SHA>` refs that **cannot** be converted to `./`. Each entry explains the constraint:
+
+| File | Why `./` won't work |
+|------|--------------------|
+| [auto-pr.yml](../.github/workflows/auto-pr.yml) | Distributed verbatim into adopter repos by `npx auto-pr-init`. When it runs in an adopter's repo, `./` resolves to the adopter's checkout — which does not contain `auto-pr-generate-reusable.yml` or `auto-pr-create-reusable.yml`. The full `knirski/auto-pr/…@<SHA>` ref points GitHub at this repo explicitly. |
+| [auto-pr-generate-reusable.yml](../.github/workflows/auto-pr-generate-reusable.yml) | Externally called via `workflow_call` from `auto-pr.yml` in adopter repos. The adopter's runner performs the checkout; `./` resolves against the adopter's tree. Every composite-action `uses:` inside this file must pin `knirski/auto-pr/.github/actions/…@<SHA>` for the same reason. |
+| [auto-pr-create-reusable.yml](../.github/workflows/auto-pr-create-reusable.yml) | Same as above. |
+
+Concretely: these three files have no way to reach `.github/actions/*` in *this* repo except by SHA-pinned full path. Any internal-only workflow (`check.yml`, `integration.yml`, `check-workflows.yml`, etc.) can and should use `./`. The post-merge pin-updater (`update-workflow-pins.yml`) exists solely to keep the three load-bearing files' pins advancing after each merge to `main`; it is not discretionary.
+
+Rationale and history: [ADR 0004 — workflow-pin automation](adr/0004-workflow-pin-automation.md).
 
 ### Third-party actions
 
