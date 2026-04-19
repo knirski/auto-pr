@@ -17,5 +17,8 @@ runs:
     - name: Restore and save Nix store
       uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
       with:
-        primary-key: nix-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/bun.lock', '**/flake.lock') }}
-        restore-prefixes-first-match: nix-store-${{ runner.os }}-${{ runner.arch }}-
+        # GitHub cache entries are immutable — include run_id so each successful run can save an updated store.
+        primary-key: nix-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/bun.lock', '**/flake.lock') }}-${{ github.run_id }}
+        restore-prefixes-first-match: |
+          nix-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/bun.lock', '**/flake.lock') }}-
+          nix-store-${{ runner.os }}-${{ runner.arch }}-
