@@ -40,7 +40,7 @@ jobs:
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@0654bbbc4cceb5e9c5db07ab75d9b00b239930fa
+        uses: knirski/auto-pr/.github/actions/setup-runtime@8eedec7fec4bf331e5160adf8fca588798797e80
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
