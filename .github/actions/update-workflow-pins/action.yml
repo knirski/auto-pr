@@ -18,6 +18,14 @@ inputs:
     description: "If true, exit 1 when pins are stale (no file changes)"
     required: false
     default: 'false'
+  pins_must_match_target:
+    description: "With check_only: require uniform pin to equal target_sha (strict gate after automation)"
+    required: false
+    default: 'false'
+  git_remote:
+    description: "Remote name used to fetch missing pin commits (shallow / act checkouts)"
+    required: false
+    default: 'origin'
 
 outputs:
   changed:
@@ -36,6 +44,8 @@ runs:
         export INPUT_TARGET_SHA="${{ inputs.target_sha || github.sha }}"
         export INPUT_REPO="${{ inputs.repo }}"
         export INPUT_CHECK_ONLY="${{ inputs.check_only }}"
+        export INPUT_PINS_MUST_MATCH_TARGET="${{ inputs.pins_must_match_target }}"
+        export INPUT_GIT_REMOTE="${{ inputs.git_remote }}"
         chmod +x .github/actions/update-workflow-pins/update-pins.sh
         .github/actions/update-workflow-pins/update-pins.sh
       env:
