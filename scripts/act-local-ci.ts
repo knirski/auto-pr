@@ -362,6 +362,15 @@ function whichOnPath(cmd: string): Option.Option<string> {
 	return Option.fromNullishOr(Bun.which(cmd));
 }
 
+/**
+ * True for GitHub PR refs (`refs/pull/…/merge` or `refs/pull/…/head`). Those refs are not usable
+ * inside act’s job container for **dorny/paths-filter** (fetch cannot resolve them to a local ref).
+ * Synthetic `workflow_dispatch` should use a branch ref instead (see {@link resolveGitPointerForActEvent}).
+ */
+export function isGithubPullRequestRef(ref: string): boolean {
+	return ref.startsWith("refs/pull/");
+}
+
 /** Resolves `ref` / `sha` for act’s synthetic `workflow_dispatch` payload (see `stringifyWorkflowDispatchEventJson`). */
 function resolveGitPointerForActEvent(
 	repoRoot: string,
@@ -372,7 +381,7 @@ function resolveGitPointerForActEvent(
 	if (sha.length === 0) return Option.none();
 
 	const envRef = process.env.GITHUB_REF?.trim();
-	if (envRef !== undefined && envRef.length > 0) {
+	if (envRef !== undefined && envRef.length > 0 && !isGithubPullRequestRef(envRef)) {
 		return Option.some({ ref: envRef, sha });
 	}
 	const symRes = Bun.spawnSync(["git", "symbolic-ref", "-q", "HEAD"], { cwd: repoRoot });

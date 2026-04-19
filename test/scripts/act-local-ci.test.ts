@@ -15,6 +15,7 @@ import {
 	CI_EVENT,
 	CI_WORKFLOW,
 	isActLocalCiMode,
+	isGithubPullRequestRef,
 	mergeActContainerOptions,
 	parseGithubRepoFromPackageJsonRepository,
 	parseGithubRepoFromRemoteUrl,
@@ -99,6 +100,13 @@ describe("pure helpers", () => {
 				dryRun: true,
 			}),
 		).toBe("ghcr.io/catthehacker/ubuntu:act-24.04");
+	});
+
+	test("isGithubPullRequestRef is true only for refs/pull/*", () => {
+		expect(isGithubPullRequestRef("refs/pull/144/merge")).toBe(true);
+		expect(isGithubPullRequestRef("refs/pull/1/head")).toBe(true);
+		expect(isGithubPullRequestRef("refs/heads/main")).toBe(false);
+		expect(isGithubPullRequestRef("refs/tags/v1")).toBe(false);
 	});
 
 	test("resolveActRunnerImage respects env override", () => {
