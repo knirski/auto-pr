@@ -14,6 +14,7 @@ import {
 import type { PlatformError } from "effect/PlatformError";
 import { systemError } from "effect/PlatformError";
 import { ChildProcess } from "effect/unstable/process";
+import type { Command } from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	AutoPrConfigError,
@@ -263,14 +264,17 @@ const twoCommits = [
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
 
-function isGhPrViewTitleCmd(cmd: unknown): boolean {
-	const c = cmd as { command?: string; args?: readonly string[] };
+function isGhPrViewTitleCmd(cmd: Command): boolean {
+	if (cmd._tag !== "StandardCommand") {
+		return false;
+	}
+	const { command, args } = cmd;
 	return (
-		c.command === "gh" &&
-		c.args?.[0] === "pr" &&
-		c.args[1] === "view" &&
-		c.args.includes("--json") &&
-		c.args.includes("title")
+		command === "gh" &&
+		args[0] === "pr" &&
+		args[1] === "view" &&
+		args.includes("--json") &&
+		args.includes("title")
 	);
 }
 
