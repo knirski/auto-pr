@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Result, Stream } from "effect";
+import { systemError } from "effect/PlatformError";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { PrLookupError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import {
 	ChildProcessSpawnerCreatePathMock,
@@ -9,7 +12,7 @@ import {
 	SilentLoggerLayer,
 	TestBaseLayer,
 } from "#test/test-utils.js";
-import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
+import { ghPrViewJson, runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
 
 const TestLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, ChildProcessSpawnerTestMock);
 const UpdatePathLayer = Layer.mergeAll(
@@ -59,6 +62,133 @@ const CreatePathLayer = Layer.mergeAll(
 	SilentLoggerLayer,
 	ChildProcessSpawnerCreatePathMock,
 );
+
+describe("ghPrViewJson", () => {
+	test("returns Option.none when stdout empty", async () => {
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: () => Effect.succeed(""),
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
+			Effect.gen(function* () {
+				const result = yield* ghPrViewJson("ai/foo", "/tmp");
+				expect(Option.isNone(result)).toBe(true);
+			}),
+		);
+	});
+
+	test("returns Option.none when gh reports no PR", async () => {
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: () =>
+				Effect.fail(
+					systemError({
+						_tag: "NotFound",
+						module: "gh",
+						method: "pr view",
+						description: "no pull requests found",
+					}),
+				),
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
+			Effect.gen(function* () {
+				const result = yield* ghPrViewJson("ai/foo", "/tmp");
+				expect(Option.isNone(result)).toBe(true);
+			}),
+		);
+	});
+
+	test("returns Option.some when gh returns valid JSON", async () => {
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: () => Effect.succeed('{"number":42,"url":"https://github.com/o/r/pull/42"}'),
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
+			Effect.gen(function* () {
+				const result = yield* ghPrViewJson("ai/foo", "/tmp");
+				expect(Option.isSome(result)).toBe(true);
+				if (Option.isSome(result)) {
+					expect(result.value.number).toBe(42);
+					expect(result.value.url).toBe("https://github.com/o/r/pull/42");
+				}
+			}),
+		);
+	});
+
+	test("fails with PrLookupError on malformed JSON", async () => {
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: () => Effect.succeed("not-json"),
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+		const exit = await Effect.runPromise(
+			ghPrViewJson("ai/foo", "/tmp").pipe(
+				Effect.provide(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock)),
+				Effect.exit,
+			),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => expect(err).toBeInstanceOf(PrLookupError),
+				onFailure: () => expect().fail("expected PrLookupError in cause"),
+			});
+		}
+	});
+
+	test("fails with PrLookupError on other gh error", async () => {
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: () =>
+				Effect.fail(
+					systemError({
+						_tag: "NotFound",
+						module: "gh",
+						method: "pr view",
+						description: "authentication failed",
+					}),
+				),
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+		const exit = await Effect.runPromise(
+			ghPrViewJson("ai/foo", "/tmp").pipe(
+				Effect.provide(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock)),
+				Effect.exit,
+			),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => expect(err).toBeInstanceOf(PrLookupError),
+				onFailure: () => expect().fail("expected PrLookupError in cause"),
+			});
+		}
+	});
+
+	test("fails with PrLookupError on schema mismatch", async () => {
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: () => Effect.succeed('{"wrong":"shape"}'),
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+		const exit = await Effect.runPromise(
+			ghPrViewJson("ai/foo", "/tmp").pipe(
+				Effect.provide(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock)),
+				Effect.exit,
+			),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => expect(err).toBeInstanceOf(PrLookupError),
+				onFailure: () => expect().fail("expected PrLookupError in cause"),
+			});
+		}
+	});
+});
 
 describe("runCreateOrUpdatePr integration (create path)", () => {
 	test("succeeds when body exists and no PR yet (gh pr create path)", async () => {

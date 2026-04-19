@@ -42,6 +42,9 @@ export const ChildProcessSpawnerCreatePathMock = Layer.mock(ChildProcessSpawner)
 				}),
 			);
 		}
+		if (cmd.command === "gh" && args[1] === "create") {
+			return Effect.succeed("https://github.com/owner/repo/pull/99\n");
+		}
 		return Effect.succeed("");
 	},
 	streamString: () => Stream.empty,

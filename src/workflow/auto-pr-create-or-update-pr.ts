@@ -24,7 +24,9 @@ import {
 	runCommand,
 	runMain,
 } from "#auto-pr";
-import type { ParsedJson } from "#core/parse-model-json.js";
+import { PrLookupError, type PrUrlParseError } from "#core/errors.js";
+import { parseGhPrCreateOutput } from "#core/gh-pr-url.js";
+import { parseFirstJsonObject } from "#core/parse-model-json.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -37,25 +39,49 @@ const PrInfoSchema = Schema.Struct({
 });
 type PrInfo = Schema.Schema.Type<typeof PrInfoSchema>;
 
+/**
+ * Heuristic: `runCommand` maps gh failures to `PullRequestFailedError` with `String(platformError)`.
+ * Treat as “no open PR” only for `gh pr view` phrasing we expect when the branch has no PR.
+ * Keep substrings specific so unrelated errors that mention “PR” are not swallowed.
+ */
+function ghStdoutMeansNoPrYet(cause: string): boolean {
+	const m = cause.toLowerCase();
+	return (
+		m.includes("no pull requests found") ||
+		m.includes("no pull requests match") ||
+		m.includes("could not find any pull requests") ||
+		m.includes("no pr found")
+	);
+}
+
 /** Reliable PR existence check: gh pr view --json number,url. Returns Option with PR info if exists. */
-function ghPrViewJson(
+export function ghPrViewJson(
 	branch: string,
 	cwd: string,
-): Effect.Effect<Option.Option<PrInfo>, never, ChildProcessSpawner> {
+): Effect.Effect<Option.Option<PrInfo>, PrLookupError, ChildProcessSpawner> {
+	const toLookupError = (cause: string): PrLookupError => new PrLookupError({ branch, cause });
+
 	return Effect.gen(function* () {
-		const stdout = yield* runCommand("gh", ["pr", "view", branch, "--json", "number,url"], cwd);
-		const trimmed = stdout.trim();
-		if (!trimmed) return Option.none();
-		const parsed = yield* Effect.try({
-			try: () => JSON.parse(trimmed) as ParsedJson,
-			catch: () => null,
-		}).pipe(Effect.catch(() => Effect.succeed(null)));
-		if (parsed === null) return Option.none();
-		return yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
-			Effect.map(Option.some),
-			Effect.catch(() => Effect.succeed(Option.none())),
+		const stdout = yield* runCommand(
+			"gh",
+			["pr", "view", branch, "--json", "number,url"],
+			cwd,
+		).pipe(
+			Effect.catchTag("PullRequestFailedError", (e) =>
+				ghStdoutMeansNoPrYet(e.cause) ? Effect.succeed("") : Effect.fail(toLookupError(e.cause)),
+			),
 		);
-	}).pipe(Effect.catch(() => Effect.succeed(Option.none())));
+		const trimmed = stdout.trim();
+		if (trimmed === "") return Option.none();
+
+		const parsed = yield* Effect.fromResult(parseFirstJsonObject(trimmed)).pipe(
+			Effect.mapError((e) => toLookupError(e.message)),
+		);
+		const decoded = yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
+			Effect.mapError((e) => toLookupError(Schema.isSchemaError(e) ? e.message : String(e))),
+		);
+		return Option.some(decoded);
+	});
 }
 
 function ghPrEdit(
@@ -126,11 +152,12 @@ function runGhWithRetry<R, E, A>(
 	);
 }
 
-function extractPrUrl(stdout: string): string {
-	return stdout.trim().split("\n").at(-1) ?? "";
-}
-
-type CreateOrUpdatePrError = PullRequestFailedError | BodyFileNotFoundError | FileSystemError;
+type CreateOrUpdatePrError =
+	| PullRequestFailedError
+	| BodyFileNotFoundError
+	| FileSystemError
+	| PrLookupError
+	| PrUrlParseError;
 
 /** Main pipeline. Exported for tests. */
 export function runCreateOrUpdatePr(params: {
@@ -181,15 +208,13 @@ export function runCreateOrUpdatePr(params: {
 				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
 				params.branch,
 			);
-			const url = extractPrUrl(stdout);
-			if (url) {
-				yield* Effect.log({
-					event: "create_or_update_pr",
-					status: "created",
-					url,
-					branch: params.branch,
-				});
-			}
+			const url = yield* Effect.fromResult(parseGhPrCreateOutput(stdout));
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "created",
+				url,
+				branch: params.branch,
+			});
 		}
 	});
 }

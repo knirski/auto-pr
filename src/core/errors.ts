@@ -13,6 +13,18 @@ export class PullRequestFailedError extends Schema.TaggedErrorClass<PullRequestF
 	{ cause: Schema.String },
 ) {}
 
+/** `gh pr view` failed or returned unparseable JSON. Distinct from "no PR yet" (Option.none). */
+export class PrLookupError extends Schema.TaggedErrorClass<PrLookupError>()("PrLookupError", {
+	branch: Schema.String,
+	cause: Schema.String,
+}) {}
+
+/** `gh pr create` output could not be parsed into a PR URL. */
+export class PrUrlParseError extends Schema.TaggedErrorClass<PrUrlParseError>()("PrUrlParseError", {
+	raw: Schema.String,
+	reason: Schema.String,
+}) {}
+
 /** Missing required env vars. Config validation failed. */
 export class AutoPrConfigError extends Schema.TaggedErrorClass<AutoPrConfigError>()(
 	"AutoPrConfigError",
