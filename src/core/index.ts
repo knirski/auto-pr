@@ -8,6 +8,7 @@ export type {
 	ActLocalCiMode,
 	ActLocalCiRun,
 	ActRunPlan,
+	ActWorkflowDispatchGitPointer,
 	ActWorkflowDispatchRepo,
 	BuildActArgsInput,
 	ResolveActRunnerImageArgs,

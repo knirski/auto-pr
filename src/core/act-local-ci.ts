@@ -134,15 +134,31 @@ export function resolveActWorkflowDispatchRepo(input: {
 	);
 }
 
-/** JSON body for `act -e` (minimal `repository` for `github.event`). */
-export function stringifyWorkflowDispatchEventJson(repo: ActWorkflowDispatchRepo): string {
+/** Optional `ref` / `after` for [nektos/act](https://github.com/nektos/act) `workflow_dispatch`: act sets `github.sha` from `after` when `deleted` is false; otherwise it falls back to local git (fragile under shallow/detached CI checkouts). */
+export type ActWorkflowDispatchGitPointer = {
+	readonly ref: string;
+	readonly sha: string;
+};
+
+/** JSON body for `act -e` (`repository` for `github.event`; optional `ref` / `after` / `deleted` for act’s github context). */
+export function stringifyWorkflowDispatchEventJson(
+	repo: ActWorkflowDispatchRepo,
+	gitPointer?: ActWorkflowDispatchGitPointer,
+): string {
 	const fullName = `${repo.owner}/${repo.name}`;
+	const repository = {
+		name: repo.name,
+		full_name: fullName,
+		owner: { login: repo.owner },
+	};
+	if (gitPointer === undefined) {
+		return JSON.stringify({ repository });
+	}
 	return JSON.stringify({
-		repository: {
-			name: repo.name,
-			full_name: fullName,
-			owner: { login: repo.owner },
-		},
+		repository,
+		ref: gitPointer.ref,
+		after: gitPointer.sha,
+		deleted: false,
 	});
 }
 

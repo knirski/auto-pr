@@ -21,6 +21,7 @@ import {
 	ACT_LOCAL_CI_MODES,
 	type ActBackend,
 	type ActLocalCiRun,
+	type ActWorkflowDispatchGitPointer,
 	buildActArgv,
 	CI_WORKFLOW,
 	CI_WORKFLOWS_ENTRY,
@@ -44,6 +45,32 @@ const INSTALL_HINTS = `To run CI locally, install:
 
 function whichOnPath(cmd: string): Option.Option<string> {
 	return Option.fromNullishOr(Bun.which(cmd));
+}
+
+/** Resolves `ref` / `sha` for act’s synthetic `workflow_dispatch` payload (see `stringifyWorkflowDispatchEventJson`). */
+function resolveGitPointerForActEvent(
+	repoRoot: string,
+): Option.Option<ActWorkflowDispatchGitPointer> {
+	const shaRes = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: repoRoot });
+	if (!shaRes.success) return Option.none();
+	const sha = new TextDecoder().decode(shaRes.stdout).trim();
+	if (sha.length === 0) return Option.none();
+
+	const envRef = process.env.GITHUB_REF?.trim();
+	if (envRef !== undefined && envRef.length > 0) {
+		return Option.some({ ref: envRef, sha });
+	}
+	const symRes = Bun.spawnSync(["git", "symbolic-ref", "-q", "HEAD"], { cwd: repoRoot });
+	if (symRes.success) {
+		const ref = new TextDecoder().decode(symRes.stdout).trim();
+		if (ref.length > 0) return Option.some({ ref, sha });
+	}
+	const curRes = Bun.spawnSync(["git", "branch", "--show-current"], { cwd: repoRoot });
+	if (curRes.success) {
+		const name = new TextDecoder().decode(curRes.stdout).trim();
+		if (name.length > 0) return Option.some({ ref: `refs/heads/${name}`, sha });
+	}
+	return Option.some({ ref: "refs/heads/main", sha });
 }
 
 /**
@@ -268,7 +295,11 @@ export function program(
 			}),
 		);
 		const eventPath = pathApi.join(repoRoot, ACT_GENERATED_EVENT_RELATIVE_PATH);
-		yield* fs.writeFileString(eventPath, stringifyWorkflowDispatchEventJson(resolvedRepo));
+		const gitPointer = resolveGitPointerForActEvent(repoRoot);
+		yield* fs.writeFileString(
+			eventPath,
+			stringifyWorkflowDispatchEventJson(resolvedRepo, Option.getOrUndefined(gitPointer)),
+		);
 		const eventFile = eventPath;
 
 		const ctx = {

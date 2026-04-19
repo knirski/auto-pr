@@ -12,6 +12,7 @@ import {
 	resolveActLocalCiInput,
 	resolveActRunnerImage,
 	resolveActWorkflowDispatchRepo,
+	stringifyWorkflowDispatchEventJson,
 } from "#core/act-local-ci.js";
 import { ActLocalCiError } from "#core/errors.js";
 
@@ -141,6 +142,23 @@ test("resolveActWorkflowDispatchRepo uses package.json when git remote missing",
 	if (Result.isSuccess(r)) {
 		expect(r.success).toEqual({ owner: "acme", name: "widget" });
 	}
+});
+
+test("stringifyWorkflowDispatchEventJson adds ref, after, deleted for act github context", () => {
+	const repo = { owner: "o", name: "n" };
+	const json = stringifyWorkflowDispatchEventJson(repo, {
+		ref: "refs/pull/1/merge",
+		sha: "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd",
+	});
+	const parsed = JSON.parse(json) as Record<string, unknown>;
+	expect(parsed.deleted).toBe(false);
+	expect(parsed.after).toBe("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+	expect(parsed.ref).toBe("refs/pull/1/merge");
+	expect(parsed.repository).toEqual({
+		name: "n",
+		full_name: "o/n",
+		owner: { login: "o" },
+	});
 });
 
 test("buildActArgv uses runsOnLabel as act -P key (not tied to a single OS name)", () => {
