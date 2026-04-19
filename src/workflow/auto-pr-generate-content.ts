@@ -159,7 +159,7 @@ const GhPrViewTitleSchema = Schema.Struct({
 });
 
 /** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort `gh pr view` (failures → no title). */
-function resolveExistingPrTitleForPrompt(input: {
+export function resolveExistingPrTitleForPrompt(input: {
 	readonly workspace: string;
 	readonly branch: string;
 }): Effect.Effect<Option.Option<string>, never, ChildProcessSpawner> {

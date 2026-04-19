@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Duration, Effect, Exit, FileSystem, Layer, Redacted, Result } from "effect";
+import {
+	Cause,
+	Duration,
+	Effect,
+	Exit,
+	FileSystem,
+	Layer,
+	Option,
+	Redacted,
+	Result,
+	Stream,
+} from "effect";
+import type { PlatformError } from "effect/PlatformError";
+import { systemError } from "effect/PlatformError";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
@@ -27,6 +40,7 @@ import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content
 import {
 	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
+	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
 } from "#workflow/auto-pr-generate-content.js";
 
@@ -248,6 +262,190 @@ const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
+
+function isGhPrViewTitleCmd(cmd: unknown): boolean {
+	const c = cmd as { command?: string; args?: readonly string[] };
+	return (
+		c.command === "gh" &&
+		c.args?.[0] === "pr" &&
+		c.args[1] === "view" &&
+		c.args.includes("--json") &&
+		c.args.includes("title")
+	);
+}
+
+/** Spawner mock: only `gh pr view … --json title` is special-cased; other commands succeed with "". */
+function ghPrViewTitleSpawnerLayer(
+	resolveGh: () => Effect.Effect<string, PlatformError, never>,
+): Layer.Layer<ChildProcessSpawner> {
+	return Layer.mock(ChildProcessSpawner)({
+		string: (cmd) => (isGhPrViewTitleCmd(cmd) ? resolveGh() : Effect.succeed("")),
+		streamString: () => Stream.empty,
+		streamLines: () => Stream.empty,
+	});
+}
+
+describe("resolveExistingPrTitleForPrompt", () => {
+	const layerWithGh = (gh: () => Effect.Effect<string, PlatformError, never>) =>
+		Layer.mergeAll(TestBaseLayer, ghPrViewTitleSpawnerLayer(gh));
+
+	test("returns env title when AUTO_PR_EXISTING_PR_TITLE is non-empty (does not call gh)", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		process.env.AUTO_PR_EXISTING_PR_TITLE = "  feat: from env  ";
+		try {
+			await runEffect(
+				layerWithGh(() =>
+					Effect.fail(
+						systemError({
+							_tag: "Unknown",
+							module: "test",
+							method: "string",
+							description: "gh should not run when env is set",
+						}),
+					),
+				),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/tmp",
+						branch: "ai/x",
+					});
+					expect(Option.isSome(opt)).toBe(true);
+					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from env");
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev === undefined) delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+			else process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns title from gh JSON on success", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(
+				layerWithGh(() => Effect.succeed(JSON.stringify({ title: "feat: from gh" }))),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isSome(opt)).toBe(true);
+					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from gh");
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when gh command fails", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(
+				layerWithGh(() =>
+					Effect.fail(
+						systemError({
+							_tag: "NotFound",
+							module: "gh",
+							method: "pr view",
+							description: "no PR",
+						}),
+					),
+				),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when gh stdout is empty or whitespace-only", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			for (const out of ["", "  \n  "]) {
+				await runEffect(layerWithGh(() => Effect.succeed(out)))(
+					Effect.gen(function* () {
+						const opt = yield* resolveExistingPrTitleForPrompt({
+							workspace: "/w",
+							branch: "ai/b",
+						});
+						expect(Option.isNone(opt)).toBe(true);
+					}).pipe(Effect.scoped),
+				);
+			}
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when gh stdout is not valid JSON", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(layerWithGh(() => Effect.succeed("not-json")))(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when JSON does not match { title: string }", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(layerWithGh(() => Effect.succeed(JSON.stringify({ foo: 1 }))))(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when title is empty or whitespace-only after trim", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			for (const title of ["", "   \t  "]) {
+				await runEffect(layerWithGh(() => Effect.succeed(JSON.stringify({ title }))))(
+					Effect.gen(function* () {
+						const opt = yield* resolveExistingPrTitleForPrompt({
+							workspace: "/w",
+							branch: "ai/b",
+						});
+						expect(Option.isNone(opt)).toBe(true);
+					}).pipe(Effect.scoped),
+				);
+			}
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+});
 
 describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 	describe("valid title", () => {
