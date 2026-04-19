@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+#
+# Load-bearing: do not delete. Used broadly as a "run via PATH or fall back to nix run" helper:
+#   - package.json: check:nix, check:docs, check:just-links, lint:scripts, format:scripts, lint:workflows
+#   - lefthook pre-commit (shfmt -w on staged scripts)
+#   - scripts/act-local-ci.ts (planActRun direct backend: bash + this script + act)
+#   - knip.json ignoreBinaries (avoids false-positive unused)
+#
+# The 2026-04-19 CI audit (Area E, spec §5) considered removing this in favor of gh act alone; investigation
+# showed many non-act callers. This shim is general-purpose tool-fallback infrastructure.
+#
 # Run a tool from PATH or via nix run .#<tool> (flake packages).
 #
 # Usage: nix-run-if-missing.sh [--optional] <tool> [args...]

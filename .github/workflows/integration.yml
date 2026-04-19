@@ -31,10 +31,10 @@ jobs:
       - name: Load CI environment (.env.ci)
         uses: ./.github/actions/load-env-ci
 
-      # Ephemeral port on this runner (`scripts/integration-ephemeral-port.sh`: python3 bind :0 — ships on Ubuntu runners).
+      # Kernel-assigned ephemeral port (python3 socket bind — python3 ships on Ubuntu runners).
       - name: Llama port and OpenAI base URL (stub job)
         run: |
-          port="$(bash "$GITHUB_WORKSPACE/scripts/integration-ephemeral-port.sh")"
+          port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
           echo "INTEGRATION_LLAMA_PORT=$port" >> "$GITHUB_ENV"
           echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Llama port and OpenAI base URL (full model job)
         run: |
-          port="$(bash "$GITHUB_WORKSPACE/scripts/integration-ephemeral-port.sh")"
+          port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
           echo "INTEGRATION_LLAMA_PORT=$port" >> "$GITHUB_ENV"
           echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 

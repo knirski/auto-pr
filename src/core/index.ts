@@ -3,37 +3,6 @@
  * Shell (auto-pr) and workflow/tools depend on core.
  */
 
-export type {
-	ActBackend,
-	ActLocalCiMode,
-	ActLocalCiRun,
-	ActRunPlan,
-	ActWorkflowDispatchGitPointer,
-	ActWorkflowDispatchRepo,
-	BuildActArgsInput,
-	ResolveActRunnerImageArgs,
-} from "#core/act-local-ci.js";
-export {
-	ACT_GENERATED_EVENT_RELATIVE_PATH,
-	ACT_LOCAL_CI_MODES,
-	buildActArgv,
-	CI_EVENT,
-	CI_WORKFLOW,
-	CI_WORKFLOWS_ENTRY,
-	DEFAULT_ACT_RUNS_ON_LABEL,
-	INTEGRATION_WORKFLOW,
-	isActLocalCiMode,
-	parseGithubRepoFromPackageJsonRepository,
-	parseGithubRepoFromRemoteUrl,
-	parseGithubRepoFromShortName,
-	planActRun,
-	resolveActArtifactServerOpts,
-	resolveActLocalCiInput,
-	resolveActLocalCiRunnerFromProcessEnv,
-	resolveActRunnerImage,
-	resolveActWorkflowDispatchRepo,
-	stringifyWorkflowDispatchEventJson,
-} from "#core/act-local-ci.js";
 export {
 	collapseProseParagraphs,
 	fallbackWhenParseFails,
