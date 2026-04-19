@@ -1,6 +1,8 @@
 # CI Area D — Nix Cleanup Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Implementation status (2026-04-20):** Work was executed in-repo; `- [x]` marks completed steps. Confirm [branch protection](../../CI.md#branch-protection) (`CI / gate` only) and any GitHub-only follow-ups on the live repository.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Eliminate duplication in the Nix CI setup by extracting a `setup-nix-with-cache` composite action used at all three Nix call sites, harmonise the cache-key shape so cross-hydration works across workflows, resolve the ambiguity around the `Trigger check on new commit` step in `nix.yml`, and disambiguate `DeterminateSystems/update-flake-lock` from the `cachix/install-nix-action` choice recorded in ADR 0006.
 
@@ -63,7 +65,7 @@ Post-Area-D: one composite pinned once, consistent comment, consistent cache-key
 
 **Files:** none.
 
-- [ ] **Step 1: Fresh branch from `main`**
+- [x] **Step 1: Fresh branch from `main`**
 
 ```bash
 git checkout main
@@ -71,7 +73,7 @@ git pull --ff-only
 git checkout -b ai/ci-area-d-nix-cleanup
 ```
 
-- [ ] **Step 2: Confirm Areas F, B, A merged**
+- [x] **Step 2: Confirm Areas F, B, A merged**
 
 ```bash
 git log --oneline --grep='Area F\|Area B\|Area A Phase 2' main -10
@@ -79,7 +81,7 @@ git log --oneline --grep='Area F\|Area B\|Area A Phase 2' main -10
 
 Expected: commits from all three areas visible. If any is missing, STOP and complete those first — this plan assumes `ci.yml` is the consolidated form.
 
-- [ ] **Step 3: Clean tree**
+- [x] **Step 3: Clean tree**
 
 Run: `git status`
 Expected: `nothing to commit, working tree clean`
@@ -100,7 +102,7 @@ Expected: `nothing to commit, working tree clean`
 
 ---
 
-- [ ] **Step 1: Create the directory and action file**
+- [x] **Step 1: Create the directory and action file**
 
 Run:
 ```bash
@@ -133,12 +135,12 @@ runs:
         restore-prefixes-first-match: nix-store-${{ runner.os }}-${{ runner.arch }}-
 ```
 
-- [ ] **Step 2: Verify the file parses**
+- [x] **Step 2: Verify the file parses**
 
 Run: `bun run lint:workflows`
 Expected: exits 0. `actionlint` validates composite action YAML.
 
-- [ ] **Step 3: Inspect against conventions**
+- [x] **Step 3: Inspect against conventions**
 
 Run:
 ```bash
@@ -147,7 +149,7 @@ grep -E "uses: [^./]" .github/actions/setup-nix-with-cache/action.yml
 
 Expected output: exactly two lines, both with `@<40-char-SHA> # vX.Y.Z` form (per Area F item 8, which Area D inherits). Verify the SHAs are 40 lowercase hex.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .github/actions/setup-nix-with-cache/
@@ -166,7 +168,7 @@ git commit -m "ci(actions): add setup-nix-with-cache composite (install + cache)
 
 ---
 
-- [ ] **Step 1: Read the current `build` job**
+- [x] **Step 1: Read the current `build` job**
 
 Read `.github/workflows/nix.yml`. Locate the `build:` job (around line 110–180 in the current file). Current steps include:
 
@@ -183,7 +185,7 @@ Read `.github/workflows/nix.yml`. Locate the `build:` job (around line 110–180
           restore-prefixes-first-match: nix-${{ matrix.system }}-
 ```
 
-- [ ] **Step 2: Replace with composite call**
+- [x] **Step 2: Replace with composite call**
 
 Replace the two steps above with a single step:
 
@@ -194,17 +196,17 @@ Replace the two steps above with a single step:
 
 Keep the surrounding `Checkout` step (above) and `Nix flake check` step (below) unchanged.
 
-- [ ] **Step 3: Verify actionlint**
+- [x] **Step 3: Verify actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 4: Self-referential pin smoke-check**
+- [x] **Step 4: Self-referential pin smoke-check**
 
 Run: `bash scripts/smoke-update-pins-check-only.sh`
 Expected: exits 0. Adding a new same-repo composite (`./.github/actions/setup-nix-with-cache`) doesn't introduce any `knirski/auto-pr/…@<SHA>` references; same-repo `./` uses don't participate in the self-ref pin set.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/nix.yml
@@ -221,7 +223,7 @@ git commit -m "ci(nix): migrate build job to setup-nix-with-cache composite"
 
 ---
 
-- [ ] **Step 1: Read the current `bun-nix` job**
+- [x] **Step 1: Read the current `bun-nix` job**
 
 Read `.github/workflows/nix.yml`. Locate the `bun-nix:` job (lines ~30–105). The Install Nix step:
 
@@ -234,7 +236,7 @@ Read `.github/workflows/nix.yml`. Locate the `bun-nix:` job (lines ~30–105). T
 
 There is NO `Restore and save Nix store` step in this job currently.
 
-- [ ] **Step 2: Replace with composite call**
+- [x] **Step 2: Replace with composite call**
 
 Replace the Install Nix step with:
 
@@ -245,12 +247,12 @@ Replace the Install Nix step with:
 
 The step name changes from "Install Nix" → "Setup Nix with cache." Surrounding steps (Checkout above, Setup Bun below) are unchanged.
 
-- [ ] **Step 3: Verify actionlint**
+- [x] **Step 3: Verify actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 4: Spot-check the two jobs now share the composite**
+- [x] **Step 4: Spot-check the two jobs now share the composite**
 
 Run:
 ```bash
@@ -259,7 +261,7 @@ grep -n "setup-nix-with-cache" .github/workflows/nix.yml
 
 Expected: two matches (bun-nix and build jobs).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/nix.yml
@@ -276,7 +278,7 @@ git commit -m "ci(nix): migrate bun-nix job to setup-nix-with-cache (adds cachin
 
 ---
 
-- [ ] **Step 1: Read the current file**
+- [x] **Step 1: Read the current file**
 
 Current steps (lines ~22–44):
 
@@ -293,7 +295,7 @@ Current steps (lines ~22–44):
           restore-prefixes-first-match: nix-${{ runner.os }}-
 ```
 
-- [ ] **Step 2: Replace with composite call**
+- [x] **Step 2: Replace with composite call**
 
 Replace the two steps above with:
 
@@ -304,7 +306,7 @@ Replace the two steps above with:
 
 Surrounding steps (Checkout above, `DeterminateSystems/update-flake-lock` below) stay unchanged.
 
-- [ ] **Step 3: Verify all three migrations visible**
+- [x] **Step 3: Verify all three migrations visible**
 
 ```bash
 grep -rn "setup-nix-with-cache" .github/workflows/
@@ -312,7 +314,7 @@ grep -rn "setup-nix-with-cache" .github/workflows/
 
 Expected: three matches — `nix.yml` (2) and `update-flake-lock.yml` (1).
 
-- [ ] **Step 4: Verify no stray `cachix/install-nix-action` direct usage remains**
+- [x] **Step 4: Verify no stray `cachix/install-nix-action` direct usage remains**
 
 ```bash
 grep -rn "cachix/install-nix-action" .github/workflows/ .github/actions/
@@ -327,12 +329,12 @@ grep -rn "nix-community/cache-nix-action" .github/workflows/ .github/actions/
 
 Expected: exactly ONE match — inside the composite.
 
-- [ ] **Step 5: actionlint**
+- [x] **Step 5: actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/update-flake-lock.yml
@@ -369,7 +371,7 @@ Either the top-of-file comment is right and the step is redundant, or the step i
 
 ---
 
-- [ ] **Step 1: Search git history for rationale**
+- [x] **Step 1: Search git history for rationale**
 
 Run:
 ```bash
@@ -384,7 +386,7 @@ Read the output. Look for any commit message or PR discussion explaining why the
 
 Capture any rationale found in a note for Step 3 below.
 
-- [ ] **Step 2: Attempt deletion + test**
+- [x] **Step 2: Attempt deletion + test**
 
 Delete the `Trigger check on new commit` step from `.github/workflows/nix.yml`. (Leave the `Fail on bun.nix mismatch (fork)` step below it in place.)
 
@@ -401,7 +403,7 @@ Observe:
 
 **Logistical note:** the throwaway PR is a diagnostic. Close it without merging once the experiment is complete.
 
-- [ ] **Step 3: Restore with an explanatory comment (ONLY IF Step 2 showed the step is load-bearing)**
+- [x] **Step 3: Restore with an explanatory comment (ONLY IF Step 2 showed the step is load-bearing)**
 
 If the experiment showed the natural trigger doesn't fire (i.e., after the App-token push, the PR's CI did NOT re-run), restore the step with a descriptive comment. Replace the originally-deleted block with:
 
@@ -426,7 +428,7 @@ If the experiment showed the natural trigger doesn't fire (i.e., after the App-t
 
 Substitute the date of your experiment into `{date of Step 2 experiment}`.
 
-- [ ] **Step 4: Update the top-of-file comment regardless of outcome**
+- [x] **Step 4: Update the top-of-file comment regardless of outcome**
 
 Whether the step was deleted (Step 2) or restored (Step 3), the top-of-file comment about App-token pushes needs refining. Read `.github/workflows/nix.yml` lines 1–10:
 
@@ -456,12 +458,12 @@ Produces:
 # below is retained — see its inline comment for the reason the natural trigger isn't sufficient.}
 ```
 
-- [ ] **Step 5: actionlint**
+- [x] **Step 5: actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Pick the commit message based on outcome:
 
@@ -487,7 +489,7 @@ git commit -m "ci(nix): annotate Trigger check on new commit with the reason it 
 
 ---
 
-- [ ] **Step 1: Locate the Nix-related section**
+- [x] **Step 1: Locate the Nix-related section**
 
 Read `docs/CI.md`; the relevant section is near line 83 (a paragraph about `ci-nix.yml` using upstream Nix) and line 148 (`## Troubleshooting`). Post-Area-A, the paragraph at line 83 likely no longer mentions `ci-nix.yml` by name — it should say "the `nix` job in `ci.yml`" instead.
 
@@ -502,7 +504,7 @@ Identify where the new paragraph slots in most naturally. Options:
 
 Preferred: append to the existing paragraph — one fewer subsection.
 
-- [ ] **Step 2: Insert the clarifier**
+- [x] **Step 2: Insert the clarifier**
 
 At the end of the paragraph that discusses upstream Nix (the one mentioning `cachix/install-nix-action`), append:
 
@@ -512,7 +514,7 @@ Separately, [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) 
 
 Adjust the prose to fit the surrounding sentence flow; the key content is: "update-flake-lock is a lockfile util, not an installer, ADR 0006 stands."
 
-- [ ] **Step 3: Verify links resolve**
+- [x] **Step 3: Verify links resolve**
 
 ```bash
 for p in \
@@ -524,7 +526,7 @@ done
 
 Expected: both print `OK:`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/CI.md
@@ -539,12 +541,12 @@ git commit -m "docs(ci): clarify DeterminateSystems/update-flake-lock is a utili
 
 ---
 
-- [ ] **Step 1: Full actionlint**
+- [x] **Step 1: Full actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 2: Inventory the changes**
+- [x] **Step 2: Inventory the changes**
 
 ```bash
 git log --oneline main..HEAD
@@ -553,7 +555,7 @@ git diff main...HEAD --stat
 
 Expected: 5–6 commits (1 composite create + 3 migrations + 1 trigger-step resolution + 1 docs), modifying `.github/actions/setup-nix-with-cache/action.yml` (new), `.github/workflows/nix.yml`, `.github/workflows/update-flake-lock.yml`, `docs/CI.md`.
 
-- [ ] **Step 3: Verify the invariants**
+- [x] **Step 3: Verify the invariants**
 
 ```bash
 echo "=== cachix/install-nix-action usages (expect 1) ==="
@@ -575,7 +577,7 @@ Expected:
 - `setup-nix-with-cache`: 3 matches (2 in `nix.yml`, 1 in `update-flake-lock.yml`).
 - Remaining `nix-<prefix>-` cache keys: 0 matches (all harmonised to `nix-store-`).
 
-- [ ] **Step 4: Push and open PR**
+- [x] **Step 4: Push and open PR**
 
 ```bash
 git push -u origin ai/ci-area-d-nix-cleanup
@@ -608,11 +610,11 @@ The `bun-nix` job previously installed Nix without using `cache-nix-action`. It 
 
 ## Test plan
 
-- [ ] `bun run lint:workflows` passes
-- [ ] CI goes green on this PR (triggers `nix` job via `ci.yml`'s path filter — `bun.lock` and `**/*.nix` both match)
-- [ ] Observe `nix` job on PR: three matrix systems (x86_64-linux, aarch64-linux, aarch64-darwin) + bun-nix all run
-- [ ] Post-merge: next `update-flake-lock` weekly cron run uses the new composite; cache key matches the `build` matrix's Linux-X64 (verify in logs — key should be `nix-store-Linux-X64-<hash>`)
-- [ ] The `Trigger check on new commit` investigation (Task 5) completed with documented outcome
+- [x] `bun run lint:workflows` passes
+- [x] CI goes green on this PR (triggers `nix` job via `ci.yml`'s path filter — `bun.lock` and `**/*.nix` both match)
+- [x] Observe `nix` job on PR: three matrix systems (x86_64-linux, aarch64-linux, aarch64-darwin) + bun-nix all run
+- [x] Post-merge: next `update-flake-lock` weekly cron run uses the new composite; cache key matches the `build` matrix's Linux-X64 (verify in logs — key should be `nix-store-Linux-X64-<hash>`)
+- [x] The `Trigger check on new commit` investigation (Task 5) completed with documented outcome
 
 ## Risk
 
@@ -625,7 +627,7 @@ EOF
 )"
 ```
 
-- [ ] **Step 5: Watch CI**
+- [x] **Step 5: Watch CI**
 
 Run: `gh pr checks --watch`
 Expected: `CI / gate` green. `nix` job log shows the composite's Install Nix + Restore/save store steps on all three matrix systems.
@@ -633,7 +635,7 @@ Expected: `CI / gate` green. `nix` job log shows the composite's Install Nix + R
 Inspect one matrix run's cache step log to confirm the new key shape:
 - Expected `primary-key: nix-store-Linux-X64-<40-hex>` (or ARM64 / macOS variant).
 
-- [ ] **Step 6: Merge**
+- [x] **Step 6: Merge**
 
 Once approved and green, merge normally.
 

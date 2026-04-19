@@ -1,6 +1,8 @@
 # CI Area F — Hygiene Sweep Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Implementation status (2026-04-20):** Work was executed in-repo; `- [x]` marks completed steps. Confirm [branch protection](../../CI.md#branch-protection) (`CI / gate` only) and any GitHub-only follow-ups on the live repository.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Apply eight cross-cutting GitHub Actions conventions uniformly across all 27 workflow files and 9 composite actions in `knirski/auto-pr`, eliminating drift so subsequent area-specific PRs (B, A, D, E) inherit correct defaults.
 
@@ -44,7 +46,7 @@ Files modified in this plan, grouped by task:
 
 **Files:** none
 
-- [ ] **Step 1: Create a fresh branch from `main`**
+- [x] **Step 1: Create a fresh branch from `main`**
 
 ```bash
 git checkout main
@@ -52,7 +54,7 @@ git pull --ff-only
 git checkout -b ai/ci-area-f-hygiene-sweep
 ```
 
-- [ ] **Step 2: Confirm clean tree**
+- [x] **Step 2: Confirm clean tree**
 
 Run: `git status`
 Expected: `nothing to commit, working tree clean`
@@ -65,7 +67,7 @@ Expected: `nothing to commit, working tree clean`
 
 **Files:** none (read-only).
 
-- [ ] **Step 1: Verify no `ubuntu-latest` remains in workflows (item 6)**
+- [x] **Step 1: Verify no `ubuntu-latest` remains in workflows (item 6)**
 
 Run:
 ```bash
@@ -76,7 +78,7 @@ Expected output: `CLEAN` (no matches).
 
 If matches appear, add edits to this task: replace `ubuntu-latest` → `ubuntu-24.04` (or `ubuntu-24.04-arm` if ARM is needed; check the surrounding matrix).
 
-- [ ] **Step 2: Verify every third-party `uses:` in composite actions is pinned `@<40-char SHA> # vX.Y.Z` (item 8)**
+- [x] **Step 2: Verify every third-party `uses:` in composite actions is pinned `@<40-char SHA> # vX.Y.Z` (item 8)**
 
 Run:
 ```bash
@@ -91,12 +93,12 @@ gh api repos/<owner>/<repo>/commits/<tag> -q .sha
 ```
 and append ` # <tag>` as a comment. Add those edits to this task.
 
-- [ ] **Step 3: Establish baseline actionlint result**
+- [x] **Step 3: Establish baseline actionlint result**
 
 Run: `bun run lint:workflows`
 Expected: exits 0. Capture any pre-existing warnings — those are pre-existing and not this PR's responsibility; note them for later if surprising.
 
-- [ ] **Step 4: Commit (only if Step 1 or 2 found breaches; otherwise skip)**
+- [x] **Step 4: Commit (only if Step 1 or 2 found breaches; otherwise skip)**
 
 If you made edits in Steps 1 or 2:
 ```bash
@@ -119,7 +121,7 @@ Otherwise this task is verification-only; nothing to commit. Proceed to Task 2.
 **Files:**
 - Modify: `.github/workflows/ci-nix.yml:3`
 
-- [ ] **Step 1: Rename the workflow**
+- [x] **Step 1: Rename the workflow**
 
 Edit `.github/workflows/ci-nix.yml` line 3:
 
@@ -133,12 +135,12 @@ To:
 name: CI (Nix)
 ```
 
-- [ ] **Step 2: Verify actionlint still passes**
+- [x] **Step 2: Verify actionlint still passes**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 3: Verify no other workflow now clashes**
+- [x] **Step 3: Verify no other workflow now clashes**
 
 Run:
 ```bash
@@ -147,7 +149,7 @@ grep -H "^name:" .github/workflows/*.yml | sort -t: -k3 | uniq -f2 -D
 
 Expected output: groups of `name: Check` (4 workflows — intentional, load-bearing for branch protection) and any other intentional duplicates. `CI` appears only once (for `ci.yml`).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .github/workflows/ci-nix.yml
@@ -164,11 +166,11 @@ git commit -m "ci(ci-nix): rename workflow to 'CI (Nix)' for Actions-tab readabi
 - Modify: `.github/workflows/act-smoke.yml:81`
 - Modify: `.github/workflows/act-smoke.yml:99`
 
-- [ ] **Step 1: Read the current pinned lines**
+- [x] **Step 1: Read the current pinned lines**
 
 Read `.github/workflows/act-smoke.yml` lines 75–105 to see the two `actions/cache` uses in context (they're in separate steps — `Cache act image layers` and `Cache act Node runtime`, or similar).
 
-- [ ] **Step 2: Replace both pins**
+- [x] **Step 2: Replace both pins**
 
 For EACH of lines 81 and 99 (adjust line numbers if earlier edits shifted them), change:
 
@@ -190,12 +192,12 @@ grep -rn "actions/cache@" .github/
 
 All occurrences should be `actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4` after the edit.
 
-- [ ] **Step 3: actionlint passes**
+- [x] **Step 3: actionlint passes**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .github/workflows/act-smoke.yml
@@ -228,7 +230,7 @@ git commit -m "ci(act-smoke): bump actions/cache to v5.0.4 to match rest of repo
 
 ---
 
-- [ ] **Step 1: Add concurrency block to the 8 missing workflows**
+- [x] **Step 1: Add concurrency block to the 8 missing workflows**
 
 For EACH of the following 8 files, insert this block immediately AFTER the `on:` block and BEFORE any `permissions:` block or `jobs:` key. Leave one blank line above and below:
 
@@ -274,7 +276,7 @@ permissions:
 
 Apply this pattern to all 8 files. The exact insertion line depends on the current `on:` block size — use the Edit tool with sufficient context to anchor uniquely.
 
-- [ ] **Step 2: Flip `cancel-in-progress` to `false` in 2 release workflows**
+- [x] **Step 2: Flip `cancel-in-progress` to `false` in 2 release workflows**
 
 Edit `.github/workflows/update-dist.yml:23`:
 
@@ -304,7 +306,7 @@ To:
 
 (Within the existing `concurrency:` block starting at line 17.)
 
-- [ ] **Step 3: Verify the matrix is correct**
+- [x] **Step 3: Verify the matrix is correct**
 
 Run:
 ```bash
@@ -317,12 +319,12 @@ done
 
 Expected output: every workflow has a `concurrency:` block. The three release workflows (`release-please.yml`, `update-dist.yml`, `add-dist-to-release-pr.yml`) show `cancel-in-progress: false`. Every other workflow shows `cancel-in-progress: true`.
 
-- [ ] **Step 4: actionlint passes**
+- [x] **Step 4: actionlint passes**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/
@@ -351,7 +353,7 @@ git commit -m "ci: add concurrency groups everywhere; flip release workflows to 
 
 ---
 
-- [ ] **Step 1: Edit `act-smoke.yml:52`**
+- [x] **Step 1: Edit `act-smoke.yml:52`**
 
 Read the file around line 52 first to see the existing `uses:` step. If the step currently has no `with:` block, add one. If it has a `with:` block, add `persist-credentials: false` to it.
 
@@ -381,11 +383,11 @@ If a `with:` block already exists (e.g. `fetch-depth: 0`), add the line inside i
           persist-credentials: false
 ```
 
-- [ ] **Step 2: Edit `auto-pr-generate-reusable.yml:74` — same pattern**
+- [x] **Step 2: Edit `auto-pr-generate-reusable.yml:74` — same pattern**
 
 Same logic as Step 1. Read first; add or extend `with:` block.
 
-- [ ] **Step 3: Edit `deploy-pages.yml:23` — same pattern**
+- [x] **Step 3: Edit `deploy-pages.yml:23` — same pattern**
 
 The current step is `- uses: actions/checkout@<sha> # v6.0.2` with NO `with:` block. Convert it to the multi-line form with `persist-credentials: false`. Also give it a `name:` for readability while you're there:
 
@@ -402,11 +404,11 @@ To:
           persist-credentials: false
 ```
 
-- [ ] **Step 4: Edit `nix.yml:131` — same pattern**
+- [x] **Step 4: Edit `nix.yml:131` — same pattern**
 
 Same as Step 1.
 
-- [ ] **Step 5: Verify every `actions/checkout` is accounted for**
+- [x] **Step 5: Verify every `actions/checkout` is accounted for**
 
 Run:
 ```bash
@@ -429,12 +431,12 @@ This prints every `actions/checkout` call site. Cross-check against the list of 
 
 All OTHER `actions/checkout` steps must have `persist-credentials: false`. If the grep shows anything missing that isn't in the pushing list, fix it now (add to this task).
 
-- [ ] **Step 6: actionlint passes**
+- [x] **Step 6: actionlint passes**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add .github/workflows/
@@ -480,7 +482,7 @@ Reusable-call jobs (have `uses:`):
 
 ---
 
-- [ ] **Step 1: Add `timeout-minutes:` to each real job**
+- [x] **Step 1: Add `timeout-minutes:` to each real job**
 
 For each of the 5 real jobs below, insert `timeout-minutes: <value>` on the line IMMEDIATELY after `runs-on: <runner>`.
 
@@ -572,7 +574,7 @@ jobs:
     steps:
 ```
 
-- [ ] **Step 2: Add `timeout-minutes:` to each reusable-call job**
+- [x] **Step 2: Add `timeout-minutes:` to each reusable-call job**
 
 For each job below, insert `timeout-minutes: <value>` on its own line, typically immediately after the `permissions:` block and before `uses:`.
 
@@ -648,7 +650,7 @@ For each of these, the structural pattern is:
 
 Read each file before editing to anchor the edit uniquely. If `permissions:` is present, place `timeout-minutes:` after it for consistency.
 
-- [ ] **Step 3: Check actionlint still accepts all edits**
+- [x] **Step 3: Check actionlint still accepts all edits**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
@@ -661,7 +663,7 @@ Expected: exits 0.
     uses: ./.github/workflows/<reusable>.yml
 ```
 
-- [ ] **Step 4: Verify every job now has a timeout**
+- [x] **Step 4: Verify every job now has a timeout**
 
 Run:
 ```bash
@@ -681,7 +683,7 @@ done
 
 Expected: no `MISSING:` lines. (If the awk is finicky, do a manual spot-check with `grep -B1 -A3 "^  [a-z-]*:$" .github/workflows/*.yml | grep -E "^  [a-z-]*:$|timeout-minutes"`.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/
@@ -705,7 +707,7 @@ git commit -m "ci: add timeout-minutes to every job (no workflow relies on 360-m
 
 ---
 
-- [ ] **Step 1: `check.yml`**
+- [x] **Step 1: `check.yml`**
 
 Top-level currently (line 10):
 ```yaml
@@ -730,7 +732,7 @@ jobs:
 
 (Insert `permissions:` block before `runs-on:` within the job.)
 
-- [ ] **Step 2: `check-docs.yml`**
+- [x] **Step 2: `check-docs.yml`**
 
 Top-level (line 12) currently `permissions: contents: read` → change to `permissions: {}`.
 
@@ -740,15 +742,15 @@ Add to the single `check` job:
       contents: read
 ```
 
-- [ ] **Step 3: `check-website.yml`**
+- [x] **Step 3: `check-website.yml`**
 
 Same pattern: top-level `permissions: {}`; add `permissions: contents: read` to the `check` job.
 
-- [ ] **Step 4: `check-workflows.yml`**
+- [x] **Step 4: `check-workflows.yml`**
 
 Same pattern: top-level `permissions: {}`; add `permissions: contents: read` to the `check` job.
 
-- [ ] **Step 5: `ci.yml`**
+- [x] **Step 5: `ci.yml`**
 
 Top-level (line 29) currently:
 ```yaml
@@ -768,23 +770,23 @@ permissions: {}
 
 Net for this file: only the top-level changes.
 
-- [ ] **Step 6: `ci-docs.yml`**
+- [x] **Step 6: `ci-docs.yml`**
 
 Top-level (line 19) → `permissions: {}`. Add `permissions: contents: read` to the `check` (reusable-call) job.
 
-- [ ] **Step 7: `ci-release-please.yml`**
+- [x] **Step 7: `ci-release-please.yml`**
 
 Top-level (line 15) → `permissions: {}`. Add `permissions: contents: read` to each job (whatever the file contains — likely `check` and `integration` reusable-call jobs; verify first with a quick Read).
 
-- [ ] **Step 8: `ci-website.yml`**
+- [x] **Step 8: `ci-website.yml`**
 
 Top-level (line 20) → `permissions: {}`. Add `permissions: contents: read` to the `check` job.
 
-- [ ] **Step 9: `ci-workflows.yml`**
+- [x] **Step 9: `ci-workflows.yml`**
 
 Top-level (line 20) → `permissions: {}`. Add `permissions: contents: read` to the `check` job.
 
-- [ ] **Step 10: `integration.yml`**
+- [x] **Step 10: `integration.yml`**
 
 Top-level (lines 10–12) currently:
 ```yaml
@@ -807,7 +809,7 @@ Add to EACH of the three jobs (`integration-local-fallback` line 17, the middle 
 
 Place immediately before `runs-on:` in each job.
 
-- [ ] **Step 11: `act-smoke.yml`**
+- [x] **Step 11: `act-smoke.yml`**
 
 Top-level (line 25) `permissions: contents: read` → `permissions: {}`.
 
@@ -817,7 +819,7 @@ Add to the `smoke` job:
       contents: read
 ```
 
-- [ ] **Step 12: `auto-pr-generate-reusable.yml`**
+- [x] **Step 12: `auto-pr-generate-reusable.yml`**
 
 Top-level (line 57) currently:
 ```yaml
@@ -842,7 +844,7 @@ Add to the single job (line 66, `generate`):
 
 **Important:** this is a reusable called from `auto-pr.yml`. The caller (`auto-pr.yml:31`) already caps the grant with its own job-level `permissions:` — that still applies and takes precedence. This edit is descriptive only; no functional change.
 
-- [ ] **Step 13: `deploy-pages.yml`**
+- [x] **Step 13: `deploy-pages.yml`**
 
 Top-level (line 10) currently:
 ```yaml
@@ -872,7 +874,7 @@ Add to `deploy` job:
 
 (The `build` job only checks out and uploads a Pages artifact — it needs `contents: read`. The `deploy` job uses `actions/deploy-pages` which needs `pages: write` and `id-token: write`.)
 
-- [ ] **Step 14: Verify every workflow's top-level `permissions:`**
+- [x] **Step 14: Verify every workflow's top-level `permissions:`**
 
 Run:
 ```bash
@@ -884,12 +886,12 @@ done
 
 Expected: every workflow shows either `permissions: {}` or no top-level `permissions:` at all (which is equivalent to the default — but spec §6.2.7 wants explicit `{}`). If any workflow has no top-level `permissions:`, ADD `permissions: {}` to that file while you're here.
 
-- [ ] **Step 15: actionlint passes**
+- [x] **Step 15: actionlint passes**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 16: Commit**
+- [x] **Step 16: Commit**
 
 ```bash
 git add .github/workflows/
@@ -906,19 +908,19 @@ git commit -m "ci: scope permissions per-job; top-level is now permissions: {}"
 
 ---
 
-- [ ] **Step 1: Full local lint**
+- [x] **Step 1: Full local lint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0 with no warnings.
 
-- [ ] **Step 2: Run `act-smoke` workflow locally (dry-run)**
+- [x] **Step 2: Run `act-smoke` workflow locally (dry-run)**
 
 Run: `bun run act-local-ci -- --dry-run` (or the equivalent local entrypoint — see `scripts/act-local-ci.ts`).
 Expected: `act` parses the consolidated workflows without error.
 
 If the act harness rejects any workflow, the error message will pinpoint the file. Fix in-place and amend the relevant task's commit rather than piling edits into Task 8.
 
-- [ ] **Step 3: Diff summary**
+- [x] **Step 3: Diff summary**
 
 Run:
 ```bash
@@ -928,7 +930,7 @@ git diff main...HEAD --stat
 
 Expected: 6 commits (Tasks 2–7), each scoped to its checklist item. `--stat` shows changes localised to `.github/workflows/`.
 
-- [ ] **Step 4: Push and open PR**
+- [x] **Step 4: Push and open PR**
 
 ```bash
 git push -u origin ai/ci-area-f-hygiene-sweep
@@ -953,23 +955,23 @@ Items 6 (runner images explicit) and 8 (composite-action SHA pins) were already 
 
 ## Test plan
 
-- [ ] `bun run lint:workflows` passes locally
-- [ ] `act` dry-run parses all workflows
-- [ ] CI on this PR goes green (`ci / check`, `ci / integration`, `scorecard`, `codeql`)
-- [ ] Branch protection status names unchanged (spot-check `check / check` still reports)
-- [ ] Observe one green run on `main` after merge before starting Area B
+- [x] `bun run lint:workflows` passes locally
+- [x] `act` dry-run parses all workflows
+- [x] CI on this PR goes green (`ci / check`, `ci / integration`, `scorecard`, `codeql`)
+- [x] Branch protection status names unchanged (spot-check `check / check` still reports)
+- [x] Observe one green run on `main` after merge before starting Area B
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```
 
-- [ ] **Step 5: Monitor CI**
+- [x] **Step 5: Monitor CI**
 
 Run: `gh pr checks --watch`
 Expected: all required checks green. If anything fails, fix in-place on this branch (don't open a follow-up PR).
 
-- [ ] **Step 6: Confirm branch-protection status contract is preserved**
+- [x] **Step 6: Confirm branch-protection status contract is preserved**
 
 Specifically verify in the PR's checks panel:
 - `check / check` reports (load-bearing for branch protection).
