@@ -4,7 +4,12 @@
  * Path aliases: #auto-pr (this), #core, #workflow/*, #tools/*
  */
 
-export type { AiProvider } from "#auto-pr/config.js";
+export type {
+	AiProvider,
+	RunAutoPrConfigCommon,
+	RunAutoPrConfigGithubModels,
+	RunAutoPrConfigLocal,
+} from "#auto-pr/config.js";
 export {
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
@@ -51,6 +56,7 @@ export {
 	AutoPrLoggerLayer,
 	appendGhOutput,
 	ChildProcessSpawnerLayer,
+	type CliMainEffect,
 	cleanGitEnv,
 	getDebugHint,
 	PlatformLayer as AutoPrPlatformLayer,

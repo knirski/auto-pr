@@ -5,8 +5,8 @@ describe("buildDescriptionPrompt", () => {
 	test("includes diffstat when provided", () => {
 		const result = buildDescriptionPrompt(
 			"System prompt.",
-			" src/a.ts | 10 +++\n 1 file changed",
 			"- feat: add a",
+			" src/a.ts | 10 +++\n 1 file changed",
 		);
 		expect(result).toContain("System prompt.");
 		expect(result).toContain("Changed files (diff stat):");
@@ -15,22 +15,21 @@ describe("buildDescriptionPrompt", () => {
 	});
 
 	test("omits diffstat section when empty string", () => {
-		const result = buildDescriptionPrompt("System prompt.", "", "- feat: add a");
+		const result = buildDescriptionPrompt("System prompt.", "- feat: add a", "");
 		expect(result).not.toContain("Changed files");
 		expect(result).toContain("Commits:\n- feat: add a");
 	});
 
-	test("backwards compat: works with undefined diffstat", () => {
-		// biome-ignore lint/suspicious/noExplicitAny: testing runtime behaviour with wrong type
-		const result = buildDescriptionPrompt("System prompt.", undefined as any, "- feat: add a");
+	test("omits diffstat section when diffstat is omitted", () => {
+		const result = buildDescriptionPrompt("System prompt.", "- feat: add a");
 		expect(result).toContain("Commits:\n- feat: add a");
 	});
 
 	test("includes existing PR title section after commits when provided", () => {
 		const result = buildDescriptionPrompt(
 			"System prompt.",
-			"",
 			"- feat: add a",
+			"",
 			"feat: prior title",
 		);
 		const commitsIdx = result.indexOf("Commits:\n- feat: add a");
@@ -42,7 +41,7 @@ describe("buildDescriptionPrompt", () => {
 	});
 
 	test("omits existing PR title section when empty or whitespace", () => {
-		expect(buildDescriptionPrompt("S.", "", "- a", "")).not.toContain("Existing PR title");
-		expect(buildDescriptionPrompt("S.", "", "- a", "   ")).not.toContain("Existing PR title");
+		expect(buildDescriptionPrompt("S.", "- a", "", "")).not.toContain("Existing PR title");
+		expect(buildDescriptionPrompt("S.", "- a", "", "   ")).not.toContain("Existing PR title");
 	});
 });

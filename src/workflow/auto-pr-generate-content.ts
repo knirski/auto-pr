@@ -186,18 +186,14 @@ export function resolveExistingPrTitleForPrompt(input: {
 			return Option.none();
 		}
 
-		const parsedUnknown = yield* Effect.sync(() => {
-			try {
-				return JSON.parse(trimmed) as unknown;
-			} catch {
-				return null;
-			}
-		});
-		if (parsedUnknown === null) {
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(trimmed);
+		} catch {
 			return Option.none();
 		}
 
-		const decoded = Schema.decodeUnknownOption(GhPrViewTitleSchema)(parsedUnknown);
+		const decoded = Schema.decodeUnknownOption(GhPrViewTitleSchema)(parsed);
 		if (Option.isNone(decoded)) {
 			return Option.none();
 		}
@@ -428,8 +424,8 @@ export function generatePrContent(params: GeneratePrContentParams) {
 			const commitContent = getDescriptionPromptText(filtered);
 			const prompt = buildDescriptionPrompt(
 				descriptionPromptText,
-				diffStatOutput,
 				commitContent,
+				diffStatOutput,
 				params.existingPrTitle,
 			);
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;

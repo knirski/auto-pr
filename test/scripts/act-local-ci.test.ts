@@ -27,7 +27,7 @@ const ActLocalCiCliTestLayer = BunServices.layer.pipe(Layer.provideMerge(AutoPrL
 function runCli(args: string[]): Effect.Effect<void, unknown, never> {
 	return Command.runWith(actLocalCiCommand, { version: pkg.version })(args).pipe(
 		Effect.provide(ActLocalCiCliTestLayer),
-	) as Effect.Effect<void, unknown, never>;
+	);
 }
 
 function childProcessSpawnerCaptureExit0(

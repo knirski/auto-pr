@@ -310,8 +310,10 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 			Effect.gen(function* () {
 				const config = yield* RunAutoPrConfig;
 				expect(config.provider).toBe("local");
-				expect(config.model).toBe("gpt-oss");
-				expect(config.openaiCompatUrl).toBe(DEFAULT_OPENAI_COMPAT_URL);
+				if (config.provider === "local") {
+					expect(config.model).toBe("gpt-oss");
+					expect(config.openaiCompatUrl).toBe(DEFAULT_OPENAI_COMPAT_URL);
+				}
 				expect(config.branch).toBeUndefined();
 			}),
 		);
@@ -333,7 +335,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 				const config = yield* RunAutoPrConfig;
 				expect(config.provider).toBe("github-models");
 				expect(config.model).toBe(DEFAULT_GITHUB_MODELS_MODEL);
-				expect(config.openaiCompatUrl).toBeUndefined();
+				expect("openaiCompatUrl" in config).toBe(false);
 			}),
 		);
 	});
