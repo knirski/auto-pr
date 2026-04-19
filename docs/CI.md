@@ -1,18 +1,19 @@
 # CI Workflows
 
-This repo uses GitHub Actions with built-in path filters. No third-party path-filter actions.
+This repo uses GitHub Actions. The main [ci.yml](../.github/workflows/ci.yml) entry uses [dorny/paths-filter](https://github.com/dorny/paths-filter) to decide which jobs run; legacy path-scoped entry workflows still exist until Area A Phase 2 merges.
 
 ## CI overview
 
 | When | What runs |
 |------|-----------|
 | Push to `ai/**` | auto-pr creates/updates PR |
-| PR to main (code changes) | ci → check (verify self-referential workflow pins, then full `check` + `integration` jobs), dependency-review |
-| PR to main (docs only) | ci-docs → check-docs |
-| PR to main (website only) | ci-website → check-website (Astro build) |
-| PR to main (.github only) | ci-workflows → `check-workflows` (verify self-referential workflow pins, actionlint, shellcheck, shfmt) |
-| PR to main (nix/deps) | ci-nix → nix flake check (Linux x64 + arm64, macOS arm64) + bun.nix update |
-| PR to main (release-please) | ci-release-please → check |
+| PR to main (any paths) | [ci.yml](../.github/workflows/ci.yml) runs always; path filters fan out to `check`, `integration`, `docs-lint`, `website`, `workflows-lint`, `nix`, `dependency-review` (PRs), and **`gate`** (required after migration). Legacy `ci-docs` / `ci-website` / `ci-workflows` / `ci-nix` / `ci-release-please` still run in parallel during Phase 1. |
+| PR to main (code changes) | Same `ci.yml`: `check` + `integration` + dependency-review when paths match `code` |
+| PR to main (docs only) | Same `ci.yml`: `docs-lint` → check-docs; legacy ci-docs also runs until Phase 2 |
+| PR to main (website only) | Same `ci.yml`: `website` → check-website; legacy ci-website also runs until Phase 2 |
+| PR to main (.github only) | Same `ci.yml`: `workflows-lint` → check-workflows; legacy ci-workflows also runs until Phase 2 |
+| PR to main (nix/deps) | Same `ci.yml`: `nix`; legacy ci-nix also runs until Phase 2 |
+| PR to main (release-please) | Same `ci.yml`: `check` when `release_manifest` or `code` matches; legacy ci-release-please also runs until Phase 2 |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), update-dist (when src/pkg/build/bun.lock change), scorecard (if configured) |
 | PR/push (paths: `.github/workflows/**`, `scripts/act-local-ci.ts`, `flake.nix`) | [act-smoke.yml](../.github/workflows/act-smoke.yml) — matrix: **`--dry-run check`** and **`check-workflows`** in parallel (no duplicate dry-run for ci-workflows; the real act run covers that graph) |
 | Manual | update-bun-nix, update-flake-lock, update-workflow-pins, update-dist |
@@ -25,7 +26,7 @@ Before CI can run fully:
 1. **GitHub App** — Create an app with Contents and Pull requests (Read and write). Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. Required for auto-pr, release-please, update-dist, and add-dist-to-release-pr.
 2. **Codecov** (optional) — Add `CODECOV_TOKEN` for the coverage badge and test analytics. The **`check`** job uploads unit coverage (`coverage/lcov.info`) and JUnit (`test-report.junit.xml`). The **`integration`** job does not upload to Codecov. Get the token from [codecov.io](https://codecov.io). Without it, upload steps no-op; CI still passes.
 3. **Labels** — Run `./scripts/create-labels.sh` so update-flake-lock can open PRs (needs `dependencies`, `nix`, `automated`) and issue templates work (`bug`, `enhancement`, `good first issue`).
-4. **Branch protection** — Require `check / check` and `check / integration` before merging to main (integration: Docker + GitHub Models smoke tests). `check / integration` is not reported by ci-workflows (`.github/**`-only PRs); do not require it for those or it will block workflow-only merges.
+4. **Branch protection** — During Area A Phase 1, keep existing required checks (`check / check`, `check / integration`). Add **`CI / gate`** when ready (see [Branch Protection](#branch-protection)). After Phase 2, require only **`CI / gate`**. Integration covers Docker + GitHub Models smoke tests.
 
 ### Integration job and fork PRs
 
@@ -51,7 +52,7 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 | Workflow | Trigger | Path filter | Jobs |
 |----------|---------|-------------|------|
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
-| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main | `paths-ignore: '**/*.md', '.github/**', 'website/**'` | check (reusable: `check` + `integration`), dependency-review |
+| [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main, workflow_dispatch | — (path filtering inside job `changes` via dorny/paths-filter) | `changes`, `dependency-review`, `check`, `integration`, `docs-lint`, `website`, `workflows-lint`, `nix`, `gate` |
 | [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
 | [ci-website.yml](../.github/workflows/ci-website.yml) | push, pull_request → main | `paths: 'website/**'` | check (reusable: [check-website.yml](../.github/workflows/check-website.yml)) |
 | [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check-workflows |
@@ -72,15 +73,15 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
-**ci.yml** runs when any file changes outside ignored paths (`**/*.md`, `.github/**`, `website/**`). Skips when only docs, only .github, or only the Astro site under `website/` changes.
+**ci.yml** is the consolidated entry: it always triggers on push/PR to `main`; the `changes` job applies path filters so each downstream job runs only when relevant (same semantics as the pre–Area-A split across `ci*.yml`). The `gate` job aggregates outcomes for branch protection (**`CI / gate`** after you add it). Until Area A Phase 2, legacy `ci-docs.yml`, `ci-website.yml`, `ci-workflows.yml`, `ci-nix.yml`, and `ci-release-please.yml` still run in parallel—ignore duplicate statuses once `gate` is required.
 
-**ci-docs.yml** is complementary: runs when only `*.md` files change. Reports a passing `check` job so branch protection allows merge.
+**ci-docs.yml** (legacy until Phase 2): runs when only `*.md` files change. Superseded by `ci.yml` → `docs-lint`.
 
-**ci-website.yml** is complementary: triggers on `website/**` changes and runs an Astro production build (same idea as [deploy-pages.yml](../.github/workflows/deploy-pages.yml)). Does not run unit tests, integration tests, or act-smoke. If a PR also changes non-ignored paths, **`ci.yml` runs too** (mixed PR): you get both workflows; only **check-website** runs the Astro build.
+**ci-website.yml** (legacy until Phase 2): triggers on `website/**` changes. Superseded by `ci.yml` → `website`. Does not run unit tests, integration tests, or act-smoke. Mixed PRs also run `check` from `ci.yml`.
 
-**ci-workflows.yml** is complementary: runs when only `.github/**` changes. Runs **check-workflows** (verify self-referential pins, then actionlint, shellcheck, shfmt on `.github/actions`). Integration tests do not run for workflow-only changes — they test AI provider HTTP behavior, which is unaffected by workflow YAML.
+**ci-workflows.yml** (legacy until Phase 2): runs when only `.github/**` changes. Superseded by `ci.yml` → `workflows-lint`.
 
-**ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
+**ci-nix.yml** (legacy until Phase 2): Nix or dependency files. Superseded by `ci.yml` → `nix`. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
 **update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, ci-nix handles updates automatically.
 
@@ -132,12 +133,15 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 
 ## Branch Protection
 
-Configure main branch protection to require:
+Configure main branch protection to require **a single status check**:
 
-- **`check / check`** — from [ci.yml](../.github/workflows/ci.yml), [ci-release-please.yml](../.github/workflows/ci-release-please.yml), [ci-docs.yml](../.github/workflows/ci-docs.yml) (pass-through), [ci-website.yml](../.github/workflows/ci-website.yml) (pass-through), and [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (via [check-workflows.yml](../.github/workflows/check-workflows.yml)).
-- **`check / integration`** — from [ci.yml](../.github/workflows/ci.yml) and [ci-release-please.yml](../.github/workflows/ci-release-please.yml). Not reported by ci-docs, ci-website, or ci-workflows (docs/website/workflow-only paths do not run integration).
+- **`CI / gate`** — reported by [ci.yml](../.github/workflows/ci.yml)'s `gate` job. The gate is `needs: [dependency-review, check, integration, docs-lint, website, workflows-lint, nix]` with `if: always()`, and fails only if any needed job's `result` is not `success` or `skipped`. A docs-only PR's `check` / `integration` / `website` / `workflows-lint` / `nix` jobs skip; `docs-lint` runs; `gate` evaluates success-or-skipped across all seven → passes. Same idea for every other path category.
 
-Do not require `dependency-review` (PR-only), `nix` (path-filtered), or `act-smoke` (path-filtered smoke test); they would block when skipped or unrelated paths change.
+Do NOT require individual job names (`check / check`, `dependency-review`, etc.) directly — they path-filter correctly inside `ci.yml` and are reported as skipped for unrelated changes, which would otherwise block branch protection.
+
+### Migration state
+
+During the Area A rollout (2026-04-19 onward), legacy entry workflows (`ci-docs.yml`, `ci-website.yml`, `ci-workflows.yml`, `ci-release-please.yml`, `ci-nix.yml`) run in parallel with the consolidated `ci.yml`. Both systems report green statuses. Add **`CI / gate`** to required checks first; verify a PR shows both old and new green; then remove legacy required checks; when the Phase 2 PR merges, the legacy entries are deleted and **`CI / gate`** becomes the sole required check.
 
 ## Dependency review and vulnerability detection
 
