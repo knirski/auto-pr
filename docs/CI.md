@@ -1,21 +1,21 @@
 # CI Workflows
 
-This repo uses GitHub Actions. The main [ci.yml](../.github/workflows/ci.yml) entry uses [dorny/paths-filter](https://github.com/dorny/paths-filter) to decide which jobs run; legacy path-scoped entry workflows still exist until Area A Phase 2 merges.
+This repo uses GitHub Actions. The main [ci.yml](../.github/workflows/ci.yml) entry uses [dorny/paths-filter](https://github.com/dorny/paths-filter) to decide which jobs run.
 
 ## CI overview
 
 | When | What runs |
 |------|-----------|
 | Push to `ai/**` | auto-pr creates/updates PR |
-| PR to main (any paths) | [ci.yml](../.github/workflows/ci.yml) runs always; path filters fan out to `check`, `integration`, `docs-lint`, `website`, `workflows-lint`, `nix`, `dependency-review` (PRs), and **`gate`** (required after migration). Legacy `ci-docs` / `ci-website` / `ci-workflows` / `ci-nix` / `ci-release-please` still run in parallel during Phase 1. |
-| PR to main (code changes) | Same `ci.yml`: `check` + `integration` + dependency-review when paths match `code` |
-| PR to main (docs only) | Same `ci.yml`: `docs-lint` → check-docs; legacy ci-docs also runs until Phase 2 |
-| PR to main (website only) | Same `ci.yml`: `website` → check-website; legacy ci-website also runs until Phase 2 |
-| PR to main (.github only) | Same `ci.yml`: `workflows-lint` → check-workflows; legacy ci-workflows also runs until Phase 2 |
-| PR to main (nix/deps) | Same `ci.yml`: `nix`; legacy ci-nix also runs until Phase 2 |
-| PR to main (release-please) | Same `ci.yml`: `check` when `release_manifest` or `code` matches; legacy ci-release-please also runs until Phase 2 |
+| PR to main (any paths) | [ci.yml](../.github/workflows/ci.yml) runs always; path filters fan out to `check`, `integration`, `docs-lint`, `website`, `workflows-lint`, `nix`, `dependency-review` (PRs), and **`gate`**. |
+| PR to main (code changes) | `ci.yml`: `check` + `integration` + dependency-review when paths match `code` |
+| PR to main (docs only) | `ci.yml`: `docs-lint` → [check-docs.yml](../.github/workflows/check-docs.yml) |
+| PR to main (website only) | `ci.yml`: `website` → [check-website.yml](../.github/workflows/check-website.yml) |
+| PR to main (.github only) | `ci.yml`: `workflows-lint` → [check-workflows.yml](../.github/workflows/check-workflows.yml) |
+| PR to main (nix/deps) | `ci.yml`: `nix` → [nix.yml](../.github/workflows/nix.yml) |
+| PR to main (release-please) | `ci.yml`: `check` when `release_manifest` or `code` matches |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), update-dist (when src/pkg/build/bun.lock change), scorecard (if configured) |
-| PR/push (paths: `.github/workflows/**`, `scripts/act-local-ci.ts`, `flake.nix`) | [act-smoke.yml](../.github/workflows/act-smoke.yml) — matrix: **`--dry-run check`** and **`check-workflows`** in parallel (no duplicate dry-run for ci-workflows; the real act run covers that graph) |
+| PR/push (paths: `.github/workflows/**`, `scripts/act-local-ci.ts`, `flake.nix`) | [act-smoke.yml](../.github/workflows/act-smoke.yml) — matrix: **`--dry-run check`** and **`check-workflows`** in parallel (the second cell runs **`ci.yml`** job **`workflows-lint`**) |
 | Manual | update-bun-nix, update-flake-lock, update-workflow-pins, update-dist |
 | Weekly | update-flake-lock (Sun), scorecard (Sat), stale (Mon) |
 
@@ -26,7 +26,7 @@ Before CI can run fully:
 1. **GitHub App** — Create an app with Contents and Pull requests (Read and write). Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**. Required for auto-pr, release-please, update-dist, and add-dist-to-release-pr.
 2. **Codecov** (optional) — Add `CODECOV_TOKEN` for the coverage badge and test analytics. The **`check`** job uploads unit coverage (`coverage/lcov.info`) and JUnit (`test-report.junit.xml`). The **`integration`** job does not upload to Codecov. Get the token from [codecov.io](https://codecov.io). Without it, upload steps no-op; CI still passes.
 3. **Labels** — Run `./scripts/create-labels.sh` so update-flake-lock can open PRs (needs `dependencies`, `nix`, `automated`) and issue templates work (`bug`, `enhancement`, `good first issue`).
-4. **Branch protection** — During Area A Phase 1, keep existing required checks (`check / check`, `check / integration`). Add **`CI / gate`** when ready (see [Branch Protection](#branch-protection)). After Phase 2, require only **`CI / gate`**. Integration covers Docker + GitHub Models smoke tests.
+4. **Branch protection** — Require **`CI / gate`** (see [Branch Protection](#branch-protection)). Integration covers Docker + GitHub Models smoke tests.
 
 ### Integration job and fork PRs
 
@@ -53,11 +53,6 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 |----------|---------|-------------|------|
 | [auto-pr.yml](../.github/workflows/auto-pr.yml) | push → `ai/**` | — | auto-pr (creates/updates PR from conventional commits) |
 | [ci.yml](../.github/workflows/ci.yml) | push, pull_request → main, workflow_dispatch | — (path filtering inside job `changes` via dorny/paths-filter) | `changes`, `dependency-review`, `check`, `integration`, `docs-lint`, `website`, `workflows-lint`, `nix`, `gate` |
-| [ci-docs.yml](../.github/workflows/ci-docs.yml) | push, pull_request → main | `paths: '**/*.md'` | check (pass-through) |
-| [ci-website.yml](../.github/workflows/ci-website.yml) | push, pull_request → main | `paths: 'website/**'` | check (reusable: [check-website.yml](../.github/workflows/check-website.yml)) |
-| [ci-workflows.yml](../.github/workflows/ci-workflows.yml) | push, pull_request → main | `paths: '.github/**'` | check-workflows |
-| [ci-nix.yml](../.github/workflows/ci-nix.yml) | push, pull_request → main | `paths: **/*.nix, package*.json, bun.lock, flake.lock` | nix |
-| [ci-release-please.yml](../.github/workflows/ci-release-please.yml) | pull_request → main | `paths: .release-please-manifest.json` | check |
 | [update-bun-nix.yml](../.github/workflows/update-bun-nix.yml) | workflow_dispatch | — | update-bun-nix (runs on default branch, pushes bun.nix to main) |
 | [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) | push → main, workflow_dispatch | `paths: .github/workflows/**`, `.github/actions/**` | update-workflow-pins (updates self-referential pins) |
 | [update-dist.yml](../.github/workflows/update-dist.yml) | push → main, workflow_dispatch | `paths: src/**`, package.json, scripts/build.ts, bun.lock | update-dist (builds and commits dist for Node-only GitHub installs) |
@@ -73,19 +68,11 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
-**ci.yml** is the consolidated entry: it always triggers on push/PR to `main`; the `changes` job applies path filters so each downstream job runs only when relevant (same semantics as the pre–Area-A split across `ci*.yml`). The `gate` job aggregates outcomes for branch protection (**`CI / gate`** after you add it). Until Area A Phase 2, legacy `ci-docs.yml`, `ci-website.yml`, `ci-workflows.yml`, `ci-nix.yml`, and `ci-release-please.yml` still run in parallel—ignore duplicate statuses once `gate` is required.
-
-**ci-docs.yml** (legacy until Phase 2): runs when only `*.md` files change. Superseded by `ci.yml` → `docs-lint`.
-
-**ci-website.yml** (legacy until Phase 2): triggers on `website/**` changes. Superseded by `ci.yml` → `website`. Does not run unit tests, integration tests, or act-smoke. Mixed PRs also run `check` from `ci.yml`.
-
-**ci-workflows.yml** (legacy until Phase 2): runs when only `.github/**` changes. Superseded by `ci.yml` → `workflows-lint`.
-
-**ci-nix.yml** (legacy until Phase 2): Nix or dependency files. Superseded by `ci.yml` → `nix`. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
+**ci.yml** is the single entry for push/PR to `main`: the `changes` job applies path filters so each downstream job runs only when relevant. The **`gate`** job aggregates outcomes for branch protection as **`CI / gate`**. The **`nix`** job calls [nix.yml](../.github/workflows/nix.yml): upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), statix/deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and `main` using the same GitHub App as auto-pr when a push is needed (GITHUB_TOKEN pushes do not trigger workflows).
 
 Separately, [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) runs [DeterminateSystems/update-flake-lock](https://github.com/DeterminateSystems/update-flake-lock) — a **single-purpose lockfile-refresh utility**, not a Nix installer. That workflow still installs upstream Nix via the [`setup-nix-with-cache`](../.github/actions/setup-nix-with-cache/action.yml) composite before running the refresh action. Using the Determinate *action* does not reopen [ADR 0006](adr/0006-nix-ci-upstream-and-caching.md)'s choice of Determinate's *installer*.
 
-**update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, ci-nix handles updates automatically.
+**update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, the **`nix`** job in `ci.yml` handles updates automatically when paths match.
 
 **update-workflow-pins.yml** runs on push to main when workflows or actions change, and on workflow_dispatch. Updates **only** self-referential `knirski/auto-pr/...@SHA` refs to the push commit (not marketplace actions or Dockerfiles). Loop prevention: skips when the push commit message starts with `chore(workflows): update self-referential pins` and `github.event.head_commit.author.name` is `github-actions[bot]`. The **Commit-and-push** step sets `git config user.name` / `user.email` to that identity before `git commit`; the **push** uses a GitHub App token (so the new commit triggers workflows—`GITHUB_TOKEN` alone would not), but the git author metadata is still `github-actions[bot]`, not the App’s slug. Do not use `github.actor` for this check: on the triggered run it reflects the App, while `head_commit.author.name` comes from the commit object. Only runs in knirski/auto-pr (skips forks). **check** and **check-workflows** validate pins with `check_only: true`. Full matrix and contributor steps: [Workflow pin automation](#workflow-pin-automation); action reference: [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
 
@@ -115,13 +102,13 @@ Separately, [update-flake-lock.yml](../.github/workflows/update-flake-lock.yml) 
 
 **GitHub Models job:** The **`integration-github-models`** job loads **`.env.ci`** with **`omit_llama_integration_env: true`** so llama-related keys and **`AUTO_PR_AI_OPENAI_COMPAT_URL`** from **`.env.ci`** are not applied (that job uses GitHub Models only).
 
-**More workflows:** `bun run act -- check-workflows` runs only [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (reusable [check-workflows.yml](../.github/workflows/check-workflows.yml): actionlint + shellcheck on `.github`). Use it when editing workflows or actions—much faster than the full `check` job.
+**More workflows:** `bun run act -- check-workflows` runs the **`workflows-lint`** job from [ci.yml](../.github/workflows/ci.yml) (reusable [check-workflows.yml](../.github/workflows/check-workflows.yml): actionlint + shellcheck on `.github`). Use it when editing workflows or actions—much faster than the full `check` job.
 
 **Dry runs:** `bun run act -- --dry-run check` and `bun run act -- --dry-run check-workflows` pass **`act --dryrun`** ([nektos/act](https://github.com/nektos/act) validates workflow graphs without a full run). Useful before a long `check` act run or to catch YAML/reusable-workflow issues early. Still uses Docker for parts of planning; not a substitute for **`bun run check`** or hosted CI.
 
 **Act on GitHub:** [act-smoke.yml](../.github/workflows/act-smoke.yml) runs on pushes/PRs that touch act-related paths (`.github/workflows`, `scripts/act-local-ci.ts`, `flake.nix`, etc.). It uses a **strategy matrix** so **`--dry-run check`** (**ci.yml** graph) and **`check-workflows`** run **in parallel** on separate runners (each installs [**nektos/gh-act**](https://github.com/nektos/gh-act) and runs [act-local-ci.ts](../scripts/act-local-ci.ts); **`GH_TOKEN`** = **`github.token`** for [GitHub CLI in Actions](https://docs.github.com/en/actions/using-workflows/using-github-cli-in-workflows)). There is no **`--dry-run check-workflows`** because the matrix **`check-workflows`** cell covers that graph. **`gh act`** is used when `act` is not on `PATH`; a **smaller default container image** applies for both cells unless **`ACT_RUNNER_IMAGE`** is set. It does **not** run full **`check`** in act (too slow), **`integration`**, or **`dependency-review`** (GitHub-only). It does **not** replace hosted `check` or prove full parity with `bun run act`.
 
-**What we do not run in act-smoke:** Full **`ci.yml` `check`** in act (long, duplicates hosted CI), **`integration.yml`** (heavy, secrets/models), **`ci-docs`** / **`check-docs`**, **`ci-website`** / **`check-website`** (thin wrappers), and **`dependency-review`** (needs GitHub APIs). Use **`bun run check`** and hosted Actions for those.
+**What we do not run in act-smoke:** Full **`ci.yml` `check`** in act (long, duplicates hosted CI), **`integration.yml`** (heavy, secrets/models), **`docs-lint`** / **`check-docs`**, **`website`** / **`check-website`** (domain-specific), and **`dependency-review`** (needs GitHub APIs). Use **`bun run check`** and hosted Actions for those.
 
 Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.md](../CONTRIBUTING.md#pre-push-hook).
 
@@ -141,10 +128,6 @@ Configure main branch protection to require **a single status check**:
 
 Do NOT require individual job names (`check / check`, `dependency-review`, etc.) directly — they path-filter correctly inside `ci.yml` and are reported as skipped for unrelated changes, which would otherwise block branch protection.
 
-### Migration state
-
-During the Area A rollout (2026-04-19 onward), legacy entry workflows (`ci-docs.yml`, `ci-website.yml`, `ci-workflows.yml`, `ci-release-please.yml`, `ci-nix.yml`) run in parallel with the consolidated `ci.yml`. Both systems report green statuses. Add **`CI / gate`** to required checks first; verify a PR shows both old and new green; then remove legacy required checks; when the Phase 2 PR merges, the legacy entries are deleted and **`CI / gate`** becomes the sole required check.
-
 ## Dependency review and vulnerability detection
 
 **dependency-review** runs on PRs (except Dependabot Bun PRs). For Dependabot Bun PRs, the job is skipped because GitHub's dependency graph may not yet support `bun.lock`. Vulnerability detection is covered by **bun audit** in the check job (`bun audit --audit-level=high` runs on every PR, including Dependabot Bun PRs).
@@ -153,7 +136,7 @@ During the Area A rollout (2026-04-19 onward), legacy entry workflows (`ci-docs.
 
 ## Troubleshooting: "check / check" waiting for status
 
-When ci-nix pushes a bun.nix update, the PR head changes to a new commit. The required check must run on that new commit. If you see "waiting for status to be reported":
+When the **`nix`** job pushes a `bun.nix` update, the PR head changes to a new commit. The required check must run on that new commit. If you see "waiting for status to be reported":
 
 1. **Wait 1–2 minutes** — The push triggers the check workflow; it may take a moment to start.
 2. **Re-run workflows** — If the check still hasn't run, use "Re-run all jobs" from the Actions tab.
@@ -161,7 +144,7 @@ When ci-nix pushes a bun.nix update, the PR head changes to a new commit. The re
 
 ## Fork PRs
 
-CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+CI cannot push to forks. If the **`nix`** job fails, update locally: `nix run .#update-bun-nix`, then commit and push. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Workflow pin automation
 

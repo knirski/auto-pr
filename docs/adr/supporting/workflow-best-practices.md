@@ -46,7 +46,7 @@ Research date: 2026-03-15. Assesses all `.github/workflows/*.yml` against modern
 ### 5. Documentation
 
 - **docs/CI.md**: release-please.yml added to workflows table
-- **ci-nix.yml**: Uses cachix/install-nix-action, cache-nix-action (see [nix-ci-research.md](nix-ci-research.md))
+- **nix.yml** (via `ci.yml` → `nix`): Uses cachix/install-nix-action, cache-nix-action (see [nix-ci-research.md](nix-ci-research.md))
 
 ### 6. Reusable Workflows
 

@@ -34,7 +34,6 @@ export function isActLocalCiMode(s: string): s is ActLocalCiMode {
 }
 
 export const CI_WORKFLOW = ".github/workflows/ci.yml" as const;
-export const CI_WORKFLOWS_ENTRY = ".github/workflows/ci-workflows.yml" as const;
 export const INTEGRATION_WORKFLOW = ".github/workflows/integration.yml" as const;
 export const CI_EVENT = "workflow_dispatch" as const;
 
@@ -535,8 +534,8 @@ function runActCheckWorkflowsJob(
 	return runWorkflowJob(
 		{
 			...ctx,
-			workflowPath: CI_WORKFLOWS_ENTRY,
-			jobName: "check",
+			workflowPath: CI_WORKFLOW,
+			jobName: "workflows-lint",
 			failureIntro,
 		},
 		resolveBackend,
@@ -619,7 +618,7 @@ export function program(
 		} as const;
 
 		const failCheck = `bun run act failed on job 'check' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check)" : ""}.`;
-		const failCw = `bun run act failed on job 'check' from ${CI_WORKFLOWS_ENTRY}${outcome.dryRun ? " (dry-run check-workflows)" : ""}.`;
+		const failCw = `bun run act failed on job 'workflows-lint' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check-workflows)" : ""}.`;
 		const failInt = `bun run act failed on job 'integration' from ${INTEGRATION_WORKFLOW}${outcome.dryRun ? " (dry-run integration)" : ""}. Integration runs llama-server + GitHub Models; ensure Docker has enough resources.`;
 
 		yield* Match.value(outcome.mode).pipe(
@@ -668,7 +667,7 @@ export const actLocalCiCommand = Command.make(
 		{ command: "act-local-ci check", description: "CI check job only" },
 		{
 			command: "act-local-ci --dry-run check-workflows",
-			description: "Validate ci-workflows graph without full run",
+			description: "Validate ci.yml workflows-lint graph without full run",
 		},
 	]),
 );

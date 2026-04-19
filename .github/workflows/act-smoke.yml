@@ -1,4 +1,4 @@
-# Smoke-test nektos/act: dry-run the ci.yml → check graph, and run the check-workflows job (ci-workflows.yml → check-workflows.yml).
+# Smoke-test nektos/act: dry-run the ci.yml → check graph, and run ci.yml → workflows-lint (reusable check-workflows.yml).
 # Matrix runs both in parallel (prep is cheap vs act). Does not replace GitHub-hosted CI.
 
 name: Act smoke
@@ -39,7 +39,7 @@ jobs:
             act_command: bun scripts/act-local-ci.ts --dry-run check
             # --dryrun skips step execution; container only needs to start up, so a minimal image suffices.
             act_runner_image: ubuntu:24.04
-          - label: Run act (check-workflows job)
+          - label: Run act (ci.yml workflows-lint)
             act_command: bun scripts/act-local-ci.ts check-workflows
             act_runner_image: ghcr.io/catthehacker/ubuntu:act-24.04
     env:

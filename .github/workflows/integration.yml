@@ -1,6 +1,6 @@
 # Real HTTP integration tests — three scenario-focused jobs run in parallel.
 # Not published by auto-pr-init — knirski/auto-pr CI only; adopters do not copy this workflow.
-# Called via workflow_call by ci.yml and ci-workflows.yml; workflow_dispatch for manual runs.
+# Called via workflow_call by ci.yml; workflow_dispatch for manual runs.
 name: Integration
 
 on:

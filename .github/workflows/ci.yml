@@ -88,7 +88,7 @@ jobs:
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
   # Full check pipeline: lint, typecheck, unit tests, secret scan, workflow pin verify.
-  # Runs for code changes and for release-please PRs (preserves ci-release-please.yml behavior).
+  # Runs for code changes and for release-please PRs (when `release_manifest` or `code` paths match).
   check:
     needs: changes
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.release_manifest == 'true'
