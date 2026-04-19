@@ -10,6 +10,12 @@ test("accepts https URL", () => {
 	expect(Result.isSuccess(parseOpenAiCompatUrl("https://api.example.com/v1"))).toBe(true);
 });
 
+test("trims surrounding whitespace on success", () => {
+	const r = parseOpenAiCompatUrl("  http://127.0.0.1:8080/v1  ");
+	expect(Result.isSuccess(r)).toBe(true);
+	if (Result.isSuccess(r)) expect(r.success).toBe("http://127.0.0.1:8080/v1");
+});
+
 test("rejects empty", () => {
 	expect(Result.isFailure(parseOpenAiCompatUrl(""))).toBe(true);
 });
@@ -20,6 +26,12 @@ test("rejects whitespace-only", () => {
 
 test("rejects missing scheme", () => {
 	expect(Result.isFailure(parseOpenAiCompatUrl("localhost:8080"))).toBe(true);
+});
+
+test("rejects string that is not a valid URL", () => {
+	const r = parseOpenAiCompatUrl(":::");
+	expect(Result.isFailure(r)).toBe(true);
+	if (Result.isFailure(r)) expect(r.failure.reason).toBe("not a valid URL");
 });
 
 test("rejects non-http scheme", () => {
