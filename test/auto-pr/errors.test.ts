@@ -13,6 +13,7 @@ import {
 	isTransientAiError,
 	NoSemanticCommitsError,
 	ParseError,
+	PrLookupError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
@@ -72,6 +73,12 @@ test("formatError formats PullRequestBodyBlankError", () => {
 	expect(formatError(new PullRequestBodyBlankError({ message: "Empty body" }))).toContain(
 		"conventionalcommits.org",
 	);
+});
+
+test("formatError formats PrLookupError", () => {
+	const out = formatError(new PrLookupError({ branch: "ai/foo", cause: "boom" }));
+	expect(out).toContain("ai/foo");
+	expect(out).toContain("boom");
 });
 
 test("formatError formats ParseError", () => {

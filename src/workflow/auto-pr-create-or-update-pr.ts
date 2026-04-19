@@ -24,7 +24,8 @@ import {
 	runCommand,
 	runMain,
 } from "#auto-pr";
-import type { ParsedJson } from "#core/parse-model-json.js";
+import { PrLookupError } from "#core/errors.js";
+import { parseFirstJsonObject } from "#core/parse-model-json.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -37,25 +38,44 @@ const PrInfoSchema = Schema.Struct({
 });
 type PrInfo = Schema.Schema.Type<typeof PrInfoSchema>;
 
+/** True when wrapped gh output indicates no PR for the branch (distinct from auth/network). */
+function ghStdoutMeansNoPrYet(cause: string): boolean {
+	const m = cause.toLowerCase();
+	return (
+		m.includes("no pull requests found") ||
+		m.includes("no pr found") ||
+		m.includes("no pull request")
+	);
+}
+
 /** Reliable PR existence check: gh pr view --json number,url. Returns Option with PR info if exists. */
-function ghPrViewJson(
+export function ghPrViewJson(
 	branch: string,
 	cwd: string,
-): Effect.Effect<Option.Option<PrInfo>, never, ChildProcessSpawner> {
+): Effect.Effect<Option.Option<PrInfo>, PrLookupError, ChildProcessSpawner> {
+	const toLookupError = (cause: string): PrLookupError => new PrLookupError({ branch, cause });
+
 	return Effect.gen(function* () {
-		const stdout = yield* runCommand("gh", ["pr", "view", branch, "--json", "number,url"], cwd);
-		const trimmed = stdout.trim();
-		if (!trimmed) return Option.none();
-		const parsed = yield* Effect.try({
-			try: () => JSON.parse(trimmed) as ParsedJson,
-			catch: () => null,
-		}).pipe(Effect.catch(() => Effect.succeed(null)));
-		if (parsed === null) return Option.none();
-		return yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
-			Effect.map(Option.some),
-			Effect.catch(() => Effect.succeed(Option.none())),
+		const stdout = yield* runCommand(
+			"gh",
+			["pr", "view", branch, "--json", "number,url"],
+			cwd,
+		).pipe(
+			Effect.catchTag("PullRequestFailedError", (e) =>
+				ghStdoutMeansNoPrYet(e.cause) ? Effect.succeed("") : Effect.fail(toLookupError(e.cause)),
+			),
 		);
-	}).pipe(Effect.catch(() => Effect.succeed(Option.none())));
+		const trimmed = stdout.trim();
+		if (trimmed === "") return Option.none();
+
+		const parsed = yield* Effect.fromResult(parseFirstJsonObject(trimmed)).pipe(
+			Effect.mapError((e) => toLookupError(e.message)),
+		);
+		const decoded = yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
+			Effect.mapError((e) => toLookupError(String(e))),
+		);
+		return Option.some(decoded);
+	});
 }
 
 function ghPrEdit(
@@ -130,7 +150,11 @@ function extractPrUrl(stdout: string): string {
 	return stdout.trim().split("\n").at(-1) ?? "";
 }
 
-type CreateOrUpdatePrError = PullRequestFailedError | BodyFileNotFoundError | FileSystemError;
+type CreateOrUpdatePrError =
+	| PullRequestFailedError
+	| BodyFileNotFoundError
+	| FileSystemError
+	| PrLookupError;
 
 /** Main pipeline. Exported for tests. */
 export function runCreateOrUpdatePr(params: {

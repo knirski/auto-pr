@@ -20,6 +20,7 @@ import {
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
+	PrLookupError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
@@ -36,6 +37,7 @@ export {
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
+	PrLookupError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
@@ -58,6 +60,7 @@ export function formatError(e: unknown): string {
 		e instanceof BodyFileNotFoundError ||
 		e instanceof DescriptionParseError ||
 		e instanceof ParseError ||
+		e instanceof PrLookupError ||
 		e instanceof NoSemanticCommitsError ||
 		e instanceof TemplateRenderError ||
 		e instanceof FillPrTemplateValidationError ||
@@ -88,6 +91,7 @@ export function formatError(e: unknown): string {
 					`PR body file does not exist: ${path}. Check generate-content step succeeded. See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md#troubleshooting`,
 			),
 			Match.tag("DescriptionParseError", ({ cause }) => cause),
+			Match.tag("PrLookupError", ({ branch, cause }) => `PR lookup failed (${branch}): ${cause}`),
 			Match.tag("ParseError", ({ message, cause }) =>
 				cause == null ? message : `${message}: ${String(cause)}`,
 			),
