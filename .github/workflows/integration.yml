@@ -7,6 +7,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   models: read
@@ -56,7 +60,7 @@ jobs:
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
       - name: Cache llama-server artifacts (stub GGUF + Docker image tar)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           # Stable workspace path (not runner.temp): cache tars/GGUF for curl and `docker cp` into the llama container (no GGUF bind-mount).
           path: ${{ github.workspace }}/.cache/auto-pr-llama-stub
@@ -162,7 +166,7 @@ jobs:
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
       - name: Cache llama-server artifacts (model GGUF + Docker image tar)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ github.workspace }}/.cache/auto-pr-llama-model
           key: llama-${{ steps.llama_server_image.outputs.tag }}-${{ steps.llama_model_cache_key.outputs.hash }}-docker-model
