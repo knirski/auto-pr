@@ -1,6 +1,6 @@
 # Updates self-referential workflow pins (knirski/auto-pr/...@SHA) to current commit.
 # Runs on push to main when workflows/actions change, or on workflow_dispatch.
-# Loop prevention: skips when commit message starts with "chore(workflows): update self-referential pins".
+# Loop prevention: skips when commit message matches the pin-updater prefix AND author is github-actions[bot].
 # Only runs in knirski/auto-pr (skips forks).
 
 name: Update workflow pins
@@ -21,9 +21,16 @@ permissions: {}
 
 jobs:
   update-pins:
+    # Loop prevention requires BOTH conditions to skip:
+    #   - commit message starts with the pin-updater prefix, AND
+    #   - commit author is github-actions[bot] (set explicitly by this workflow in the Commit-and-push step).
+    # A human commit that happens to reuse the prefix still runs.
     if: |
       github.repository == 'knirski/auto-pr' &&
-      (github.event_name != 'push' || github.event.head_commit == null || !startsWith(github.event.head_commit.message, 'chore(workflows): update self-referential pins'))
+      (github.event_name != 'push' ||
+       github.event.head_commit == null ||
+       !startsWith(github.event.head_commit.message, 'chore(workflows): update self-referential pins') ||
+       github.event.head_commit.author.name != 'github-actions[bot]')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
