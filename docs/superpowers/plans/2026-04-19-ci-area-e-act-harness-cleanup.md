@@ -481,8 +481,8 @@ In `docs/CI.md:111`, change:
 - To: "an inline **`python3`** one-liner in `integration.yml`"
 
 In `docs/INTEGRATION.md:228`, change:
-- From: "[`scripts/integration-ephemeral-port.sh`](../scripts/integration-ephemeral-port.sh) (**`python3`**: `bind(127.0.0.1, 0)` — Python is preinstalled on GitHub-hosted Ubuntu; not inside nested containers)"
-- To: "an inline **`python3`** one-liner in [integration.yml](../.github/workflows/integration.yml) (`bind(127.0.0.1, 0)` — Python is preinstalled on GitHub-hosted Ubuntu; not inside nested containers)"
+- From: "`scripts/integration-ephemeral-port.sh` (**`python3`**: `bind(127.0.0.1, 0)` — Python is preinstalled on GitHub-hosted Ubuntu; not inside nested containers)"
+- To: "an inline **`python3`** one-liner in [integration.yml](../../../.github/workflows/integration.yml) (`bind(127.0.0.1, 0)` — Python is preinstalled on GitHub-hosted Ubuntu; not inside nested containers)"
 
 Exact wording can vary; preserve the technical details (localhost, port 0, Python preinstalled on Ubuntu).
 
