@@ -79,12 +79,14 @@ test("formatError formats ParseError", () => {
 });
 
 test("formatError formats ParseError with cause", () => {
-	expect(formatError(new ParseError({ message: "Bad", cause: new Error("nested") }))).toContain(
-		"Bad",
-	);
-	expect(formatError(new ParseError({ message: "Bad", cause: new Error("nested") }))).toContain(
-		"nested",
-	);
+	expect(formatError(new ParseError({ message: "Bad", cause: "nested" }))).toContain("Bad");
+	expect(formatError(new ParseError({ message: "Bad", cause: "nested" }))).toContain("nested");
+});
+
+test("formatError passes ParseError.cause through as a string", () => {
+	const out = formatError(new ParseError({ message: "parse failed", cause: "unexpected token" }));
+	expect(out).toContain("parse failed");
+	expect(out).toContain("unexpected token");
 });
 
 test("formatError formats NoSemanticCommitsError", () => {

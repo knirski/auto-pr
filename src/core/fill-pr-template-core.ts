@@ -146,7 +146,7 @@ export function parseCommits(logOutput: string): Result.Result<readonly CommitIn
 		catch: (e) =>
 			new ParseError({
 				message: "Failed to parse commits",
-				cause: toError(e),
+				cause: toError(e).message,
 			}),
 	});
 }
@@ -516,7 +516,7 @@ export function renderBody(
 		catch: (e) =>
 			new TemplateRenderError({
 				message: "Failed to render template",
-				cause: toError(e),
+				cause: toError(e).message,
 			}),
 	});
 }

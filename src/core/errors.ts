@@ -56,7 +56,7 @@ export class DescriptionParseError extends Schema.TaggedErrorClass<DescriptionPa
 /** Parse error for commit message parsing failures. Used by fill-pr-template. */
 export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseError", {
 	message: Schema.String,
-	cause: Schema.optional(Schema.Unknown),
+	cause: Schema.optional(Schema.String),
 }) {}
 
 /** No semantic commits (all merge or non-semantic). Add at least one non-merge commit. */
@@ -70,7 +70,7 @@ export class NoSemanticCommitsError extends Schema.TaggedErrorClass<NoSemanticCo
 /** Template render failed (micromustache syntax error). */
 export class TemplateRenderError extends Schema.TaggedErrorClass<TemplateRenderError>()(
 	"TemplateRenderError",
-	{ message: Schema.String, cause: Schema.optional(Schema.Unknown) },
+	{ message: Schema.String, cause: Schema.optional(Schema.String) },
 ) {}
 
 /** FillPrTemplate params validation failed (e.g. templatePath required). */

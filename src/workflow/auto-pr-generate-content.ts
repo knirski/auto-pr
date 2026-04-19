@@ -500,7 +500,7 @@ export function normalizeUnknownToGeneratePrContentError(
 		() =>
 			new TemplateRenderError({
 				message: "Unexpected failure",
-				cause: toError(e),
+				cause: toError(e).message,
 			}),
 	);
 }

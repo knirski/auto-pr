@@ -41,6 +41,7 @@ import {
 } from "effect";
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
 import { AutoPrConfigError } from "#core/errors.js";
+import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
 
 /** Type guard for cause with message property. */
 function hasMessage(obj: unknown): obj is { message?: string } {
@@ -79,6 +80,21 @@ function requireRedactedOption(
 	return Option.match(opt, {
 		onNone: () => Effect.fail(new AutoPrConfigError({ missing: [missingMessage] })),
 		onSome: (v) => requireRedactedNonEmpty(name, v),
+	});
+}
+
+/** Unwrap Option with default; log a warning when the default is used. */
+function getOrDefaultLogged<T>(
+	opt: Option.Option<T>,
+	name: string,
+	fallback: T,
+): Effect.Effect<T, never> {
+	return Option.match(opt, {
+		onNone: () =>
+			Effect.logWarning(`${name} not set, defaulting to ${String(fallback)}`).pipe(
+				Effect.as(fallback),
+			),
+		onSome: Effect.succeed,
 	});
 }
 
@@ -175,11 +191,11 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			}
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
-			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
-			yield* Option.match(base.aiProvider, {
-				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to local"),
-				onSome: () => Effect.void,
-			});
+			const providerRaw = yield* getOrDefaultLogged(
+				base.aiProvider,
+				"AUTO_PR_AI_PROVIDER",
+				DEFAULT_AI_PROVIDER,
+			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 
 			const shared = {
@@ -193,25 +209,25 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			return yield* Match.value(provider).pipe(
 				Match.when("local", () =>
 					Effect.gen(function* () {
-						const openaiCompatUrl = Option.getOrElse(
+						const openaiCompatUrl = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatUrl,
-							() => DEFAULT_OPENAI_COMPAT_URL,
+							"AUTO_PR_AI_OPENAI_COMPAT_URL",
+							DEFAULT_OPENAI_COMPAT_URL,
 						);
-						if (Option.isNone(base.aiOpenaiCompatUrl)) {
-							yield* Effect.logWarning(
-								`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
-							);
-						}
-						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
-						const model = Option.getOrElse(
+						const urlRaw = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const url = yield* Effect.fromResult(parseOpenAiCompatUrl(urlRaw)).pipe(
+							Effect.mapError(
+								(e) =>
+									new AutoPrConfigError({
+										missing: [`AUTO_PR_AI_OPENAI_COMPAT_URL: ${e.reason}`],
+									}),
+							),
+						);
+						const model = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatModel,
-							() => DEFAULT_OPENAI_COMPAT_MODEL,
+							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+							DEFAULT_OPENAI_COMPAT_MODEL,
 						);
-						if (Option.isNone(base.aiOpenaiCompatModel)) {
-							yield* Effect.logWarning(
-								`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
-							);
-						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
@@ -230,17 +246,11 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.ghToken,
 							"GH_TOKEN required for github-models",
 						);
-						const model = Option.getOrElse(
+						const model = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatModel,
-							() => DEFAULT_GITHUB_MODELS_MODEL,
+							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+							DEFAULT_GITHUB_MODELS_MODEL,
 						);
-						yield* Option.match(base.aiOpenaiCompatModel, {
-							onNone: () =>
-								Effect.logWarning(
-									`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_GITHUB_MODELS_MODEL}`,
-								),
-							onSome: () => Effect.void,
-						});
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						return {
 							...shared,
@@ -374,11 +384,11 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				);
 			}
 
-			const providerRaw = Option.getOrElse(base.aiProvider, () => "");
-			yield* Option.match(base.aiProvider, {
-				onNone: () => Effect.logWarning("AUTO_PR_AI_PROVIDER not set, defaulting to local"),
-				onSome: () => Effect.void,
-			});
+			const providerRaw = yield* getOrDefaultLogged(
+				base.aiProvider,
+				"AUTO_PR_AI_PROVIDER",
+				DEFAULT_AI_PROVIDER,
+			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 
 			const shared = {
@@ -392,25 +402,25 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			return yield* Match.value(provider).pipe(
 				Match.when("local", () =>
 					Effect.gen(function* () {
-						const openaiCompatUrl = Option.getOrElse(
+						const openaiCompatUrl = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatUrl,
-							() => DEFAULT_OPENAI_COMPAT_URL,
+							"AUTO_PR_AI_OPENAI_COMPAT_URL",
+							DEFAULT_OPENAI_COMPAT_URL,
 						);
-						if (Option.isNone(base.aiOpenaiCompatUrl)) {
-							yield* Effect.logWarning(
-								`AUTO_PR_AI_OPENAI_COMPAT_URL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_URL}`,
-							);
-						}
-						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
-						const model = Option.getOrElse(
+						const urlRaw = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const url = yield* Effect.fromResult(parseOpenAiCompatUrl(urlRaw)).pipe(
+							Effect.mapError(
+								(e) =>
+									new AutoPrConfigError({
+										missing: [`AUTO_PR_AI_OPENAI_COMPAT_URL: ${e.reason}`],
+									}),
+							),
+						);
+						const model = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatModel,
-							() => DEFAULT_OPENAI_COMPAT_MODEL,
+							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+							DEFAULT_OPENAI_COMPAT_MODEL,
 						);
-						if (Option.isNone(base.aiOpenaiCompatModel)) {
-							yield* Effect.logWarning(
-								`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_OPENAI_COMPAT_MODEL}`,
-							);
-						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						const runAutoPrLocal: RunAutoPrConfigLocal = {
 							...shared,
@@ -426,17 +436,11 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				),
 				Match.when("github-models", () =>
 					Effect.gen(function* () {
-						const model = Option.getOrElse(
+						const model = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatModel,
-							() => DEFAULT_GITHUB_MODELS_MODEL,
+							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+							DEFAULT_GITHUB_MODELS_MODEL,
 						);
-						yield* Option.match(base.aiOpenaiCompatModel, {
-							onNone: () =>
-								Effect.logWarning(
-									`AUTO_PR_AI_OPENAI_COMPAT_MODEL not set, defaulting to ${DEFAULT_GITHUB_MODELS_MODEL}`,
-								),
-							onSome: () => Effect.void,
-						});
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 						const runAutoPrGithub: RunAutoPrConfigGithubModels = {
 							...shared,
