@@ -52,10 +52,10 @@ jobs:
         run: bun run check:code
 
       - name: Markdown lint
-        uses: rvben/rumdl@6540b53fa24e83f9693e36889e0f9c765aa90349 # v0.1.67
+        uses: rvben/rumdl@68d37ee69adb3c568543c15ef78865389c02ee6c # v0.1.75
 
       - name: Spell check
-        uses: crate-ci/typos@02ea592e44b3a53c302f697cddca7641cd051c3d # v1.45.0
+        uses: crate-ci/typos@cf5f1c29a8ac336af8568821ec41919923b05a83 # v1.45.1
 
       - name: Lint workflows
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
@@ -88,7 +88,7 @@ jobs:
         # protojson and rejects unknown fields (nektos/act#6022). Upstream: open PRs e.g. #6039 / #6053
         # (DiscardUnknown) — after merge and an act release, this guard can be removed if desired.
         if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom
           path: sbom.json
