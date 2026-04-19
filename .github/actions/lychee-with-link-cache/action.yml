@@ -1,0 +1,79 @@
+# Composite: install lychee, fingerprint discovered links (sorted), cache .lycheecache, run check.
+# Cache key includes sha256 of `lychee --dump` output sorted uniquely (one URL per line).
+name: Lychee with link-set cache
+description: Lychee link check with HTTP cache keyed by sorted link-set hash
+
+inputs:
+  args:
+    description: Arguments appended after --cache (must include inputs, e.g. `.`).
+    required: true
+  lychee-version:
+    description: Lychee release tag (keep aligned with lychee-action releases)
+    default: v0.23.0
+
+runs:
+  using: composite
+  steps:
+    - name: Install lychee
+      shell: bash
+      env:
+        LYCHEE_VERSION: ${{ inputs.lychee-version }}
+      run: |
+        set -euo pipefail
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        mkdir -p "$HOME/.local/bin"
+        rm -f "$HOME/.local/bin/lychee"
+        TEMP_DIR="${RUNNER_TEMP}/lychee-download"
+        mkdir -p "${TEMP_DIR}"
+        cd "${TEMP_DIR}"
+        ARCH=$(uname -m)
+        FILENAME="lychee-${ARCH}-unknown-linux-gnu.tar.gz"
+        DOWNLOAD_URL="https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/${FILENAME}"
+        echo "Downloading from: ${DOWNLOAD_URL}"
+        curl -sfLO "${DOWNLOAD_URL}"
+        tar -xzf "${FILENAME}"
+        install -t "$HOME/.local/bin" -D "${TEMP_DIR}/lychee"
+
+    - name: Link set fingerprint (sorted URLs)
+      id: links_fp
+      shell: bash
+      run: |
+        set -euo pipefail
+        hash="$(lychee --dump . 2>/dev/null | sort -u | sha256sum | awk '{print $1}')"
+        echo "hash=$hash" >> "$GITHUB_OUTPUT"
+        echo "lychee link-set sha256: $hash"
+
+    - name: Cache lychee HTTP responses
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: .lycheecache
+        key: lychee-links-${{ runner.os }}-${{ inputs.lychee-version }}-${{ steps.links_fp.outputs.hash }}
+
+    - name: Check links
+      shell: bash
+      env:
+        INPUT_ARGS: ${{ inputs.args }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -uo pipefail
+        set +e
+        LYCHEE_TMP="$(mktemp)"
+        eval lychee --format markdown --output "${LYCHEE_TMP}" --cache ${INPUT_ARGS}
+        LYCHEE_EXIT_CODE=$?
+        set -e
+        if [ ! -f "${LYCHEE_TMP}" ]; then
+          echo "No output from lychee."
+          exit 1
+        fi
+        should_fail_because_empty=false
+        if grep -E 'Total\s+\|\s+0' "${LYCHEE_TMP}"; then
+          echo "No links were found. This usually indicates a configuration error." >> "${LYCHEE_TMP}"
+          should_fail_because_empty=true
+        fi
+        cat "${LYCHEE_TMP}" >> "${GITHUB_STEP_SUMMARY}"
+        echo "::notice::Lychee summary written to the job summary for this run."
+        cat "${LYCHEE_TMP}"
+        if [ "${should_fail_because_empty}" = true ]; then
+          exit 1
+        fi
+        exit "${LYCHEE_EXIT_CODE}"
