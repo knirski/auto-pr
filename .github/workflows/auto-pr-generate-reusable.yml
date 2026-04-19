@@ -61,6 +61,7 @@ jobs:
   generate:
     permissions:
       contents: read
+      pull-requests: read # gh pr view (existing PR title) when token allows
       models: read # GitHub Models API (github-models provider) with GITHUB_TOKEN or GH_TOKEN
     runs-on: ubuntu-24.04
     timeout-minutes: 25

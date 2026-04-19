@@ -25,4 +25,24 @@ describe("buildDescriptionPrompt", () => {
 		const result = buildDescriptionPrompt("System prompt.", undefined as any, "- feat: add a");
 		expect(result).toContain("Commits:\n- feat: add a");
 	});
+
+	test("includes existing PR title section after commits when provided", () => {
+		const result = buildDescriptionPrompt(
+			"System prompt.",
+			"",
+			"- feat: add a",
+			"feat: prior title",
+		);
+		const commitsIdx = result.indexOf("Commits:\n- feat: add a");
+		const existingIdx = result.indexOf("Existing PR title");
+		expect(commitsIdx).not.toBe(-1);
+		expect(existingIdx).not.toBe(-1);
+		expect(existingIdx).toBeGreaterThan(commitsIdx);
+		expect(result).toContain("feat: prior title");
+	});
+
+	test("omits existing PR title section when empty or whitespace", () => {
+		expect(buildDescriptionPrompt("S.", "", "- a", "")).not.toContain("Existing PR title");
+		expect(buildDescriptionPrompt("S.", "", "- a", "   ")).not.toContain("Existing PR title");
+	});
 });
