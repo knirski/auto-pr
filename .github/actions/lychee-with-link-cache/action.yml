@@ -8,7 +8,7 @@ inputs:
     description: Arguments appended after --cache (must include inputs, e.g. `.`).
     required: true
   lychee-version:
-    description: Lychee release tag (keep aligned with lychee-action releases)
+    description: Version suffix for lycheeverse/lychee releases (tag is lychee-<this>, e.g. lychee-v0.23.0). Align with lychee-action.
     default: v0.23.0
 
 runs:
@@ -27,8 +27,10 @@ runs:
         mkdir -p "${TEMP_DIR}"
         cd "${TEMP_DIR}"
         ARCH=$(uname -m)
+        # Upstream asset names are lychee-<arch>-unknown-linux-gnu.tar.gz (no version in the filename).
         FILENAME="lychee-${ARCH}-unknown-linux-gnu.tar.gz"
-        DOWNLOAD_URL="https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/${FILENAME}"
+        RELEASE_TAG="lychee-${LYCHEE_VERSION}"
+        DOWNLOAD_URL="https://github.com/lycheeverse/lychee/releases/download/${RELEASE_TAG}/${FILENAME}"
         echo "Downloading from: ${DOWNLOAD_URL}"
         curl -sfLO "${DOWNLOAD_URL}"
         tar -xzf "${FILENAME}"
@@ -48,6 +50,8 @@ runs:
       with:
         path: .lycheecache
         key: lychee-links-${{ runner.os }}-${{ inputs.lychee-version }}-${{ steps.links_fp.outputs.hash }}
+        restore-keys: |
+          lychee-links-${{ runner.os }}-${{ inputs.lychee-version }}-
 
     - name: Check links
       shell: bash
@@ -58,7 +62,8 @@ runs:
         set -uo pipefail
         set +e
         LYCHEE_TMP="$(mktemp)"
-        eval lychee --format markdown --output "${LYCHEE_TMP}" --cache ${INPUT_ARGS}
+        # shellcheck disable=SC2086 -- INPUT_ARGS is intentional multi-arg passthrough from the workflow (no eval).
+        lychee --format markdown --output "${LYCHEE_TMP}" --cache ${INPUT_ARGS}
         LYCHEE_EXIT_CODE=$?
         set -e
         if [ ! -f "${LYCHEE_TMP}" ]; then
