@@ -1,7 +1,6 @@
-# CI: check, dependency-review. Nix runs in ci-nix.yml when deps change.
-# Uses built-in paths-ignore: skip when only *.md, only .github/**, or only website/** changes.
-# .github-only changes run ci-workflows.yml (minimal check).
-# Website-only changes run ci-website.yml (build only; no unit/integration tests).
+# CI: one entry workflow, path-filtered fan-out to per-domain jobs, single gate for branch protection.
+# Replaces six pre-Area-A entry workflows (ci.yml + ci-docs + ci-website + ci-workflows + ci-release-please + ci-nix).
+# See docs/CI.md §Branch Protection and docs/superpowers/specs/2026-04-19-ci-modernization-audit-design.md §2.
 
 name: CI
 
@@ -9,29 +8,69 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
-      - '.github/**'
-      - 'website/**'
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
-      - '.github/**'
-      - 'website/**'
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # false: superseding pushes no longer cancel in-flight runs. Cancelled runs surface as failed/bad
+  # checks on PRs and confuse branch protection; true saves minutes but hurts UX on active branches.
+  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
+  # Determine which groups of files changed, so work jobs only run when relevant.
+  # Filter definitions mirror the pre-Area-A entry workflows' paths / paths-ignore exactly.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # dorny/paths-filter reads PR file list via REST
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+      website: ${{ steps.filter.outputs.website }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      nix: ${{ steps.filter.outputs.nix }}
+      release_manifest: ${{ steps.filter.outputs.release_manifest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Compute path filters
+        id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!*.md'
+              - '!.github/**'
+              - '!website/**'
+            docs:
+              - '**/*.md'
+            website:
+              - 'website/**'
+            workflows:
+              - '.github/**'
+            nix:
+              - '**/*.nix'
+              - 'package*.json'
+              - 'bun.lock'
+              - 'flake.lock'
+            release_manifest:
+              - '.release-please-manifest.json'
+
+  # Dependency review (PRs only; skipped for Dependabot Bun PRs because GitHub's
+  # dependency graph may not support bun.lock yet — bun audit in `check` covers those).
   dependency-review:
-    # Skip for Dependabot Bun PRs: GitHub's dependency graph may not support bun.lock yet.
-    # Vulnerability detection is covered by bun audit in the check job.
+    needs: changes
     if: |
       github.event_name == 'pull_request' &&
       !(github.actor == 'dependabot[bot]' && startsWith(github.event.pull_request.head.ref, 'dependabot/bun-'))
@@ -48,17 +87,83 @@ jobs:
       - name: Dependency review
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
+  # Full check pipeline: lint, typecheck, unit tests, secret scan, workflow pin verify.
+  # Runs for code changes and for release-please PRs (preserves ci-release-please.yml behavior).
   check:
-    # timeout-minutes not settable on reusable-call jobs; check.yml caps the check job at 20m
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.release_manifest == 'true'
     permissions:
       contents: read
       models: read
     uses: ./.github/workflows/check.yml
     secrets: inherit
 
+  # Real-HTTP integration scenarios against a local llama-server. Code changes only.
   integration:
-    # timeout-minutes not settable on reusable-call jobs; integration.yml caps jobs internally
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
       models: read
     uses: ./.github/workflows/integration.yml
+
+  # Markdown lint + link check + spell check. Docs-only path.
+  docs-lint:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/check-docs.yml
+
+  # Astro build. Website-only path. (Mixed PRs touching code+website run both `check` and `website`.)
+  website:
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/check-website.yml
+
+  # actionlint + shellcheck + shfmt + self-referential pin verify. .github-only path.
+  workflows-lint:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/check-workflows.yml
+
+  # Nix flake build matrix + bun.nix regeneration.
+  # ref / push_allowed preserve fork-safe behavior (no push from fork PRs, target right commit).
+  nix:
+    needs: changes
+    if: needs.changes.outputs.nix == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/nix.yml
+    with:
+      ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
+      push_allowed: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    secrets: inherit
+
+  # Required status check for branch protection.
+  # Fails only if any needed job's result is not success or skipped.
+  # `if: always()` ensures the gate runs even when a needed job failed or was cancelled.
+  gate:
+    needs: [dependency-review, check, integration, docs-lint, website, workflows-lint, nix]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Verify required checks
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # jq -e exits non-zero on false; we capture it to produce a readable error.
+          if ! echo "$NEEDS_JSON" | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")' > /dev/null; then
+            echo "::error::One or more required jobs failed or were cancelled"
+            echo "$NEEDS_JSON" | jq 'to_entries | map({job: .key, result: .value.result})'
+            exit 1
+          fi
+          echo "All needed jobs passed or were skipped."
+          echo "$NEEDS_JSON" | jq 'to_entries | map({job: .key, result: .value.result})'
