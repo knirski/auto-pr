@@ -222,6 +222,28 @@ const VALID_AI_RESPONSE = JSON.stringify({
 });
 const INVALID_AI_RESPONSE = '{"title":"feat","description":"Invalid."}';
 
+/** Asserts the OpenAI-style request body contains `mustContain` before returning `responseBody` as the model reply. */
+function createOpenAiMockFetchExpectingPromptSubstring(
+	mustContain: string,
+	responseBody: string,
+): typeof fetch {
+	const inner = createOpenAiChatCompletionsMockFetch(responseBody);
+	return (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const raw = init?.body;
+		const bodyStr =
+			typeof raw === "string"
+				? raw
+				: raw != null
+					? await new Request("http://local.invalid", {
+							method: "POST",
+							body: raw as BodyInit,
+						}).text()
+					: "";
+		expect(bodyStr).toContain(mustContain);
+		return inner(input, init);
+	}) as typeof fetch;
+}
+
 const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
@@ -253,6 +275,23 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					);
 					expect(result.body).toContain("feat: add module A");
 					expect(result.body).toContain("fix: fix bug in B");
+					expect(result.count).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("includes existingPrTitle in the AI request body for 2+ commits", async () => {
+			const prior = "feat: existing open PR title";
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				existingPrTitle: prior,
+				fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, VALID_AI_RESPONSE),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.count).toBe(2);
 				}).pipe(Effect.scoped),
 			);
@@ -739,5 +778,63 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 				}
 			}).pipe(Effect.scoped),
 		);
+	});
+
+	test("AUTO_PR_EXISTING_PR_TITLE is sent in the AI request for 2 commits", async () => {
+		const prior = "feat: title from env";
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		process.env.AUTO_PR_EXISTING_PR_TITLE = prior;
+		try {
+			await runEffect(IntegrationTestLayer)(
+				Effect.gen(function* () {
+					const tmp = yield* createTestTempDirEffect("run-generate-envtitle-");
+					try {
+						yield* setupGitRepoForRunGeneratePrContent(
+							tmp.path,
+							[{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+							"ai/test",
+						);
+
+						const fs = yield* FileSystem.FileSystem;
+						yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+						yield* fs.writeFileString(
+							tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+							DEFAULT_TEMPLATE,
+						);
+
+						const mockResponse = JSON.stringify({
+							title: "feat: env and AI",
+							motivation: ["M."],
+							benefits: [],
+							risks: ["R."],
+							notesForReviewers: "",
+						});
+
+						yield* runGeneratePrContent({
+							defaultBranch: "main",
+							branch: "ai/test",
+							workspace: tmp.path,
+							templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+							provider: "local",
+							model: "gpt-oss",
+							retryDelay: Duration.zero,
+							fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, mockResponse),
+						});
+
+						const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+						expect(title.trim()).toBe("feat: env and AI");
+					} finally {
+						const fs = yield* FileSystem.FileSystem;
+						yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+					}
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev === undefined) {
+				delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+			} else {
+				process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+			}
+		}
 	});
 });
