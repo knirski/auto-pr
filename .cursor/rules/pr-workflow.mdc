@@ -12,6 +12,6 @@ When creating a pull request (Option 2 of **finishing-a-development-branch**):
 3. Create PR — follow [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)
 4. **Checkout main and pull** — `git checkout main && git pull`
 
-Workflow pins are automated: [update-workflow-pins](.github/workflows/update-workflow-pins.yml) runs on push to main when workflows/actions change. No manual step.
+Self-referential workflow pins (`knirski/auto-pr/...@<40-char-sha>`) must be **consistent on the PR branch** so `check` / `check-workflows` pass; after merge to `main`, [update-workflow-pins](.github/workflows/update-workflow-pins.yml) advances them to the merge commit when `.github/workflows/**` or `.github/actions/**` changed. Third-party action SHAs and the llama Dockerfile are **not** updated by that workflow (Dependabot + manual bumps). See [docs/CI.md](docs/CI.md#workflow-pin-automation).
 
 Do not finish until step 4 is done. Workspace must be left on `main`.

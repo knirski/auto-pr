@@ -7,10 +7,10 @@ This repo uses GitHub Actions with built-in path filters. No third-party path-fi
 | When | What runs |
 |------|-----------|
 | Push to `ai/**` | auto-pr creates/updates PR |
-| PR to main (code changes) | ci → check (`check` + `integration` jobs), dependency-review |
+| PR to main (code changes) | ci → check (verify self-referential workflow pins, then full `check` + `integration` jobs), dependency-review |
 | PR to main (docs only) | ci-docs → check-docs |
 | PR to main (website only) | ci-website → check-website (Astro build) |
-| PR to main (.github only) | ci-workflows → `check-workflows` (actionlint, shellcheck, shfmt) |
+| PR to main (.github only) | ci-workflows → `check-workflows` (verify self-referential workflow pins, actionlint, shellcheck, shfmt) |
 | PR to main (nix/deps) | ci-nix → nix flake check (Linux x64 + arm64, macOS arm64) + bun.nix update |
 | PR to main (release-please) | ci-release-please → check |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), update-dist (when src/pkg/build/bun.lock change), scorecard (if configured) |
@@ -33,7 +33,18 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 ### Integration tests
 
-**`bun run test:integration`** runs integration smoke tests with `--no-coverage` (coverage is tracked on the unit job only). Requires the same opt-in env and infrastructure as CI when you want tests to run (for example `AUTO_PR_INTEGRATION_LOCAL`, `AUTO_PR_INTEGRATION_GITHUB_MODELS`, `GH_TOKEN`, Docker / Testcontainers).
+**Local command:** [`package.json`](../package.json) defines **`test:integration`** as:
+
+`bun --env-file=.env.ci --env-file=.env.local --config=bunfig.integration.toml test test/integration`
+
+- **[`.env.ci`](../.env.ci)** — committed pins (`INTEGRATION_LLAMA_PORT`, `INTEGRATION_*` URLs/model id). Same keys are injected in GitHub Actions from this file (see [integration.yml](../.github/workflows/integration.yml)).
+- **`.env.local`** — optional, gitignored (matches `.env.*`). Same variable names as `.env.ci`; the second `--env-file` wins on duplicates. Omit the file if you do not need overrides (Bun does not require it to exist).
+
+**`bun run test:integration`** runs those tests with `--no-coverage` ([`bunfig.integration.toml`](../bunfig.integration.toml); coverage is tracked on the unit job only). Local llama scenarios use Testcontainers with the image pin in `.github/llama-server/Dockerfile` (**Docker** required). Set **`INTEGRATION_SKIP_DOCKER=1`** to skip Docker-based tests. The **GitHub Models** integration test needs **`GH_TOKEN`** with **`models: read`** in your environment when running locally (for example export a PAT); in Actions the default token is sufficient.
+
+**Dockerfile pin:** The canonical parser for the image ref is [`parseFirstFromImageDockerfileContent`](../test/integration/dockerfile-from-image.ts); CI uses the same logic in [parse-first-from-dockerfile.awk](../.github/actions/resolve-llama-server-tag/parse-first-from-dockerfile.awk), invoked by [resolve-llama-server-tag.sh](../.github/actions/resolve-llama-server-tag/resolve-llama-server-tag.sh) (`--dockerfile-image` and the repo root). [`test/integration/dockerfile-from-image.test.ts`](../test/integration/dockerfile-from-image.test.ts) keeps them aligned. Same limitations as [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin) (first `FROM` only; no `\\` continuation).
+
+**GitHub Actions (integration + generate):** Jobs that run llama in Docker use the **`llama-server-docker-start`** / **`llama-server-docker-stop`** composite actions, **`llama_server_root`**, and `docker/llama-server-image.tar` under that directory — see [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin).
 
 ## Workflows
 
@@ -67,13 +78,13 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 **ci-website.yml** is complementary: triggers on `website/**` changes and runs an Astro production build (same idea as [deploy-pages.yml](../.github/workflows/deploy-pages.yml)). Does not run unit tests, integration tests, or act-smoke. If a PR also changes non-ignored paths, **`ci.yml` runs too** (mixed PR): you get both workflows; only **check-website** runs the Astro build.
 
-**ci-workflows.yml** is complementary: runs when only `.github/**` changes. Runs **check-workflows** (actionlint, shellcheck, shfmt on `.github/actions`). Integration tests do not run for workflow-only changes — they test AI provider HTTP behavior, which is unaffected by workflow YAML.
+**ci-workflows.yml** is complementary: runs when only `.github/**` changes. Runs **check-workflows** (verify self-referential pins, then actionlint, shellcheck, shfmt on `.github/actions`). Integration tests do not run for workflow-only changes — they test AI provider HTTP behavior, which is unaffected by workflow YAML.
 
 **ci-nix.yml** runs only when Nix or dependency files change. Uses upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), runs statix and deadnix via `nix flake check`, and auto-updates `bun.nix` for same-repo PRs and main. Uses the same GitHub App as auto-pr for the push so CI triggers on the new commit (GITHUB_TOKEN pushes do not trigger workflows).
 
 **update-bun-nix.yml** runs on manual trigger (workflow_dispatch). Use when `main` has a stale `bun.nix` (e.g. after merging a lockfile change from a fork). Runs on the default branch and pushes the updated `bun.nix` to `main`. For same-repo PRs, ci-nix handles updates automatically.
 
-**update-workflow-pins.yml** runs on push to main when workflows or actions change, and on workflow_dispatch. Updates self-referential `knirski/auto-pr/...@SHA` refs to the current commit. Loop prevention: skips when the push commit message starts with `chore(workflows): update self-referential pins`. Only runs in knirski/auto-pr (skips forks). See [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
+**update-workflow-pins.yml** runs on push to main when workflows or actions change, and on workflow_dispatch. Updates **only** self-referential `knirski/auto-pr/...@SHA` refs to the push commit (not marketplace actions or Dockerfiles). Loop prevention: skips when the push commit message starts with `chore(workflows): update self-referential pins`. Only runs in knirski/auto-pr (skips forks). **check** and **check-workflows** validate pins with `check_only: true`. Full matrix and contributor steps: [Workflow pin automation](#workflow-pin-automation); action reference: [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
 
 **update-dist.yml** runs on push to main when `src/`, `package.json`, `scripts/build.ts`, or `bun.lock` change, and on workflow_dispatch. Uses [build-and-commit-dist](../.github/actions/build-and-commit-dist) to build and commit `dist/` so `npx -p github:knirski/auto-pr` works for Node-only users (no Bun). `dist/` is in `.gitignore` locally—the action uses `git add -f dist/` to override. Loop prevention: skips when commit message starts with `chore: update dist`. Only runs in knirski/auto-pr. See [Dist and .gitignore](#dist-and-gitignore).
 
@@ -93,7 +104,13 @@ The **integration** job uses `GITHUB_TOKEN` with `models: read` for GitHub Model
 
 ## Run CI locally
 
-`bun run act` runs two jobs via [act](https://github.com/nektos/act) in Docker: first **`check`** from [ci.yml](../.github/workflows/ci.yml) (reusable [check.yml](../.github/workflows/check.yml): tests, lint, Codecov, etc.), then **`integration`** from [integration.yml](../.github/workflows/integration.yml) (local llama-server + GitHub Models HTTP tests). Requires Docker and either `act` on your PATH, Nix on **Linux** (x86_64/aarch64) where this flake provides `act` (`nix run .#act` when `act` is not on PATH), or `gh extension install nektos/gh-act` for `gh act`. [act-local-ci.ts](../scripts/act-local-ci.ts) passes **`-P <runs-on>=<container image>`** (default label **`ubuntu-24.04`**, overridable with **`ACT_RUNS_ON_LABEL`**; image from **`ACT_RUNNER_IMAGE`** or defaults — see [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job)), writes a minimal **workflow_dispatch** JSON to `.act-artifacts/workflow_dispatch.json` (owner/name from **`git remote origin`** or **`package.json` `repository`**) for **`act -e`**, and starts act’s **artifact server** under `.act-artifacts/` (gitignored). Integration is heavier than `check` alone.
+`bun run act` runs two jobs via [act](https://github.com/nektos/act) in Docker: first **`check`** from [ci.yml](../.github/workflows/ci.yml) (reusable [check.yml](../.github/workflows/check.yml): tests, lint, Codecov, etc.), then **`integration`** from [integration.yml](../.github/workflows/integration.yml) (Testcontainers llama + GitHub Models HTTP tests). Requires Docker and either `act` on your PATH, Nix on **Linux** (x86_64/aarch64) where this flake provides `act` (`nix run .#act` when `act` is not on PATH), or `gh extension install nektos/gh-act` for `gh act`. [act-local-ci.ts](../scripts/act-local-ci.ts) passes **`-P <runs-on>=<container image>`** (default label **`ubuntu-24.04`**, overridable with **`ACT_RUNS_ON_LABEL`**; image from **`ACT_RUNNER_IMAGE`** or defaults — see [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job)), writes a minimal **workflow_dispatch** JSON to `.act-artifacts/workflow_dispatch.json` (owner/name from **`git remote origin`** or **`package.json` `repository`**) for **`act -e`**, and starts act’s **artifact server** under `.act-artifacts/` (gitignored). Integration is heavier than `check` alone.
+
+**Docker parity:** [check.yml](../.github/workflows/check.yml) sets **`RUNNER_TOOL_CACHE`** / **`AGENT_TOOLSDIRECTORY`** under the workspace so **`actions/setup-node`** (SBOM step) avoids **`EACCES`** on `/opt/hostedtoolcache` in act. [act-local-ci.ts](../scripts/act-local-ci.ts) leaves **`--artifact-server-port`** at act’s default unless you set **`ACT_ARTIFACT_SERVER_PORT`** / **`ACT_ARTIFACT_SERVER_ADDR`** (**`0`** is not a safe default—artifact uploads can fail). Details: [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job).
+
+**Integration + nested Docker:** On Linux, [act-local-ci.ts](../scripts/act-local-ci.ts) passes **`act --container-options`** with **`--group-add`** set from the host **`/var/run/docker.sock`** group id when that path exists, so integration jobs can run **`docker`** inside the act job container. Override with **`ACT_CONTAINER_OPTIONS`** or disable auto with **`ACT_SKIP_AUTO_DOCKER_GROUP_ADD=1`**. Rootless Docker or a nonstandard socket may need manual **`ACT_CONTAINER_OPTIONS`**. [integration.yml](../.github/workflows/integration.yml) caches llama artifacts under **`github.workspace/.cache/`** (stable vs **`runner.temp`** when debugging paths). The **llama-server-docker-start** action copies the GGUF into the container with **`docker cp`**, not a bind mount, so nested Docker (act) does not rely on host path alignment. Parallel llama jobs each bind an **ephemeral TCP port** on the runner (`scripts/integration-ephemeral-port.sh` via **`python3`**, as on GitHub-hosted Ubuntu) and use distinct **`container_name`** values so they do not collide on a single Docker daemon. Only when simulating **`integration.yml`** (not **`check`** / **`check-workflows`**) does [act-local-ci.ts](../scripts/act-local-ci.ts) pass **`--env AUTO_PR_ACT_LOCAL_CI=1`** so the happy-path integration test can use a longer timeout under CPU-bound [nektos/act](https://github.com/nektos/act).
+
+**GitHub Models job:** The **`integration-github-models`** job loads **`.env.ci`** with **`omit_llama_integration_env: true`** so llama-related keys and **`AUTO_PR_AI_OPENAI_COMPAT_URL`** from **`.env.ci`** are not applied (that job uses GitHub Models only).
 
 **More workflows:** `bun run act -- check-workflows` runs only [ci-workflows.yml](../.github/workflows/ci-workflows.yml) (reusable [check-workflows.yml](../.github/workflows/check-workflows.yml): actionlint + shellcheck on `.github`). Use it when editing workflows or actions—much faster than the full `check` job.
 
@@ -108,6 +125,10 @@ Pre-push runs `check:code` before each push (Bun deps only). See [CONTRIBUTING.m
 ## Link verification
 
 `bun run check:just-links` runs lychee to verify links in the repo. Can fail on broken external URLs (404s, redirects). Use `check:with-links` to run full check plus link verification. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge. Lychee accepts 200 and 429 (rate limit) via `--accept 200,429`.
+
+## Secret scan and shell lint paths
+
+[check.yml](../.github/workflows/check.yml) and [check-workflows.yml](../.github/workflows/check-workflows.yml) skip dependency and build output trees for **gitleaks** and **[luizm/action-sh-checker](https://github.com/luizm/action-sh-checker)** (shellcheck + shfmt). After `bun install`, `shfmt -f .` would otherwise discover shell scripts under `node_modules`; `sh_checker_exclude` filters those paths. Gitleaks uses the same intent via [.gitleaks.toml](../.gitleaks.toml) allowlist paths and [.gitleaksignore](../.gitleaksignore) (`node_modules/`, `dist/`, `coverage/`, `.worktrees/`). Typos ([_typos.toml](../_typos.toml)) also extends excludes for those directories.
 
 ## Branch Protection
 
@@ -138,11 +159,38 @@ CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix
 
 ## Workflow pin automation
 
-Self-referential pins (`knirski/auto-pr/...@SHA`) are updated automatically by [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) on push to main when workflows or actions change. Manual run: **Actions → Update workflow pins → Run workflow**. Rationale: [ADR 0004](adr/0004-workflow-pin-automation.md).
+This repo pins workflow dependencies immutably where GitHub allows it: **full commit SHAs** for actions, **one shared SHA** for every self-referential `knirski/auto-pr/...@…` line, and **image digests or tags** for the llama CI Dockerfile. Rationale for the self-ref updater: [ADR 0004](adr/0004-workflow-pin-automation.md).
 
-**When automation runs:** Push to main with changes under `.github/workflows/` or `.github/actions/`. The workflow updates all pins to the current commit and pushes. Loop prevention: it skips when the push came from itself (commit message starts with `chore(workflows): update self-referential pins`).
+### What is pinned how
 
-**Manual update (if needed):** If automation didn't run (e.g. merge only touched `src/`), run the workflow manually or update pins yourself. See [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md).
+| Kind | Example | Update path |
+|------|---------|-------------|
+| Marketplace / third-party actions | `uses: actions/checkout@<40-char-sha> # v6.0.2` | Weekly [Dependabot](../.github/dependabot.yml) (`package-ecosystem: github-actions`); merge its PRs or bump SHA + comment by hand after verifying the release |
+| Self-referential callables | `uses: knirski/auto-pr/.github/actions/foo@<40-char-sha>` | [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) on push to `main` when `.github/workflows/**` or `.github/actions/**` change; validation in every **`check`** and **`check-workflows`** run ([`check_only`](../.github/actions/update-workflow-pins/README.md)) |
+| Same-repo callables (no external fetch) | `uses: ./.github/workflows/check.yml` or `./.github/actions/name` | No extra SHA: GitHub uses the workflow’s checked-out ref |
+| Llama server base image | `FROM …` in [`.github/llama-server/Dockerfile`](../.github/llama-server/Dockerfile) | Dependabot `docker` on `/.github/llama-server`; keep parser parity with [dockerfile-from-image tests](../test/integration/dockerfile-from-image.test.ts) |
+
+The [update-workflow-pins](../.github/actions/update-workflow-pins/update-pins.sh) script only rewrites lines matching `knirski/auto-pr/<path>@<40-char-sha>`. It does **not** bump third-party actions or Dockerfiles.
+
+### Self-referential pins (knirski/auto-pr → knirski/auto-pr)
+
+All matching `uses:` lines must share **exactly one** 40-character SHA. That commit must exist in the clone, be an **ancestor of `HEAD`** for the workflow run, and contain **every** referenced `.github/...` path at that commit (so you cannot point at an older tree that lacks a composite you call). Tags and branch names are not valid for these refs—the regex and CI expect a full SHA.
+
+**On `main` after merge:** [update-workflow-pins.yml](../.github/workflows/update-workflow-pins.yml) sets every self-ref to the push commit and pushes. Loop prevention: skip when the commit message starts with `chore(workflows): update self-referential pins`. **Manual run:** Actions → **Update workflow pins** → Run workflow (e.g. if only `src/` changed but pins should still advance—rare).
+
+**On a PR branch:** CI runs the same checks as `check_only`; align pins before push. From repo root after your changes are committed, you can run the composite in write mode with `target_sha: $(git rev-parse HEAD)` (see **Same-repo contributors** under [Pull Requests](../CONTRIBUTING.md#pull-requests)) or run `update-pins.sh` with `INPUT_CHECK_ONLY=false` and `INPUT_TARGET_SHA` set. [Lefthook](../lefthook.yml) runs [smoke-update-pins-check-only.sh](../scripts/smoke-update-pins-check-only.sh) when you stage workflow/action YAML.
+
+**Forks:** The update workflow runs only when `github.repository == 'knirski/auto-pr'`. Fork maintainers must keep self-refs consistent themselves if they run these workflows.
+
+### Third-party actions
+
+Prefer **SHA + human-readable comment** (`# vX.Y.Z`) so reviewers see intent. After a Dependabot bump, spot-check release notes; resolve conflicts like any other dependency PR.
+
+### Related docs
+
+- [.github/actions/update-workflow-pins/README.md](../.github/actions/update-workflow-pins/README.md) — inputs, local `check_only`, pre-commit hook
+- [CONTRIBUTING.md](../CONTRIBUTING.md#pull-requests) — same-repo workflow pin commands (under Pull Requests)
+- [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) — stale SHA / missing path errors
 
 ## Dist and .gitignore
 

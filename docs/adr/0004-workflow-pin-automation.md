@@ -22,3 +22,7 @@ Chosen option: **"Composite action on push to main"** (Option 3), because it rem
 * Good: `check_only` input available for future PR job if we want to fail CI when pins are stale before merge.
 * Minor: Fork PRs — automation only runs in knirski/auto-pr; forks must update pins manually or run workflow_dispatch if they have the secrets.
 * Note: workflow_dispatch supported for manual runs when automation didn't trigger (e.g. merge only touched `src/`).
+
+## Related (broader pinning)
+
+Third-party Actions, same-repo `uses: ./.github/...`, and the llama CI Dockerfile use **different** update paths (Dependabot, relative resolution, `docker` ecosystem). See [docs/CI.md](../CI.md#workflow-pin-automation) for the full table and contributor checklist.

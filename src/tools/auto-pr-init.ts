@@ -1,6 +1,6 @@
 /**
  * Initialize auto-pr in the current directory.
- * Creates workflow, PR template, and .nvmrc.
+ * Creates workflow, PR template, .nvmrc, and `.github/llama-server/Dockerfile`.
  *
  * Adopters: npx -p github:knirski/auto-pr auto-pr-init
  * This repo: bun run src/tools/auto-pr-init.ts

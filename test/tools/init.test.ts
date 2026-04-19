@@ -5,7 +5,7 @@ import { createTestTempDirEffect, TestBaseLayer } from "#test/test-utils.js";
 import { runInit } from "#tools/auto-pr-init.js";
 
 describe("runInit", () => {
-	test("creates workflow, PR template, and .nvmrc in target directory", async () => {
+	test("creates workflow, PR template, .nvmrc, and llama-server Dockerfile in target directory", async () => {
 		await runEffect(TestBaseLayer)(
 			Effect.gen(function* () {
 				const tmp = yield* createTestTempDirEffect("auto-pr-init-");
@@ -13,15 +13,18 @@ describe("runInit", () => {
 				yield* runInit(tmp.path);
 
 				const fs = yield* FileSystem.FileSystem;
-				const [workflowExists, templateExists, nvmrcExists] = yield* Effect.all([
-					fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
-					fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
-					fs.exists(tmp.join(".nvmrc")),
-				]);
+				const [workflowExists, templateExists, nvmrcExists, llamaServerDockerfileExists] =
+					yield* Effect.all([
+						fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
+						fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
+						fs.exists(tmp.join(".nvmrc")),
+						fs.exists(tmp.join(".github", "llama-server", "Dockerfile")),
+					]);
 
 				expect(workflowExists).toBe(true);
 				expect(templateExists).toBe(true);
 				expect(nvmrcExists).toBe(true);
+				expect(llamaServerDockerfileExists).toBe(true);
 
 				const workflowContent = yield* fs.readFileString(
 					tmp.join(".github", "workflows", "auto-pr.yml"),

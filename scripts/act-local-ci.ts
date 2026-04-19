@@ -8,6 +8,7 @@
  * Example: `bun run act -- check`. Or run the file directly: `bun scripts/act-local-ci.ts check` (no `--`).
  */
 
+import { statSync } from "node:fs";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { Effect, FileSystem, Match, Option, Path } from "effect";
 import type { PlatformError } from "effect/PlatformError";
@@ -20,11 +21,13 @@ import {
 	ACT_LOCAL_CI_MODES,
 	type ActBackend,
 	type ActLocalCiRun,
+	type ActWorkflowDispatchGitPointer,
 	buildActArgv,
 	CI_WORKFLOW,
 	CI_WORKFLOWS_ENTRY,
 	INTEGRATION_WORKFLOW,
 	planActRun,
+	resolveActArtifactServerOpts,
 	resolveActLocalCiRunnerFromProcessEnv,
 	resolveActWorkflowDispatchRepo,
 	stringifyWorkflowDispatchEventJson,
@@ -42,6 +45,55 @@ const INSTALL_HINTS = `To run CI locally, install:
 
 function whichOnPath(cmd: string): Option.Option<string> {
 	return Option.fromNullishOr(Bun.which(cmd));
+}
+
+/** Resolves `ref` / `sha` for act’s synthetic `workflow_dispatch` payload (see `stringifyWorkflowDispatchEventJson`). */
+function resolveGitPointerForActEvent(
+	repoRoot: string,
+): Option.Option<ActWorkflowDispatchGitPointer> {
+	const shaRes = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: repoRoot });
+	if (!shaRes.success) return Option.none();
+	const sha = new TextDecoder().decode(shaRes.stdout).trim();
+	if (sha.length === 0) return Option.none();
+
+	const envRef = process.env.GITHUB_REF?.trim();
+	if (envRef !== undefined && envRef.length > 0) {
+		return Option.some({ ref: envRef, sha });
+	}
+	const symRes = Bun.spawnSync(["git", "symbolic-ref", "-q", "HEAD"], { cwd: repoRoot });
+	if (symRes.success) {
+		const ref = new TextDecoder().decode(symRes.stdout).trim();
+		if (ref.length > 0) return Option.some({ ref, sha });
+	}
+	const curRes = Bun.spawnSync(["git", "branch", "--show-current"], { cwd: repoRoot });
+	if (curRes.success) {
+		const name = new TextDecoder().decode(curRes.stdout).trim();
+		if (name.length > 0) return Option.some({ ref: `refs/heads/${name}`, sha });
+	}
+	return Option.some({ ref: "refs/heads/main", sha });
+}
+
+/**
+ * Extra Docker flags for act job containers (see nektos/act **`--container-options`**).
+ * Integration jobs may run nested `docker`; on Linux the job user must match **`/var/run/docker.sock`** group.
+ *
+ * - **`ACT_CONTAINER_OPTIONS`**: overrides auto (non-empty string).
+ * - **`ACT_SKIP_AUTO_DOCKER_GROUP_ADD=1`**: skip Linux default **`--group-add`** using the host Docker socket GID.
+ *
+ * **Caveat:** auto **`--group-add`** assumes Docker’s socket is **`/var/run/docker.sock`** with a meaningful GID. Rootless Docker,
+ * remote contexts, or a nonstandard socket path may not match; set **`ACT_CONTAINER_OPTIONS`** manually or **`ACT_SKIP_AUTO_DOCKER_GROUP_ADD=1`**.
+ */
+export function mergeActContainerOptions(env: NodeJS.ProcessEnv): string | undefined {
+	const explicit = env.ACT_CONTAINER_OPTIONS?.trim();
+	if (explicit !== undefined && explicit.length > 0) return explicit;
+	if (env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD === "1") return undefined;
+	if (process.platform !== "linux") return undefined;
+	try {
+		const st = statSync("/var/run/docker.sock");
+		return `--group-add ${String(st.gid)}`;
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -96,7 +148,7 @@ function spawnAct(
 function runWorkflowJob(
 	input: {
 		readonly workflowPath: string;
-		readonly jobName: string;
+		readonly jobName: string | undefined;
 		readonly dryRun: boolean;
 		readonly repoRoot: string;
 		readonly runsOnLabel: string;
@@ -117,14 +169,20 @@ function runWorkflowJob(
 			return;
 		}
 		const backend = backendOpt.value;
+		const artifact = resolveActArtifactServerOpts(process.env);
+		const containerOpts = mergeActContainerOptions(process.env);
 		const actArgv = buildActArgv({
 			repoRoot: input.repoRoot,
 			runsOnLabel: input.runsOnLabel,
 			runnerImage: input.runnerImage,
 			workflowPath: input.workflowPath,
-			jobName: input.jobName,
+			...(input.jobName !== undefined && input.jobName.length > 0
+				? { jobName: input.jobName }
+				: {}),
 			dryRun: input.dryRun,
 			eventFile: input.eventFile,
+			...artifact,
+			...(containerOpts !== undefined ? { containerOptions: containerOpts } : {}),
 		});
 		const plan = planActRun(backend, input.repoRoot, actArgv);
 		yield* spawnAct(plan.command, plan.args, plan.cwd).pipe(
@@ -186,7 +244,7 @@ function runActIntegrationJob(
 		{
 			...ctx,
 			workflowPath: INTEGRATION_WORKFLOW,
-			jobName: "integration",
+			jobName: undefined,
 			failureIntro,
 		},
 		resolveBackend,
@@ -237,7 +295,11 @@ export function program(
 			}),
 		);
 		const eventPath = pathApi.join(repoRoot, ACT_GENERATED_EVENT_RELATIVE_PATH);
-		yield* fs.writeFileString(eventPath, stringifyWorkflowDispatchEventJson(resolvedRepo));
+		const gitPointer = resolveGitPointerForActEvent(repoRoot);
+		yield* fs.writeFileString(
+			eventPath,
+			stringifyWorkflowDispatchEventJson(resolvedRepo, Option.getOrUndefined(gitPointer)),
+		);
 		const eventFile = eventPath;
 
 		const ctx = {

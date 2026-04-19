@@ -21,6 +21,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Self-referential uses: must share one SHA, that commit must include each referenced path (see update-workflow-pins check_only).
+      - name: Verify self-referential workflow pins
+        uses: ./.github/actions/update-workflow-pins
+        with:
+          check_only: 'true'
+
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
@@ -34,7 +40,7 @@ jobs:
       # resolve to caller's repo. Update @SHA when updating workflow refs (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@2fd79fb751ea6bb8668ce57b3625edf48eb26882
+        uses: knirski/auto-pr/.github/actions/setup-runtime@91a6e2594513cf21c022f686cafe0a1496c08af0
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -56,6 +62,9 @@ jobs:
 
       - name: Lint scripts (shellcheck, shfmt)
         uses: luizm/action-sh-checker@883217215b11c1fabbf00eb1a9a041f62d74c744 # v0.10.0
+        with:
+          # shfmt -f . would otherwise list scripts under node_modules after bun install
+          sh_checker_exclude: node_modules dist coverage .worktrees website/node_modules
         env:
           SHFMT_OPTS: -d
 
@@ -64,6 +73,11 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version-file: ".nvmrc"
+        env:
+          # nektos/act + Docker: /opt/hostedtoolcache may be root-only; host AGENT_TOOLSDIRECTORY can leak into the
+          # container and break mkdir. Workspace-relative cache matches hosted runners (writable) and fixes EACCES.
+          RUNNER_TOOL_CACHE: ${{ github.workspace }}/.cache/github-actions/tool-cache
+          AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.cache/github-actions/tool-cache
 
       - name: Generate SBOM
         # --ignore-scripts: skip prepare (bun build); SBOM only needs the lockfile graph.

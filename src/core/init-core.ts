@@ -20,5 +20,9 @@ export function getInitFileSpecs(): readonly InitFileSpec[] {
 			from: ".github/PULL_REQUEST_TEMPLATE.md",
 		},
 		{ dest: ".nvmrc", from: ".nvmrc" },
+		{
+			dest: ".github/llama-server/Dockerfile",
+			from: ".github/llama-server/Dockerfile",
+		},
 	];
 }

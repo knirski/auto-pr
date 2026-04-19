@@ -41,7 +41,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | `bun run check:with-links` | Full check + lychee |
 | `bun run check:just-links` | Lychee only |
 | `bun test` | Unit tests with coverage (`test/integration/**` excluded in [bunfig.toml](bunfig.toml)) — this is what `check:code` runs |
-| `bun run test:integration` | Real HTTP AI provider tests (`bunfig.integration.toml`); needs env — see `test/integration/ai-providers.integration.test.ts` |
+| `bun run test:integration` | Real HTTP AI provider tests: `--env-file=.env.ci` then optional `.env.local` ([`bunfig.integration.toml`](bunfig.integration.toml)); Docker + Testcontainers for local llama — see [docs/CI.md](docs/CI.md#integration-tests), `test/integration/*.integration.test.ts` |
 | `bun run test:all` | `bun test` then `test:integration` |
 | `bun run lint` / `lint:fix` | Lint (Biome) |
 | `bun run lint:scripts` | Shellcheck + shfmt check |
@@ -62,6 +62,9 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Composite action | `.github/actions/<name>/` |
+| Local llama image pin (CI + init) | `.github/llama-server/Dockerfile` — `FROM` line; tag for Dependabot |
+| Llama in Docker on the runner (CI) | `.github/actions/llama-server-docker-start`, `.github/actions/llama-server-docker-stop` — input `llama_server_root`; cached image at `docker/llama-server-image.tar` |
+| Dockerfile `FROM` parser + shell parity | `test/integration/dockerfile-from-image.ts`; CI: [resolve-llama-server-tag.sh](.github/actions/resolve-llama-server-tag/resolve-llama-server-tag.sh) (`--dockerfile-image`); tests: `test/integration/dockerfile-from-image.test.ts` |
 | New prompt | `src/auto-pr/prompts/` |
 
 ### Key Rules
@@ -76,7 +79,8 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | Optionals | `Option<T>`, not `T \| null` |
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
-| Workflow testing | `bun run act` locally; update `@SHA` refs to `git rev-parse HEAD` |
+| Workflow / action pins | Self-refs `knirski/auto-pr/...@` must be **one** full **40-char SHA** (ancestor of branch, every path exists at that commit). Third-party `uses:` = SHA + `# v…` comment; Dependabot updates weekly. Same-repo `uses: ./.github/...` needs no SHA. Llama image: `.github/llama-server/Dockerfile`. Details: [docs/CI.md](docs/CI.md#workflow-pin-automation) |
+| Workflow testing | `bun run act` locally; align self-ref `@SHA` to `git rev-parse HEAD` when exercising workflow edits on a branch |
 | Multi-commit AI | `LanguageModel.generateText` + JSON parse + Schema decode in `auto-pr-generate-content.ts`; not `generateObject` (`json_schema` unsupported on GitHub Models) |
 
 ---
@@ -137,7 +141,7 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 
 **GitHub:** MCP first (`mcps/user-github/tools/`). PRs: create/update/merge/read. Issues: write/comment/read. Fallback to `gh` when MCP lacks capability.
 
-**Post-merge:** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) — auto-updates self-refs. [update-dist.yml](.github/workflows/update-dist.yml) — builds `dist/` on main. Do not commit `dist/` in PRs. [CI.md](docs/CI.md#dist-and-gitignore)
+**Post-merge:** [update-workflow-pins.yml](.github/workflows/update-workflow-pins.yml) — bumps every `knirski/auto-pr/...@<sha>` to the merge commit when `.github/workflows/**` or `.github/actions/**` changed (not third-party actions or Dockerfiles). If a PR only touched workflows/actions, ensure self-refs already matched **one** SHA before merge; after merge, expect either a follow-up bot commit or run **Update workflow pins** manually if needed. [update-dist.yml](.github/workflows/update-dist.yml) — builds `dist/` on main. Do not commit `dist/` in PRs. [CI.md](docs/CI.md#dist-and-gitignore) · [Workflow pin automation](docs/CI.md#workflow-pin-automation)
 
 **Act smoke:** [act-smoke.yml](.github/workflows/act-smoke.yml) uses a **matrix** so **`--dry-run check`** and **`check-workflows`** run in parallel (no **`--dry-run check-workflows`**; the **`check-workflows`** cell covers that graph). [docs/CI.md](docs/CI.md#run-ci-locally).
 

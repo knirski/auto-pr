@@ -5,6 +5,7 @@ package-lock.json
 *.log
 .env
 .env.*
+!.env.ci
 !.env.example
 .direnv/
 .DS_Store
@@ -13,6 +14,7 @@ coverage/
 test-report.junit.xml
 sbom.json
 .act-artifacts/
+.cache/
 result
 .cursor/worktrees.json
 .cursor/debug-*.log

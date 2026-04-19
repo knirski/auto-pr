@@ -13,7 +13,11 @@ import {
 	resolveActLocalCiRunnerFromProcessEnv,
 } from "#core/act-local-ci.js";
 import pkg from "../../package.json" with { type: "json" };
-import { actLocalCiCommand, program } from "../../scripts/act-local-ci.js";
+import {
+	actLocalCiCommand,
+	mergeActContainerOptions,
+	program,
+} from "../../scripts/act-local-ci.js";
 
 const repoRoot = join(import.meta.dir, "..", "..");
 
@@ -40,6 +44,20 @@ function childProcessSpawnerCaptureExit0(
 }
 
 describe("act-local-ci", () => {
+	describe("mergeActContainerOptions", () => {
+		test("ACT_CONTAINER_OPTIONS overrides when non-empty", () => {
+			expect(
+				mergeActContainerOptions({
+					ACT_CONTAINER_OPTIONS: "  --privileged  ",
+				}),
+			).toBe("--privileged");
+		});
+
+		test("ACT_SKIP_AUTO_DOCKER_GROUP_ADD=1 yields undefined", () => {
+			expect(mergeActContainerOptions({ ACT_SKIP_AUTO_DOCKER_GROUP_ADD: "1" })).toBeUndefined();
+		});
+	});
+
 	describe("CLI", () => {
 		test("invalid mode fails parse (failure exit)", async () => {
 			const exit = await Effect.runPromise(runCli(["bogus"]).pipe(Effect.exit));
@@ -54,16 +72,23 @@ describe("act-local-ci", () => {
 
 	describe("program", () => {
 		test("check + dryRun invokes direct backend with act argv (platform, -e, --dryrun, job)", async () => {
+			const prevSkip = process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD;
+			process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD = "1";
 			const invocations: Array<{ command: string; args: readonly string[] }> = [];
 			const layer = Layer.mergeAll(
 				childProcessSpawnerCaptureExit0(invocations),
 				AutoPrPlatformLayer,
 			);
-			await Effect.runPromise(
-				program({ dryRun: true, mode: "check" }, repoRoot, {
-					resolveActBackend: () => Option.some("direct"),
-				}).pipe(Effect.provide(layer)),
-			);
+			try {
+				await Effect.runPromise(
+					program({ dryRun: true, mode: "check" }, repoRoot, {
+						resolveActBackend: () => Option.some("direct"),
+					}).pipe(Effect.provide(layer)),
+				);
+			} finally {
+				if (prevSkip === undefined) delete process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD;
+				else process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD = prevSkip;
+			}
 			expect(invocations.length).toBe(1);
 			const first = invocations[0];
 			expect(first).toBeDefined();
@@ -88,19 +113,27 @@ describe("act-local-ci", () => {
 			expect(eIdx).toBeGreaterThanOrEqual(0);
 			expect(actArgv[eIdx + 1]).toBe(join(repoRoot, ACT_GENERATED_EVENT_RELATIVE_PATH));
 			expect(actArgv.some((a) => a.startsWith("--artifact-server-path="))).toBe(true);
+			expect(actArgv).not.toContain("AUTO_PR_ACT_LOCAL_CI=1");
 		});
 
 		test("check + dryRun invokes gh backend with gh act argv", async () => {
+			const prevSkip = process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD;
+			process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD = "1";
 			const invocations: Array<{ command: string; args: readonly string[] }> = [];
 			const layer = Layer.mergeAll(
 				childProcessSpawnerCaptureExit0(invocations),
 				AutoPrPlatformLayer,
 			);
-			await Effect.runPromise(
-				program({ dryRun: true, mode: "check" }, repoRoot, {
-					resolveActBackend: () => Option.some("gh"),
-				}).pipe(Effect.provide(layer)),
-			);
+			try {
+				await Effect.runPromise(
+					program({ dryRun: true, mode: "check" }, repoRoot, {
+						resolveActBackend: () => Option.some("gh"),
+					}).pipe(Effect.provide(layer)),
+				);
+			} finally {
+				if (prevSkip === undefined) delete process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD;
+				else process.env.ACT_SKIP_AUTO_DOCKER_GROUP_ADD = prevSkip;
+			}
 			expect(invocations.length).toBe(1);
 			const first = invocations[0];
 			expect(first).toBeDefined();
@@ -116,6 +149,7 @@ describe("act-local-ci", () => {
 			expect(actArgv[0]).toBe(`-P${expected.runsOnLabel}=${expected.runnerImage}`);
 			expect(actArgv).toContain("--dryrun");
 			expect(actArgv).toContain(CI_WORKFLOW);
+			expect(actArgv).not.toContain("AUTO_PR_ACT_LOCAL_CI=1");
 		});
 	});
 });

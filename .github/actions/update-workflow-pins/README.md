@@ -2,9 +2,12 @@
 
 Composite action that replaces self-referential `knirski/auto-pr/...@SHA` refs with a target commit SHA.
 
-**Used by:** [update-workflow-pins.yml](../../workflows/update-workflow-pins.yml) on push to main when workflows or actions change.
+**Used by:**
 
-**Loop prevention:** The workflow skips when the push commit message starts with `chore(workflows): update self-referential pins`.
+- [update-workflow-pins.yml](../../workflows/update-workflow-pins.yml) on push to main when workflows or actions change (writes pins and pushes).
+- [check.yml](../../workflows/check.yml) and [check-workflows.yml](../../workflows/check-workflows.yml) with `check_only: true` so every run fails if self-referential pins are inconsistent: more than one SHA, an unknown commit, a commit that is not an ancestor of `HEAD`, or a `uses:` path missing at the pinned commit (catches broken nested pins such as an action added only on a branch while refs still pointed at an older tree).
+
+**Loop prevention:** The update workflow skips when the push commit message starts with `chore(workflows): update self-referential pins`.
 
 ## Inputs
 
@@ -12,9 +15,7 @@ Composite action that replaces self-referential `knirski/auto-pr/...@SHA` refs w
 |-------|---------|-------------|
 | `target_sha` | `github.sha` | Commit SHA to pin to (write mode); comparison target when `pins_must_match_target` is true |
 | `repo` | `knirski/auto-pr` | Repo slug for self-referential refs |
-| `check_only` | `false` | If true, validate pins only (no file changes); see below |
-| `pins_must_match_target` | `false` | With `check_only`: require the uniform pin to equal `target_sha` (strict gate, e.g. after the bot pushed) |
-| `git_remote` | `origin` | Remote used to `git fetch` a missing pin commit |
+| `check_only` | `false` | If true, exit 1 when pins fail validation (no file changes); see check_only behavior below |
 
 ## Outputs
 
@@ -24,6 +25,8 @@ Composite action that replaces self-referential `knirski/auto-pr/...@SHA` refs w
 
 ## Usage
 
+**Apply pins (e.g. locally via `act`, or implicitly on main via the update workflow):**
+
 ```yaml
 - uses: ./.github/actions/update-workflow-pins
   id: update
@@ -31,22 +34,23 @@ Composite action that replaces self-referential `knirski/auto-pr/...@SHA` refs w
     target_sha: ${{ github.sha }}
 ```
 
-### `check_only` validation (no writes)
+**Validate pins (CI):** all `uses: ... knirski/auto-pr/...@<sha>` lines must use the **same** 40-char SHA; that commit must exist, be an **ancestor of `HEAD`**, and contain every referenced workflow or action path (so a pin cannot point at a tree that lacks a composite you reference).
 
-When `check_only: true`, the script checks that:
+```yaml
+- uses: ./.github/actions/update-workflow-pins
+  with:
+    check_only: 'true'
+```
 
-1. Every self-referential `uses:` line shares **one** 40-character SHA.
-2. That commit exists locally, or is **fetched** from `git_remote` (mitigates shallow clones, local act, and partial checkouts).
-3. The pin is an **ancestor of `HEAD`** (so it is on the current branch history).
-4. Each referenced path exists **at that commit** (`git cat-file`), so a pin cannot omit a composite action you reference.
+**Local `check_only`:** Export `INPUT_CHECK_ONLY=true`, run from repo root, and set `GITHUB_SHA="$(git rev-parse HEAD)"`. Writing to `GITHUB_OUTPUT` is optional; if unset, no `changed=` line is appended (useful for `bash -c` one-liners). Example:
 
-Optional: set `pins_must_match_target: true` to also require the pin to equal `target_sha` (e.g. “automation already bumped pins to this commit”).
+```bash
+GITHUB_SHA=$(git rev-parse HEAD) INPUT_CHECK_ONLY=true bash .github/actions/update-workflow-pins/update-pins.sh
+```
 
-## Gold standard / common practice
+`bun run lint:scripts` runs [scripts/smoke-update-pins-check-only.sh](../../../scripts/smoke-update-pins-check-only.sh) so verify logic is exercised with the current tree.
 
-- **Prevention:** Use `fetch-depth: 0` on [`actions/checkout`](https://github.com/actions/checkout) before any job that runs git-based checks, so ancestors are usually already present.
-- **Resilience:** If the pin object is still missing (very shallow clone, odd tooling), `git fetch <remote> <sha>` is the usual fix; this script does that before `git rev-parse` / `git cat-file`.
-- **Alternative:** Verify the commit exists via the [GitHub REST API](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#get-a-commit) (`GET /repos/{owner}/{repo}/commits/{sha}`) with `GITHUB_TOKEN` — no local objects, but needs network and a token with `contents: read`.
+**Pre-commit (Lefthook):** When you stage `.github/**/*.yml`, `.github/**/*.sh`, or the smoke script, [lefthook.yml](../../../lefthook.yml) runs the same smoke script before the commit—after [check-no-dist-staged](../../../scripts/check-no-dist-staged.sh). Run `bun x lefthook install` once per clone.
 
 ## Notes
 

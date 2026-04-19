@@ -1,4 +1,5 @@
 # Integration workflow only (see .github/workflows/integration.yml).
+# Pins: `bun run test:integration` uses `--env-file=.env.ci` then `--env-file=.env.local` (optional; last wins). No hardcoded URLs in tests.
 # Default bunfig.toml enables coverage + threshold; a narrow integration run
 # would fail that global gate even when all tests pass.
 logLevel = "warn"

@@ -39,12 +39,14 @@ on:
       ai_llamacpp_release_tag:
         required: false
         type: string
-        description: "Override for llama.cpp GHCR tag (server-<tag>). When empty, uses .github/llama-ci/Dockerfile. Required via input or Dockerfile when local llama + model URL is used (no silent default)."
+        description: >-
+          Optional override for the Docker image (full ghcr.io/... ref, or short suffix after server-). When empty,
+          uses the image from the first FROM line in .github/llama-server/Dockerfile.
         default: ""
       ai_llamacpp_model_url:
         required: false
         type: string
-        description: "HTTPS URL to a .gguf model. When set with ai_provider=local and ai_openai_compat_url empty, pulls the pinned GHCR image (see .github/llama-ci/Dockerfile), caches the model, and starts llama-server via Docker."
+        description: "HTTPS URL to a .gguf model. When set with ai_provider=local and ai_openai_compat_url empty, uses .github/llama-server/Dockerfile for the image pin, caches the GGUF and Docker image tarball, and starts llama-server in Docker (docker run)."
         default: ""
       ai_llamacpp_port:
         required: false
@@ -84,7 +86,7 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@2fd79fb751ea6bb8668ce57b3625edf48eb26882
+        uses: knirski/auto-pr/.github/actions/setup-runtime@91a6e2594513cf21c022f686cafe0a1496c08af0
 
       - name: Fetch base branch
         env:
@@ -93,7 +95,7 @@ jobs:
 
       - name: Set auto-pr package ref
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@2fd79fb751ea6bb8668ce57b3625edf48eb26882
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@91a6e2594513cf21c022f686cafe0a1496c08af0
         with:
           repository: ${{ github.repository }}
           ref_name: ${{ github.ref_name }}
@@ -110,9 +112,9 @@ jobs:
           count=$(git log --format=%s "origin/$DEFAULT_BRANCH..HEAD" | grep -cvE '^Merge ' || true)
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve llama-server image tag
+      - name: Resolve llama Docker image
         id: llama_release
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@2fd79fb751ea6bb8668ce57b3625edf48eb26882
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@91a6e2594513cf21c022f686cafe0a1496c08af0
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -129,26 +131,26 @@ jobs:
           h=$(printf '%s' "$MODEL_URL" | sha256sum | awk '{print $1}')
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
-      - name: Cache llama.cpp (model + docker metadata)
+      - name: Cache llama.cpp (GGUF model + Docker image tar)
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ runner.temp }}/auto-pr-llama
           key: llama-${{ steps.llama_release.outputs.tag }}-${{ steps.llama_cache_key.outputs.hash }}-docker
 
-      - name: Start local llama.cpp (llama-server)
+      - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-start@2fd79fb751ea6bb8668ce57b3625edf48eb26882
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@91a6e2594513cf21c022f686cafe0a1496c08af0
         with:
-          llama_release: ${{ steps.llama_release.outputs.tag }}
+          docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+          llama_server_root: ${{ runner.temp }}/auto-pr-llama
           llama_port: ${{ inputs.ai_llamacpp_port }}
 
       - name: Generate PR content
         id: generate
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@2fd79fb751ea6bb8668ce57b3625edf48eb26882
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@91a6e2594513cf21c022f686cafe0a1496c08af0
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -158,17 +160,15 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
-          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outputs.compat_url != '' && steps.local_llama.outputs.compat_url || inputs.ai_openai_compat_url }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
           # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
 
-      - name: Stop local llama-server
+      - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-ci-local-server-stop@2fd79fb751ea6bb8668ce57b3625edf48eb26882
-        with:
-          llama_ci_root: ${{ runner.temp }}/auto-pr-llama
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@91a6e2594513cf21c022f686cafe0a1496c08af0
 
       - name: Prepare artifact
         env:

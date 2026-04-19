@@ -2,7 +2,7 @@
 # See docs/CI.md.
 
 [files]
-extend-exclude = ["*", "!**/*.md"]
+extend-exclude = ["*", "!**/*.md", "**/node_modules/**", "**/dist/**", "**/coverage/**"]
 
 [default.extend-words]
 # Project-specific and technical terms (allow as valid)

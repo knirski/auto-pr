@@ -1,0 +1,45 @@
+# Composite: start llama-server from ghcr.io/ggml-org/llama.cpp (Docker CLI) for CI.
+name: Start local llama.cpp (Docker)
+description: >-
+  docker load from docker/llama-server-image.tar when present (actions/cache), else docker pull + docker save.
+  Bind-mount .gguf, run llama-server with OpenAI-compat /v1 (same layout as integration Testcontainers).
+
+inputs:
+  docker_image:
+    description: Full image reference (e.g. ghcr.io/ggml-org/llama.cpp:server@sha256:...)
+    required: true
+  model_url:
+    description: HTTPS URL to a .gguf model file
+    required: true
+  llama_server_root:
+    description: Directory for model/, docker/llama-server-image.tar (Actions cache), and optional logs
+    required: true
+  llama_port:
+    description: >-
+      Host TCP port mapped to llama-server (container listens on 8080 inside). Contract: OpenAI-compatible
+      base URL is http://127.0.0.1:{this_port}/v1
+    required: false
+    default: "8080"
+  extra_flags:
+    description: Extra flags appended to llama-server (e.g. "--jinja")
+    required: false
+    default: ""
+  container_name:
+    description: >-
+      Docker container name. Must be unique when several jobs share one Docker host (e.g. nektos/act).
+    required: false
+    default: "auto-pr-llama"
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/llama-server-docker-start.sh"
+      env:
+        DOCKER_IMAGE: ${{ inputs.docker_image }}
+        MODEL_URL: ${{ inputs.model_url }}
+        LLAMA_SERVER_ROOT: ${{ inputs.llama_server_root }}
+        LLAMA_PORT: ${{ inputs.llama_port }}
+        EXTRA_FLAGS: ${{ inputs.extra_flags }}
+        CONTAINER_NAME: ${{ inputs.container_name }}
