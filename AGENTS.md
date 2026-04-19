@@ -54,6 +54,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | Adding… | Put in |
 |---------|--------|
 | Pure validation, helpers | `src/core/*.ts` (fill-pr-template-core, string, gh-output, etc.) |
+| Dev-tool pure helpers (act-local-ci only) | `scripts/act-local-ci.ts` (alongside the imperative CLI — scoped FC/IS exception; see [CI audit §5](docs/superpowers/specs/2026-04-19-ci-modernization-audit-design.md)). Do not extend this pattern to other code. |
 | New config/env | `src/auto-pr/config.ts` |
 | New tagged error class | `src/core/errors.ts`; add `formatError` branch in `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
@@ -110,7 +111,7 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 
 ### Design Principles
 
-- **FC/IS:** Core pure (no Effect, no I/O, returns `Result`). Shell orchestrates I/O, bridges with `Effect.fromResult`.
+- **FC/IS:** Core pure (no Effect, no I/O, returns `Result`). Shell orchestrates I/O, bridges with `Effect.fromResult`. One scoped exception: the local `act` harness in `scripts/act-local-ci.ts` (see "Where to Put X").
 - **Tagless Final:** Interfaces + Tags; live in `live/`, tests swap mocks. `Effect.provide(layer)`.
 - **Effect first**, config as service, ADTs with `Match.exhaustive`. Core files do not depend on shell.
 
