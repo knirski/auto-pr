@@ -23,7 +23,8 @@ jobs:
   update-pins:
     # Loop prevention requires BOTH conditions to skip:
     #   - commit message starts with the pin-updater prefix, AND
-    #   - commit author is github-actions[bot] (set explicitly by this workflow in the Commit-and-push step).
+    #   - head_commit.author.name is github-actions[bot] (git config in Commit-and-push; NOT github.actor,
+    #     which would be the GitHub App slug when pushing with the App token).
     # A human commit that happens to reuse the prefix still runs.
     if: |
       github.repository == 'knirski/auto-pr' &&
