@@ -97,11 +97,6 @@
 			"scripts/nix-run-if-missing.sh shfmt -w"
 		]
 	},
-	"commitlint": {
-		"extends": [
-			"@commitlint/config-conventional"
-		]
-	},
 	"engines": {
 		"node": ">=20.0.0"
 	},
