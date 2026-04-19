@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import{Ca as f,D as t,Da as y,Ia as g,L as d,M as m,Xa as h,e as p,ua as a,za as u}from"../auto-pr-generate-content-a3m7mf4a.js";function P(r,s,o,l,n){return t.gen(function*(){let c=s.join(o,l),e=yield*r.readFileString(c),i=s.dirname(n);yield*r.makeDirectory(i,{recursive:!0}),yield*r.writeFileString(n,e)})}function v(r){return t.gen(function*(){let s=yield*d.FileSystem,o=yield*m.Path,l=yield*t.fromResult(g.fromString(import.meta.url)).pipe(t.mapError((e)=>Error(`Invalid import.meta.url: ${e.message}`))),n=yield*o.fromFileUrl(l),c=o.join(o.dirname(n),"..","..");for(let e of h()){let i=o.join(r,e.dest);if(yield*s.exists(i))yield*t.log({event:"init",status:"skipped",path:a(i),reason:"already exists"});else if(e.content!==void 0)yield*s.writeFileString(i,e.content),yield*t.log({event:"init",status:"created",path:a(i)});else if(e.from!==void 0)yield*P(s,o,c,e.from,i),yield*t.log({event:"init",status:"created",path:a(i)})}yield*t.log({event:"init",status:"next_steps",message:`Next steps (required for the workflow to create PRs):
+import{Aa as u,Da as f,E as t,Ea as y,Ja as g,M as d,N as m,Ya as h,f as p,va as a}from"../auto-pr-generate-content-hpckp6kg.js";function P(r,s,o,l,n){return t.gen(function*(){let c=s.join(o,l),e=yield*r.readFileString(c),i=s.dirname(n);yield*r.makeDirectory(i,{recursive:!0}),yield*r.writeFileString(n,e)})}function v(r){return t.gen(function*(){let s=yield*d.FileSystem,o=yield*m.Path,l=yield*t.fromResult(g.fromString(import.meta.url)).pipe(t.mapError((e)=>Error(`Invalid import.meta.url: ${e.message}`))),n=yield*o.fromFileUrl(l),c=o.join(o.dirname(n),"..","..");for(let e of h()){let i=o.join(r,e.dest);if(yield*s.exists(i))yield*t.log({event:"init",status:"skipped",path:a(i),reason:"already exists"});else if(e.content!==void 0)yield*s.writeFileString(i,e.content),yield*t.log({event:"init",status:"created",path:a(i)});else if(e.from!==void 0)yield*P(s,o,c,e.from,i),yield*t.log({event:"init",status:"created",path:a(i)})}yield*t.log({event:"init",status:"next_steps",message:`Next steps (required for the workflow to create PRs):
 1. Create a GitHub App: https://github.com/settings/apps/new
    - Permissions: Contents, Pull requests (Read and write)
    - Webhook: Uncheck Active
@@ -14,5 +14,5 @@ Then push to ai/** to test:
 
 See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md for full instructions.`})})}if(p.main==p.module)y(t.gen(function*(){let r=yield*t.sync(()=>process.cwd());yield*v(r)}).pipe(t.provide(u),t.provide(f)),"init");export{v as runInit};
 
-//# debugId=05E5D28B316814AF64756E2164756E21
+//# debugId=B805DE8F6CCBC27864756E2164756E21
 //# sourceMappingURL=auto-pr-init.js.map
