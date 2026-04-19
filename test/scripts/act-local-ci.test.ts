@@ -196,7 +196,15 @@ describe("pure helpers", () => {
 			name: "n",
 			full_name: "o/n",
 			owner: { login: "o" },
+			default_branch: "main",
 		});
+	});
+
+	test("stringifyWorkflowDispatchEventJson respects defaultBranch option", () => {
+		const repo = { owner: "o", name: "n" };
+		const json = stringifyWorkflowDispatchEventJson(repo, undefined, { defaultBranch: "develop" });
+		const parsed = JSON.parse(json) as { repository: { default_branch: string } };
+		expect(parsed.repository.default_branch).toBe("develop");
 	});
 
 	test("buildActArgv uses runsOnLabel as act -P key (not tied to a single OS name)", () => {

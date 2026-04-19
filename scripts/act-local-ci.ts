@@ -152,16 +152,24 @@ export type ActWorkflowDispatchGitPointer = {
 	readonly sha: string;
 };
 
+/** Options for {@link stringifyWorkflowDispatchEventJson}. `defaultBranch` is required by `dorny/paths-filter` when simulating `ci.yml` under act (see `repository.default_branch` in GitHub’s event payload). */
+export type ActWorkflowDispatchEventOptions = {
+	readonly defaultBranch?: string;
+};
+
 /** JSON body for `act -e` (`repository` for `github.event`; optional `ref` / `after` / `deleted` for act’s github context). */
 export function stringifyWorkflowDispatchEventJson(
 	repo: ActWorkflowDispatchRepo,
 	gitPointer?: ActWorkflowDispatchGitPointer,
+	options?: ActWorkflowDispatchEventOptions,
 ): string {
 	const fullName = `${repo.owner}/${repo.name}`;
+	const defaultBranch = options?.defaultBranch ?? "main";
 	const repository = {
 		name: repo.name,
 		full_name: fullName,
 		owner: { login: repo.owner },
+		default_branch: defaultBranch,
 	};
 	if (gitPointer === undefined) {
 		return JSON.stringify({ repository });
@@ -603,9 +611,12 @@ export function program(
 		);
 		const eventPath = pathApi.join(repoRoot, ACT_GENERATED_EVENT_RELATIVE_PATH);
 		const gitPointer = resolveGitPointerForActEvent(repoRoot);
+		const defaultBranch = process.env.ACT_DEFAULT_BRANCH?.trim() || "main";
 		yield* fs.writeFileString(
 			eventPath,
-			stringifyWorkflowDispatchEventJson(resolvedRepo, Option.getOrUndefined(gitPointer)),
+			stringifyWorkflowDispatchEventJson(resolvedRepo, Option.getOrUndefined(gitPointer), {
+				defaultBranch,
+			}),
 		);
 		const eventFile = eventPath;
 
