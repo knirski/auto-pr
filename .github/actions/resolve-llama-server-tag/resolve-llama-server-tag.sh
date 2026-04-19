@@ -64,7 +64,7 @@ case "${always_resolve,,}" in
 true | 1 | yes) ;; # skip NEED gate
 *)
 	need_script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ci-local-llama-docker-need.sh"
-	local_llama_docker_need="$("$need_script_path")"
+	local_llama_docker_need="$(bash "$need_script_path")"
 	if [[ "$local_llama_docker_need" != "true" ]]; then
 		printf 'tag=\nimage=\n' >>"$GITHUB_OUTPUT"
 		exit 0
