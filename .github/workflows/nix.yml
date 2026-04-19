@@ -1,8 +1,10 @@
 # Reusable workflow: Nix build with bun.nix auto-update.
-# Called by ci-nix.yml and update-bun-nix.yml.
+# Called by ci.yml's `nix` job and update-bun-nix.yml.
 #
-# Uses GitHub App token when push_allowed so the push triggers CI on the new commit
+# Uses GitHub App token when push_allowed so the push can trigger CI on the new commit
 # (GITHUB_TOKEN pushes do not trigger workflows). Same App as auto-pr (APP_ID, APP_PRIVATE_KEY).
+# The `Trigger check on new commit` step below is retained — see its inline comment for why
+# an explicit `ci.yml` dispatch may still be needed after the App push.
 #
 # Uses upstream Nix (cachix/install-nix-action).
 # Builds on x86_64-linux, aarch64-linux, and aarch64-darwin (macos-latest).
@@ -54,10 +56,8 @@ jobs:
           token: ${{ inputs.push_allowed && steps.app-token.outputs.token || github.token }}
           fetch-depth: 1
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@616559265b40713947b9c190a8ff4b507b5df49b # v31
-        with:
-          extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
+      - name: Setup Nix with cache
+        uses: ./.github/actions/setup-nix-with-cache
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -89,6 +89,9 @@ jobs:
             exit 1
           fi
 
+      # Explicit `gh workflow run ci.yml` after the App-token push: branch protection
+      # needs checks on the new commit; PR synchronize may not always re-run consolidated
+      # CI on the pushed head. Re-evaluate before deleting (Area D Task 5 diagnostic).
       - name: Trigger check on new commit
         if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed
         env:
@@ -138,16 +141,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@616559265b40713947b9c190a8ff4b507b5df49b # v31
-        with:
-          extra_nix_config: "experimental-features = nix-command flakes auto-allocate-uids"
-
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
-        with:
-          primary-key: nix-${{ matrix.system }}-${{ hashFiles('**/*.nix', '**/bun.lock', '**/flake.lock') }}
-          restore-prefixes-first-match: nix-${{ matrix.system }}-
+      - name: Setup Nix with cache
+        uses: ./.github/actions/setup-nix-with-cache
 
       - name: Nix flake check
         run: nix flake check -L --system ${{ matrix.system }}
