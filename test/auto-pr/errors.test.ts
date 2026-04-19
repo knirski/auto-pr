@@ -14,6 +14,7 @@ import {
 	NoSemanticCommitsError,
 	ParseError,
 	PrLookupError,
+	PrUrlParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,
@@ -79,6 +80,12 @@ test("formatError formats PrLookupError", () => {
 	const out = formatError(new PrLookupError({ branch: "ai/foo", cause: "boom" }));
 	expect(out).toContain("ai/foo");
 	expect(out).toContain("boom");
+});
+
+test("formatError formats PrUrlParseError", () => {
+	const out = formatError(new PrUrlParseError({ raw: "hi", reason: "not a URL" }));
+	expect(out).toContain("not a URL");
+	expect(out).toContain("hi");
 });
 
 test("formatError formats ParseError", () => {

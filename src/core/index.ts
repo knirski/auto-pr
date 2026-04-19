@@ -47,6 +47,8 @@ export {
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
+	PrLookupError,
+	PrUrlParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
 	PullRequestTitleBlankError,

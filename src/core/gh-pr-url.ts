@@ -1,0 +1,29 @@
+/**
+ * Parse `gh pr create` stdout into a validated GitHub PR URL.
+ * Uses regex instead of `Url.fromString` from Effect: that helper is oriented to
+ * `import.meta.url`-style resolution in this repo, not arbitrary http(s) PR links.
+ */
+
+import { Result } from "effect";
+import { PrUrlParseError } from "./errors.js";
+
+/** GitHub PR URL: https(s)://host/.../pull/<digits> */
+const GH_PR_URL = /^https?:\/\/\S+\/pull\/\d+$/;
+
+/** Pure: extract the PR URL from `gh pr create` stdout. Validates shape. */
+export function parseGhPrCreateOutput(stdout: string): Result.Result<string, PrUrlParseError> {
+	const lines = stdout
+		.split("\n")
+		.map((l) => l.trim())
+		.filter((l) => l !== "");
+	const last = lines.at(-1);
+	if (last === undefined) {
+		return Result.fail(new PrUrlParseError({ raw: stdout, reason: "empty output" }));
+	}
+	if (!GH_PR_URL.test(last)) {
+		return Result.fail(
+			new PrUrlParseError({ raw: stdout, reason: `last line is not a PR URL: ${last}` }),
+		);
+	}
+	return Result.succeed(last);
+}

@@ -24,7 +24,8 @@ import {
 	runCommand,
 	runMain,
 } from "#auto-pr";
-import { PrLookupError } from "#core/errors.js";
+import { PrLookupError, type PrUrlParseError } from "#core/errors.js";
+import { parseGhPrCreateOutput } from "#core/gh-pr-url.js";
 import { parseFirstJsonObject } from "#core/parse-model-json.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -146,15 +147,12 @@ function runGhWithRetry<R, E, A>(
 	);
 }
 
-function extractPrUrl(stdout: string): string {
-	return stdout.trim().split("\n").at(-1) ?? "";
-}
-
 type CreateOrUpdatePrError =
 	| PullRequestFailedError
 	| BodyFileNotFoundError
 	| FileSystemError
-	| PrLookupError;
+	| PrLookupError
+	| PrUrlParseError;
 
 /** Main pipeline. Exported for tests. */
 export function runCreateOrUpdatePr(params: {
@@ -205,15 +203,13 @@ export function runCreateOrUpdatePr(params: {
 				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
 				params.branch,
 			);
-			const url = extractPrUrl(stdout);
-			if (url) {
-				yield* Effect.log({
-					event: "create_or_update_pr",
-					status: "created",
-					url,
-					branch: params.branch,
-				});
-			}
+			const url = yield* Effect.fromResult(parseGhPrCreateOutput(stdout));
+			yield* Effect.log({
+				event: "create_or_update_pr",
+				status: "created",
+				url,
+				branch: params.branch,
+			});
 		}
 	});
 }
