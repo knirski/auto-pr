@@ -31,7 +31,6 @@ jobs:
         uses: rvben/rumdl@68d37ee69adb3c568543c15ef78865389c02ee6c # v0.1.75
 
       - name: Check links
-        continue-on-error: true
         timeout-minutes: 2
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
