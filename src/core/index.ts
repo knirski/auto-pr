@@ -26,6 +26,7 @@ export {
 	parseGithubRepoFromRemoteUrl,
 	parseGithubRepoFromShortName,
 	planActRun,
+	resolveActArtifactServerOpts,
 	resolveActLocalCiInput,
 	resolveActLocalCiRunnerFromProcessEnv,
 	resolveActRunnerImage,

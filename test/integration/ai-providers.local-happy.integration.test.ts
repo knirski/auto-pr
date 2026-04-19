@@ -59,6 +59,9 @@ describe.skipIf(skipDocker)("integration: local llama.cpp (model, happy path)", 
 				),
 			);
 		},
-		{ timeout: 300_000 },
+		{
+			// act-local-ci: full GGUF on CPU often exceeds 5 min; hosted CI is typically faster.
+			timeout: process.env.AUTO_PR_ACT_LOCAL_CI === "1" ? 900_000 : 300_000,
+		},
 	);
 });

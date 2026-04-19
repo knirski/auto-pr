@@ -8,6 +8,7 @@ import {
 	parseGithubRepoFromRemoteUrl,
 	parseGithubRepoFromShortName,
 	planActRun,
+	resolveActArtifactServerOpts,
 	resolveActLocalCiInput,
 	resolveActRunnerImage,
 	resolveActWorkflowDispatchRepo,
@@ -177,6 +178,77 @@ test("buildActArgv wires platform, workflow_dispatch, job, dryrun", () => {
 		"-j",
 		"check",
 	]);
+});
+
+test("buildActArgv passes artifact server addr/port when set", () => {
+	const argv = buildActArgv({
+		repoRoot: "/repo",
+		runsOnLabel: "ubuntu-24.04",
+		runnerImage: "img:tag",
+		workflowPath: ".github/workflows/ci.yml",
+		jobName: "check",
+		dryRun: false,
+		eventFile: undefined,
+		artifactServerAddr: "127.0.0.1",
+		artifactServerPort: "0",
+	});
+	expect(argv).toEqual([
+		"-Pubuntu-24.04=img:tag",
+		"--artifact-server-path=/repo/.act-artifacts",
+		"--artifact-server-addr=127.0.0.1",
+		"--artifact-server-port=0",
+		"-W",
+		".github/workflows/ci.yml",
+		CI_EVENT,
+		"-j",
+		"check",
+	]);
+});
+
+test("resolveActArtifactServerOpts omits port by default and allows omit via -", () => {
+	expect(resolveActArtifactServerOpts({})).toEqual({});
+	expect(
+		resolveActArtifactServerOpts({
+			ACT_ARTIFACT_SERVER_PORT: "34567",
+		}),
+	).toEqual({ artifactServerPort: "34567" });
+	expect(
+		resolveActArtifactServerOpts({
+			ACT_ARTIFACT_SERVER_ADDR: " 192.168.1.1 ",
+			ACT_ARTIFACT_SERVER_PORT: "-",
+		}),
+	).toEqual({ artifactServerAddr: "192.168.1.1" });
+});
+
+test("buildActArgv omits -j when jobName unset (integration workflow)", () => {
+	const argv = buildActArgv({
+		repoRoot: "/repo",
+		runsOnLabel: "ubuntu-24.04",
+		runnerImage: "img:tag",
+		workflowPath: ".github/workflows/integration.yml",
+		dryRun: false,
+		eventFile: undefined,
+	});
+	expect(argv).toContain("-W");
+	expect(argv).toContain(".github/workflows/integration.yml");
+	expect(argv).not.toContain("-j");
+	expect(argv).toContain("AUTO_PR_ACT_LOCAL_CI=1");
+});
+
+test("buildActArgv passes container-options when set", () => {
+	const argv = buildActArgv({
+		repoRoot: "/repo",
+		runsOnLabel: "ubuntu-24.04",
+		runnerImage: "img:tag",
+		workflowPath: ".github/workflows/integration.yml",
+		dryRun: false,
+		eventFile: undefined,
+		containerOptions: "--group-add 998",
+	});
+	const i = argv.indexOf("--container-options");
+	expect(i).toBeGreaterThanOrEqual(0);
+	expect(argv[i + 1]).toBe("--group-add 998");
+	expect(argv).toContain("AUTO_PR_ACT_LOCAL_CI=1");
 });
 
 test("planActRun uses bash direct act helper or gh", () => {

@@ -229,10 +229,39 @@ export type BuildActArgsInput = {
 	readonly runsOnLabel: string;
 	readonly runnerImage: string;
 	readonly workflowPath: string;
-	readonly jobName: string;
+	/** Act **`-j`** filter; omit to run all jobs in the workflow (`.github/workflows/integration.yml` has several parallel jobs, no `integration` job id). */
+	readonly jobName?: string;
 	readonly dryRun: boolean;
 	readonly eventFile: string | undefined;
+	/** Passed to act as `--artifact-server-addr` when set. */
+	readonly artifactServerAddr?: string;
+	/** Passed to act as `--artifact-server-port` when set (omit for act default, usually 34567). */
+	readonly artifactServerPort?: string;
+	/** Passed to act as **`--container-options`** (Docker flags for job containers; e.g. Docker-in-Docker socket access). */
+	readonly containerOptions?: string;
 };
+
+/**
+ * Resolves {@link BuildActArgsInput} artifact flags from `process.env` (act-local-ci host).
+ * - **`ACT_ARTIFACT_SERVER_PORT`**: explicit port (e.g. **`45678`** if **34567** is busy), **`0`** at your own risk, or `-` to omit the flag (act’s built-in default, usually **34567**).
+ * - **Default** when unset: **omit** `--artifact-server-port`. **Do not** default to **`0`**: nektos/act does not wire ephemeral ports to actions; artifact uploads fail with **`CreateArtifact` → `ECONNREFUSED`**. Use an explicit free port or stop the process holding **34567**.
+ */
+export function resolveActArtifactServerOpts(
+	env: NodeJS.ProcessEnv,
+): Pick<BuildActArgsInput, "artifactServerAddr" | "artifactServerPort"> {
+	const addrRaw = env.ACT_ARTIFACT_SERVER_ADDR?.trim();
+	const portRaw = env.ACT_ARTIFACT_SERVER_PORT?.trim();
+	const addr = addrRaw !== undefined && addrRaw.length > 0 ? addrRaw : undefined;
+	if (portRaw === "-") {
+		return addr !== undefined ? { artifactServerAddr: addr } : {};
+	}
+	if (portRaw !== undefined && portRaw.length > 0) {
+		return addr !== undefined
+			? { artifactServerAddr: addr, artifactServerPort: portRaw }
+			: { artifactServerPort: portRaw };
+	}
+	return addr !== undefined ? { artifactServerAddr: addr } : {};
+}
 
 /**
  * Build argv for the act subprocess (flags after the `act` command name). {@link planActRun} then wraps them:
@@ -241,20 +270,30 @@ export type BuildActArgsInput = {
  */
 export function buildActArgv(input: BuildActArgsInput): readonly string[] {
 	const platform = `-P${input.runsOnLabel}=${input.runnerImage}`;
-	const artifact = `--artifact-server-path=${input.repoRoot}/.act-artifacts`;
+	const artifactPath = `--artifact-server-path=${input.repoRoot}/.act-artifacts`;
 	const dry = input.dryRun ? (["--dryrun"] as const) : ([] as const);
 	const event = input.eventFile !== undefined ? (["-e", input.eventFile] as const) : ([] as const);
-	return [
-		platform,
-		...event,
-		artifact,
-		...dry,
-		"-W",
-		input.workflowPath,
-		CI_EVENT,
-		"-j",
-		input.jobName,
-	];
+	const mid: string[] = [platform, ...event, artifactPath];
+	if (input.artifactServerAddr !== undefined) {
+		mid.push(`--artifact-server-addr=${input.artifactServerAddr}`);
+	}
+	if (input.artifactServerPort !== undefined) {
+		mid.push(`--artifact-server-port=${input.artifactServerPort}`);
+	}
+	const tail: string[] = [...mid, ...dry, "-W", input.workflowPath, CI_EVENT];
+	const jn = input.jobName?.trim();
+	if (jn !== undefined && jn.length > 0) {
+		tail.push("-j", jn);
+	}
+	const co = input.containerOptions?.trim();
+	if (co !== undefined && co.length > 0) {
+		tail.push("--container-options", co);
+	}
+	/* Only integration workflow simulation: signals nested act / long LLM timeouts in integration tests. */
+	if (input.workflowPath === INTEGRATION_WORKFLOW) {
+		tail.push("--env", "AUTO_PR_ACT_LOCAL_CI=1");
+	}
+	return tail;
 }
 
 export function planActRun(
