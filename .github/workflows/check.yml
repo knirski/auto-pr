@@ -8,7 +8,8 @@ on:
   workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Caller name is often "CI" for multiple entry workflows; suffix avoids cross-cancelling other Check reusables.
+  group: ${{ github.workflow }}-${{ github.ref }}-check-full
   cancel-in-progress: true
 
 permissions: {}
