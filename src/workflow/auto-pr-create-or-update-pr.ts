@@ -39,13 +39,18 @@ const PrInfoSchema = Schema.Struct({
 });
 type PrInfo = Schema.Schema.Type<typeof PrInfoSchema>;
 
-/** True when wrapped gh output indicates no PR for the branch (distinct from auth/network). */
+/**
+ * Heuristic: `runCommand` maps gh failures to `PullRequestFailedError` with `String(platformError)`.
+ * Treat as “no open PR” only for `gh pr view` phrasing we expect when the branch has no PR.
+ * Keep substrings specific so unrelated errors that mention “PR” are not swallowed.
+ */
 function ghStdoutMeansNoPrYet(cause: string): boolean {
 	const m = cause.toLowerCase();
 	return (
 		m.includes("no pull requests found") ||
-		m.includes("no pr found") ||
-		m.includes("no pull request")
+		m.includes("no pull requests match") ||
+		m.includes("could not find any pull requests") ||
+		m.includes("no pr found")
 	);
 }
 
@@ -73,7 +78,7 @@ export function ghPrViewJson(
 			Effect.mapError((e) => toLookupError(e.message)),
 		);
 		const decoded = yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
-			Effect.mapError((e) => toLookupError(String(e))),
+			Effect.mapError((e) => toLookupError(Schema.isSchemaError(e) ? e.message : String(e))),
 		);
 		return Option.some(decoded);
 	});

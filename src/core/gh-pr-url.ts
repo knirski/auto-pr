@@ -7,8 +7,8 @@
 import { Result } from "effect";
 import { PrUrlParseError } from "./errors.js";
 
-/** GitHub PR URL: https(s)://host/.../pull/<digits> */
-const GH_PR_URL = /^https?:\/\/\S+\/pull\/\d+$/;
+/** GitHub-style PR URL: `https(s)://host/<org>/<repo>/pull/<digits>` (no extra path segments). */
+const GH_PR_URL = /^https?:\/\/[^/?#\s]+\/[^/\s]+\/[^/\s]+\/pull\/\d+$/u;
 
 /** Pure: extract the PR URL from `gh pr create` stdout. Validates shape. */
 export function parseGhPrCreateOutput(stdout: string): Result.Result<string, PrUrlParseError> {

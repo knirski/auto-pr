@@ -26,6 +26,12 @@ test("rejects when last line is not a PR URL", () => {
 	expect(Result.isFailure(parseGhPrCreateOutput("https://github.com/o/r/issues/1"))).toBe(true);
 });
 
+test("rejects PR URL with extra path segments (e.g. /files)", () => {
+	expect(Result.isFailure(parseGhPrCreateOutput("https://github.com/o/r/pull/42/files"))).toBe(
+		true,
+	);
+});
+
 test("trims whitespace on URL line", () => {
 	const r = parseGhPrCreateOutput("  https://github.com/o/r/pull/5  \n");
 	expect(Result.isSuccess(r)).toBe(true);

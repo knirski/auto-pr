@@ -12,9 +12,9 @@ coverageDir = "coverage"
 # act-local-ci.ts: CLI + process I/O; per-file coverage still misses most branches. Pure logic: src/core/act-local-ci.ts; program dry-run path: test/scripts/act-local-ci.test.ts.
 coveragePathIgnorePatterns = ["test/**", "**/core/errors.ts", "scripts/act-local-ci.ts"]
 coverageSkipTestFiles = true
-# Bun enforces per-file. Overall 91.55% funcs; lowest file create-or-update-pr 68%.
-# Set to 0.68 so CI passes; raise when low-coverage files get more tests.
-coverageThreshold = 0.68
+# Bun enforces per-file threshold on both % funcs and % lines. Floor was 0.68 (weakest line ~68%).
+# Raised to 0.75: still below auto-pr-init (75% funcs) and collapse-prose (~84% lines).
+coverageThreshold = 0.75
 concurrentTestGlob = "test/**/*.test.ts"
 preload = ["./test/test-setup.ts"]
 smol = true
