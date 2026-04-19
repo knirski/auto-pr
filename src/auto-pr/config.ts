@@ -41,6 +41,7 @@ import {
 } from "effect";
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
 import { AutoPrConfigError } from "#core/errors.js";
+import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
 
 /** Type guard for cause with message property. */
 function hasMessage(obj: unknown): obj is { message?: string } {
@@ -213,7 +214,15 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							"AUTO_PR_AI_OPENAI_COMPAT_URL",
 							DEFAULT_OPENAI_COMPAT_URL,
 						);
-						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const urlRaw = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const url = yield* Effect.fromResult(parseOpenAiCompatUrl(urlRaw)).pipe(
+							Effect.mapError(
+								(e) =>
+									new AutoPrConfigError({
+										missing: [`AUTO_PR_AI_OPENAI_COMPAT_URL: ${e.reason}`],
+									}),
+							),
+						);
 						const model = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatModel,
 							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
@@ -383,7 +392,15 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							"AUTO_PR_AI_OPENAI_COMPAT_URL",
 							DEFAULT_OPENAI_COMPAT_URL,
 						);
-						const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const urlRaw = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
+						const url = yield* Effect.fromResult(parseOpenAiCompatUrl(urlRaw)).pipe(
+							Effect.mapError(
+								(e) =>
+									new AutoPrConfigError({
+										missing: [`AUTO_PR_AI_OPENAI_COMPAT_URL: ${e.reason}`],
+									}),
+							),
+						);
 						const model = yield* getOrDefaultLogged(
 							base.aiOpenaiCompatModel,
 							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",

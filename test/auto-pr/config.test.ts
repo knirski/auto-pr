@@ -490,6 +490,38 @@ describe("RunAutoPrConfigLayer rejects branch === defaultBranch when BRANCH is s
 });
 
 describe("GeneratePrContentConfigLayer uses default values and logs warnings", () => {
+	test("fails when AUTO_PR_AI_OPENAI_COMPAT_URL lacks scheme (local provider)", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...generatePrContentBaseEnv,
+				AUTO_PR_AI_PROVIDER: "local",
+				AUTO_PR_AI_OPENAI_COMPAT_URL: "localhost:8080/v1",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* GeneratePrContentConfig;
+			}).pipe(Effect.provide(layer), Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+						"AUTO_PR_AI_OPENAI_COMPAT_URL",
+					);
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
+	});
+
 	test("uses default AUTO_PR_AI_OPENAI_COMPAT_URL when not set (local provider)", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
