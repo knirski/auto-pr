@@ -17,8 +17,7 @@ on:
       - '.github/**'
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-workflows-${{ github.ref }}
@@ -26,4 +25,7 @@ concurrency:
 
 jobs:
   check:
+    permissions:
+      contents: read
+    # timeout-minutes not settable on reusable-call jobs; check-workflows.yml caps check at 5m
     uses: ./.github/workflows/check-workflows.yml

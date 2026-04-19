@@ -12,8 +12,7 @@ on:
     paths:
       - '.release-please-manifest.json'
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-release-please-${{ github.ref }}
@@ -24,5 +23,6 @@ jobs:
     permissions:
       contents: read
       models: read
+    # timeout-minutes not settable on reusable-call jobs; check.yml caps the check job at 20m
     uses: ./.github/workflows/check.yml
     secrets: inherit

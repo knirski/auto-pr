@@ -11,14 +11,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  models: read
+permissions: {}
 
 jobs:
   # Scenario: local model with no tool-call support → exercises the commit-summary fallback path.
   # Uses Mozilla tiny-llama (~27 KiB stub). Expected to fail AI generation; asserts graceful fallback.
   integration-local-fallback:
+    permissions:
+      contents: read
+      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -100,6 +101,9 @@ jobs:
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
   integration-github-models:
+    permissions:
+      contents: read
+      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -128,6 +132,9 @@ jobs:
   # Scenario: local full model with tool-call support → exercises real AI generation without fallback.
   # Asserts AI output is used (no "AI description unavailable"). `--jinja` for chat-template tooling.
   integration-local-happy:
+    permissions:
+      contents: read
+      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

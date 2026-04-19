@@ -22,11 +22,12 @@ concurrency:
   group: act-smoke-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   smoke:
+    permissions:
+      contents: read
     name: ${{ matrix.label }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25

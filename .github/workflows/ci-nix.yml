@@ -30,6 +30,7 @@ jobs:
   nix:
     permissions:
       contents: write
+    # timeout-minutes not settable on reusable-call jobs; nix.yml caps bun-nix/build internally
     uses: ./.github/workflows/nix.yml
     with:
       ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}

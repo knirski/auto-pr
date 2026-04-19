@@ -16,8 +16,7 @@ on:
     paths:
       - '**/*.md'
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-docs-${{ github.ref }}
@@ -25,4 +24,7 @@ concurrency:
 
 jobs:
   check:
+    permissions:
+      contents: read
+    # timeout-minutes not settable on reusable-call jobs; check-docs.yml caps check at 15m
     uses: ./.github/workflows/check-docs.yml
