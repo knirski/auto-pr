@@ -15,6 +15,7 @@ import {
 	CI_EVENT,
 	CI_WORKFLOW,
 	isActLocalCiMode,
+	isGithubPullRequestRef,
 	mergeActContainerOptions,
 	parseGithubRepoFromPackageJsonRepository,
 	parseGithubRepoFromRemoteUrl,
@@ -99,6 +100,13 @@ describe("pure helpers", () => {
 				dryRun: true,
 			}),
 		).toBe("ghcr.io/catthehacker/ubuntu:act-24.04");
+	});
+
+	test("isGithubPullRequestRef is true only for refs/pull/*", () => {
+		expect(isGithubPullRequestRef("refs/pull/144/merge")).toBe(true);
+		expect(isGithubPullRequestRef("refs/pull/1/head")).toBe(true);
+		expect(isGithubPullRequestRef("refs/heads/main")).toBe(false);
+		expect(isGithubPullRequestRef("refs/tags/v1")).toBe(false);
 	});
 
 	test("resolveActRunnerImage respects env override", () => {
@@ -196,7 +204,15 @@ describe("pure helpers", () => {
 			name: "n",
 			full_name: "o/n",
 			owner: { login: "o" },
+			default_branch: "main",
 		});
+	});
+
+	test("stringifyWorkflowDispatchEventJson respects defaultBranch option", () => {
+		const repo = { owner: "o", name: "n" };
+		const json = stringifyWorkflowDispatchEventJson(repo, undefined, { defaultBranch: "develop" });
+		const parsed = JSON.parse(json) as { repository: { default_branch: string } };
+		expect(parsed.repository.default_branch).toBe("develop");
 	});
 
 	test("buildActArgv uses runsOnLabel as act -P key (not tied to a single OS name)", () => {

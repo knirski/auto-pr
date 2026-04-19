@@ -65,9 +65,9 @@ Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integr
 | `bun run test:all` | Unit tests, then integration |
 | `bun run act` | CI `check` then `integration` in Docker (not the same as `test:all`). [package.json](package.json) exposes a single **`act`** script; pass a mode after `--` (see below). |
 | `bun run act -- check` | Only the CI `check` job (faster; skips integration) |
-| `bun run act -- check-workflows` | Only [ci-workflows.yml](.github/workflows/ci-workflows.yml) → [check-workflows.yml](.github/workflows/check-workflows.yml) (actionlint + shellcheck on `.github`; fast). |
+| `bun run act -- check-workflows` | [ci.yml](.github/workflows/ci.yml) job **`workflows-lint`** → [check-workflows.yml](.github/workflows/check-workflows.yml) (actionlint + shellcheck on `.github`; fast). |
 | `bun run act -- --dry-run check` | `act --dryrun` for [ci.yml](.github/workflows/ci.yml) → [check.yml](.github/workflows/check.yml) (validates workflow graph; not a full run). Equivalent: `bun scripts/act-local-ci.ts --dry-run check` (or `-n check`). |
-| `bun run act -- --dry-run check-workflows` | `act --dryrun` for the **ci-workflows** path only. Equivalent: `bun scripts/act-local-ci.ts --dry-run check-workflows`. |
+| `bun run act -- --dry-run check-workflows` | `act --dryrun` for **`ci.yml`** job **`workflows-lint`** only. Equivalent: `bun scripts/act-local-ci.ts --dry-run check-workflows`. |
 | `bun run act -- integration` | [integration.yml](.github/workflows/integration.yml) only — all its jobs (local llama + GitHub Models scenarios); heavy |
 
 #### Integration test env (this repository)
@@ -96,9 +96,9 @@ If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 
 **Local warning:** `bun run check` warns when `bun.nix` is stale. You can ignore it — CI will fix it when you push.
 
-**If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for the new check to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-check--check-waiting-for-status) if the required check stays "waiting for status".
+**If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for **`CI / gate`** to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-ci--gate-waiting-for-status) if the required check stays "waiting for status".
 
-**Fork PRs:** CI cannot push to forks. If the nix job fails (ci-nix.yml), update locally: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
+**Fork PRs:** CI cannot push to forks. If the **`nix`** job fails in CI, update locally: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
 
 See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architecture.
 

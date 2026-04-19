@@ -34,7 +34,6 @@ export function isActLocalCiMode(s: string): s is ActLocalCiMode {
 }
 
 export const CI_WORKFLOW = ".github/workflows/ci.yml" as const;
-export const CI_WORKFLOWS_ENTRY = ".github/workflows/ci-workflows.yml" as const;
 export const INTEGRATION_WORKFLOW = ".github/workflows/integration.yml" as const;
 export const CI_EVENT = "workflow_dispatch" as const;
 
@@ -153,16 +152,24 @@ export type ActWorkflowDispatchGitPointer = {
 	readonly sha: string;
 };
 
+/** Options for {@link stringifyWorkflowDispatchEventJson}. `defaultBranch` is required by `dorny/paths-filter` when simulating `ci.yml` under act (see `repository.default_branch` in GitHub’s event payload). */
+export type ActWorkflowDispatchEventOptions = {
+	readonly defaultBranch?: string;
+};
+
 /** JSON body for `act -e` (`repository` for `github.event`; optional `ref` / `after` / `deleted` for act’s github context). */
 export function stringifyWorkflowDispatchEventJson(
 	repo: ActWorkflowDispatchRepo,
 	gitPointer?: ActWorkflowDispatchGitPointer,
+	options?: ActWorkflowDispatchEventOptions,
 ): string {
 	const fullName = `${repo.owner}/${repo.name}`;
+	const defaultBranch = options?.defaultBranch ?? "main";
 	const repository = {
 		name: repo.name,
 		full_name: fullName,
 		owner: { login: repo.owner },
+		default_branch: defaultBranch,
 	};
 	if (gitPointer === undefined) {
 		return JSON.stringify({ repository });
@@ -355,6 +362,15 @@ function whichOnPath(cmd: string): Option.Option<string> {
 	return Option.fromNullishOr(Bun.which(cmd));
 }
 
+/**
+ * True for GitHub PR refs (`refs/pull/…/merge` or `refs/pull/…/head`). Those refs are not usable
+ * inside act’s job container for **dorny/paths-filter** (fetch cannot resolve them to a local ref).
+ * Synthetic `workflow_dispatch` should use a branch ref instead (see {@link resolveGitPointerForActEvent}).
+ */
+export function isGithubPullRequestRef(ref: string): boolean {
+	return ref.startsWith("refs/pull/");
+}
+
 /** Resolves `ref` / `sha` for act’s synthetic `workflow_dispatch` payload (see `stringifyWorkflowDispatchEventJson`). */
 function resolveGitPointerForActEvent(
 	repoRoot: string,
@@ -365,7 +381,7 @@ function resolveGitPointerForActEvent(
 	if (sha.length === 0) return Option.none();
 
 	const envRef = process.env.GITHUB_REF?.trim();
-	if (envRef !== undefined && envRef.length > 0) {
+	if (envRef !== undefined && envRef.length > 0 && !isGithubPullRequestRef(envRef)) {
 		return Option.some({ ref: envRef, sha });
 	}
 	const symRes = Bun.spawnSync(["git", "symbolic-ref", "-q", "HEAD"], { cwd: repoRoot });
@@ -535,8 +551,8 @@ function runActCheckWorkflowsJob(
 	return runWorkflowJob(
 		{
 			...ctx,
-			workflowPath: CI_WORKFLOWS_ENTRY,
-			jobName: "check",
+			workflowPath: CI_WORKFLOW,
+			jobName: "workflows-lint",
 			failureIntro,
 		},
 		resolveBackend,
@@ -604,9 +620,12 @@ export function program(
 		);
 		const eventPath = pathApi.join(repoRoot, ACT_GENERATED_EVENT_RELATIVE_PATH);
 		const gitPointer = resolveGitPointerForActEvent(repoRoot);
+		const defaultBranch = process.env.ACT_DEFAULT_BRANCH?.trim() || "main";
 		yield* fs.writeFileString(
 			eventPath,
-			stringifyWorkflowDispatchEventJson(resolvedRepo, Option.getOrUndefined(gitPointer)),
+			stringifyWorkflowDispatchEventJson(resolvedRepo, Option.getOrUndefined(gitPointer), {
+				defaultBranch,
+			}),
 		);
 		const eventFile = eventPath;
 
@@ -619,7 +638,7 @@ export function program(
 		} as const;
 
 		const failCheck = `bun run act failed on job 'check' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check)" : ""}.`;
-		const failCw = `bun run act failed on job 'check' from ${CI_WORKFLOWS_ENTRY}${outcome.dryRun ? " (dry-run check-workflows)" : ""}.`;
+		const failCw = `bun run act failed on job 'workflows-lint' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check-workflows)" : ""}.`;
 		const failInt = `bun run act failed on job 'integration' from ${INTEGRATION_WORKFLOW}${outcome.dryRun ? " (dry-run integration)" : ""}. Integration runs llama-server + GitHub Models; ensure Docker has enough resources.`;
 
 		yield* Match.value(outcome.mode).pipe(
@@ -668,7 +687,7 @@ export const actLocalCiCommand = Command.make(
 		{ command: "act-local-ci check", description: "CI check job only" },
 		{
 			command: "act-local-ci --dry-run check-workflows",
-			description: "Validate ci-workflows graph without full run",
+			description: "Validate ci.yml workflows-lint graph without full run",
 		},
 	]),
 );
