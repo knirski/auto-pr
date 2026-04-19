@@ -3,6 +3,11 @@
 pre-commit:
   jobs:
     - run: scripts/check-no-dist-staged.sh
+    - glob:
+        - ".github/**/*.yml"
+        - ".github/**/*.sh"
+        - "scripts/smoke-update-pins-check-only.sh"
+      run: bash scripts/smoke-update-pins-check-only.sh
     - run: bun x lint-staged
     - glob: "*.nix"
       run: bun run check:nix

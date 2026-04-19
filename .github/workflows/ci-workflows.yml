@@ -1,5 +1,5 @@
 # Complementary to ci.yml: runs when only .github/** changes.
-# Minimal check: actionlint, shellcheck, shfmt on .github/actions.
+# Minimal check: verify self-referential knirski/auto-pr pins, actionlint, shellcheck, shfmt on .github/actions.
 # See docs/CI.md.
 
 name: CI
