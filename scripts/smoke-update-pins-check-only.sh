@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke-test update-pins.sh check_only mode on the current checkout (guards regressions in verify_pins_uniform).
+# Smoke-test update-pins.sh check_only mode on the current checkout (guards regressions in verify_self_pins_check_only).
 
 set -euo pipefail
 
