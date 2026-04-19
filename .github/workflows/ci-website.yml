@@ -17,8 +17,7 @@ on:
     paths:
       - 'website/**'
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-website-${{ github.ref }}
@@ -26,4 +25,7 @@ concurrency:
 
 jobs:
   check:
+    permissions:
+      contents: read
+    # timeout-minutes not settable on reusable-call jobs; check-website.yml caps check at 15m
     uses: ./.github/workflows/check-website.yml

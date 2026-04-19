@@ -17,5 +17,6 @@ jobs:
   update-bun-nix:
     permissions:
       contents: write
+    # timeout-minutes not settable on reusable-call jobs; nix.yml caps bun-nix/build internally
     uses: ./.github/workflows/nix.yml
     secrets: inherit

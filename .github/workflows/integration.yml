@@ -7,14 +7,19 @@ on:
   workflow_call:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  models: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-integration
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   # Scenario: local model with no tool-call support → exercises the commit-summary fallback path.
   # Uses Mozilla tiny-llama (~27 KiB stub). Expected to fail AI generation; asserts graceful fallback.
   integration-local-fallback:
+    permissions:
+      contents: read
+      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -56,7 +61,7 @@ jobs:
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
       - name: Cache llama-server artifacts (stub GGUF + Docker image tar)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           # Stable workspace path (not runner.temp): cache tars/GGUF for curl and `docker cp` into the llama container (no GGUF bind-mount).
           path: ${{ github.workspace }}/.cache/auto-pr-llama-stub
@@ -96,6 +101,9 @@ jobs:
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
   integration-github-models:
+    permissions:
+      contents: read
+      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -124,6 +132,9 @@ jobs:
   # Scenario: local full model with tool-call support → exercises real AI generation without fallback.
   # Asserts AI output is used (no "AI description unavailable"). `--jinja` for chat-template tooling.
   integration-local-happy:
+    permissions:
+      contents: read
+      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -162,7 +173,7 @@ jobs:
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
       - name: Cache llama-server artifacts (model GGUF + Docker image tar)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ github.workspace }}/.cache/auto-pr-llama-model
           key: llama-${{ steps.llama_server_image.outputs.tag }}-${{ steps.llama_model_cache_key.outputs.hash }}-docker-model

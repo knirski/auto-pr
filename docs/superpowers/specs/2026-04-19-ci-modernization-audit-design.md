@@ -304,3 +304,19 @@ An implementation is complete when:
 - **F:** All eight checklist items applied uniformly across the repo; CI continues green.
 
 No workflow regresses in wall-time (target: each area is neutral-or-faster on `check.yml` wall-time compared to pre-change baseline). Area A is expected to be neutral; Areas D/E/F are expected to be neutral. No perf target is binding — correctness and simplicity first.
+
+---
+
+## 10. Chosen implementation order (plans)
+
+Section 8 defines the recommended merge sequence. **The first plan to execute is Area F** — it establishes conventions everywhere so Areas B, A, D, and E inherit a consistent baseline.
+
+| Order | Area | Plan file |
+|------:|------|-----------|
+| 1 | **F** — General hygiene | [`docs/superpowers/plans/2026-04-19-ci-area-f-hygiene-sweep.md`](../plans/2026-04-19-ci-area-f-hygiene-sweep.md) |
+| 2 | **B** — Pin cleanup | [`docs/superpowers/plans/2026-04-19-ci-area-b-pin-cleanup.md`](../plans/2026-04-19-ci-area-b-pin-cleanup.md) |
+| 3 | **A** — Entry consolidation | [`docs/superpowers/plans/2026-04-19-ci-area-a-consolidate-entry-workflows.md`](../plans/2026-04-19-ci-area-a-consolidate-entry-workflows.md) |
+| 4 | **D** — Nix cleanup | [`docs/superpowers/plans/2026-04-19-ci-area-d-nix-cleanup.md`](../plans/2026-04-19-ci-area-d-nix-cleanup.md) |
+| 5 | **E** — Act harness | [`docs/superpowers/plans/2026-04-19-ci-area-e-act-harness-cleanup.md`](../plans/2026-04-19-ci-area-e-act-harness-cleanup.md) |
+
+**Start here:** open and follow the Area F plan first; after it merges to `main` with green CI, proceed to B, then A (with branch-protection steps as in Area A’s plan), then D and E in either order if parallel capacity allows.

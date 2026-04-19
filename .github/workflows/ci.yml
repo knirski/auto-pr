@@ -26,8 +26,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   dependency-review:
@@ -37,6 +36,7 @@ jobs:
       github.event_name == 'pull_request' &&
       !(github.actor == 'dependabot[bot]' && startsWith(github.event.pull_request.head.ref, 'dependabot/bun-'))
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -49,6 +49,7 @@ jobs:
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
   check:
+    # timeout-minutes not settable on reusable-call jobs; check.yml caps the check job at 20m
     permissions:
       contents: read
       models: read
@@ -56,6 +57,7 @@ jobs:
     secrets: inherit
 
   integration:
+    # timeout-minutes not settable on reusable-call jobs; integration.yml caps jobs internally
     permissions:
       contents: read
       models: read

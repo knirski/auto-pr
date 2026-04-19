@@ -7,11 +7,17 @@ name: Check
 on:
   workflow_call:
 
-permissions:
-  contents: read
+concurrency:
+  # Caller name is often "CI" for multiple entry workflows; suffix avoids cross-cancelling other Check reusables.
+  group: ${{ github.workflow }}-${{ github.ref }}-check-full
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   check:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
