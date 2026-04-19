@@ -8,12 +8,12 @@ This repo uses GitHub Actions. The main [ci.yml](../.github/workflows/ci.yml) en
 |------|-----------|
 | Push to `ai/**` | auto-pr creates/updates PR |
 | PR to main (any paths) | [ci.yml](../.github/workflows/ci.yml) runs always; path filters fan out to `check`, `integration`, `docs-lint`, `website`, `workflows-lint`, `nix`, `dependency-review` (PRs), and **`gate`**. |
-| PR to main (code changes) | `ci.yml`: `check` + `integration` + dependency-review when paths match `code` |
+| PR to main (code changes) | `ci.yml`: `check` → [check.yml](../.github/workflows/check.yml) + `integration` → [integration.yml](../.github/workflows/integration.yml) + `dependency-review` when paths match `code` |
 | PR to main (docs only) | `ci.yml`: `docs-lint` → [check-docs.yml](../.github/workflows/check-docs.yml) |
 | PR to main (website only) | `ci.yml`: `website` → [check-website.yml](../.github/workflows/check-website.yml) |
 | PR to main (.github only) | `ci.yml`: `workflows-lint` → [check-workflows.yml](../.github/workflows/check-workflows.yml) |
 | PR to main (nix/deps) | `ci.yml`: `nix` → [nix.yml](../.github/workflows/nix.yml) |
-| PR to main (release-please) | `ci.yml`: `check` when `release_manifest` or `code` matches |
+| PR to main (release-please) | `ci.yml`: `check` → [check.yml](../.github/workflows/check.yml) when `release_manifest` or `code` matches |
 | Push to main | release-please, update-workflow-pins (when workflows/actions change), update-dist (when src/pkg/build/bun.lock change), scorecard (if configured) |
 | PR/push (paths: `.github/workflows/**`, `scripts/act-local-ci.ts`, `flake.nix`) | [act-smoke.yml](../.github/workflows/act-smoke.yml) — matrix: **`--dry-run check`** and **`check-workflows`** in parallel (the second cell runs **`ci.yml`** job **`workflows-lint`**) |
 | Manual | update-bun-nix, update-flake-lock, update-workflow-pins, update-dist |
@@ -134,9 +134,9 @@ Do NOT require individual job names (`check / check`, `dependency-review`, etc.)
 
 **License checking:** dependency-review can flag license changes when it runs. When it is skipped (Dependabot Bun PRs), license changes are not automatically checked. To audit licenses manually or in CI, consider tools like `license-checker` or `manypkg check licenses`; add to the check workflow if desired.
 
-## Troubleshooting: "check / check" waiting for status
+## Troubleshooting: "CI / gate" waiting for status
 
-When the **`nix`** job pushes a `bun.nix` update, the PR head changes to a new commit. The required check must run on that new commit. If you see "waiting for status to be reported":
+When the **`nix`** job pushes a `bun.nix` update, the PR head changes to a new commit. **`CI / gate`** must run on that new commit. If you see "waiting for status to be reported":
 
 1. **Wait 1–2 minutes** — The push triggers the check workflow; it may take a moment to start.
 2. **Re-run workflows** — If the check still hasn't run, use "Re-run all jobs" from the Actions tab.

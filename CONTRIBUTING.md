@@ -96,7 +96,7 @@ If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 
 **Local warning:** `bun run check` warns when `bun.nix` is stale. You can ignore it — CI will fix it when you push.
 
-**If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for the new check to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-check--check-waiting-for-status) if the required check stays "waiting for status".
+**If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for **`CI / gate`** to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-ci--gate-waiting-for-status) if the required check stays "waiting for status".
 
 **Fork PRs:** CI cannot push to forks. If the **`nix`** job fails in CI, update locally: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
 
