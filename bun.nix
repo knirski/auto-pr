@@ -705,9 +705,9 @@
     url = "https://registry.npmjs.org/buildcheck/-/buildcheck-0.0.7.tgz";
     hash = "sha512-lHblz4ahamxpTmnsk+MNTRWsjYKv965MwOrSJyeD588rR3Jcu7swE+0wN5F+PbL5cjgu/9ObkhfzEPuofEMwLA==";
   };
-  "bun-types@1.3.11" = fetchurl {
-    url = "https://registry.npmjs.org/bun-types/-/bun-types-1.3.11.tgz";
-    hash = "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg==";
+  "bun-types@1.3.12" = fetchurl {
+    url = "https://registry.npmjs.org/bun-types/-/bun-types-1.3.12.tgz";
+    hash = "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA==";
   };
   "byline@5.0.0" = fetchurl {
     url = "https://registry.npmjs.org/byline/-/byline-5.0.0.tgz";
