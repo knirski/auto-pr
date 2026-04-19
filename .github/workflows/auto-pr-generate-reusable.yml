@@ -87,7 +87,7 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@5a9f3e9b53b5e6c61cd961e5864832c83348f54a
+        uses: knirski/auto-pr/.github/actions/setup-runtime@a9de56b2961a4ad70db8cac80a820be8c406af7c
 
       - name: Fetch base branch
         env:
@@ -96,7 +96,7 @@ jobs:
 
       - name: Set auto-pr package ref
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@5a9f3e9b53b5e6c61cd961e5864832c83348f54a
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@a9de56b2961a4ad70db8cac80a820be8c406af7c
         with:
           repository: ${{ github.repository }}
           ref_name: ${{ github.ref_name }}
@@ -115,7 +115,7 @@ jobs:
 
       - name: Resolve llama Docker image
         id: llama_release
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@5a9f3e9b53b5e6c61cd961e5864832c83348f54a
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@a9de56b2961a4ad70db8cac80a820be8c406af7c
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -142,7 +142,7 @@ jobs:
       - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@5a9f3e9b53b5e6c61cd961e5864832c83348f54a
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@a9de56b2961a4ad70db8cac80a820be8c406af7c
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Generate PR content
         id: generate
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@5a9f3e9b53b5e6c61cd961e5864832c83348f54a
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@a9de56b2961a4ad70db8cac80a820be8c406af7c
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -169,7 +169,7 @@ jobs:
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@5a9f3e9b53b5e6c61cd961e5864832c83348f54a
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@a9de56b2961a4ad70db8cac80a820be8c406af7c
 
       - name: Prepare artifact
         env:
