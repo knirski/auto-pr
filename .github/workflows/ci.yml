@@ -15,7 +15,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # false: superseding pushes no longer cancel in-flight runs. Cancelled runs surface as failed/bad
+  # checks on PRs and confuse branch protection; true saves minutes but hurts UX on active branches.
+  cancel-in-progress: false
 
 permissions: {}
 
