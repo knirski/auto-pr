@@ -312,18 +312,35 @@ export const CreateOrUpdatePrConfigLayer = Layer.effect(
 
 // ─── RunAutoPrConfig (local pipeline) ─────────────────────────────────────────
 
-export interface RunAutoPrConfig {
+/**
+ * Shared fields for `run-auto-pr` config; discriminated by {@link RunAutoPrConfigLocal} vs {@link RunAutoPrConfigGithubModels}.
+ *
+ * Optional fields follow the same convention as {@link GeneratePrContentConfig}: `Config.option` + `Option` only inside
+ * {@link RunAutoPrConfigLayer}; the service shape uses `?:` (omit when unset), not `Option` in the type.
+ */
+export type RunAutoPrConfigCommon = {
 	readonly defaultBranch: string;
 	readonly workspace: string;
 	readonly templatePath: string;
 	readonly ghToken: Redacted.Redacted<string>;
-	readonly provider: AiProvider;
 	readonly model: string;
-	readonly branch: string | undefined;
-	/** Set when `provider` is `local`. */
-	readonly openaiCompatUrl?: string;
+	/** When set from `BRANCH`; omit to resolve the head branch via `git branch --show-current` at run time. */
+	readonly branch?: string;
+};
+
+export type RunAutoPrConfigLocal = RunAutoPrConfigCommon & {
+	readonly provider: "local";
+	readonly openaiCompatUrl: string;
+	/** When set from `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`. */
 	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
-}
+};
+
+export type RunAutoPrConfigGithubModels = RunAutoPrConfigCommon & {
+	readonly provider: "github-models";
+};
+
+/** `run-auto-pr` config: OpenAI-compat fields exist only when `provider` is `local`. */
+export type RunAutoPrConfig = RunAutoPrConfigLocal | RunAutoPrConfigGithubModels;
 
 export const RunAutoPrConfig = Context.Service<RunAutoPrConfig>("RunAutoPrConfig");
 
@@ -347,12 +364,11 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
-			const resolvedBranch = Option.getOrUndefined(base.branch);
-			if (resolvedBranch !== undefined && resolvedBranch === defaultBranch) {
+			if (Option.isSome(base.branch) && base.branch.value === defaultBranch) {
 				return yield* Effect.fail(
 					new AutoPrConfigError({
 						missing: [
-							`BRANCH (${resolvedBranch}) must differ from DEFAULT_BRANCH (${defaultBranch})`,
+							`BRANCH (${base.branch.value}) must differ from DEFAULT_BRANCH (${defaultBranch})`,
 						],
 					}),
 				);
@@ -370,8 +386,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				workspace,
 				templatePath,
 				ghToken: base.ghToken,
-				provider,
-				branch: resolvedBranch,
+				...(Option.isSome(base.branch) ? { branch: base.branch.value } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -397,14 +412,16 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							);
 						}
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
-						return {
+						const runAutoPrLocal: RunAutoPrConfigLocal = {
 							...shared,
+							provider: "local",
 							model: modelId,
 							openaiCompatUrl: url,
 							...(Option.isSome(base.aiOpenaiCompatApiKey)
 								? { openaiCompatApiKey: base.aiOpenaiCompatApiKey.value }
 								: {}),
 						};
+						return runAutoPrLocal;
 					}),
 				),
 				Match.when("github-models", () =>
@@ -421,10 +438,12 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							onSome: () => Effect.void,
 						});
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
-						return {
+						const runAutoPrGithub: RunAutoPrConfigGithubModels = {
 							...shared,
+							provider: "github-models",
 							model: modelId,
 						};
+						return runAutoPrGithub;
 					}),
 				),
 				Match.exhaustive,

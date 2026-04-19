@@ -12,6 +12,12 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import { formatError, PullRequestFailedError } from "#auto-pr/errors.js";
 import { formatGhOutput } from "#core/gh-output.js";
 
+/**
+ * Effect passed to {@link runMain}: void on success, failures left untyped for CLI scripts.
+ * Third type parameter is `never` once all services are provided (see `run-auto-pr` pipeline).
+ */
+export type CliMainEffect = Effect.Effect<void, unknown, never>;
+
 /** Platform layer for auto-PR scripts: FileSystem + Path. */
 export const PlatformLayer = BunFileSystem.layer.pipe(Layer.provideMerge(BunPath.layer));
 
@@ -77,11 +83,11 @@ export function getDebugHint(): string {
 		: " Set AUTO_PR_DEBUG=1 for verbose output.";
 }
 
-/** Prepares a main program with error logging. Requires Logger in environment. Used by runMain. */
+/** Prepares a main program with error logging. Used by runMain (provide {@link AutoPrLoggerLayer} before run). */
 export function withMainSetup(
 	program: Effect.Effect<void, unknown>,
 	eventName: string,
-): Effect.Effect<void, unknown, Logger.Logger<unknown, void>> {
+): Effect.Effect<void, unknown> {
 	return program.pipe(
 		Effect.tapError((e) =>
 			Effect.logError({
@@ -95,5 +101,5 @@ export function withMainSetup(
 /** Run main with BunRuntime. Provides Logger, logs errors, exits 0/1. Call from `if (import.meta.main)`. */
 export function runMain(program: Effect.Effect<void, unknown>, eventName: string): void {
 	const main = withMainSetup(program, eventName).pipe(Effect.provide(AutoPrLoggerLayer));
-	BunRuntime.runMain(main as Effect.Effect<void, unknown>);
+	BunRuntime.runMain(main);
 }

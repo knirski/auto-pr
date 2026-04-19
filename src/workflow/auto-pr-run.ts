@@ -14,6 +14,7 @@ import {
 	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
 	ChildProcessSpawnerLayer,
+	type CliMainEffect,
 	FillPrTemplate,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
@@ -33,35 +34,40 @@ const RunAutoPrLayer = Layer.mergeAll(
 	FillPrTemplate.Live,
 );
 
-function runPipeline(): Effect.Effect<void, unknown, never> {
+function runPipeline(): CliMainEffect {
 	return Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		const config = yield* RunAutoPrConfig;
-		const { workspace, defaultBranch, templatePath, branch, provider, model } = config;
-		const resolvedBranch =
-			branch !== undefined ? Effect.succeed(branch) : getCurrentBranch(workspace);
-		const branchVal = yield* resolvedBranch;
+		const { workspace, defaultBranch, templatePath, model } = config;
+		const branchVal = yield* config.branch !== undefined
+			? Effect.succeed(config.branch)
+			: getCurrentBranch(workspace);
 
 		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
-		yield* runGeneratePrContent({
-			defaultBranch,
-			branch: branchVal,
-			workspace,
-			templatePath,
-			provider,
-			model,
-			...(provider === "github-models" ? { ghToken: config.ghToken } : {}),
-			...(provider === "local"
+		yield* runGeneratePrContent(
+			config.provider === "github-models"
 				? {
-						...(config.openaiCompatUrl !== undefined
-							? { openaiCompatUrl: config.openaiCompatUrl }
-							: {}),
+						defaultBranch,
+						branch: branchVal,
+						workspace,
+						templatePath,
+						provider: "github-models",
+						model,
+						ghToken: config.ghToken,
+					}
+				: {
+						defaultBranch,
+						branch: branchVal,
+						workspace,
+						templatePath,
+						provider: "local",
+						model,
+						openaiCompatUrl: config.openaiCompatUrl,
 						...(config.openaiCompatApiKey !== undefined
 							? { openaiCompatApiKey: config.openaiCompatApiKey }
 							: {}),
-					}
-				: {}),
-		});
+					},
+		);
 
 		const titlePath = join(workspace, PR_TITLE_FILE_NAME);
 		const bodyPath = join(workspace, PR_BODY_FILE_NAME);

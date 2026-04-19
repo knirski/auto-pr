@@ -111,7 +111,7 @@ describe("core", () => {
 
 	describe("buildDescriptionPrompt", () => {
 		test("builds prompt with content", () => {
-			const out = buildDescriptionPrompt("Desc template", "", "commit content");
+			const out = buildDescriptionPrompt("Desc template", "commit content");
 			expect(out).toContain("Desc template");
 			expect(out).toContain("commit content");
 		});

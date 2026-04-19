@@ -368,8 +368,5 @@ export const actLocalCiCommand = Command.make(
 const cliProgram = Command.run(actLocalCiCommand, { version: pkg.version });
 
 if (import.meta.main) {
-	runMain(
-		cliProgram.pipe(Effect.provide(BunServices.layer)) as Effect.Effect<void, unknown>,
-		"act-local-ci",
-	);
+	runMain(cliProgram.pipe(Effect.provide(BunServices.layer)), "act-local-ci");
 }

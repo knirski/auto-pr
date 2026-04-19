@@ -2,11 +2,11 @@
  * Prompt building helpers. Pure, no I/O.
  */
 
-/** Build full description prompt from template, optional diffstat, commit content, and optional existing PR title. */
+/** Build full description prompt from template, commit content, optional diffstat, and optional existing PR title. */
 export function buildDescriptionPrompt(
 	promptTemplate: string,
-	diffStat: string,
 	commitContent: string,
+	diffStat?: string,
 	existingPrTitle?: string,
 ): string {
 	const sections = [promptTemplate.trim()];

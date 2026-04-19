@@ -15,9 +15,7 @@ import type { GitContext } from "#auto-pr/git-context.js";
  * Silent logger for tests. Suppresses all log output.
  * No-op logger: Logger.make(() => {}) does nothing; single layer avoids mergeAll.
  */
-export const SilentLoggerLayer = Logger.layer([
-	Logger.make<unknown, void>(() => {}),
-]) as Layer.Layer<Logger.Logger<unknown, void>>;
+export const SilentLoggerLayer = Logger.layer([Logger.make<unknown, void>(() => {})]);
 export const TestBaseLayer = Layer.mergeAll(SilentLoggerLayer, AutoPrPlatformLayer);
 
 /** Mock ChildProcessSpawner for tests. string() returns empty; stream methods return empty streams. */
@@ -94,7 +92,7 @@ export function createOpenAiChatCompletionsMockFetch(
 		normalizeOpenAiResponse(r),
 	);
 	let callCount = 0;
-	return (async (input: RequestInfo | URL, init?: RequestInit) => {
+	const impl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
 			throw new Error("createOpenAiChatCompletionsMockFetch: unexpected request");
@@ -118,7 +116,10 @@ export function createOpenAiChatCompletionsMockFetch(
 			],
 		};
 		return new Response(JSON.stringify(body), { status });
-	}) as typeof fetch;
+	};
+	return Object.assign(impl, {
+		preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+	});
 }
 
 /** Mock GitContext for tests. Override individual methods as needed. */
