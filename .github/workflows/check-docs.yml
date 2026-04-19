@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
 
       - name: Markdown lint
-        uses: rvben/rumdl@6540b53fa24e83f9693e36889e0f9c765aa90349 # v0.1.67
+        uses: rvben/rumdl@68d37ee69adb3c568543c15ef78865389c02ee6c # v0.1.75
 
       - name: Check links
         continue-on-error: true
@@ -33,4 +33,4 @@ jobs:
           args: --timeout 90 --max-retries 10 --retry-wait-time 2 --no-progress --accept 200,429 .
 
       - name: Spell check
-        uses: crate-ci/typos@02ea592e44b3a53c302f697cddca7641cd051c3d # v1.45.0
+        uses: crate-ci/typos@cf5f1c29a8ac336af8568821ec41919923b05a83 # v1.45.1
