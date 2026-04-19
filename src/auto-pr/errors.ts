@@ -89,14 +89,14 @@ export function formatError(e: unknown): string {
 			),
 			Match.tag("DescriptionParseError", ({ cause }) => cause),
 			Match.tag("ParseError", ({ message, cause }) =>
-				cause == null ? message : `${message}: ${String(cause)}`,
+				cause == null ? message : `${message}: ${cause}`,
 			),
 			Match.tag(
 				"NoSemanticCommitsError",
 				({ message }) => `${message} See https://www.conventionalcommits.org`,
 			),
 			Match.tag("TemplateRenderError", ({ message, cause }) =>
-				cause == null ? message : `${message}: ${String(cause)}`,
+				cause == null ? message : `${message}: ${cause}`,
 			),
 			Match.tag("FillPrTemplateValidationError", ({ message }) => message),
 			Match.tag("UnexpectedError", ({ cause }) => cause),

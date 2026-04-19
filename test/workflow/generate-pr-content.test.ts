@@ -198,14 +198,13 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 		const result = normalizeUnknownToGeneratePrContentError(err);
 		expect(result).toBeInstanceOf(TemplateRenderError);
 		expect((result as TemplateRenderError).message).toBe("Unexpected failure");
-		expect((result as TemplateRenderError).cause).toBe(err);
+		expect((result as TemplateRenderError).cause).toBe("raw error");
 	});
 
 	test("returns TemplateRenderError when input is non-Error (string)", () => {
 		const result = normalizeUnknownToGeneratePrContentError("oops");
 		expect(result).toBeInstanceOf(TemplateRenderError);
-		expect((result as TemplateRenderError).cause).toBeInstanceOf(Error);
-		expect(((result as TemplateRenderError).cause as Error).message).toBe("oops");
+		expect((result as TemplateRenderError).cause).toBe("oops");
 	});
 
 	test("decodes class instances via Schema (ParseError)", () => {
@@ -844,8 +843,7 @@ describe("catchDefect (defect → TemplateRenderError)", () => {
 				onSuccess: (err) => {
 					expect(err).toBeInstanceOf(TemplateRenderError);
 					expect((err as TemplateRenderError).message).toBe("Unexpected failure");
-					expect((err as TemplateRenderError).cause).toBeInstanceOf(Error);
-					expect(((err as TemplateRenderError).cause as Error).message).toBe("defect");
+					expect((err as TemplateRenderError).cause).toBe("defect");
 				},
 				onFailure: () => expect().fail("expected Fail cause"),
 			});
