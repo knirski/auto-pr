@@ -33,7 +33,7 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 | **Linux** (Homebrew) | `brew install typos-cli` | `brew install lychee` | `brew install actionlint` |
 | **Windows** | [Pre-built binary](https://github.com/crate-ci/typos/releases) or `cargo install typos-cli` | [Pre-built binary](https://github.com/lycheeverse/lychee/releases) or `cargo install lychee` | [Pre-built binary](https://github.com/rhysd/actionlint/releases) |
 
-**check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `bun run check:just-links` to verify links locally. Both check.yml and check-docs.yml run lychee with `continue-on-error: true` so link failures do not block merge. Lychee accepts 200 and 429 (rate limit) via `--accept 200,429`.
+**check:just-links** and **check:with-links** can fail on broken external URLs (404s, redirects, timeouts). Use `bun run check:just-links` to verify links locally. In GitHub Actions, **check.yml** and **check-docs.yml** cache lychee’s HTTP cache (`.lycheecache`) with a key that includes a hash of the sorted unique links from `lychee --dump`; the link step still uses `continue-on-error: true` so link failures do not block merge. Lychee accepts 200 and 429 (rate limit) via `--accept 200,429`.
 
 **statix and deadnix** (Nix lint): Run with `--optional`; skipped when neither tool nor Nix is available. CI still runs them via the nix job.
 
