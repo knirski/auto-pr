@@ -38,13 +38,10 @@ function openAiLanguageModelStack(
 	clientOptions: OpenAiClient.Options,
 	modelId: string,
 	fetchOverrideLayer: Layer.Layer<never>,
-): Layer.Layer<LanguageModel.LanguageModel, never> {
+) {
 	const clientLayer = OpenAiClient.layer(clientOptions).pipe(Layer.provide(FetchHttpClient.layer));
 	const modelLayer = OpenAiLanguageModel.model(modelId);
-	return Layer.mergeAll(
-		fetchOverrideLayer,
-		modelLayer.pipe(Layer.provide(clientLayer)),
-	) as Layer.Layer<LanguageModel.LanguageModel, never>;
+	return Layer.mergeAll(fetchOverrideLayer, modelLayer.pipe(Layer.provide(clientLayer)));
 }
 
 /**
@@ -93,5 +90,5 @@ export function aiProviderLayerFromConfig(
 			return openAiLanguageModelStack(clientOptions, config.model, fetchOverrideLayer);
 		}),
 		Match.exhaustive,
-	) as Layer.Layer<LanguageModel.LanguageModel, AutoPrConfigError>;
+	);
 }
