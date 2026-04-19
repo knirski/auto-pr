@@ -1,0 +1,20 @@
+# Composite: integration jobs — load `.env.ci` and optionally set OpenAI-compat base URL for llama-server.
+name: Load CI environment (.env.ci)
+description: >-
+  Appends non-comment lines from `.env.ci` to GITHUB_ENV. By default also sets AUTO_PR_AI_OPENAI_COMPAT_URL to
+  http://127.0.0.1:<INTEGRATION_LLAMA_PORT>/v1 from `.env.ci`. Requires checkout of the repo root first.
+
+inputs:
+  omit_llama_integration_env:
+    description: >-
+      If true, skip keys starting with INTEGRATION_LLAMA_ and do not set AUTO_PR_AI_OPENAI_COMPAT_URL (GitHub Models–only jobs).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        LOAD_ENV_CI_OMIT_LLAMA_INTEGRATION: ${{ inputs.omit_llama_integration_env }}
+      run: bash "$GITHUB_ACTION_PATH/load-env-ci.sh"

@@ -9,9 +9,11 @@ MODEL_URL="${MODEL_URL:?MODEL_URL required}"
 LLAMA_SERVER_ROOT="${LLAMA_SERVER_ROOT:?LLAMA_SERVER_ROOT required}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 EXTRA_FLAGS="${EXTRA_FLAGS:-}"
-CONTAINER_NAME=auto-pr-llama
+CONTAINER_NAME="${CONTAINER_NAME:-auto-pr-llama}"
 
 CONTAINER_INTERNAL_PORT=8080
+# Must be a path that exists in the image before `docker cp` (images may omit /models).
+IN_CONTAINER_MODEL=/tmp/auto-pr-model.gguf
 IMAGE_TAR="$LLAMA_SERVER_ROOT/docker/llama-server-image.tar"
 
 if [[ ! "$MODEL_URL" =~ ^https:// ]]; then
@@ -44,17 +46,28 @@ fi
 
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
+# Copy the GGUF into the container instead of bind-mounting. Nested Docker (e.g. nektos/act job
+# containers using the host daemon) often maps `-v` host paths incorrectly; `docker cp` avoids that.
 # shellcheck disable=SC2086
-if ! docker run -d \
+if ! docker create \
 	--name "$CONTAINER_NAME" \
 	-p "${LLAMA_PORT}:${CONTAINER_INTERNAL_PORT}" \
-	-v "${MODEL_FILE}:/models/model.gguf:ro" \
 	"$DOCKER_IMAGE" \
-	-m /models/model.gguf \
+	-m "$IN_CONTAINER_MODEL" \
 	--port "$CONTAINER_INTERNAL_PORT" \
 	--host 0.0.0.0 \
 	$EXTRA_FLAGS; then
-	echo "::error::docker run failed" >&2
+	echo "::error::docker create failed" >&2
+	exit 1
+fi
+if ! docker cp "$MODEL_FILE" "$CONTAINER_NAME:$IN_CONTAINER_MODEL"; then
+	echo "::error::docker cp model into container failed" >&2
+	docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+	exit 1
+fi
+if ! docker start "$CONTAINER_NAME"; then
+	echo "::error::docker start failed" >&2
+	docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 	exit 1
 fi
 

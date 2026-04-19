@@ -24,6 +24,11 @@ inputs:
     description: Extra flags appended to llama-server (e.g. "--jinja")
     required: false
     default: ""
+  container_name:
+    description: >-
+      Docker container name. Must be unique when several jobs share one Docker host (e.g. nektos/act).
+    required: false
+    default: "auto-pr-llama"
 
 runs:
   using: composite
@@ -37,3 +42,4 @@ runs:
         LLAMA_SERVER_ROOT: ${{ inputs.llama_server_root }}
         LLAMA_PORT: ${{ inputs.llama_port }}
         EXTRA_FLAGS: ${{ inputs.extra_flags }}
+        CONTAINER_NAME: ${{ inputs.container_name }}

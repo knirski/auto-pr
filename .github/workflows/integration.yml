@@ -24,9 +24,13 @@ jobs:
           persist-credentials: false
 
       - name: Load CI environment (.env.ci)
+        uses: ./.github/actions/load-env-ci
+
+      # Ephemeral port on this runner (`scripts/integration-ephemeral-port.sh`: python3 bind :0 — ships on Ubuntu runners).
+      - name: Llama port and OpenAI base URL (stub job)
         run: |
-          awk '!/^[[:space:]]*#/ && NF' .env.ci >> "$GITHUB_ENV"
-          port=$(grep -E '^INTEGRATION_LLAMA_PORT=' .env.ci | head -1 | cut -d= -f2-)
+          port="$(bash "$GITHUB_WORKSPACE/scripts/integration-ephemeral-port.sh")"
+          echo "INTEGRATION_LLAMA_PORT=$port" >> "$GITHUB_ENV"
           echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 
       # always_resolve_tag: CI always starts llama here (no auto-pr generate NEED gate).
@@ -54,7 +58,8 @@ jobs:
       - name: Cache llama-server artifacts (stub GGUF + Docker image tar)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/auto-pr-llama-stub
+          # Stable workspace path (not runner.temp): cache tars/GGUF for curl and `docker cp` into the llama container (no GGUF bind-mount).
+          path: ${{ github.workspace }}/.cache/auto-pr-llama-stub
           key: llama-${{ steps.llama_server_image.outputs.tag }}-${{ steps.llama_stub_cache_key.outputs.hash }}-docker-stub
 
       - name: Start local llama-server (Docker)
@@ -63,8 +68,9 @@ jobs:
         with:
           docker_image: ${{ steps.llama_server_image.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_STUB_MODEL_URL }}
-          llama_server_root: ${{ runner.temp }}/auto-pr-llama-stub
+          llama_server_root: ${{ github.workspace }}/.cache/auto-pr-llama-stub
           llama_port: ${{ env.INTEGRATION_LLAMA_PORT }}
+          container_name: auto-pr-llama-stub
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model_stub
@@ -84,6 +90,8 @@ jobs:
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama_stub.outcome != 'skipped'
         uses: ./.github/actions/llama-server-docker-stop
+        with:
+          container_name: auto-pr-llama-stub
 
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
@@ -97,10 +105,9 @@ jobs:
           persist-credentials: false
 
       - name: Load CI environment (.env.ci)
-        run: |
-          awk '!/^[[:space:]]*#/ && NF' .env.ci >> "$GITHUB_ENV"
-          port=$(grep -E '^INTEGRATION_LLAMA_PORT=' .env.ci | head -1 | cut -d= -f2-)
-          echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
+        uses: ./.github/actions/load-env-ci
+        with:
+          omit_llama_integration_env: true
 
       - name: Setup runtime (Bun) with cache
         uses: ./.github/actions/setup-runtime
@@ -126,9 +133,12 @@ jobs:
           persist-credentials: false
 
       - name: Load CI environment (.env.ci)
+        uses: ./.github/actions/load-env-ci
+
+      - name: Llama port and OpenAI base URL (full model job)
         run: |
-          awk '!/^[[:space:]]*#/ && NF' .env.ci >> "$GITHUB_ENV"
-          port=$(grep -E '^INTEGRATION_LLAMA_PORT=' .env.ci | head -1 | cut -d= -f2-)
+          port="$(bash "$GITHUB_WORKSPACE/scripts/integration-ephemeral-port.sh")"
+          echo "INTEGRATION_LLAMA_PORT=$port" >> "$GITHUB_ENV"
           echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 
       - name: Resolve llama-server image tag
@@ -154,7 +164,7 @@ jobs:
       - name: Cache llama-server artifacts (model GGUF + Docker image tar)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/auto-pr-llama-model
+          path: ${{ github.workspace }}/.cache/auto-pr-llama-model
           key: llama-${{ steps.llama_server_image.outputs.tag }}-${{ steps.llama_model_cache_key.outputs.hash }}-docker-model
 
       - name: Start local llama-server (Docker)
@@ -163,9 +173,10 @@ jobs:
         with:
           docker_image: ${{ steps.llama_server_image.outputs.image }}
           model_url: ${{ env.INTEGRATION_LLAMA_MODEL_URL }}
-          llama_server_root: ${{ runner.temp }}/auto-pr-llama-model
+          llama_server_root: ${{ github.workspace }}/.cache/auto-pr-llama-model
           llama_port: ${{ env.INTEGRATION_LLAMA_PORT }}
           extra_flags: "--jinja"
+          container_name: auto-pr-llama-model
 
       - name: Resolve OpenAI model id from llama-server
         id: openai_model
@@ -185,3 +196,5 @@ jobs:
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama_model.outcome != 'skipped'
         uses: ./.github/actions/llama-server-docker-stop
+        with:
+          container_name: auto-pr-llama-model

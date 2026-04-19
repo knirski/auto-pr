@@ -2,8 +2,16 @@
 name: Stop local llama.cpp (Docker)
 description: Best-effort docker rm for container from llama-server-docker-start
 
+inputs:
+  container_name:
+    description: Same value as llama-server-docker-start container_name
+    required: false
+    default: "auto-pr-llama"
+
 runs:
   using: composite
   steps:
     - shell: bash
-      run: docker rm -f auto-pr-llama 2>/dev/null || true
+      env:
+        CONTAINER_NAME: ${{ inputs.container_name }}
+      run: docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
