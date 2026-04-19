@@ -1,6 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Duration, Effect, Exit, FileSystem, Layer, Redacted, Result } from "effect";
+import {
+	Cause,
+	Duration,
+	Effect,
+	Exit,
+	FileSystem,
+	Layer,
+	Option,
+	Redacted,
+	Result,
+	Stream,
+} from "effect";
+import type { PlatformError } from "effect/PlatformError";
+import { systemError } from "effect/PlatformError";
 import { ChildProcess } from "effect/unstable/process";
+import type { Command } from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	AutoPrConfigError,
@@ -27,6 +41,7 @@ import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content
 import {
 	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
+	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
 } from "#workflow/auto-pr-generate-content.js";
 
@@ -222,10 +237,219 @@ const VALID_AI_RESPONSE = JSON.stringify({
 });
 const INVALID_AI_RESPONSE = '{"title":"feat","description":"Invalid."}';
 
+/** Asserts the OpenAI-style request body contains `mustContain` before returning `responseBody` as the model reply. */
+function createOpenAiMockFetchExpectingPromptSubstring(
+	mustContain: string,
+	responseBody: string,
+): typeof fetch {
+	const inner = createOpenAiChatCompletionsMockFetch(responseBody);
+	return (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const raw = init?.body;
+		const bodyStr =
+			typeof raw === "string"
+				? raw
+				: raw != null
+					? await new Request("http://local.invalid", {
+							method: "POST",
+							body: raw as BodyInit,
+						}).text()
+					: "";
+		expect(bodyStr).toContain(mustContain);
+		return inner(input, init);
+	}) as typeof fetch;
+}
+
 const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
+
+function isGhPrViewTitleCmd(cmd: Command): boolean {
+	if (cmd._tag !== "StandardCommand") {
+		return false;
+	}
+	const { command, args } = cmd;
+	return (
+		command === "gh" &&
+		args[0] === "pr" &&
+		args[1] === "view" &&
+		args.includes("--json") &&
+		args.includes("title")
+	);
+}
+
+/** Spawner mock: only `gh pr view … --json title` is special-cased; other commands succeed with "". */
+function ghPrViewTitleSpawnerLayer(
+	resolveGh: () => Effect.Effect<string, PlatformError, never>,
+): Layer.Layer<ChildProcessSpawner> {
+	return Layer.mock(ChildProcessSpawner)({
+		string: (cmd) => (isGhPrViewTitleCmd(cmd) ? resolveGh() : Effect.succeed("")),
+		streamString: () => Stream.empty,
+		streamLines: () => Stream.empty,
+	});
+}
+
+describe("resolveExistingPrTitleForPrompt", () => {
+	const layerWithGh = (gh: () => Effect.Effect<string, PlatformError, never>) =>
+		Layer.mergeAll(TestBaseLayer, ghPrViewTitleSpawnerLayer(gh));
+
+	test("returns env title when AUTO_PR_EXISTING_PR_TITLE is non-empty (does not call gh)", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		process.env.AUTO_PR_EXISTING_PR_TITLE = "  feat: from env  ";
+		try {
+			await runEffect(
+				layerWithGh(() =>
+					Effect.fail(
+						systemError({
+							_tag: "Unknown",
+							module: "test",
+							method: "string",
+							description: "gh should not run when env is set",
+						}),
+					),
+				),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/tmp",
+						branch: "ai/x",
+					});
+					expect(Option.isSome(opt)).toBe(true);
+					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from env");
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev === undefined) delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+			else process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns title from gh JSON on success", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(
+				layerWithGh(() => Effect.succeed(JSON.stringify({ title: "feat: from gh" }))),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isSome(opt)).toBe(true);
+					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from gh");
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when gh command fails", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(
+				layerWithGh(() =>
+					Effect.fail(
+						systemError({
+							_tag: "NotFound",
+							module: "gh",
+							method: "pr view",
+							description: "no PR",
+						}),
+					),
+				),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when gh stdout is empty or whitespace-only", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			for (const out of ["", "  \n  "]) {
+				await runEffect(layerWithGh(() => Effect.succeed(out)))(
+					Effect.gen(function* () {
+						const opt = yield* resolveExistingPrTitleForPrompt({
+							workspace: "/w",
+							branch: "ai/b",
+						});
+						expect(Option.isNone(opt)).toBe(true);
+					}).pipe(Effect.scoped),
+				);
+			}
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when gh stdout is not valid JSON", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(layerWithGh(() => Effect.succeed("not-json")))(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when JSON does not match { title: string }", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(layerWithGh(() => Effect.succeed(JSON.stringify({ foo: 1 }))))(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when title is empty or whitespace-only after trim", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			for (const title of ["", "   \t  "]) {
+				await runEffect(layerWithGh(() => Effect.succeed(JSON.stringify({ title }))))(
+					Effect.gen(function* () {
+						const opt = yield* resolveExistingPrTitleForPrompt({
+							workspace: "/w",
+							branch: "ai/b",
+						});
+						expect(Option.isNone(opt)).toBe(true);
+					}).pipe(Effect.scoped),
+				);
+			}
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+});
 
 describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 	describe("valid title", () => {
@@ -253,6 +477,23 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					);
 					expect(result.body).toContain("feat: add module A");
 					expect(result.body).toContain("fix: fix bug in B");
+					expect(result.count).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("includes existingPrTitle in the AI request body for 2+ commits", async () => {
+			const prior = "feat: existing open PR title";
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				existingPrTitle: prior,
+				fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, VALID_AI_RESPONSE),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.count).toBe(2);
 				}).pipe(Effect.scoped),
 			);
@@ -739,5 +980,63 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 				}
 			}).pipe(Effect.scoped),
 		);
+	});
+
+	test("AUTO_PR_EXISTING_PR_TITLE is sent in the AI request for 2 commits", async () => {
+		const prior = "feat: title from env";
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		process.env.AUTO_PR_EXISTING_PR_TITLE = prior;
+		try {
+			await runEffect(IntegrationTestLayer)(
+				Effect.gen(function* () {
+					const tmp = yield* createTestTempDirEffect("run-generate-envtitle-");
+					try {
+						yield* setupGitRepoForRunGeneratePrContent(
+							tmp.path,
+							[{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+							"ai/test",
+						);
+
+						const fs = yield* FileSystem.FileSystem;
+						yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+						yield* fs.writeFileString(
+							tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+							DEFAULT_TEMPLATE,
+						);
+
+						const mockResponse = JSON.stringify({
+							title: "feat: env and AI",
+							motivation: ["M."],
+							benefits: [],
+							risks: ["R."],
+							notesForReviewers: "",
+						});
+
+						yield* runGeneratePrContent({
+							defaultBranch: "main",
+							branch: "ai/test",
+							workspace: tmp.path,
+							templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+							provider: "local",
+							model: "gpt-oss",
+							retryDelay: Duration.zero,
+							fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, mockResponse),
+						});
+
+						const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+						expect(title.trim()).toBe("feat: env and AI");
+					} finally {
+						const fs = yield* FileSystem.FileSystem;
+						yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+					}
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev === undefined) {
+				delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+			} else {
+				process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+			}
+		}
 	});
 });

@@ -1,6 +1,7 @@
 Output JSON only: {"title": "...", "motivation": ["..."], "benefits": ["..."], "risks": ["..."], "notesForReviewers": "..."}.
 
 title: TYPE: subject or TYPE(scope): subject. Types: feat, fix, docs, chore, refactor, security, perf, test, ci, build, revert, style. Max 100 chars. Be concrete after the colon ("feat: add session refresh", not "feat: update").
+If the prompt includes "Existing PR title" for this branch, prefer reusing that title when it still matches the commits (continuity for open PRs). Change it only when the branch has clearly moved on, the type prefix is wrong, or the old wording is misleading.
 
 motivation: 1–5 bullets. Why does this branch exist—what problem, goal, or constraint? Most important field. Be specific.
 

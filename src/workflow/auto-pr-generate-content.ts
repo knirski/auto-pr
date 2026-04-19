@@ -2,6 +2,7 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: GITHUB_WORKSPACE, DEFAULT_BRANCH, BRANCH. Uses GitContext to fetch commit log and diff data directly.
+ * Optional: `AUTO_PR_EXISTING_PR_TITLE` (non-empty) or best-effort `gh pr view <BRANCH> --json title` supplies the current PR title for multi-commit AI prompts (continuity when updating an open PR).
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
@@ -28,6 +29,7 @@ import {
 } from "effect";
 import type { AiError } from "effect/unstable/ai";
 import { LanguageModel } from "effect/unstable/ai";
+import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	type AiProvider,
 	AutoPrConfigError,
@@ -50,6 +52,7 @@ import {
 	ParseError,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
+	runCommand,
 	runMain,
 	TemplateRenderError,
 	toError,
@@ -150,6 +153,69 @@ function logAndValidateTitleDescription(
 
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
+
+const GhPrViewTitleSchema = Schema.Struct({
+	title: Schema.String,
+});
+
+/** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort `gh pr view` (failures → no title). */
+export function resolveExistingPrTitleForPrompt(input: {
+	readonly workspace: string;
+	readonly branch: string;
+}): Effect.Effect<Option.Option<string>, never, ChildProcessSpawner> {
+	return Effect.gen(function* () {
+		const fromEnv = yield* Effect.sync(() => (process.env.AUTO_PR_EXISTING_PR_TITLE ?? "").trim());
+		if (fromEnv !== "") {
+			yield* Effect.log({
+				event: "generate_pr_content",
+				step: "existing_pr_title",
+				source: "env",
+				title_chars: fromEnv.length,
+			});
+			return Option.some(fromEnv);
+		}
+
+		const stdout = yield* runCommand(
+			"gh",
+			["pr", "view", input.branch, "--json", "title"],
+			input.workspace,
+		).pipe(Effect.catch(() => Effect.succeed("")));
+
+		const trimmed = stdout.trim();
+		if (trimmed === "") {
+			return Option.none();
+		}
+
+		const parsedUnknown = yield* Effect.sync(() => {
+			try {
+				return JSON.parse(trimmed) as unknown;
+			} catch {
+				return null;
+			}
+		});
+		if (parsedUnknown === null) {
+			return Option.none();
+		}
+
+		const decoded = Schema.decodeUnknownOption(GhPrViewTitleSchema)(parsedUnknown);
+		if (Option.isNone(decoded)) {
+			return Option.none();
+		}
+
+		const title = decoded.value.title.trim();
+		if (title === "") {
+			return Option.none();
+		}
+
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "existing_pr_title",
+			source: "gh",
+			title_chars: title.length,
+		});
+		return Option.some(title);
+	});
+}
 
 function normalizeRiskItems(risks: readonly string[]): readonly string[] {
 	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
@@ -316,6 +382,8 @@ export type GeneratePrContentParams = {
 	provider: AiProvider;
 	model: string;
 	retryDelay?: Duration.Duration;
+	/** Current PR title when updating an open PR (multi-commit AI path only). */
+	existingPrTitle?: string;
 };
 
 export function generatePrContent(params: GeneratePrContentParams) {
@@ -358,7 +426,12 @@ export function generatePrContent(params: GeneratePrContentParams) {
 
 		if (count >= 2) {
 			const commitContent = getDescriptionPromptText(filtered);
-			const prompt = buildDescriptionPrompt(descriptionPromptText, diffStatOutput, commitContent);
+			const prompt = buildDescriptionPrompt(
+				descriptionPromptText,
+				diffStatOutput,
+				commitContent,
+				params.existingPrTitle,
+			);
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescriptionWithToolkit(
 				prompt,
@@ -506,6 +579,15 @@ export function runGeneratePrContent(config: {
 
 		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
 
+		const existingPrTitleOpt = yield* resolveExistingPrTitleForPrompt({
+			workspace,
+			branch,
+		}).pipe(Effect.provide(ChildProcessSpawnerLayer));
+
+		const existingPrTitle = Option.isSome(existingPrTitleOpt)
+			? existingPrTitleOpt.value
+			: undefined;
+
 		const { title, body, count } = yield* generatePrContent({
 			baseRef,
 			headRef: branch,
@@ -514,6 +596,7 @@ export function runGeneratePrContent(config: {
 			provider,
 			model,
 			...(retryDelay !== undefined && { retryDelay }),
+			...(existingPrTitle !== undefined && { existingPrTitle }),
 		}).pipe(Effect.provide(generateLayer));
 
 		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
