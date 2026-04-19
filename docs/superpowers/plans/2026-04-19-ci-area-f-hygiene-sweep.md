@@ -993,4 +993,4 @@ Per spec §9, Area F is complete when:
 ## Post-merge
 
 1. Observe one green `main` run to confirm no hosted-CI regression.
-2. Hand off to Area B: `docs/superpowers/plans/<date>-ci-area-b-pin-cleanup.md` (to be written).
+2. Hand off to Area B: `docs/superpowers/plans/2026-04-19-ci-area-b-pin-cleanup.md`.
