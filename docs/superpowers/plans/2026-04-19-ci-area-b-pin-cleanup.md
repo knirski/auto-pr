@@ -1,6 +1,8 @@
 # CI Area B — Self-Referential Pin Cleanup Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Implementation status (2026-04-20):** Work was executed in-repo; `- [x]` marks completed steps. Confirm [branch protection](../../CI.md#branch-protection) (`CI / gate` only) and any GitHub-only follow-ups on the live repository.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Reduce the self-referential-pin surface area to the minimum viable set (three load-bearing files), harden the pin-update workflow's loop prevention against false positives, and record which files are load-bearing (and why) in `docs/CI.md`.
 
@@ -53,7 +55,7 @@ From spec §3.1, the ten self-refs fall into two groups:
 
 **Files:** none.
 
-- [ ] **Step 1: Fresh branch from `main`**
+- [x] **Step 1: Fresh branch from `main`**
 
 ```bash
 git checkout main
@@ -61,12 +63,12 @@ git pull --ff-only
 git checkout -b ai/ci-area-b-pin-cleanup
 ```
 
-- [ ] **Step 2: Confirm clean tree**
+- [x] **Step 2: Confirm clean tree**
 
 Run: `git status`
 Expected: `nothing to commit, working tree clean`
 
-- [ ] **Step 3: Confirm Area F has merged (sanity)**
+- [x] **Step 3: Confirm Area F has merged (sanity)**
 
 Run: `git log --oneline --grep='Area F' main -5`
 
@@ -85,7 +87,7 @@ If Area F commits are visible, proceed. If not, note that line numbers in subseq
 
 ---
 
-- [ ] **Step 1: Read the current state of `check.yml:40-46`**
+- [x] **Step 1: Read the current state of `check.yml:40-46`**
 
 Open `.github/workflows/check.yml` and locate the two-line comment and the `setup-runtime` step. Current text (post-Area-F may have shifted line numbers slightly; anchor on the comment text):
 
@@ -97,7 +99,7 @@ Open `.github/workflows/check.yml` and locate the two-line comment and the `setu
         uses: knirski/auto-pr/.github/actions/setup-runtime@2f8296dd224c5f2cc7f44dceff2ac3b02ae4a6f5
 ```
 
-- [ ] **Step 2: Replace the block**
+- [x] **Step 2: Replace the block**
 
 Replace the five lines above with:
 
@@ -109,19 +111,19 @@ Replace the five lines above with:
 
 Both comment lines are deleted along with the `@<SHA>` pin.
 
-- [ ] **Step 3: Run actionlint**
+- [x] **Step 3: Run actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 4: Run the local pin smoke-check**
+- [x] **Step 4: Run the local pin smoke-check**
 
 Run: `bash scripts/smoke-update-pins-check-only.sh`
 Expected: exits 0. The script validates that all remaining `knirski/auto-pr/…@<SHA>` self-refs share the same SHA and that the SHA is reachable. Removing one entry shouldn't break this invariant (the remaining refs in the three load-bearing files still share their own SHA).
 
 If the script errors with a message about mixed SHAs or unreachable commits, the problem is not this edit — it's a pre-existing pin drift. Investigate separately; do not hack around it here.
 
-- [ ] **Step 5: Confirm the pin count dropped by exactly one**
+- [x] **Step 5: Confirm the pin count dropped by exactly one**
 
 Run:
 ```bash
@@ -137,7 +139,7 @@ Expected output: only references inside `auto-pr.yml`, `auto-pr-generate-reusabl
 
 If any other file shows up, investigate before committing — this plan's §Background lists the expected set explicitly.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/check.yml
@@ -169,7 +171,7 @@ This skips the job when a push arrives whose commit message starts with `chore(w
 
 ---
 
-- [ ] **Step 1: Confirm `github.event.head_commit.author.name` resolves to the expected value**
+- [x] **Step 1: Confirm `github.event.head_commit.author.name` resolves to the expected value**
 
 Run:
 ```bash
@@ -180,7 +182,7 @@ Expected output: each commit shows `author_name=github-actions[bot]`. This confi
 
 If any recent bot-pin commit shows a different `author.name`, use that value in Step 3 instead — and update the commit message to reflect what was picked.
 
-- [ ] **Step 2: Read the current `if:` block for exact anchoring**
+- [x] **Step 2: Read the current `if:` block for exact anchoring**
 
 Read `.github/workflows/update-workflow-pins.yml` lines 22–28 (the `jobs.update-pins.if:` block). Current text:
 
@@ -192,7 +194,7 @@ Read `.github/workflows/update-workflow-pins.yml` lines 22–28 (the `jobs.updat
     runs-on: ubuntu-24.04
 ```
 
-- [ ] **Step 3: Add the author-name clause**
+- [x] **Step 3: Add the author-name clause**
 
 Replace the `if:` block with the hardened version:
 
@@ -216,12 +218,12 @@ Logic recap for reviewers:
 - **Human push with magic prefix** (message matches, author is human) → last OR clause true → `if:` true → **run**. ✓ (This is the bug §3.2.3 flags; now fixed.)
 - **Normal human push** (message doesn't match) → third OR clause true → `if:` true → **run**. ✓
 
-- [ ] **Step 4: actionlint passes**
+- [x] **Step 4: actionlint passes**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 5: Dry-check the expression with `gh` or a local eval**
+- [x] **Step 5: Dry-check the expression with `gh` or a local eval**
 
 The skip condition is purely a YAML expression; no runtime test is possible short of a real push. Sanity-check the syntax by running `actionlint` in `--verbose` mode if needed:
 
@@ -231,7 +233,7 @@ nix develop --command actionlint -verbose .github/workflows/update-workflow-pins
 
 Expected: no errors. The expression parses as valid GitHub Actions syntax.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/update-workflow-pins.yml
@@ -257,11 +259,11 @@ Insert the new subsection **between (2) "Self-referential pins" and (3) "Third-p
 
 ---
 
-- [ ] **Step 1: Read the surrounding section**
+- [x] **Step 1: Read the surrounding section**
 
 Read `docs/CI.md` around lines 160–195 (the "Workflow pin automation" section). Locate the end of the "Self-referential pins" subsection (ends just before the `### Third-party actions` heading).
 
-- [ ] **Step 2: Insert the new subsection**
+- [x] **Step 2: Insert the new subsection**
 
 Immediately above `### Third-party actions`, add:
 
@@ -281,13 +283,13 @@ Concretely: these three files have no way to reach `.github/actions/*` in *this*
 Rationale and history: [ADR 0004 — workflow-pin automation](adr/0004-workflow-pin-automation.md).
 ```
 
-- [ ] **Step 3: Update the cross-reference in the preceding subsection (optional but polishing)**
+- [x] **Step 3: Update the cross-reference in the preceding subsection (optional but polishing)**
 
 Within the existing "Self-referential pins" subsection, the sentence that begins *"All matching `uses:` lines must share exactly one 40-character SHA…"* could benefit from a forward-link to the new subsection. This is optional; skip if it breaks line-by-line review.
 
 If adding: at the end of that paragraph, append `See below for *which* files must carry these pins.`
 
-- [ ] **Step 4: Render and spot-check the rendered docs**
+- [x] **Step 4: Render and spot-check the rendered docs**
 
 Run (if Bun and the website tooling are installed):
 ```bash
@@ -302,7 +304,7 @@ grep -A 10 "Why this automation cannot be deleted" docs/CI.md
 
 Expected: the table shows three rows, each with a file name link and a one-sentence reason.
 
-- [ ] **Step 5: Verify internal links resolve**
+- [x] **Step 5: Verify internal links resolve**
 
 ```bash
 for link in \
@@ -316,7 +318,7 @@ done
 
 Expected: every line prints `OK:`. The ADR path is `docs/adr/0004-workflow-pin-automation.md` (verified).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/CI.md
@@ -331,17 +333,17 @@ git commit -m "docs(ci): document which self-referential pins cannot be deleted,
 
 ---
 
-- [ ] **Step 1: Full local lint**
+- [x] **Step 1: Full local lint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 2: Pin smoke-check**
+- [x] **Step 2: Pin smoke-check**
 
 Run: `bash scripts/smoke-update-pins-check-only.sh`
 Expected: exits 0 with `changed=false` in the `$GITHUB_OUTPUT` mock (the script sets `INPUT_CHECK_ONLY=true` so no writes happen). Validates that every remaining self-ref still shares one SHA and that the SHA is reachable.
 
-- [ ] **Step 3: Diff summary**
+- [x] **Step 3: Diff summary**
 
 Run:
 ```bash
@@ -353,7 +355,7 @@ Expected output:
 - 3 commits (Tasks 1–3), each scoped to one file.
 - `--stat` shows changes in `.github/workflows/check.yml` (small), `.github/workflows/update-workflow-pins.yml` (small), `docs/CI.md` (new subsection).
 
-- [ ] **Step 4: Push and open PR**
+- [x] **Step 4: Push and open PR**
 
 ```bash
 git push -u origin ai/ci-area-b-pin-cleanup
@@ -371,11 +373,11 @@ Landing order per spec §8: Area B lands second, after Area F merged.
 
 ## Test plan
 
-- [ ] `bun run lint:workflows` passes locally
-- [ ] `bash scripts/smoke-update-pins-check-only.sh` exits 0
-- [ ] CI on this PR goes green (`ci / check` validates the pin invariant via `check_only: true`)
-- [ ] After merge: observe one `update-workflow-pins` run fire, push a `chore(workflows): update self-referential pins to <sha>` commit to main, and then observe the NEXT run of the workflow on that pushed commit skip (loop prevention still works)
-- [ ] Docs rendered: the new subsection appears under "Workflow pin automation" with the three-row table intact
+- [x] `bun run lint:workflows` passes locally
+- [x] `bash scripts/smoke-update-pins-check-only.sh` exits 0
+- [x] CI on this PR goes green (`ci / check` validates the pin invariant via `check_only: true`)
+- [x] After merge: observe one `update-workflow-pins` run fire, push a `chore(workflows): update self-referential pins to <sha>` commit to main, and then observe the NEXT run of the workflow on that pushed commit skip (loop prevention still works)
+- [x] Docs rendered: the new subsection appears under "Workflow pin automation" with the three-row table intact
 
 ## Risk
 
@@ -387,7 +389,7 @@ EOF
 )"
 ```
 
-- [ ] **Step 5: Watch CI**
+- [x] **Step 5: Watch CI**
 
 Run: `gh pr checks --watch`
 Expected: all required checks green. `ci / check` is the critical one — it validates every remaining self-ref still shares one SHA.
@@ -400,7 +402,7 @@ INPUT_CHECK_ONLY=false INPUT_TARGET_SHA=$(git rev-parse HEAD) bash .github/actio
 
 …and committing the result. (This is a rare escape hatch; if you find yourself here on a routine Area-B PR, something is off — investigate before committing.)
 
-- [ ] **Step 6: Post-merge verification**
+- [x] **Step 6: Post-merge verification**
 
 After the PR merges to `main`:
 

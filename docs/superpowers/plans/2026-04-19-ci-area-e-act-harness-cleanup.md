@@ -1,6 +1,8 @@
 # CI Area E — `act` Harness Cleanup Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Implementation status (2026-04-20):** Work was executed in-repo; `- [x]` marks completed steps. Confirm [branch protection](../../CI.md#branch-protection) (`CI / gate` only) and any GitHub-only follow-ups on the live repository.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Reduce `act` local-CI harness surface area by (a) collapsing the FC/IS file split for this dev tool only, (b) inlining `scripts/integration-ephemeral-port.sh` into its YAML callers, and (c) annotating `scripts/nix-run-if-missing.sh` to record its load-bearing role (rather than deleting it — investigation reveals many non-act callers).
 
@@ -64,7 +66,7 @@ Two of the three file-surface items shift vs. the spec once the code is actually
 
 **Files:** none.
 
-- [ ] **Step 1: Fresh branch from `main`**
+- [x] **Step 1: Fresh branch from `main`**
 
 ```bash
 git checkout main
@@ -72,7 +74,7 @@ git pull --ff-only
 git checkout -b ai/ci-area-e-act-harness-cleanup
 ```
 
-- [ ] **Step 2: Confirm prior areas landed**
+- [x] **Step 2: Confirm prior areas landed**
 
 ```bash
 git log --oneline --grep='Area F\|Area B\|Area A Phase 2\|Area D' main -15
@@ -80,7 +82,7 @@ git log --oneline --grep='Area F\|Area B\|Area A Phase 2\|Area D' main -15
 
 Expected: commits from F, B, A (both phases), D visible.
 
-- [ ] **Step 3: Clean tree**
+- [x] **Step 3: Clean tree**
 
 Run: `git status`
 Expected: `nothing to commit, working tree clean`
@@ -93,7 +95,7 @@ Expected: `nothing to commit, working tree clean`
 
 **Files:** none.
 
-- [ ] **Step 1: Grep**
+- [x] **Step 1: Grep**
 
 Run:
 ```bash
@@ -141,7 +143,7 @@ Otherwise: no commit; proceed to Task 2.
 
 ---
 
-- [ ] **Step 1: Read both files fully**
+- [x] **Step 1: Read both files fully**
 
 Read `src/core/act-local-ci.ts` and `scripts/act-local-ci.ts` completely. Note:
 - `src/core/act-local-ci.ts` imports: `{ Option, Predicate, Result } from "effect"`, `{ ActLocalCiError } from "#core/errors.js"`.
@@ -149,7 +151,7 @@ Read `src/core/act-local-ci.ts` and `scripts/act-local-ci.ts` completely. Note:
 
 After the merge, `scripts/act-local-ci.ts` needs `Predicate` and `Result` added to its `effect` import, and the `#core/act-local-ci.js` import block deleted.
 
-- [ ] **Step 2: Append the pure-function block to `scripts/act-local-ci.ts`**
+- [x] **Step 2: Append the pure-function block to `scripts/act-local-ci.ts`**
 
 Copy the ENTIRE body of `src/core/act-local-ci.ts` (lines 5–333, everything below the file-level docstring) and paste it into `scripts/act-local-ci.ts`. Placement: **immediately after the imports block and before the existing impure code** (typically right after the opening imports, above the `INSTALL_HINTS` constant or equivalent).
 
@@ -160,7 +162,7 @@ Edits:
 - Do NOT duplicate the `import { ActLocalCiError } from "#core/errors.js"` line (already present in `scripts/act-local-ci.ts`).
 - Do NOT duplicate `Option` import (already there); just ensure `Predicate` and `Result` are added.
 
-- [ ] **Step 3: Update the effect import**
+- [x] **Step 3: Update the effect import**
 
 In `scripts/act-local-ci.ts`'s top-of-file imports, change:
 
@@ -176,7 +178,7 @@ import { Effect, FileSystem, Match, Option, Path, Predicate, Result } from "effe
 
 (Alphabetically sorted per Effect's convention.)
 
-- [ ] **Step 4: Delete the now-stale `#core/act-local-ci.js` import block**
+- [x] **Step 4: Delete the now-stale `#core/act-local-ci.js` import block**
 
 In `scripts/act-local-ci.ts`, delete the multi-line import (lines ~20–35) that currently imports 14 symbols from `#core/act-local-ci.js`. Those symbols are now defined inline in this file.
 
@@ -188,7 +190,7 @@ grep -n "#core/act-local-ci" scripts/act-local-ci.ts
 
 Expected: no matches.
 
-- [ ] **Step 5: Update the file-level docstring comment**
+- [x] **Step 5: Update the file-level docstring comment**
 
 The current docstring at the top of `scripts/act-local-ci.ts` likely reads:
 
@@ -201,7 +203,7 @@ The current docstring at the top of `scripts/act-local-ci.ts` likely reads:
 
 Update the phrase "pure helpers in #core/act-local-ci" → "pure helpers inline above." If there's a doc comment above `planActRun` that references `scripts/nix-run-if-missing.sh`, leave it — that's unrelated.
 
-- [ ] **Step 6: Remove act-local-ci re-exports from `src/core/index.ts`**
+- [x] **Step 6: Remove act-local-ci re-exports from `src/core/index.ts`**
 
 In `src/core/index.ts`, delete the two blocks that re-export from `#core/act-local-ci.js`:
 
@@ -241,13 +243,13 @@ export {
 
 Delete both blocks entirely. The remaining re-exports from `collapse-prose-paragraphs`, `errors`, `fill-pr-template-core`, `gh-output`, etc. stay.
 
-- [ ] **Step 7: Delete `src/core/act-local-ci.ts`**
+- [x] **Step 7: Delete `src/core/act-local-ci.ts`**
 
 ```bash
 git rm src/core/act-local-ci.ts
 ```
 
-- [ ] **Step 8: Typecheck**
+- [x] **Step 8: Typecheck**
 
 Run: `bun run typecheck` (or the project's equivalent — check `package.json` scripts).
 
@@ -257,7 +259,7 @@ Expected: zero errors. If type errors surface:
 
 Do NOT proceed to Task 3 until typecheck is clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/act-local-ci.ts src/core/act-local-ci.ts src/core/index.ts
@@ -276,7 +278,7 @@ git commit -m "refactor(act-local-ci): collapse FC/IS split into single script f
 
 ---
 
-- [ ] **Step 1: Read both test files**
+- [x] **Step 1: Read both test files**
 
 Read `test/core/act-local-ci.test.ts` (284 lines, 21 tests) and `test/scripts/act-local-ci.test.ts` (155 lines, 5 tests). Note:
 - Both currently import from `#core/act-local-ci.js` — after Task 2 that module is gone.
@@ -290,7 +292,7 @@ grep -n "#scripts\|paths.*scripts" tsconfig.json package.json 2>/dev/null
 - If an alias like `#scripts/*` exists → use `#scripts/act-local-ci.js` in imports.
 - If not → use the relative path `../../scripts/act-local-ci`. The relative path works but is less clean; consider adding a `#scripts/*` alias in `tsconfig.json` + `package.json`'s `imports` field. That's an optional polish — the plan includes it as Step 4 below.
 
-- [ ] **Step 2: Merge tests into `test/scripts/act-local-ci.test.ts`**
+- [x] **Step 2: Merge tests into `test/scripts/act-local-ci.test.ts`**
 
 Copy the bodies of all 21 `describe`/`test` blocks from `test/core/act-local-ci.test.ts` into `test/scripts/act-local-ci.test.ts`. Place them AFTER the existing 5 tests, grouped under their own top-level `describe("pure helpers", …)` block if they weren't already wrapped:
 
@@ -302,7 +304,7 @@ describe("pure helpers", () => {
 
 (If the original `test/core/act-local-ci.test.ts` already had a single top-level `describe("act-local-ci", …)` wrapping everything, rename it to `describe("pure helpers", …)` to avoid name collision with the impure suite.)
 
-- [ ] **Step 3: Update imports in the merged file**
+- [x] **Step 3: Update imports in the merged file**
 
 Unified imports at the top of `test/scripts/act-local-ci.test.ts`:
 
@@ -316,7 +318,7 @@ import {
 
 Ensure the import list covers: every symbol used by any of the 26 tests now in the file. De-duplicate.
 
-- [ ] **Step 4 (optional — recommended): Add a `#scripts/*` path alias**
+- [x] **Step 4 (optional — recommended): Add a `#scripts/*` path alias**
 
 If no alias exists: add one to make imports clean.
 
@@ -344,13 +346,13 @@ If no alias exists: add one to make imports clean.
 
 Then use `#scripts/act-local-ci.js` in the test file's import. If you skip this step, use the relative path `../../scripts/act-local-ci` instead — both work.
 
-- [ ] **Step 5: Delete the old test file**
+- [x] **Step 5: Delete the old test file**
 
 ```bash
 git rm test/core/act-local-ci.test.ts
 ```
 
-- [ ] **Step 6: Run the test suite**
+- [x] **Step 6: Run the test suite**
 
 Run: `bun test test/scripts/act-local-ci.test.ts`
 Expected: 26 tests pass (21 pure + 5 impure).
@@ -366,7 +368,7 @@ bun test
 
 Expected: all tests pass, coverage unchanged (the pure functions have the same test coverage as before, just in a different file).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add test/
@@ -381,7 +383,7 @@ git commit -m "test(act-local-ci): merge pure-helper tests into scripts test fil
 
 **Files:** none.
 
-- [ ] **Step 1: Run the build**
+- [x] **Step 1: Run the build**
 
 ```bash
 bun run build
@@ -389,7 +391,7 @@ bun run build
 
 Expected: completes without error.
 
-- [ ] **Step 2: Typecheck one more time**
+- [x] **Step 2: Typecheck one more time**
 
 ```bash
 bun run typecheck
@@ -397,7 +399,7 @@ bun run typecheck
 
 Expected: zero errors.
 
-- [ ] **Step 3: Full check**
+- [x] **Step 3: Full check**
 
 ```bash
 bun run check:code
@@ -431,7 +433,7 @@ The meaningful line is the `python3 -c '...'`. Everything else is shell boilerpl
 
 ---
 
-- [ ] **Step 1: Read `integration.yml`'s two call sites**
+- [x] **Step 1: Read `integration.yml`'s two call sites**
 
 Current form at both sites (line ~32 and ~140):
 
@@ -444,7 +446,7 @@ Current form at both sites (line ~32 and ~140):
           echo "AUTO_PR_AI_OPENAI_COMPAT_URL=http://127.0.0.1:${port}/v1" >> "$GITHUB_ENV"
 ```
 
-- [ ] **Step 2: Replace both call sites**
+- [x] **Step 2: Replace both call sites**
 
 At BOTH call sites, change the comment and the `port=...` line:
 
@@ -466,13 +468,13 @@ To:
 
 Preserve the second job's step name if it differs (e.g. "(high capability)" vs "(stub)").
 
-- [ ] **Step 3: Delete the script**
+- [x] **Step 3: Delete the script**
 
 ```bash
 git rm scripts/integration-ephemeral-port.sh
 ```
 
-- [ ] **Step 4: Update doc references**
+- [x] **Step 4: Update doc references**
 
 `docs/CI.md:111` and `docs/INTEGRATION.md:228` both mention the script by name. Update both to describe the inline form. Minimal edits:
 
@@ -486,7 +488,7 @@ In `docs/INTEGRATION.md:228`, change:
 
 Exact wording can vary; preserve the technical details (localhost, port 0, Python preinstalled on Ubuntu).
 
-- [ ] **Step 5: Verify no remaining references**
+- [x] **Step 5: Verify no remaining references**
 
 ```bash
 grep -rn "integration-ephemeral-port" . --include='*.yml' --include='*.ts' --include='*.sh' --include='*.md' --include='*.json' 2>/dev/null | grep -v '.worktrees\|node_modules'
@@ -494,12 +496,12 @@ grep -rn "integration-ephemeral-port" . --include='*.yml' --include='*.ts' --inc
 
 Expected: no matches.
 
-- [ ] **Step 6: Lint workflows**
+- [x] **Step 6: Lint workflows**
 
 Run: `bun run lint:workflows`
 Expected: exits 0. `shellcheck` may or may not lint the inline `run:` block — either way, the python one-liner is syntactically trivial.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -516,11 +518,11 @@ git commit -m "ci(integration): inline ephemeral-port python one-liner; delete s
 
 ---
 
-- [ ] **Step 1: Read the current header**
+- [x] **Step 1: Read the current header**
 
 Read `scripts/nix-run-if-missing.sh` (34 lines). It likely has a brief usage comment at the top. Preserve it.
 
-- [ ] **Step 2: Prepend a load-bearing-callers comment**
+- [x] **Step 2: Prepend a load-bearing-callers comment**
 
 Insert a comment block immediately after the `#!/usr/bin/env bash` shebang, before the existing `# Usage:` comment:
 
@@ -544,7 +546,7 @@ Insert a comment block immediately after the `#!/usr/bin/env bash` shebang, befo
 
 Preserve the existing `# Usage:` block below this new header.
 
-- [ ] **Step 3: Verify shellcheck / shfmt still accept the file**
+- [x] **Step 3: Verify shellcheck / shfmt still accept the file**
 
 Run:
 ```bash
@@ -554,7 +556,7 @@ bun run lint:scripts
 
 Expected: `lint:scripts` exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add scripts/nix-run-if-missing.sh
@@ -571,13 +573,13 @@ git commit -m "scripts(nix-run-if-missing): document load-bearing callers (keep 
 
 ---
 
-- [ ] **Step 1: Locate the "Where to Put X" table**
+- [x] **Step 1: Locate the "Where to Put X" table**
 
 Read `AGENTS.md` near line 52. The table has rows like:
 - "Pure validation, helpers | `src/core/*.ts` (fill-pr-template-core, string, gh-output, etc.)"
 - "New tagged error class | `src/core/errors.ts`; add `formatError` branch in `src/auto-pr/errors.ts`"
 
-- [ ] **Step 2: Add a row for the act-local-ci exception**
+- [x] **Step 2: Add a row for the act-local-ci exception**
 
 Insert immediately after the "Pure validation, helpers" row:
 
@@ -587,7 +589,7 @@ Insert immediately after the "Pure validation, helpers" row:
 
 Adjust the table formatting (column widths) to match neighbouring rows.
 
-- [ ] **Step 3: Review the surrounding "Architecture" / "FC/IS" bullets**
+- [x] **Step 3: Review the surrounding "Architecture" / "FC/IS" bullets**
 
 Near line 113, `AGENTS.md` has a line:
 ```
@@ -600,7 +602,7 @@ Add a footnote or parenthetical noting the exception. Simplest form — append t
 - **FC/IS:** Core pure (no Effect, no I/O, returns `Result`). Shell orchestrates I/O, bridges with `Effect.fromResult`. (Single known exception: `scripts/act-local-ci.ts` dev tool; see "Where to Put X" table.)
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add AGENTS.md
@@ -617,7 +619,7 @@ git commit -m "docs(agents): record act-local-ci FC/IS exception in 'Where to Pu
 
 ---
 
-- [ ] **Step 1: Find stale references**
+- [x] **Step 1: Find stale references**
 
 ```bash
 grep -rn "src/core/act-local-ci" docs/ README.md CONTRIBUTING.md 2>/dev/null
@@ -625,7 +627,7 @@ grep -rn "src/core/act-local-ci" docs/ README.md CONTRIBUTING.md 2>/dev/null
 
 Expected: at least one match in `docs/ARCHITECTURE.md:83` (the "ActBackend" row references `src/core/act-local-ci.ts`).
 
-- [ ] **Step 2: Update each reference**
+- [x] **Step 2: Update each reference**
 
 For each match, update the file path:
 - `src/core/act-local-ci.ts` → `scripts/act-local-ci.ts`.
@@ -634,7 +636,7 @@ Specifically in `docs/ARCHITECTURE.md:83`, change:
 - From: "See `ActBackend` and `planActRun` in `src/core/act-local-ci.ts`."
 - To: "See `ActBackend` and `planActRun` in `scripts/act-local-ci.ts`."
 
-- [ ] **Step 3: Verify links still resolve**
+- [x] **Step 3: Verify links still resolve**
 
 ```bash
 for f in $(grep -rn "act-local-ci" docs/ --include='*.md' 2>/dev/null | sed -n 's/.*(\([^)]*act-local-ci[^)]*\)).*/\1/p' | sort -u); do
@@ -645,7 +647,7 @@ done
 
 (If the sed is finicky, spot-check manually.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/
@@ -660,17 +662,17 @@ git commit -m "docs: update act-local-ci paths after FC/IS collapse"
 
 ---
 
-- [ ] **Step 1: Full test run**
+- [x] **Step 1: Full test run**
 
 Run: `bun test`
 Expected: all tests pass. The test count should be the same as before Area E (same 26 act tests, just consolidated) plus whatever else the project has.
 
-- [ ] **Step 2: Full check**
+- [x] **Step 2: Full check**
 
 Run: `bun run check:code && bun run lint:workflows && bun run lint:scripts`
 Expected: all exit 0.
 
-- [ ] **Step 3: Dry-run act-smoke workflow locally**
+- [x] **Step 3: Dry-run act-smoke workflow locally**
 
 ```bash
 bun run act-local-ci -- --dry-run check
@@ -678,7 +680,7 @@ bun run act-local-ci -- --dry-run check
 
 Expected: `act` parses the workflows, prints the check job plan. No errors about missing modules or references.
 
-- [ ] **Step 4: Inventory the diff**
+- [x] **Step 4: Inventory the diff**
 
 ```bash
 git log --oneline main..HEAD
@@ -687,7 +689,7 @@ git diff main...HEAD --stat
 
 Expected: ~7–8 commits, each scoped to one logical concern.
 
-- [ ] **Step 5: Push and open PR**
+- [x] **Step 5: Push and open PR**
 
 ```bash
 git push -u origin ai/ci-area-e-act-harness-cleanup
@@ -718,13 +720,13 @@ The only observable difference is the import path. External consumers: none — 
 
 ## Test plan
 
-- [ ] `bun test` passes (26 act-local-ci tests; same as before; now in one file)
-- [ ] `bun run typecheck` clean
-- [ ] `bun run check:code` clean
-- [ ] `bun run act-local-ci -- --dry-run check` produces the same plan as before
-- [ ] `bun run act-local-ci -- --dry-run integration` ditto
-- [ ] `gh act` (if installed locally) still works via the `gh` backend path — no changes to that logic
-- [ ] CI on this PR green (`CI / gate`, `act-smoke`)
+- [x] `bun test` passes (26 act-local-ci tests; same as before; now in one file)
+- [x] `bun run typecheck` clean
+- [x] `bun run check:code` clean
+- [x] `bun run act-local-ci -- --dry-run check` produces the same plan as before
+- [x] `bun run act-local-ci -- --dry-run integration` ditto
+- [x] `gh act` (if installed locally) still works via the `gh` backend path — no changes to that logic
+- [x] CI on this PR green (`CI / gate`, `act-smoke`)
 
 ## Risk
 
@@ -737,14 +739,14 @@ EOF
 )"
 ```
 
-- [ ] **Step 6: Watch CI**
+- [x] **Step 6: Watch CI**
 
 Run: `gh pr checks --watch`
 Expected: `CI / gate` green. `act-smoke` runs (it's an independent workflow, not part of gate); it should also pass.
 
 If `act-smoke` fails: the `act` dry-run may be hitting a regression from the FC/IS collapse. Debug by comparing the argv `planActRun` produces pre-vs-post. Fix in-place.
 
-- [ ] **Step 7: Merge**
+- [x] **Step 7: Merge**
 
 Once approved and green, merge.
 

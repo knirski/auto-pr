@@ -128,6 +128,12 @@ Configure main branch protection to require **a single status check**:
 
 Do NOT require individual job names (`check / check`, `dependency-review`, etc.) directly — they path-filter correctly inside `ci.yml` and are reported as skipped for unrelated changes, which would otherwise block branch protection.
 
+### Verifying required checks (maintainers)
+
+1. Open **Settings → Branches →** the `main` rule → **Require status checks to pass before merging**.
+2. Under **Status checks that are required**, the only entry from workflow **`CI`** should be **`gate`** (shown as **`CI / gate`** in the PR checks panel). Remove legacy required checks such as **`Check / check`** or **`Check / integration`** if they remain from the pre-consolidation setup.
+3. Optional: with a token that can read branch protection, run `gh api repos/<owner>/<repo>/branches/main/protection --jq '.required_status_checks.contexts'` and confirm the list matches your policy (typically a single context for the gate job after migration).
+
 ## Dependency review and vulnerability detection
 
 **dependency-review** runs on PRs (except Dependabot Bun PRs). For Dependabot Bun PRs, the job is skipped because GitHub's dependency graph may not yet support `bun.lock`. Vulnerability detection is covered by **bun audit** in the check job (`bun audit --audit-level=high` runs on every PR, including Dependabot Bun PRs).

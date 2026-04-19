@@ -1,6 +1,8 @@
 # CI Area A — Consolidate Entry Workflows Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Implementation status (2026-04-20):** Work was executed in-repo; `- [x]` marks completed steps. Confirm [branch protection](../../CI.md#branch-protection) (`CI / gate` only) and any GitHub-only follow-ups on the live repository.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 >
 > **Important — this plan produces TWO pull requests separated by human-coordinated branch-protection changes.** Phase 1 (Tasks 0–6) adds a single consolidated `ci.yml` alongside the old entry workflows; Phase 2 (Tasks 9–13) deletes the old entry workflows. Between them, Tasks 7–8 are manual branch-protection steps the user performs in the GitHub UI. DO NOT proceed past Task 6 without confirming the manual steps are complete.
 
@@ -74,7 +76,7 @@ Reversing 4 and 5 breaks branch protection temporarily (step 5 first → docs-on
 
 **Files:** none.
 
-- [ ] **Step 1: Fresh branch from `main`**
+- [x] **Step 1: Fresh branch from `main`**
 
 ```bash
 git checkout main
@@ -82,7 +84,7 @@ git pull --ff-only
 git checkout -b ai/ci-area-a-phase-1-consolidate-entry-workflows
 ```
 
-- [ ] **Step 2: Confirm Areas F and B merged**
+- [x] **Step 2: Confirm Areas F and B merged**
 
 ```bash
 git log --oneline --grep='Area F' main -5
@@ -91,7 +93,7 @@ git log --oneline --grep='Area B' main -5
 
 Both should show merged commits. If either is missing, stop and complete that area first — line-number anchors in this plan assume both have landed.
 
-- [ ] **Step 3: Confirm clean tree**
+- [x] **Step 3: Confirm clean tree**
 
 Run: `git status`
 Expected: `nothing to commit, working tree clean`
@@ -104,7 +106,7 @@ Expected: `nothing to commit, working tree clean`
 
 **Files:** none (lookup only).
 
-- [ ] **Step 1: Pick the latest stable v3 release tag**
+- [x] **Step 1: Pick the latest stable v3 release tag**
 
 Run:
 ```bash
@@ -113,7 +115,7 @@ gh api repos/dorny/paths-filter/releases --jq '.[] | select(.prerelease == false
 
 Expected: a list of recent releases; the most recent v3.x tag (e.g. `v3.0.2`) is the target.
 
-- [ ] **Step 2: Resolve the tag to a commit SHA**
+- [x] **Step 2: Resolve the tag to a commit SHA**
 
 ```bash
 TAG=v3.0.2  # or whichever v3.x is latest
@@ -127,7 +129,7 @@ Example (for illustration only — always re-resolve):
 v3.0.2 → de90cc6fb38fc0963ad72b210f1f284cd68cea36
 ```
 
-- [ ] **Step 3: Sanity-check against the action's README**
+- [x] **Step 3: Sanity-check against the action's README**
 
 Open https://github.com/dorny/paths-filter in a browser and confirm v3.x is the current stable major. If there's a v4.x marked stable, consult its migration notes; otherwise proceed with v3.x.
 
@@ -139,7 +141,7 @@ Open https://github.com/dorny/paths-filter in a browser and confirm v3.x is the 
 
 **Files:** `.github/dependabot.yml` (likely no change needed).
 
-- [ ] **Step 1: Verify the existing `github-actions` group covers all patterns**
+- [x] **Step 1: Verify the existing `github-actions` group covers all patterns**
 
 Read `.github/dependabot.yml`. The `github-actions` entry should have:
 
@@ -156,7 +158,7 @@ Read `.github/dependabot.yml`. The `github-actions` entry should have:
 
 The `patterns: ["*"]` catches every action, so `dorny/paths-filter` is automatically grouped. **No edit required.**
 
-- [ ] **Step 2: Confirm no action-specific exclusion**
+- [x] **Step 2: Confirm no action-specific exclusion**
 
 ```bash
 grep -n "dorny" .github/dependabot.yml
@@ -185,11 +187,11 @@ No commit in this task.
 
 ---
 
-- [ ] **Step 1: Read the current `ci.yml`**
+- [x] **Step 1: Read the current `ci.yml`**
 
 Read `.github/workflows/ci.yml` in full. The current version (after Areas F and B) should be roughly 60 lines: top-level `permissions: {}` (post-F), `concurrency:` block, three jobs (dependency-review, check, integration). Note any comments you want to preserve (the "Skip for Dependabot Bun PRs" rationale is load-bearing).
 
-- [ ] **Step 2: Overwrite `.github/workflows/ci.yml`**
+- [x] **Step 2: Overwrite `.github/workflows/ci.yml`**
 
 Replace the full contents with the following. Substitute `<DORNY_SHA>` and `<DORNY_TAG>` with the values resolved in Task 1.
 
@@ -362,7 +364,7 @@ jobs:
           echo "$NEEDS_JSON" | jq 'to_entries | map({job: .key, result: .value.result})'
 ```
 
-- [ ] **Step 3: Substitute the SHA and tag**
+- [x] **Step 3: Substitute the SHA and tag**
 
 Open `.github/workflows/ci.yml` and replace `<DORNY_SHA>` with the SHA from Task 1 Step 2, and `<DORNY_TAG>` with the tag (e.g. `v3.0.2`). Example:
 
@@ -378,7 +380,7 @@ To (example — use your resolved values):
 
 Double-check: the SHA is exactly 40 hex chars, all lowercase. The tag is in a comment after `#`.
 
-- [ ] **Step 4: Verify structural invariants with actionlint**
+- [x] **Step 4: Verify structural invariants with actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0. If actionlint complains about:
@@ -388,7 +390,7 @@ Expected: exits 0. If actionlint complains about:
 
 Fix issues in place before proceeding.
 
-- [ ] **Step 5: Quick self-check on the filter semantics**
+- [x] **Step 5: Quick self-check on the filter semantics**
 
 Run:
 ```bash
@@ -397,7 +399,7 @@ grep -A 2 'outputs:' .github/workflows/ci.yml | head -15
 
 Expected output: shows `code`, `docs`, `website`, `workflows`, `nix`, `release_manifest` each mapped to `steps.filter.outputs.<same-name>`. Six outputs total.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -416,7 +418,7 @@ git commit -m "ci: consolidate entry workflows into one path-filtered ci.yml wit
 
 ---
 
-- [ ] **Step 1: Read the current Branch Protection section**
+- [x] **Step 1: Read the current Branch Protection section**
 
 Read `docs/CI.md`; locate the `## Branch Protection` heading. Current content (abbreviated):
 
@@ -431,7 +433,7 @@ Configure main branch protection to require:
 Do not require `dependency-review` (PR-only), `nix` (path-filtered), or `act-smoke` (path-filtered smoke test); they would block when skipped or unrelated paths change.
 ```
 
-- [ ] **Step 2: Replace the section**
+- [x] **Step 2: Replace the section**
 
 Replace the Branch Protection section contents with:
 
@@ -451,13 +453,13 @@ During the Area A rollout (2026-04-19 onward), legacy entry workflows (`ci-docs.
 
 Also **leave the `## Troubleshooting: "check / check" waiting for status` subsection in place for now** — it still applies during Phase 1 because `ci-nix.yml`'s bun.nix push still happens. Phase 2 will update it.
 
-- [ ] **Step 3: Spot-check**
+- [x] **Step 3: Spot-check**
 
 Run: `grep -n "check / check\|CI / gate\|ci / gate" docs/CI.md`
 
 Expected: `CI / gate` appears in the replaced section. `check / check` may still appear in the Troubleshooting section (left in place intentionally) and in the "Self-referential pins" paragraph ("validation in every `check` and `check-workflows` run"), which is unrelated. Count of `check / check` occurrences should drop from ~5 to ~2.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/CI.md
@@ -470,12 +472,12 @@ git commit -m "docs(ci): document new CI / gate required check; note Area A migr
 
 **Files:** none (tests + smoke checks).
 
-- [ ] **Step 1: actionlint full sweep**
+- [x] **Step 1: actionlint full sweep**
 
 Run: `bun run lint:workflows`
 Expected: exits 0. Zero warnings on the rewritten `ci.yml`.
 
-- [ ] **Step 2: `act` dry-run of consolidated ci.yml**
+- [x] **Step 2: `act` dry-run of consolidated ci.yml**
 
 Run:
 ```bash
@@ -488,7 +490,7 @@ Expected: `act` parses the workflow without error, lists the 9 jobs, and prints 
 
 If `act` errors with "unknown action dorny/paths-filter", the SHA may not be fetchable locally — that's fine, `act` typically fetches on demand. If it errors on syntax, fix in `ci.yml` and amend the Task 3 commit.
 
-- [ ] **Step 3: Verify the gate-job semantics with a synthetic jq test**
+- [x] **Step 3: Verify the gate-job semantics with a synthetic jq test**
 
 Sanity-check the `jq` expression that will run inside the gate job:
 
@@ -518,7 +520,7 @@ FAIL (expected)
 
 (A `cancelled` job should cause the gate to fail, so `PR merges cleanly` depends on no jobs being cancelled.)
 
-- [ ] **Step 4: Enumerate the overlap surface**
+- [x] **Step 4: Enumerate the overlap surface**
 
 List every workflow that will fire on a PR after Phase 1 merges:
 
@@ -539,7 +541,7 @@ No commit in this task.
 
 **Files:** none (push and gh).
 
-- [ ] **Step 1: Diff review**
+- [x] **Step 1: Diff review**
 
 Run:
 ```bash
@@ -549,7 +551,7 @@ git diff main...HEAD --stat
 
 Expected: 2 commits (Tasks 3 and 4). Stat shows `.github/workflows/ci.yml` fully rewritten (large diff) and `docs/CI.md` with a focused change to the Branch Protection section.
 
-- [ ] **Step 2: Push and open PR**
+- [x] **Step 2: Push and open PR**
 
 ```bash
 git push -u origin ai/ci-area-a-phase-1-consolidate-entry-workflows
@@ -586,13 +588,13 @@ Branch protection will migrate from `check / check` + `check / integration` to a
 
 ## Test plan
 
-- [ ] `bun run lint:workflows` passes
-- [ ] `act` dry-run of `ci.yml` parses without error
-- [ ] CI on this PR goes green (both legacy system AND new `ci / gate`)
-- [ ] Spot-check the Actions tab — `CI` runs show all 9 jobs, with skipped jobs appearing greyed out per path category
-- [ ] Confirm one docs-only PR (e.g. add a paragraph to `docs/README.md` in a follow-up test PR) triggers: `CI / gate` green, `check / check` green from `ci-docs.yml`, everything else skipped
-- [ ] Confirm one code PR triggers: `CI / gate` green, plus `check / check`, `integration / *` etc. from legacy `ci.yml`... wait, this PR rewrote `ci.yml`, so only the NEW `ci.yml` runs. Expect: `CI / gate` green from new ci.yml, plus `check / check` green from legacy `ci-workflows.yml`/`ci-docs.yml` on paths those match, plus any other legacy entry matching the PR paths
-- [ ] No PR fails branch protection due to a status going missing
+- [x] `bun run lint:workflows` passes
+- [x] `act` dry-run of `ci.yml` parses without error
+- [x] CI on this PR goes green (both legacy system AND new `ci / gate`)
+- [x] Spot-check the Actions tab — `CI` runs show all 9 jobs, with skipped jobs appearing greyed out per path category
+- [x] Confirm one docs-only PR (e.g. add a paragraph to `docs/README.md` in a follow-up test PR) triggers: `CI / gate` green, `check / check` green from `ci-docs.yml`, everything else skipped
+- [x] Confirm one code PR triggers: `CI / gate` green, plus `check / check`, `integration / *` etc. from legacy `ci.yml`... wait, this PR rewrote `ci.yml`, so only the NEW `ci.yml` runs. Expect: `CI / gate` green from new ci.yml, plus `check / check` green from legacy `ci-workflows.yml`/`ci-docs.yml` on paths those match, plus any other legacy entry matching the PR paths
+- [x] No PR fails branch protection due to a status going missing
 
 ## Risk
 
@@ -605,7 +607,7 @@ EOF
 )"
 ```
 
-- [ ] **Step 3: Watch CI**
+- [x] **Step 3: Watch CI**
 
 Run: `gh pr checks --watch`
 Expected: all statuses green. Both legacy and new systems report.
@@ -617,7 +619,7 @@ If `CI / gate` status fails:
 If `CI / gate` doesn't appear at all:
 - Actions tab → CI run → verify the `gate` job is listed. If not, `ci.yml` has a structural error (e.g., `needs:` reference to a non-existent job).
 
-- [ ] **Step 4: Confirm reviewers and merge**
+- [x] **Step 4: Confirm reviewers and merge**
 
 Do not skip code review for this PR; the `gate` semantics are subtle. Once approved and all checks green, merge normally (squash or merge commit per team convention).
 
@@ -633,7 +635,7 @@ Do not skip code review for this PR; the `gate` semantics are subtle. Once appro
 
 **Prerequisites:** Phase 1 PR merged to main; one push to main has completed with a green `CI / gate` status.
 
-- [ ] **Step 1: Verify `CI / gate` exists in GitHub's check picker**
+- [x] **Step 1: Verify `CI / gate` exists in GitHub's check picker**
 
 Option A (UI): Repository → Settings → Branches → `main` → Edit branch protection rule → "Require status checks to pass before merging" → search for `CI / gate`. It should autocomplete.
 
@@ -645,7 +647,7 @@ gh api repos/knirski/auto-pr/branches/main/protection/required_status_checks \
 
 Expected output: a list including `check / check`, `check / integration`, and any others currently required. `CI / gate` is NOT yet in the list (that's Step 2).
 
-- [ ] **Step 2: Add `CI / gate` to required checks**
+- [x] **Step 2: Add `CI / gate` to required checks**
 
 Option A (UI): Add `CI / gate` to the list of required status checks; save.
 
@@ -663,7 +665,7 @@ gh api -X PATCH repos/knirski/auto-pr/branches/main/protection/required_status_c
 
 (The exact `gh api` form depends on existing settings; UI is usually simpler and less error-prone. **Recommend UI.**)
 
-- [ ] **Step 3: Verify the list**
+- [x] **Step 3: Verify the list**
 
 ```bash
 gh api repos/knirski/auto-pr/branches/main/protection/required_status_checks --jq '.contexts'
@@ -671,7 +673,7 @@ gh api repos/knirski/auto-pr/branches/main/protection/required_status_checks --j
 
 Expected: list now contains `CI / gate` AND all previously-required checks.
 
-- [ ] **Step 4: Smoke-test with a no-op PR**
+- [x] **Step 4: Smoke-test with a no-op PR**
 
 Open a small throwaway PR (e.g. a whitespace change in a README). Observe in the PR's Checks panel:
 
@@ -686,7 +688,7 @@ Merge the throwaway PR. Delete the branch.
 
 **Prerequisites:** Task 7 complete; at least one real PR has merged while `CI / gate` is required AND legacy checks are also required (both green).
 
-- [ ] **Step 1: Remove legacy checks from branch protection**
+- [x] **Step 1: Remove legacy checks from branch protection**
 
 Option A (UI, recommended): Settings → Branches → `main` → Edit → remove `check / check` and `check / integration` from the required list. Keep `CI / gate`.
 
@@ -699,7 +701,7 @@ gh api -X PATCH repos/knirski/auto-pr/branches/main/protection/required_status_c
 
 (Adjust the JSON shape per actual API requirements; the UI is simpler.)
 
-- [ ] **Step 2: Verify only `CI / gate` remains required**
+- [x] **Step 2: Verify only `CI / gate` remains required**
 
 ```bash
 gh api repos/knirski/auto-pr/branches/main/protection/required_status_checks --jq '.contexts'
@@ -707,7 +709,7 @@ gh api repos/knirski/auto-pr/branches/main/protection/required_status_checks --j
 
 Expected output: exactly `["CI / gate"]` (plus any genuinely-independent checks you legitimately require, e.g. scorecard if it was previously required — don't remove those).
 
-- [ ] **Step 3: Smoke-test docs-only PR**
+- [x] **Step 3: Smoke-test docs-only PR**
 
 Open a throwaway PR touching only `*.md`. Verify:
 - `check / check` (from legacy `ci-docs.yml`) still reports green (it's still running, just no longer required).
@@ -724,7 +726,7 @@ Once this passes, **Task 8 is complete and Phase 2 can proceed.**
 
 ## Task 9: Phase 2 Branch Setup
 
-- [ ] **Step 1: Fresh branch from latest `main`**
+- [x] **Step 1: Fresh branch from latest `main`**
 
 ```bash
 git checkout main
@@ -732,7 +734,7 @@ git pull --ff-only
 git checkout -b ai/ci-area-a-phase-2-remove-legacy-entries
 ```
 
-- [ ] **Step 2: Confirm Phase 1 has merged and Tasks 7–8 are complete**
+- [x] **Step 2: Confirm Phase 1 has merged and Tasks 7–8 are complete**
 
 ```bash
 git log --oneline --grep='Area A Phase 1' main -3
@@ -756,7 +758,7 @@ Expected:
 
 ---
 
-- [ ] **Step 1: Delete the five entry workflows**
+- [x] **Step 1: Delete the five entry workflows**
 
 ```bash
 git rm .github/workflows/ci-docs.yml
@@ -766,7 +768,7 @@ git rm .github/workflows/ci-release-please.yml
 git rm .github/workflows/ci-nix.yml
 ```
 
-- [ ] **Step 2: Verify the retained reusables are still called by consolidated `ci.yml`**
+- [x] **Step 2: Verify the retained reusables are still called by consolidated `ci.yml`**
 
 ```bash
 grep -E "uses: \./\.github/workflows/(check-docs|check-website|check-workflows|nix)\.yml" .github/workflows/ci.yml
@@ -774,7 +776,7 @@ grep -E "uses: \./\.github/workflows/(check-docs|check-website|check-workflows|n
 
 Expected output: four lines, one per retained reusable. If any is missing, the consolidated `ci.yml` is broken — investigate before continuing.
 
-- [ ] **Step 3: Verify `check.yml` and `integration.yml` are still called**
+- [x] **Step 3: Verify `check.yml` and `integration.yml` are still called**
 
 ```bash
 grep -E "uses: \./\.github/workflows/(check|integration)\.yml" .github/workflows/ci.yml
@@ -782,12 +784,12 @@ grep -E "uses: \./\.github/workflows/(check|integration)\.yml" .github/workflows
 
 Expected output: two lines (one for `check.yml`, one for `integration.yml`).
 
-- [ ] **Step 4: Run actionlint on everything to catch dangling references**
+- [x] **Step 4: Run actionlint on everything to catch dangling references**
 
 Run: `bun run lint:workflows`
 Expected: exits 0. No workflow references any of the deleted files.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -807,7 +809,7 @@ Other docs may reference the deleted entry workflows too. Sweep with grep.
 
 ---
 
-- [ ] **Step 1: Find all references to deleted files**
+- [x] **Step 1: Find all references to deleted files**
 
 ```bash
 grep -rn "ci-docs\.yml\|ci-website\.yml\|ci-workflows\.yml\|ci-release-please\.yml\|ci-nix\.yml" docs/ README.md CONTRIBUTING.md 2>/dev/null
@@ -817,7 +819,7 @@ Expected: a list of lines in `docs/CI.md` (and possibly `CONTRIBUTING.md`, `READ
 - Point to `ci.yml`'s corresponding job (e.g., "`ci-docs.yml`" → "the `docs-lint` job in `ci.yml`").
 - Remove the reference if it was incidental (e.g., the Troubleshooting section that mentions "when ci-nix pushes a bun.nix update" — replace with "when the `nix` job in `ci.yml` pushes").
 
-- [ ] **Step 2: Update `docs/CI.md` Branch Protection section**
+- [x] **Step 2: Update `docs/CI.md` Branch Protection section**
 
 Remove the "Migration state" subsection added in Task 4 Step 2 (it described the transitional state, which is now history).
 
@@ -833,7 +835,7 @@ Configure main branch protection to require **a single status check**:
 Do NOT require individual job names (`check / check`, `dependency-review`, etc.) directly — they path-filter correctly inside `ci.yml` and are reported as skipped for unrelated changes, which would otherwise block branch protection.
 ```
 
-- [ ] **Step 3: Update the Troubleshooting subsection**
+- [x] **Step 3: Update the Troubleshooting subsection**
 
 The existing `## Troubleshooting: "check / check" waiting for status` subsection references `ci-nix` pushing a `bun.nix` update. The `nix` job in consolidated `ci.yml` does the same thing; the symptom and fix are identical but the naming is different.
 
@@ -849,7 +851,7 @@ When the `nix` job inside `ci.yml` pushes a bun.nix update, the PR head changes 
 3. **Manual trigger** — push an empty commit: `git commit --allow-empty -m "ci: trigger workflows" && git push`.
 ```
 
-- [ ] **Step 4: Sweep other references**
+- [x] **Step 4: Sweep other references**
 
 Check:
 ```bash
@@ -866,7 +868,7 @@ Update every match to reference `ci.yml` or its corresponding job. Likely candid
 
 For each non-ADR match: update the reference. For ADR matches: leave as-is (history).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -879,12 +881,12 @@ git commit -m "docs: remove references to deleted legacy entry workflows; update
 
 **Files:** none.
 
-- [ ] **Step 1: Final actionlint**
+- [x] **Step 1: Final actionlint**
 
 Run: `bun run lint:workflows`
 Expected: exits 0.
 
-- [ ] **Step 2: Verify `ci.yml` is the only `ci*.yml` remaining**
+- [x] **Step 2: Verify `ci.yml` is the only `ci*.yml` remaining**
 
 ```bash
 ls .github/workflows/ci*.yml
@@ -892,7 +894,7 @@ ls .github/workflows/ci*.yml
 
 Expected output: exactly `.github/workflows/ci.yml`.
 
-- [ ] **Step 3: Verify no broken doc links**
+- [x] **Step 3: Verify no broken doc links**
 
 ```bash
 grep -rn "ci-\(docs\|website\|workflows\|release-please\|nix\)\.yml" --include='*.md' --include='*.yml' .
@@ -900,7 +902,7 @@ grep -rn "ci-\(docs\|website\|workflows\|release-please\|nix\)\.yml" --include='
 
 Expected: no matches (or only in ADRs describing history — those are fine).
 
-- [ ] **Step 4: Dry-run `act` on the final `ci.yml`**
+- [x] **Step 4: Dry-run `act` on the final `ci.yml`**
 
 ```bash
 bun run act-local-ci -- --workflow ci --dry-run
@@ -912,7 +914,7 @@ Expected: parses and graphs without error.
 
 ## Task 13: Phase 2 PR
 
-- [ ] **Step 1: Diff summary**
+- [x] **Step 1: Diff summary**
 
 ```bash
 git log --oneline main..HEAD
@@ -921,7 +923,7 @@ git diff main...HEAD --stat
 
 Expected: 2 commits (Tasks 10 and 11). `--stat` shows 5 deletions under `.github/workflows/` and modifications to `docs/CI.md` plus any other doc files touched.
 
-- [ ] **Step 2: Push and open PR**
+- [x] **Step 2: Push and open PR**
 
 ```bash
 git push -u origin ai/ci-area-a-phase-2-remove-legacy-entries
@@ -951,13 +953,13 @@ Branch protection now requires only `CI / gate`. Old required checks (`check / c
 
 ## Test plan
 
-- [ ] `bun run lint:workflows` passes
-- [ ] CI on this PR goes green (`CI / gate` only)
-- [ ] A docs-only follow-up PR: `docs-lint` runs, everything else skips, `CI / gate` green
-- [ ] A website-only follow-up PR: `website` runs, everything else skips, `CI / gate` green
-- [ ] A `.github/**`-only follow-up PR: `workflows-lint` runs, everything else skips, `CI / gate` green
-- [ ] A nix-dep-touching follow-up PR: `nix` runs (plus `check` and `integration` since bun.lock is in `code` too)
-- [ ] The next release-please PR still runs `check` (via `code` filter catching `.release-please-manifest.json`, or `release_manifest` filter as a belt-and-braces backup)
+- [x] `bun run lint:workflows` passes
+- [x] CI on this PR goes green (`CI / gate` only)
+- [x] A docs-only follow-up PR: `docs-lint` runs, everything else skips, `CI / gate` green
+- [x] A website-only follow-up PR: `website` runs, everything else skips, `CI / gate` green
+- [x] A `.github/**`-only follow-up PR: `workflows-lint` runs, everything else skips, `CI / gate` green
+- [x] A nix-dep-touching follow-up PR: `nix` runs (plus `check` and `integration` since bun.lock is in `code` too)
+- [x] The next release-please PR still runs `check` (via `code` filter catching `.release-please-manifest.json`, or `release_manifest` filter as a belt-and-braces backup)
 
 ## Risk
 
@@ -969,12 +971,12 @@ EOF
 )"
 ```
 
-- [ ] **Step 3: Watch CI**
+- [x] **Step 3: Watch CI**
 
 Run: `gh pr checks --watch`
 Expected: only `CI / gate` listed (plus any other independent checks like `Scorecard`). All green.
 
-- [ ] **Step 4: Merge and announce**
+- [x] **Step 4: Merge and announce**
 
 Once approved and green, merge. Post a short note to the team channel (or pin an issue) noting the new `CI / gate` required check and linking to the updated `docs/CI.md §Branch Protection`.
 
