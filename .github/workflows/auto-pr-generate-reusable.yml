@@ -138,7 +138,7 @@ jobs:
 
       - name: Cache llama.cpp (GGUF model + Docker image tar)
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}/auto-pr-llama
           key: llama-${{ steps.llama_release.outputs.tag }}-${{ steps.llama_cache_key.outputs.hash }}-docker

@@ -56,7 +56,7 @@ jobs:
         run: bun run check:code
 
       - name: Markdown lint
-        uses: rvben/rumdl@68d37ee69adb3c568543c15ef78865389c02ee6c # v0.1.75
+        uses: rvben/rumdl@097fbad168c977130c573a03797c0d407cb4ad21 # v0.1.81
 
       - name: Spell check
         uses: crate-ci/typos@cf5f1c29a8ac336af8568821ec41919923b05a83 # v1.45.1
@@ -74,7 +74,7 @@ jobs:
 
       # SBOM: lockfile graph only — same concerns as unit tests/lint, not integration or act.
       - name: Setup Node (for SBOM)
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: ".nvmrc"
         env:
