@@ -44,6 +44,12 @@ function openAiLanguageModelStack(
 	return Layer.mergeAll(fetchOverrideLayer, modelLayer.pipe(Layer.provide(clientLayer)));
 }
 
+function redactedHasText(
+	value: Redacted.Redacted<string> | undefined,
+): value is Redacted.Redacted<string> {
+	return value !== undefined && RedactedValue.value(value).trim() !== "";
+}
+
 /**
  * Build Layer<LanguageModel> from provider config.
  * Supports `local` and `github-models`.
@@ -63,15 +69,14 @@ export function aiProviderLayerFromConfig(
 		Match.when("local", () => {
 			const apiUrl = config.openaiCompatUrl ?? DEFAULT_OPENAI_COMPAT_URL;
 			const apiKey = config.openaiCompatApiKey;
-			const hasKey = apiKey !== undefined && RedactedValue.value(apiKey).trim() !== "";
 			const clientOptions: OpenAiClient.Options = {
 				apiUrl,
-				...(hasKey ? { apiKey } : {}),
+				...(redactedHasText(apiKey) ? { apiKey } : {}),
 			};
 			return openAiLanguageModelStack(clientOptions, config.model, fetchOverrideLayer);
 		}),
 		Match.when("github-models", () => {
-			if (!config.ghToken || RedactedValue.value(config.ghToken).trim() === "" || !config.model) {
+			if (!redactedHasText(config.ghToken) || !config.model) {
 				return Layer.effect(
 					LanguageModel.LanguageModel,
 					Effect.fail(
