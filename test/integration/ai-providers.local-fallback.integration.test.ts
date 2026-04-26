@@ -1,7 +1,8 @@
 /**
  * Scenario: local model with no tool-call support → commit-summary fallback path.
  *
- * Uses Mozilla tiny-llama (~27 KiB stub) in llama-server (Testcontainers + `.github/llama-server/Dockerfile`).
+ * In CI, uses Mozilla tiny-llama (~27 KiB stub) in the llama-server already started by
+ * `.github/actions/llama-server-docker-start`. Locally, falls back to Testcontainers + `.github/llama-server/Dockerfile`.
  * The model cannot produce tool calls or valid JSON, so `generatePrContent` retries then falls back.
  *
  * Run via `integration-local` CI job (see .github/workflows/integration.yml).
@@ -11,7 +12,12 @@
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect } from "effect";
 import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
-import { layerLocal, PR_DESCRIPTION_PROMISE, TEMPLATE } from "./helpers.js";
+import {
+	layerLocal,
+	localLlamaEndpointFromEnv,
+	PR_DESCRIPTION_PROMISE,
+	TEMPLATE,
+} from "./helpers.js";
 import { requireIntegrationEnv } from "./integration-env.js";
 import { acquireLlamaLocalContainer, FsPath } from "./llama-local-container.js";
 
@@ -21,18 +27,23 @@ describe.skipIf(skipDocker)("integration: local llama.cpp (tiny-llama, fallback 
 	test(
 		"generatePrContent (2 commits) completes with PR-shaped body",
 		async () => {
-			const modelUrl = new URL(requireIntegrationEnv("INTEGRATION_LLAMA_STUB_MODEL_URL"));
-			const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
-			const modelCacheDir =
-				cacheRaw !== undefined && cacheRaw.length > 0 ? FsPath(cacheRaw) : undefined;
 			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
 			await Effect.runPromise(
 				Effect.scoped(
 					Effect.gen(function* () {
-						const { openAiCompatBaseUrl, modelId } = yield* acquireLlamaLocalContainer({
-							modelUrl,
-							modelCacheDir,
-						});
+						const configuredEndpoint = localLlamaEndpointFromEnv();
+						const { openAiCompatBaseUrl, modelId } =
+							configuredEndpoint ??
+							(yield* Effect.gen(function* () {
+								const modelUrl = new URL(requireIntegrationEnv("INTEGRATION_LLAMA_STUB_MODEL_URL"));
+								const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
+								const modelCacheDir =
+									cacheRaw !== undefined && cacheRaw.length > 0 ? FsPath(cacheRaw) : undefined;
+								return yield* acquireLlamaLocalContainer({
+									modelUrl,
+									modelCacheDir,
+								});
+							}));
 						const layer = layerLocal(modelId, openAiCompatBaseUrl);
 						yield* Effect.provide(
 							generatePrContent({

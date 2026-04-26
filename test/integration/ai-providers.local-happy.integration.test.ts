@@ -1,7 +1,8 @@
 /**
  * Scenario: local full model with tool-call support → real AI generation, no fallback.
  *
- * Uses `INTEGRATION_LLAMA_MODEL_URL` from env (`.env.ci`) via llama-server (`--jinja`) in Testcontainers + `.github/llama-server/Dockerfile`.
+ * In CI, uses the llama-server already started by `.github/actions/llama-server-docker-start`.
+ * Locally, falls back to `INTEGRATION_LLAMA_MODEL_URL` from env (`.env.ci`) via Testcontainers + `.github/llama-server/Dockerfile`.
  *
  * Run via `integration-local` CI job (see .github/workflows/integration.yml).
  * Requires Docker. Set `INTEGRATION_SKIP_DOCKER=1` to skip.
@@ -9,7 +10,12 @@
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect } from "effect";
 import { generatePrContent } from "#workflow/auto-pr-generate-content.js";
-import { layerLocal, PR_DESCRIPTION_PROMISE, TEMPLATE } from "./helpers.js";
+import {
+	layerLocal,
+	localLlamaEndpointFromEnv,
+	PR_DESCRIPTION_PROMISE,
+	TEMPLATE,
+} from "./helpers.js";
 import { requireIntegrationEnv } from "./integration-env.js";
 import { acquireLlamaLocalContainer, FsPath } from "./llama-local-container.js";
 
@@ -19,19 +25,24 @@ describe.skipIf(skipDocker)("integration: local llama.cpp (model, happy path)", 
 	test(
 		"generatePrContent (2 commits) uses AI and produces non-fallback PR body",
 		async () => {
-			const modelUrl = new URL(requireIntegrationEnv("INTEGRATION_LLAMA_MODEL_URL"));
-			const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
-			const modelCacheDir =
-				cacheRaw !== undefined && cacheRaw.length > 0 ? FsPath(cacheRaw) : undefined;
 			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
 			await Effect.runPromise(
 				Effect.scoped(
 					Effect.gen(function* () {
-						const { openAiCompatBaseUrl, modelId } = yield* acquireLlamaLocalContainer({
-							modelUrl,
-							modelCacheDir,
-							extraLlamaArgs: ["--jinja"],
-						});
+						const configuredEndpoint = localLlamaEndpointFromEnv();
+						const { openAiCompatBaseUrl, modelId } =
+							configuredEndpoint ??
+							(yield* Effect.gen(function* () {
+								const modelUrl = new URL(requireIntegrationEnv("INTEGRATION_LLAMA_MODEL_URL"));
+								const cacheRaw = process.env.INTEGRATION_MODEL_CACHE?.trim();
+								const modelCacheDir =
+									cacheRaw !== undefined && cacheRaw.length > 0 ? FsPath(cacheRaw) : undefined;
+								return yield* acquireLlamaLocalContainer({
+									modelUrl,
+									modelCacheDir,
+									extraLlamaArgs: ["--jinja"],
+								});
+							}));
 						const layer = layerLocal(modelId, openAiCompatBaseUrl);
 						yield* Effect.provide(
 							generatePrContent({
