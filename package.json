@@ -65,7 +65,7 @@
 		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
 	},
 	"dependencies": {
-		"@effect/ai-openai-compat": "4.0.0-beta.51",
+		"@effect/ai-openai-compat": "4.0.0-beta.57",
 		"@effect/platform-bun": "4.0.0-beta.51",
 		"@effect/platform-node-shared": "4.0.0-beta.51",
 		"conventional-commits-parser": "^6.4.0",
