@@ -2,7 +2,7 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: GITHUB_WORKSPACE, DEFAULT_BRANCH, BRANCH. Uses GitContext to fetch commit log and diff data directly.
- * Optional: `AUTO_PR_EXISTING_PR_TITLE` (non-empty) or best-effort PullRequestClient lookup supplies the current PR title for multi-commit AI prompts (continuity when updating an open PR).
+ * Optional config `existingPrTitle` or best-effort PullRequestClient lookup supplies the current PR title for multi-commit AI prompts (continuity when updating an open PR).
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
@@ -139,21 +139,21 @@ function logAndValidateTitleDescription(
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 
-/** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort PR lookup (failures -> no title). */
+/** Configured title wins; else best-effort PR lookup (failures -> no title). */
 export function resolveExistingPrTitleForPrompt(input: {
-	readonly workspace: string;
 	readonly branch: string;
+	readonly existingPrTitle?: string;
 }): Effect.Effect<Option.Option<string>, never, PullRequestClient> {
 	return Effect.gen(function* () {
-		const fromEnv = yield* Effect.sync(() => (process.env.AUTO_PR_EXISTING_PR_TITLE ?? "").trim());
-		if (fromEnv !== "") {
+		const fromConfig = input.existingPrTitle?.trim() ?? "";
+		if (fromConfig !== "") {
 			yield* Effect.log({
 				event: "generate_pr_content",
 				step: "existing_pr_title",
-				source: "env",
-				title_chars: fromEnv.length,
+				source: "config",
+				title_chars: fromConfig.length,
 			});
-			return Option.some(fromEnv);
+			return Option.some(fromConfig);
 		}
 
 		const prClient = yield* PullRequestClient;
@@ -422,13 +422,16 @@ export function runGeneratePrContent(config: {
 	/** When `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp). */
 	openaiCompatUrl?: string;
 	openaiCompatApiKey?: Redacted.Redacted<string>;
+	/** Current PR title override for prompt continuity. */
+	existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
 	retryDelay?: Duration.Duration;
 	/** Custom fetch for tests (OpenAI `POST …/chat/completions`). Omit for production. */
 	fetch?: typeof fetch;
 }): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
-	const toUnexpected = (ctx: string) => (e: unknown) =>
-		new UnexpectedError({ cause: `${ctx}: ${unknownToMessage(e)}` });
+	function toUnexpected(ctx: string) {
+		return (e: unknown) => new UnexpectedError({ cause: `${ctx}: ${unknownToMessage(e)}` });
+	}
 
 	return Effect.gen(function* () {
 		const {
@@ -442,6 +445,7 @@ export function runGeneratePrContent(config: {
 			ghToken,
 			openaiCompatUrl,
 			openaiCompatApiKey,
+			existingPrTitle: configuredExistingPrTitle,
 		} = config;
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
@@ -482,8 +486,10 @@ export function runGeneratePrContent(config: {
 		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
 
 		const existingPrTitleOpt = yield* resolveExistingPrTitleForPrompt({
-			workspace,
 			branch,
+			...(configuredExistingPrTitle !== undefined
+				? { existingPrTitle: configuredExistingPrTitle }
+				: {}),
 		}).pipe(Effect.provide(prClientLayer));
 
 		const existingPrTitle = Option.isSome(existingPrTitleOpt)
@@ -528,7 +534,7 @@ export function runGeneratePrContent(config: {
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const program = Effect.gen(function* () {
+export const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;
 	const params = {
 		defaultBranch: config.defaultBranch,
@@ -548,6 +554,7 @@ const program = Effect.gen(function* () {
 						: {}),
 				}
 			: {}),
+		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
 	yield* runGeneratePrContent(params).pipe(Effect.provide(AutoPrPlatformLayer));
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
