@@ -278,9 +278,10 @@ function makeRetrySchedule(delay: Duration.Duration) {
 			Effect.logWarning({
 				event: "generate_pr_content",
 				status: "ai_retry",
-				message: `Title invalid or AI failed, retrying in ${delayLabel}...`,
+				message: `Title invalid or AI failed, retrying in about ${delayLabel}...`,
 			}).pipe(Effect.as(delay)),
 		),
+		Schedule.jittered,
 	);
 }
 

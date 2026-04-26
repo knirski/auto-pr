@@ -129,9 +129,10 @@ function createGhRetrySchedule(branch: string) {
 				event: "create_or_update_pr",
 				status: "gh_retry",
 				branch,
-				message: "gh failed, retrying in 5s...",
+				message: "gh failed, retrying in about 5s...",
 			}).pipe(Effect.as(Duration.millis(GH_RETRY_DELAY_MS))),
 		),
+		Schedule.jittered,
 	);
 }
 
