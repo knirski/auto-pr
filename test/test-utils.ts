@@ -129,6 +129,7 @@ export function createOpenAiChatCompletionsMockFetch(
 export function createGitContextMock(overrides?: Partial<GitContext>): GitContext {
 	const noOp = () => Effect.succeed("");
 	return {
+		getCurrentBranch: overrides?.getCurrentBranch ?? noOp,
 		getLog: overrides?.getLog ?? noOp,
 		getChangedFiles: overrides?.getChangedFiles ?? noOp,
 		getDiffStat: overrides?.getDiffStat ?? noOp,

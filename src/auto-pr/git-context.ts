@@ -10,6 +10,7 @@ import { runCommand } from "#auto-pr/shell.js";
 import { unknownToMessage } from "#core/string.js";
 
 export interface GitContext {
+	readonly getCurrentBranch: () => Effect.Effect<string, Error>;
 	readonly getLog: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
 	readonly getChangedFiles: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
 	readonly getDiffStat: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
@@ -83,7 +84,11 @@ export function GitContextLive(
 				return yield* run("git", ["show", hash]);
 			});
 
-			return { getLog, getChangedFiles, getDiffStat, getDiff, getCommitDiff };
+			const getCurrentBranch = Effect.fn("GitContext.getCurrentBranch")(function* () {
+				return (yield* run("git", ["branch", "--show-current"])).trim();
+			});
+
+			return { getCurrentBranch, getLog, getChangedFiles, getDiffStat, getDiff, getCommitDiff };
 		}),
 	);
 }

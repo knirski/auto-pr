@@ -201,6 +201,33 @@ describe("GitContext", () => {
 		);
 	});
 
+	test("getCurrentBranch returns the checked-out branch name", async () => {
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("git-context-current-branch-");
+				yield* setupGitRepoWithFiles(tmp.path, [{ message: "feat: add feature" }]);
+				const spawner = yield* ChildProcessSpawner;
+				const env = cleanGitEnv();
+				yield* spawner
+					.string(
+						ChildProcess.make("git", ["checkout", "-b", "ai/test-branch"], {
+							cwd: tmp.path,
+							env,
+							extendEnv: false,
+						}),
+					)
+					.pipe(Effect.mapError((e) => new Error(String(e))));
+
+				const branch = yield* Effect.gen(function* () {
+					const git = yield* GitContext;
+					return yield* git.getCurrentBranch();
+				}).pipe(Effect.provide(GitContextLive(tmp.path)));
+
+				expect(branch).toBe("ai/test-branch");
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("GIT_COMMAND_TIMEOUT is 30 seconds", () => {
 		expect(Duration.toMillis(GIT_COMMAND_TIMEOUT)).toBe(30_000);
 	});
