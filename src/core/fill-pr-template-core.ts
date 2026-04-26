@@ -401,7 +401,6 @@ export function getBreakingChanges(commits: readonly CommitInfo[]): Option.Optio
 	const texts = commits.flatMap((c) =>
 		pipe(
 			c.breakingNote,
-			Option.map((note) => note.trim()),
 			Option.filter((note) => note !== ""),
 			Option.toArray,
 		),
