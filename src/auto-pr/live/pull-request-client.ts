@@ -13,6 +13,7 @@ import { parseFirstJsonObject } from "#core/parse-model-json.js";
 const PrInfoSchema = Schema.Struct({
 	number: Schema.Number,
 	url: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+	title: Schema.optional(Schema.String),
 });
 
 /**
@@ -50,7 +51,7 @@ export class PullRequestClient extends Context.Service<
 					const toLookupError = (cause: string): PrLookupError =>
 						new PrLookupError({ branch, cause });
 
-					const stdout = yield* run(["pr", "view", branch, "--json", "number,url"]).pipe(
+					const stdout = yield* run(["pr", "view", branch, "--json", "number,url,title"]).pipe(
 						Effect.catchTag("PullRequestFailedError", (e) =>
 							ghStdoutMeansNoPrYet(e.cause)
 								? Effect.succeed("")
