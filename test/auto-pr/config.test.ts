@@ -125,6 +125,7 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
 				const config = yield* GeneratePrContentConfig;
 				expect(config.provider).toBe("github-models");
 				expect(config.model).toBe("openai/gpt-4.1");
+				if (config.provider !== "github-models") return expect().fail("expected github-models");
 				expect(config.ghToken).toBeDefined();
 				expect(Redacted.isRedacted(config.ghToken)).toBe(true);
 			}),
@@ -203,6 +204,7 @@ describe("GeneratePrContentConfigLayer for local", () => {
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
 				expect(config.provider).toBe("local");
+				if (config.provider !== "local") return expect().fail("expected local");
 				expect(config.model).toBe("meta-llama/llama-3.1-8b-instruct");
 				expect(config.openaiCompatUrl).toBe("https://api.openrouter.ai/v1");
 				expect(Redacted.isRedacted(config.openaiCompatApiKey)).toBe(true);
@@ -227,6 +229,7 @@ describe("GeneratePrContentConfigLayer for local", () => {
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
 				expect(config.provider).toBe("local");
+				if (config.provider !== "local") return expect().fail("expected local");
 				expect(config.openaiCompatUrl).toBe(DEFAULT_OPENAI_COMPAT_URL);
 			}),
 		);
@@ -642,6 +645,8 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
 		await runEffect(layer)(
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
+				expect(config.provider).toBe("local");
+				if (config.provider !== "local") return expect().fail("expected local");
 				expect(config.openaiCompatUrl).toBe(DEFAULT_OPENAI_COMPAT_URL);
 				expect(config.model).toBe("gpt-oss");
 			}),
@@ -664,6 +669,8 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
 		await runEffect(layer)(
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
+				expect(config.provider).toBe("local");
+				if (config.provider !== "local") return expect().fail("expected local");
 				expect(config.model).toBe(DEFAULT_OPENAI_COMPAT_MODEL);
 				expect(config.openaiCompatUrl).toBe("http://localhost:8080/v1");
 			}),

@@ -30,6 +30,7 @@ import type { AiError } from "effect/unstable/ai";
 import { LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
+	type AiProviderConfig,
 	AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
@@ -410,42 +411,59 @@ export function normalizeUnknownToGeneratePrContentError(
 
 // ─── Main pipeline ───────────────────────────────────────────────────────
 
-export function runGeneratePrContent(config: {
+type RunGeneratePrContentConfigCommon = {
 	defaultBranch: string;
 	branch: string;
 	workspace: string;
 	templatePath: string;
-	provider: AiProvider;
 	model: string;
-	/** Required when `provider` is `github-models` (GitHub Models API). */
-	ghToken?: Redacted.Redacted<string>;
-	/** When `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp). */
-	openaiCompatUrl?: string;
-	openaiCompatApiKey?: Redacted.Redacted<string>;
 	/** Current PR title override for prompt continuity. */
 	existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
 	retryDelay?: Duration.Duration;
 	/** Custom fetch for tests (OpenAI `POST …/chat/completions`). Omit for production. */
 	fetch?: typeof fetch;
-}): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
+};
+
+export type RunGeneratePrContentConfig =
+	| (RunGeneratePrContentConfigCommon & {
+			provider: "local";
+			openaiCompatUrl?: string;
+			openaiCompatApiKey?: Redacted.Redacted<string>;
+	  })
+	| (RunGeneratePrContentConfigCommon & {
+			provider: "github-models";
+			ghToken: Redacted.Redacted<string>;
+	  });
+
+function buildAiProviderConfig(config: RunGeneratePrContentConfig): AiProviderConfig {
+	switch (config.provider) {
+		case "local":
+			return {
+				provider: "local",
+				model: config.model,
+				...(config.openaiCompatUrl !== undefined
+					? { openaiCompatUrl: config.openaiCompatUrl }
+					: {}),
+				...(config.openaiCompatApiKey !== undefined
+					? { openaiCompatApiKey: config.openaiCompatApiKey }
+					: {}),
+			};
+		case "github-models":
+			return {
+				provider: "github-models",
+				model: config.model,
+				ghToken: config.ghToken,
+			};
+	}
+}
+
+export function runGeneratePrContent(
+	config: RunGeneratePrContentConfig,
+): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
 	const baseRef = `origin/${config.defaultBranch}`;
 	const aiLayer = aiProviderLayerFromConfig(
-		{
-			provider: config.provider,
-			model: config.model,
-			...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
-			...(config.provider === "local"
-				? {
-						...(config.openaiCompatUrl !== undefined
-							? { openaiCompatUrl: config.openaiCompatUrl }
-							: {}),
-						...(config.openaiCompatApiKey !== undefined
-							? { openaiCompatApiKey: config.openaiCompatApiKey }
-							: {}),
-					}
-				: {}),
-		},
+		buildAiProviderConfig(config),
 		config.fetch !== undefined ? { fetch: config.fetch } : undefined,
 	);
 
@@ -564,26 +582,29 @@ export function runGeneratePrContentWithServices(config: {
 
 export const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;
-	const params = {
+	const common = {
 		defaultBranch: config.defaultBranch,
 		branch: config.branch,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
-		provider: config.provider,
 		model: config.model,
-		...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
-		...(config.provider === "local"
+		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
+	};
+	const params: RunGeneratePrContentConfig =
+		config.provider === "local"
 			? {
-					...(config.openaiCompatUrl !== undefined
-						? { openaiCompatUrl: config.openaiCompatUrl }
-						: {}),
+					...common,
+					provider: "local",
+					openaiCompatUrl: config.openaiCompatUrl,
 					...(config.openaiCompatApiKey !== undefined
 						? { openaiCompatApiKey: config.openaiCompatApiKey }
 						: {}),
 				}
-			: {}),
-		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
-	};
+			: {
+					...common,
+					provider: "github-models",
+					ghToken: config.ghToken,
+				};
 	yield* runGeneratePrContent(params).pipe(Effect.provide(AutoPrPlatformLayer));
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
 

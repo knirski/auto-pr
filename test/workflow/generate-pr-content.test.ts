@@ -114,20 +114,22 @@ function layerForTest(p: {
 	gitCtx: GitContext;
 	fetch: typeof fetch | undefined;
 }) {
+	const aiConfig =
+		p.params.provider === "github-models"
+			? {
+					provider: "github-models" as const,
+					model: p.params.model,
+					ghToken: Redacted.make("mock-github-token"),
+				}
+			: {
+					provider: "local" as const,
+					model: p.params.model,
+				};
 	return Layer.mergeAll(
 		ValueBasedLayer,
 		Layer.succeed(GitContext, p.gitCtx),
 		MockDiffToolkitLayer,
-		aiProviderLayerFromConfig(
-			{
-				provider: p.params.provider,
-				model: p.params.model,
-				...(p.params.provider === "github-models"
-					? { ghToken: Redacted.make("mock-github-token") }
-					: {}),
-			},
-			p.fetch !== undefined ? { fetch: p.fetch } : undefined,
-		),
+		aiProviderLayerFromConfig(aiConfig, p.fetch !== undefined ? { fetch: p.fetch } : undefined),
 	);
 }
 
@@ -947,6 +949,45 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
 					expect(title.trim()).toBe("feat: add x");
 					expect(body).toContain("add x");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("program builds github-models run config for single-commit path", async () => {
+		await runEffect(IntegrationTestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("generate-program-github-models-");
+				try {
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add github models config" }],
+						"ai/test",
+					);
+
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+					const configProviderLayer = ConfigProvider.layer(
+						ConfigProvider.fromUnknown({
+							GITHUB_WORKSPACE: tmp.path,
+							DEFAULT_BRANCH: "main",
+							BRANCH: "ai/test",
+							AUTO_PR_AI_PROVIDER: "github-models",
+							GH_TOKEN: "ghp_test_github_models",
+						}),
+					);
+
+					yield* program.pipe(Effect.provide(configProviderLayer));
+
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(title.trim()).toBe("feat: add github models config");
+					expect(body).toContain("github models config");
 				} finally {
 					const fs = yield* FileSystem.FileSystem;
 					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));

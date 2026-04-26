@@ -136,20 +136,30 @@ export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
  */
 export const DEFAULT_GITHUB_MODELS_MODEL = "microsoft/phi-4-mini-instruct";
 
-export interface GeneratePrContentConfig {
+export type GeneratePrContentConfigCommon = {
 	readonly workspace: string;
 	readonly templatePath: string;
 	readonly defaultBranch: string;
 	readonly branch: string;
-	readonly provider: AiProvider;
 	readonly model: string;
-	/** Set when `provider` is `github-models`. */
-	readonly ghToken?: Redacted.Redacted<string>;
-	/** Set when `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp today). */
-	readonly openaiCompatUrl?: string;
-	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
 	readonly existingPrTitle?: string;
-}
+};
+
+export type GeneratePrContentConfigLocal = GeneratePrContentConfigCommon & {
+	readonly provider: "local";
+	/** OpenAI-compatible HTTP base URL; e.g. llama.cpp today. */
+	readonly openaiCompatUrl: string;
+	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+};
+
+export type GeneratePrContentConfigGithubModels = GeneratePrContentConfigCommon & {
+	readonly provider: "github-models";
+	readonly ghToken: Redacted.Redacted<string>;
+};
+
+export type GeneratePrContentConfig =
+	| GeneratePrContentConfigLocal
+	| GeneratePrContentConfigGithubModels;
 
 export const GeneratePrContentConfig =
 	Context.Service<GeneratePrContentConfig>("GeneratePrContentConfig");
@@ -216,7 +226,6 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 				templatePath,
 				defaultBranch,
 				branch,
-				provider,
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 			};
 
@@ -243,14 +252,16 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							DEFAULT_OPENAI_COMPAT_MODEL,
 						);
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
-						return {
+						const generatePrContentLocal: GeneratePrContentConfigLocal = {
 							...shared,
+							provider: "local",
 							model: modelId,
 							openaiCompatUrl: url,
 							...(Option.isSome(base.aiOpenaiCompatApiKey)
 								? { openaiCompatApiKey: base.aiOpenaiCompatApiKey.value }
 								: {}),
 						};
+						return generatePrContentLocal;
 					}),
 				),
 				Match.when("github-models", () =>
@@ -266,11 +277,13 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							DEFAULT_GITHUB_MODELS_MODEL,
 						);
 						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
-						return {
+						const generatePrContentGithub: GeneratePrContentConfigGithubModels = {
 							...shared,
+							provider: "github-models",
 							model: modelId,
 							ghToken,
 						};
+						return generatePrContentGithub;
 					}),
 				),
 				Match.exhaustive,

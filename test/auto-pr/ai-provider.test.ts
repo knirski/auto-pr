@@ -69,10 +69,14 @@ describe("aiProviderLayerFromConfig", () => {
 		}
 	});
 
-	test("github-models: fails with AutoPrConfigError when ghToken missing", async () => {
+	test("github-models: fails with AutoPrConfigError when model empty", async () => {
 		const layer = Layer.mergeAll(
 			BaseLayer,
-			aiProviderLayerFromConfig({ provider: "github-models", model: "openai/gpt-4" }),
+			aiProviderLayerFromConfig({
+				provider: "github-models",
+				model: "",
+				ghToken: Redacted.make("ghp_test", { label: "GH_TOKEN" }),
+			}),
 		);
 		const exit = await Effect.runPromise(
 			Effect.gen(function* () {
