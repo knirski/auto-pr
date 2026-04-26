@@ -20,9 +20,9 @@ export interface CommitInfo {
 	readonly subject: string;
 	readonly body: string;
 	readonly fullMessage: string;
-	readonly type: string | null;
+	readonly type: Option.Option<string>;
 	readonly references: readonly string[];
-	readonly breakingNote: string | null;
+	readonly breakingNote: Option.Option<string>;
 }
 
 /** Template substitution data. */
@@ -95,10 +95,17 @@ function isConventionalType(s: string): s is ConventionalType {
 	return CONVENTIONAL_TYPES.some((t) => t === s);
 }
 
-function typeFromString(s: string | null | undefined): TypeOfChange {
-	if (!s) return "Chore";
-	const lower = s.toLowerCase();
-	return isConventionalType(lower) ? TYPE_MAP[lower] : "Chore";
+function typeFromString(s: Option.Option<string>): TypeOfChange {
+	return pipe(
+		s,
+		Option.match({
+			onNone: () => "Chore",
+			onSome: (value) => {
+				const lower = value.toLowerCase();
+				return isConventionalType(lower) ? TYPE_MAP[lower] : "Chore";
+			},
+		}),
+	);
 }
 
 function mapParsedToCommitInfo(block: string, parsed: Commit, hash: string): CommitInfo {
@@ -121,9 +128,9 @@ function mapParsedToCommitInfo(block: string, parsed: Commit, hash: string): Com
 		subject: header,
 		body,
 		fullMessage: block,
-		type: parsed.type ?? null,
+		type: Option.fromNullishOr(parsed.type),
 		references: refs,
-		breakingNote: breaking?.text ?? null,
+		breakingNote: Option.fromNullishOr(breaking?.text),
 	};
 }
 
@@ -157,7 +164,7 @@ export function parseCommits(logOutput: string): Result.Result<readonly CommitIn
  * conventional type wins so the template matches `gh pr` title and body.
  */
 export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: string): TypeOfChange {
-	const hasBreaking = commits.some((c) => c.breakingNote != null);
+	const hasBreaking = commits.some((c) => Option.isSome(c.breakingNote));
 	if (hasBreaking) return "Breaking change";
 
 	const titleTrim = prTitle?.trim();
@@ -166,10 +173,11 @@ export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: stri
 	}
 
 	if (titleTrim && matchesConventionalTitleFormat(titleTrim)) {
-		const token = extractConventionalTypeFromTitle(titleTrim);
-		if (token) {
-			return typeFromString(token.toLowerCase());
-		}
+		return pipe(
+			extractConventionalTypeFromTitle(titleTrim),
+			Option.map((token) => token.toLowerCase()),
+			typeFromString,
+		);
 	}
 
 	const first = commits[0];
@@ -180,12 +188,12 @@ export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: stri
 	const fromType = typeFromString(first.type);
 	if (fromType !== "Chore") return fromType;
 	const prefix = sub.toLowerCase().split(":")[0] ?? "";
-	return typeFromString(prefix);
+	return typeFromString(Option.some(prefix));
 }
 
-function extractConventionalTypeFromTitle(title: string): string | null {
+function extractConventionalTypeFromTitle(title: string): Option.Option<string> {
 	const m = CONVENTIONAL_HEADER_PATTERN.exec(title.trim());
-	return m?.[1] ?? null;
+	return Option.fromNullishOr(m?.[1]);
 }
 
 /** Header uses `!` before `:` (any type), or starts with BREAKING. */
@@ -350,7 +358,7 @@ export function hasDocsFiles(files: readonly string[]): boolean {
 }
 
 export function isConventional(commit: CommitInfo): boolean {
-	return commit.type != null;
+	return Option.isSome(commit.type);
 }
 
 export function isMergeCommit(c: CommitInfo): boolean {
@@ -389,10 +397,18 @@ export const BREAKING_CHANGES_BODY_MAX_LENGTH = 2000;
 
 /** All `BREAKING CHANGE:` footer texts in commit order, joined with blank lines. */
 export function getBreakingChanges(commits: readonly CommitInfo[]): Option.Option<string> {
-	const texts = commits
-		.map((c) => c.breakingNote)
-		.filter((n): n is string => n != null && n.trim() !== "")
-		.map((n) => n.trim());
+	const texts = commits.flatMap((c) =>
+		pipe(
+			c.breakingNote,
+			Option.match({
+				onNone: () => [],
+				onSome: (note) => {
+					const trimmed = note.trim();
+					return trimmed === "" ? [] : [trimmed];
+				},
+			}),
+		),
+	);
 	if (texts.length === 0) return Option.none();
 	return Option.some(texts.join("\n\n").slice(0, BREAKING_CHANGES_BODY_MAX_LENGTH));
 }

@@ -45,15 +45,15 @@ const TEST_TEMPLATE = `## Description
 const commit = (
 	subject: string,
 	body: string,
-	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string | null },
+	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string },
 ): CommitInfo => ({
 	hash: opts?.hash ?? "",
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: opts?.type ?? null,
+	type: Option.fromNullishOr(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: opts?.breakingNote ?? null,
+	breakingNote: Option.fromNullishOr(opts?.breakingNote),
 });
 
 /** Format commit blocks for parseCommits (---COMMIT--- separated). */

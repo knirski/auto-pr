@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Result } from "effect";
+import { Option, Result } from "effect";
 import { DescriptionParseError } from "#core/errors.js";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
@@ -17,9 +17,9 @@ function commit(overrides: Partial<CommitInfo>): CommitInfo {
 		subject: "feat: add generated content",
 		body: "",
 		fullMessage: "feat: add generated content",
-		type: "feat",
+		type: Option.some("feat"),
 		references: [],
-		breakingNote: null,
+		breakingNote: Option.none(),
 		...overrides,
 	};
 }
@@ -95,7 +95,7 @@ describe("generated content core", () => {
 			commit({
 				subject: "fix: preserve provider compatibility",
 				body: "",
-				type: "fix",
+				type: Option.some("fix"),
 			}),
 		]);
 

@@ -65,15 +65,15 @@ const TEST_TEMPLATE = `## Description
 const commit = (
 	subject: string,
 	body: string,
-	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string | null },
+	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string },
 ): CommitInfo => ({
 	hash: opts?.hash ?? "",
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: opts?.type ?? null,
+	type: Option.fromNullishOr(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: opts?.breakingNote ?? null,
+	breakingNote: Option.fromNullishOr(opts?.breakingNote),
 });
 
 describe("fill-pr-template-core", () => {
@@ -86,7 +86,7 @@ describe("fill-pr-template-core", () => {
 						expect(commits).toHaveLength(1);
 						expect(commits[0]?.subject).toBe("feat: add foo");
 						expect(commits[0]?.body).toBe("body line 1");
-						expect(commits[0]?.type).toBe("feat");
+						expect(Option.getOrUndefined(commits[0]?.type ?? Option.none())).toBe("feat");
 					},
 					onFailure: () => expect().fail("expected success"),
 				}),
