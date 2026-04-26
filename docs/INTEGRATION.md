@@ -233,6 +233,17 @@ For branches with **2+ commits**, auto-pr generates the PR description via an AI
 
 **How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, because GitHub Models does not support that response format and other OpenAI-compatible servers are inconsistent with it. On repeated parse or transient HTTP failures (network, rate limit, 5xx), auto-pr falls back to commit-derived title and description. **Authentication errors (HTTP 401/403) surface directly as a configuration error** rather than silently falling back — check your `GH_TOKEN` or `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` if you see an auth error in the generate step.
 
+### Provider defaults
+
+Defaults differ by entry point so local development can run against a local OpenAI-compatible server, while the stock GitHub workflow works without hosting a model yourself.
+
+| Entry point | Provider default | Model default | Notes |
+|-------------|------------------|---------------|-------|
+| Stock [`auto-pr.yml`](../.github/workflows/auto-pr.yml) | `github-models` | `openai/gpt-4.1` | The workflow grants `models: read` and passes `github.token` to the generate reusable workflow. |
+| Generate reusable workflow with `ai_provider: local` and `ai_llamacpp_model_url` | `local` | `gpt-oss` unless `ai_openai_compat_model` is set | Starts `llama-server` in Docker and uses the local OpenAI-compatible endpoint. |
+| Local CLI / `bun run generate-content` with no AI env | `local` | `gpt-oss` | Targets `http://127.0.0.1:8080/v1`. |
+| Local CLI / custom workflow with `AUTO_PR_AI_PROVIDER=github-models` and no model env | `github-models` | `microsoft/phi-4-mini-instruct` | Export `GH_TOKEN`; override `AUTO_PR_AI_OPENAI_COMPAT_MODEL` when you want another GitHub Models id. |
+
 ### `local` (OpenAI-compatible HTTP)
 
 Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.) using the same env names as in [`src/auto-pr/config.ts`](../src/auto-pr/config.ts): `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
@@ -302,4 +313,4 @@ If you work on **this** repository (not only consuming the workflow), `bun run t
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
 | "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |
 | PR already exists | Workflow updates the PR title and body from the latest commits |
-| AI provider returns invalid description | Retries 3×; description override may be empty on failure |
+| AI provider returns invalid description | Retries up to five attempts; description override may be empty on failure |
