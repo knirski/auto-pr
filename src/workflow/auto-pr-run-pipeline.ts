@@ -8,7 +8,10 @@ import {
 	unknownToMessage,
 } from "#auto-pr";
 import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
-import { runGeneratePrContentWithServices } from "#workflow/auto-pr-generate-content.js";
+import {
+	type RunGeneratePrContentWithServicesConfig,
+	runGeneratePrContentWithServices,
+} from "#workflow/auto-pr-generate-content.js";
 
 export function resolveRunAutoPrBranch(config: RunAutoPrConfigService) {
 	if (config.branch !== undefined) return Effect.succeed(config.branch);
@@ -24,25 +27,30 @@ export function prTitleReadError(error: unknown): UnexpectedError {
 	});
 }
 
-function generateConfig(config: RunAutoPrConfigService, branch: string) {
+export function generateContentConfigFromRunAutoPrConfig(
+	config: RunAutoPrConfigService,
+	branch: string,
+): RunGeneratePrContentWithServicesConfig {
 	const common = {
 		defaultBranch: config.defaultBranch,
 		branch,
 		workspace: config.workspace,
 		templatePath: config.templatePath,
-		provider: config.provider,
 		model: config.model,
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
-	return config.provider === "github-models"
-		? common
-		: {
+	switch (config.provider) {
+		case "github-models":
+			return {
 				...common,
-				openaiCompatUrl: config.openaiCompatUrl,
-				...(config.openaiCompatApiKey !== undefined
-					? { openaiCompatApiKey: config.openaiCompatApiKey }
-					: {}),
+				provider: "github-models",
 			};
+		case "local":
+			return {
+				...common,
+				provider: "local",
+			};
+	}
 }
 
 /**
@@ -59,7 +67,9 @@ export function runAutoPrPipelineWithServices(config: RunAutoPrConfigService) {
 		const branchVal = yield* resolveRunAutoPrBranch(config);
 
 		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
-		yield* runGeneratePrContentWithServices(generateConfig(config, branchVal));
+		yield* runGeneratePrContentWithServices(
+			generateContentConfigFromRunAutoPrConfig(config, branchVal),
+		);
 
 		const titlePath = pathApi.join(workspace, PR_TITLE_FILE_NAME);
 		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
