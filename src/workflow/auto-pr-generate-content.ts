@@ -158,6 +158,48 @@ const GhPrViewTitleSchema = Schema.Struct({
 	title: Schema.String,
 });
 
+function parseExistingPrTitleOutput(stdout: string): Effect.Effect<Option.Option<string>, never> {
+	const trimmed = stdout.trim();
+	if (trimmed === "") {
+		return Effect.succeed(Option.none());
+	}
+
+	return Effect.gen(function* () {
+		const parsed = yield* Effect.fromResult(parseFirstJsonObject(trimmed)).pipe(
+			Effect.map(Option.some),
+			Effect.catch((e: Error) =>
+				Effect.logWarning({
+					event: "generate_pr_content",
+					step: "existing_pr_title",
+					status: "parse_failed",
+					message: e.message,
+				}).pipe(Effect.as(Option.none())),
+			),
+		);
+		if (Option.isNone(parsed)) {
+			return Option.none();
+		}
+
+		const decoded = yield* Schema.decodeUnknownEffect(GhPrViewTitleSchema)(parsed.value).pipe(
+			Effect.map(Option.some),
+			Effect.catch((e: unknown) =>
+				Effect.logWarning({
+					event: "generate_pr_content",
+					step: "existing_pr_title",
+					status: "schema_failed",
+					message: Schema.isSchemaError(e) ? e.message : String(e),
+				}).pipe(Effect.as(Option.none())),
+			),
+		);
+		if (Option.isNone(decoded)) {
+			return Option.none();
+		}
+
+		const title = decoded.value.title.trim();
+		return title === "" ? Option.none() : Option.some(title);
+	});
+}
+
 /** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort `gh pr view` (failures → no title). */
 export function resolveExistingPrTitleForPrompt(input: {
 	readonly workspace: string;
@@ -181,35 +223,16 @@ export function resolveExistingPrTitleForPrompt(input: {
 			input.workspace,
 		).pipe(Effect.catch(() => Effect.succeed("")));
 
-		const trimmed = stdout.trim();
-		if (trimmed === "") {
-			return Option.none();
-		}
-
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(trimmed);
-		} catch {
-			return Option.none();
-		}
-
-		const decoded = Schema.decodeUnknownOption(GhPrViewTitleSchema)(parsed);
-		if (Option.isNone(decoded)) {
-			return Option.none();
-		}
-
-		const title = decoded.value.title.trim();
-		if (title === "") {
-			return Option.none();
-		}
+		const titleOpt = yield* parseExistingPrTitleOutput(stdout);
+		if (Option.isNone(titleOpt)) return Option.none();
 
 		yield* Effect.log({
 			event: "generate_pr_content",
 			step: "existing_pr_title",
 			source: "gh",
-			title_chars: title.length,
+			title_chars: titleOpt.value.length,
 		});
-		return Option.some(title);
+		return titleOpt;
 	});
 }
 
