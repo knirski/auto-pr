@@ -42,6 +42,7 @@ import {
 	program,
 	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
+	runGeneratePrContentWithServices,
 } from "#workflow/auto-pr-generate-content.js";
 
 function logContent(...blocks: Array<{ hash?: string; subject: string; body: string }>): string {
@@ -841,6 +842,80 @@ function setupGitRepoForRunGeneratePrContent(
 }
 
 describe("runGeneratePrContent (integration, real git repo)", () => {
+	test("runGeneratePrContentWithServices uses injected git and PR services", async () => {
+		const prior = "feat: existing PR title";
+		const mockResponse = JSON.stringify({
+			title: "feat: injected services",
+			motivation: ["Uses injected GitContext and PullRequestClient."],
+			benefits: [],
+			risks: ["Low risk."],
+			notesForReviewers: "",
+		});
+		let lookedUpBranch = "";
+		const gitCtx = mockGitContext([
+			{ subject: "feat: add module A", body: "" },
+			{ subject: "fix: fix bug in B", body: "" },
+		]);
+		const prClient = {
+			findByBranch: (branch: string) => {
+				lookedUpBranch = branch;
+				return Effect.succeed(
+					Option.some({
+						number: 123,
+						url: "https://github.com/knirski/auto-pr/pull/123",
+						title: prior,
+					}),
+				);
+			},
+			update: () => Effect.void,
+			create: () => Effect.succeed("https://github.com/knirski/auto-pr/pull/123"),
+		};
+
+		await runEffect(
+			Layer.mergeAll(
+				ValueBasedLayer,
+				Layer.succeed(GitContext, gitCtx),
+				Layer.succeed(PullRequestClient, prClient),
+				MockDiffToolkitLayer,
+				aiProviderLayerFromConfig(
+					{
+						provider: "local",
+						model: "gpt-oss",
+					},
+					{ fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, mockResponse) },
+				),
+			),
+		)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("run-generate-injected-");
+				try {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+					yield* runGeneratePrContentWithServices({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "local",
+						model: "gpt-oss",
+						retryDelay: Duration.zero,
+					});
+
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(lookedUpBranch).toBe("ai/test");
+					expect(title.trim()).toBe("feat: injected services");
+					expect(body).toContain("Uses injected GitContext and PullRequestClient.");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("program passes configured existing PR title into runGeneratePrContent", async () => {
 		await runEffect(IntegrationTestLayer)(
 			Effect.gen(function* () {
