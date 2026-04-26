@@ -37,7 +37,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 - **`src/workflow/*.ts`** — Main auto-PR workflow. generate-content, create-or-update-pr, run-auto-pr.
 - **`src/tools/*.ts`** — Standalone tools. fill-pr-template, init.
-- **`src/core/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs, init-core, string, gh-output, errors, **act-local-ci** (local [act](https://github.com/nektos/act) argv, `workflow_dispatch` payload shape, runner image defaults; no I/O).
+- **`src/core/*.ts`** — Pure core modules. fill-pr-template-core, collapse-prose-paragraphs, init-core, string, gh-output, errors.
 - **`src/auto-pr/shell.ts`** — Imperative shell. runCommand, appendGhOutput, runMain. Uses `@effect/platform-bun` for FileSystem, Path, ChildProcessSpawner, Runtime. Orchestrates I/O.
 - **`src/auto-pr/paths.ts`** — Path resolution for package-relative assets. `getPrDescriptionPromptPath` resolves `dist/prompts/pr-description.txt` (relative to shared chunk in `dist/`).
 - **`src/auto-pr/config.ts`** — Workflow-specific config layers. Validate and fail early: required env vars cause immediate failure at load. No Option for required fields.

@@ -79,7 +79,7 @@ When you do install from git (e.g. `npx -p github:knirski/auto-pr` or `bun add g
 | `APP_ID` | Your app's App ID (from app settings, "About") |
 | `APP_PRIVATE_KEY` | Full contents of the `.pem` file |
 
-Optional: **`GH_TOKEN`** — use only if you want a specific token for [GitHub Models](https://github.com/marketplace/models) instead of the default **`GITHUB_TOKEN`** injected into Actions. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes `secrets.GH_TOKEN || github.token` into the generate workflow (entry workflow must keep **`models: read`**).
+Optional: **`GH_TOKEN`** — only for local CLI use or advanced workflows that intentionally provide a separate GitHub Models token. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes the default **`github.token`** to the generate workflow and grants **`models: read`**. Avoid forwarding a long-lived PAT secret to the generate job: that job checks out branch code by design.
 
 `APP_*` are used by the create job (and release-please if you use it).
 
@@ -245,7 +245,7 @@ Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.)
 
 Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`https://models.github.ai/inference`) with an OpenAI-compatible client.
 
-- **Token:** Optional repository secret **`GH_TOKEN`**; if unset, the entry workflow passes the default Actions **`github.token`** (`secrets.GH_TOKEN || github.token`). See [Step 5](#step-5-add-repository-secrets). The reusable workflow forwards it to generate when `ai_provider` is `github-models`.
+- **Token:** The stock entry workflow passes the default Actions **`github.token`** and grants `models: read`. For local scripts, export `GH_TOKEN`. For custom workflows, pass a separate token only when you accept that the generate job checks out branch code.
 - **Workflow:** Default is `ai_provider: github-models` with `ai_openai_compat_model` (e.g. `openai/gpt-4.1`).
 - **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL=...`, `GH_TOKEN=...`.
 - **Legal model ids:** The catalog is published as JSON — see [REST: List all models](https://docs.github.com/en/rest/models/catalog#list-all-models). Fetch and read each entry’s **`id`** (format `publisher/model`):

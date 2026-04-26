@@ -32,7 +32,8 @@
 		"dist",
 		".github",
 		"docs",
-		".nvmrc"
+		".nvmrc",
+		".bun-version"
 	],
 	"scripts": {
 		"test": "bun test",
@@ -41,7 +42,8 @@
 		"test:watch": "bun test --watch",
 		"check": "bash scripts/check-nix-hash.sh && bun run check:nix && bun run check:code && bun run check:docs && bun run lint:workflows && bun run lint:scripts",
 		"act": "bun scripts/act-local-ci.ts",
-		"check:code": "bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
+		"check:code": "bun run check:manifest && bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
+		"check:manifest": "bun run scripts/check-package-manifest.ts",
 		"check:with-links": "bun run check && bun run check:just-links",
 		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix --exclude bun.nix .",
 		"check:docs": "bun x rumdl check . && scripts/nix-run-if-missing.sh typos",
@@ -60,8 +62,7 @@
 		"build": "bun run scripts/build.ts",
 		"prepare": "bun run build || exit 0",
 		"prepublishOnly": "bun run build",
-		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts",
-		"stage-group": "bun run src/workflow/auto-pr-stage-group.ts"
+		"run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
 	},
 	"dependencies": {
 		"@effect/ai-openai-compat": "4.0.0-beta.51",

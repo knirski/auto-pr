@@ -8,6 +8,8 @@ Composite action that sets up the JS/TS runtime matching the project's lockfile 
 
 Supported: `bun.lock`, `bun.lockb`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`.
 
+When Bun is selected, the action resolves the Bun version from the explicit `bun-version` input, then `.bun-version`, then `packageManager: "bun@..."`. It fails instead of silently using an unpinned Bun when no version is available.
+
 ## Outputs
 
 | Output    | Description                    |
@@ -47,7 +49,7 @@ steps:
 | Input | Default | Description |
 |-------|---------|-------------|
 | `node-version-file` | `.nvmrc` | Path to Node version file |
-| `bun-version` | (empty) | Bun version when bun detected; empty = auto |
+| `bun-version` | (empty) | Bun version when bun detected; empty = resolve from `.bun-version` or `packageManager` |
 
 ## Troubleshooting
 

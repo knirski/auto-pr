@@ -18,8 +18,8 @@ The auto-pr flow is split into two reusable workflows:
 
 | Workflow | Checkout | Permissions | Secrets |
 |----------|----------|-------------|---------|
-| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read`, `models: read` | `GH_TOKEN` from caller (`secrets.GH_TOKEN` or `github.token`) for GitHub Models |
-| **create** (`auto-pr-create-reusable.yml`) | Default branch only | `contents: read`, `pull-requests: write` | `APP_ID`, `APP_PRIVATE_KEY` |
+| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read`, `models: read` | `GH_TOKEN` from caller for GitHub Models; stock workflow passes `github.token` |
+| **create** (`auto-pr-create-reusable.yml`) | No checkout | `contents: read`, `pull-requests: write` | `APP_ID`, `APP_PRIVATE_KEY` |
 
 The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must also include `models: read` in its top-level `permissions` when it calls the generate reusable workflow. Nested jobs cannot request broader `GITHUB_TOKEN` permissions than the caller grants ([reusable workflows and permissions](https://docs.github.com/en/actions/using-workflows/reusing-workflows#supported-keywords-for-jobs-that-call-a-reusable-workflow)).
 
@@ -28,14 +28,14 @@ The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must 
 - **Checkout:** The pushed branch — untrusted, but acceptable because the workflow has no privileged permissions.
 - **Runs:** `auto-pr-generate-content` (AI), artifact preparation.
 - **Output:** Artifact `pr-content` (title, body, branch, default_branch).
-- **Risk:** Limited. It cannot write to the repo. The job receives a token for GitHub Models as passed from the caller (repo **`GH_TOKEN`** secret or default **`github.token`**), not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`).
+- **Risk:** Limited. It cannot write to the repo. The stock workflow passes the ephemeral default **`github.token`** with `models: read`, not a long-lived PAT and not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`). Custom workflows should not forward repository secrets to generate unless branch authors are trusted to see them.
 
 ### Create (Privileged, Trusted Checkout Only)
 
-- **Checkout:** `github.event.repository.default_branch` — trusted.
+- **Checkout:** None. The job installs the trusted auto-pr package and uses only the downloaded artifact as data.
 - **Input:** Artifact from generate job.
 - **Runs:** GitHub App token generation, `gh pr create` or `gh pr edit`.
-- **Risk:** Mitigated. No untrusted code is checked out or executed. Artifact content is treated as data, not code.
+- **Risk:** Mitigated. No untrusted code is checked out or executed. Artifact content is treated as data, not code. The create workflow validates artifact `branch` and `default_branch` against the triggering ref and repository default before calling `gh`.
 
 ## Artifact Handling
 

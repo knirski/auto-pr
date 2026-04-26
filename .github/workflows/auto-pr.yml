@@ -35,8 +35,7 @@ jobs:
     uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@cf30af9b08e895e57be0607d2c3a201debab02bd
     secrets:
       # GitHub API token for the generate job. This workflow grants `models: read` so the default
-      # `github.token` works. If you use a PAT, set repo secret `GH_TOKEN` and pass
-      # `${{ secrets.GH_TOKEN || github.token }}` here instead.
+      # `github.token` works without exposing a long-lived PAT to branch code.
       GH_TOKEN: ${{ github.token }}
 
   create:
