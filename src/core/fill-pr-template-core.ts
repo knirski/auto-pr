@@ -108,7 +108,8 @@ function typeFromString(s: Option.Option<string>): TypeOfChange {
 function nonBlankOption(value: string | null | undefined): Option.Option<string> {
 	return pipe(
 		Option.fromNullishOr(value),
-		Option.filter((s) => s.trim() !== ""),
+		Option.map((s) => s.trim()),
+		Option.filter((s) => s !== ""),
 	);
 }
 
@@ -177,11 +178,7 @@ export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: stri
 	}
 
 	if (titleTrim && matchesConventionalTitleFormat(titleTrim)) {
-		return pipe(
-			extractConventionalTypeFromTitle(titleTrim),
-			Option.map((token) => token.toLowerCase()),
-			typeFromString,
-		);
+		return pipe(extractConventionalTypeFromTitle(titleTrim), typeFromString);
 	}
 
 	const first = commits[0];

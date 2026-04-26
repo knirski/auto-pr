@@ -62,6 +62,13 @@ const TEST_TEMPLATE = `## Description
 {{breakingChanges}}
 `;
 
+const toNonBlankOption = (value: string | null | undefined): Option.Option<string> =>
+	pipe(
+		Option.fromNullishOr(value),
+		Option.map((s) => s.trim()),
+		Option.filter((s) => s !== ""),
+	);
+
 const commit = (
 	subject: string,
 	body: string,
@@ -71,9 +78,9 @@ const commit = (
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: Option.fromNullishOr(opts?.type),
+	type: toNonBlankOption(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: Option.fromNullishOr(opts?.breakingNote),
+	breakingNote: toNonBlankOption(opts?.breakingNote),
 });
 
 describe("fill-pr-template-core", () => {
