@@ -98,7 +98,11 @@ export function runCreateOrUpdatePr(params: {
 			return yield* Effect.fail(new BodyFileNotFoundError({ path: params.bodyFile }));
 		}
 
-		const prInfo = yield* prClient.findByBranch(params.branch);
+		const prInfo = yield* runGhWithRetry(
+			prClient.findByBranch(params.branch),
+			params.branch,
+			params.retryDelay,
+		);
 		if (Option.isSome(prInfo)) {
 			const { number: prNumber, url } = prInfo.value;
 			yield* Effect.log({
