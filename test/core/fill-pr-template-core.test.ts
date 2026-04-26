@@ -62,18 +62,25 @@ const TEST_TEMPLATE = `## Description
 {{breakingChanges}}
 `;
 
+const toNonBlankOption = (value: string | null | undefined): Option.Option<string> =>
+	pipe(
+		Option.fromNullishOr(value),
+		Option.map((s) => s.trim()),
+		Option.filter((s) => s !== ""),
+	);
+
 const commit = (
 	subject: string,
 	body: string,
-	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string | null },
+	opts?: { hash?: string; type?: string; references?: string[]; breakingNote?: string },
 ): CommitInfo => ({
 	hash: opts?.hash ?? "",
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: opts?.type ?? null,
+	type: toNonBlankOption(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: opts?.breakingNote ?? null,
+	breakingNote: toNonBlankOption(opts?.breakingNote),
 });
 
 describe("fill-pr-template-core", () => {
@@ -86,7 +93,7 @@ describe("fill-pr-template-core", () => {
 						expect(commits).toHaveLength(1);
 						expect(commits[0]?.subject).toBe("feat: add foo");
 						expect(commits[0]?.body).toBe("body line 1");
-						expect(commits[0]?.type).toBe("feat");
+						expect(Option.getOrUndefined(commits[0]?.type ?? Option.none())).toBe("feat");
 					},
 					onFailure: () => expect().fail("expected success"),
 				}),
@@ -120,6 +127,20 @@ Made-with: Cursor`;
 					onSuccess: (commits) => {
 						expect(commits).toHaveLength(1);
 						expect(commits[0]?.references).toEqual([]);
+					},
+					onFailure: () => expect().fail("expected success"),
+				}),
+			);
+		});
+
+		test("normalizes blank optional parser fields to none", () => {
+			pipe(
+				parseCommits("---COMMIT---\nplain subject\n\nBREAKING CHANGE:   "),
+				Result.match({
+					onSuccess: (commits) => {
+						expect(commits).toHaveLength(1);
+						expect(commits[0]?.type).toEqual(Option.none());
+						expect(commits[0]?.breakingNote).toEqual(Option.none());
 					},
 					onFailure: () => expect().fail("expected success"),
 				}),
@@ -214,6 +235,13 @@ Made-with: Cursor`;
 		});
 		test("feat! → Breaking change", () => {
 			expect(inferTypeOfChange([commit("feat!: x", "")])).toBe("Breaking change");
+		});
+		test("later breaking subject → Breaking change", () => {
+			const commits = [
+				commit("chore: cleanup", "", { type: "chore" }),
+				commit("feat!: remove legacy API", "", { type: "feat" }),
+			];
+			expect(inferTypeOfChange(commits)).toBe("Breaking change");
 		});
 		test("empty commits → Chore", () => {
 			expect(inferTypeOfChange([])).toBe("Chore");
