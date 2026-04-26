@@ -6,105 +6,74 @@
  * This repo: bun run run-auto-pr · installed: npx auto-pr-run
  */
 
-import { join } from "node:path";
-import { Effect, FileSystem, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import {
 	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
+	aiProviderLayerFromConfig,
 	ChildProcessSpawnerLayer,
 	type CliMainEffect,
-	FillPrTemplate,
-	GitContext,
 	GitContextLive,
-	PR_BODY_FILE_NAME,
-	PR_TITLE_FILE_NAME,
+	makeDiffToolkitLayer,
 	PullRequestClient,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
+	type RunAutoPrConfig as RunAutoPrConfigService,
 	runMain,
-	UnexpectedError,
-	unknownToMessage,
 } from "#auto-pr";
-import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
-import { runGeneratePrContent } from "#workflow/auto-pr-generate-content.js";
+import {
+	resolveRunAutoPrBranch,
+	runAutoPrPipelineWithServices,
+} from "#workflow/auto-pr-run-pipeline.js";
 
 // ─── Pipeline ────────────────────────────────────────────────────────────────
 
-const RunAutoPrLayer = Layer.mergeAll(
-	AutoPrPlatformLayer,
-	ChildProcessSpawnerLayer,
-	FillPrTemplate.Live,
-);
+function livePipeline(config: RunAutoPrConfigService): CliMainEffect {
+	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
+	const baseLayer = Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer, gitLayer);
 
-function runPipeline(): CliMainEffect {
 	return Effect.gen(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const config = yield* RunAutoPrConfig;
-		const { workspace, defaultBranch, templatePath, model } = config;
-		const branchVal = yield* config.branch !== undefined
-			? Effect.succeed(config.branch)
-			: Effect.gen(function* () {
-					const git = yield* GitContext;
-					return yield* git.getCurrentBranch();
-				})
-					.pipe(Effect.provide(GitContextLive(workspace)))
-					.pipe(Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })));
-
-		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
-		yield* runGeneratePrContent(
+		const branch = yield* resolveRunAutoPrBranch(config);
+		const configWithBranch = { ...config, branch };
+		const aiLayer = aiProviderLayerFromConfig(
 			config.provider === "github-models"
 				? {
-						defaultBranch,
-						branch: branchVal,
-						workspace,
-						templatePath,
 						provider: "github-models",
-						model,
+						model: config.model,
 						ghToken: config.ghToken,
-						...(config.existingPrTitle !== undefined
-							? { existingPrTitle: config.existingPrTitle }
-							: {}),
 					}
 				: {
-						defaultBranch,
-						branch: branchVal,
-						workspace,
-						templatePath,
 						provider: "local",
-						model,
+						model: config.model,
 						openaiCompatUrl: config.openaiCompatUrl,
 						...(config.openaiCompatApiKey !== undefined
 							? { openaiCompatApiKey: config.openaiCompatApiKey }
 							: {}),
-						...(config.existingPrTitle !== undefined
-							? { existingPrTitle: config.existingPrTitle }
-							: {}),
 					},
 		);
+		const toolkitLayer = makeDiffToolkitLayer(`origin/${config.defaultBranch}`, branch).pipe(
+			Layer.provide(gitLayer),
+		);
+		const prClientLayer = PullRequestClient.Live(config.workspace).pipe(
+			Layer.provide(ChildProcessSpawnerLayer),
+		);
+		yield* runAutoPrPipelineWithServices(configWithBranch).pipe(
+			Effect.provide(Layer.mergeAll(baseLayer, aiLayer, toolkitLayer, prClientLayer)),
+		);
+	}).pipe(Effect.provide(baseLayer));
+}
 
-		const titlePath = join(workspace, PR_TITLE_FILE_NAME);
-		const bodyPath = join(workspace, PR_BODY_FILE_NAME);
-		const title = (yield* fs.readFileString(titlePath)).trim();
-
-		yield* Effect.log({ event: "run_auto_pr", step: "create_or_update_pr" });
-		yield* runCreateOrUpdatePr({
-			branch: branchVal,
-			defaultBranch,
-			title,
-			bodyFile: bodyPath,
-			workspace,
-		}).pipe(Effect.provide(PullRequestClient.Live(workspace)));
-
-		yield* Effect.log({ event: "run_auto_pr", status: "done" });
-	}).pipe(
-		Effect.provide(RunAutoPrLayer),
-		Effect.provide(RunAutoPrConfigLayer),
-		Effect.provide(AutoPrLoggerLayer),
-	);
+/* c8 ignore next 6 */
+function runPipeline(): CliMainEffect {
+	return Effect.gen(function* () {
+		const config = yield* RunAutoPrConfig;
+		yield* livePipeline(config);
+	}).pipe(Effect.provide(RunAutoPrConfigLayer), Effect.provide(AutoPrLoggerLayer));
 }
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
+/* c8 ignore next 3 */
 if (import.meta.main) {
 	runMain(runPipeline(), "run_auto_pr_failed");
 }
