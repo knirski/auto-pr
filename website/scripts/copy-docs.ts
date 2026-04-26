@@ -1,5 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
+
+import { rewriteLinks } from "./copy-docs-core.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const DOCS_DIR = join(REPO_ROOT, "docs");
@@ -21,30 +23,11 @@ const docsMeta: Record<string, DocMeta> = {
 };
 
 const EXCLUDED_FILES = new Set(["README.md"]);
+const EXCLUDED_ADR_FILES = new Set(["adr-template.md"]);
 
 function extractTitle(content: string): string {
 	const match = content.match(/^#\s+(.+)$/m);
-	return match ? match[1].trim() : "Untitled";
-}
-
-function rewriteLinks(content: string, subdir: string = ""): string {
-	return content.replace(/\]\(([^)]+)\)/g, (full, href: string) => {
-		if (href.startsWith("http") || href.startsWith("#") || href.startsWith("../")) {
-			return full;
-		}
-
-		const [filePart, anchor] = href.split("#");
-		if (!filePart?.endsWith(".md")) {
-			return full;
-		}
-
-		const slug = filePart.replace(/\.md$/, "").toLowerCase().replace(/_/g, "-");
-
-		// For relative links (no directory component), prepend the subdir
-		const prefix = filePart.includes("/") ? "" : subdir;
-		const anchorSuffix = anchor ? `#${anchor}` : "";
-		return `](/auto-pr/${prefix}${slug}/${anchorSuffix})`;
-	});
+	return match?.[1]?.trim() ?? "Untitled";
 }
 
 function buildFrontmatter(title: string, meta?: DocMeta, editUrl?: string): string {
@@ -72,7 +55,6 @@ async function processFile(
 	srcPath: string,
 	destPath: string,
 	meta?: DocMeta,
-	subdir: string = "",
 	repoRelativePath?: string,
 ): Promise<void> {
 	const raw = await readFile(srcPath, "utf-8");
@@ -81,7 +63,8 @@ async function processFile(
 		? `https://github.com/knirski/auto-pr/edit/main/${repoRelativePath}`
 		: undefined;
 	const frontmatter = buildFrontmatter(title, meta, editUrl);
-	const rewritten = rewriteLinks(stripH1(raw), subdir);
+	const sourceDir = repoRelativePath ? posix.dirname(repoRelativePath) : "docs";
+	const rewritten = rewriteLinks(stripH1(raw), sourceDir);
 	await mkdir(dirname(destPath), { recursive: true });
 	await writeFile(destPath, frontmatter + rewritten);
 }
@@ -104,7 +87,6 @@ async function main(): Promise<void> {
 			join(DOCS_DIR, file),
 			join(OUTPUT_DIR, destName),
 			docsMeta[file],
-			"",
 			`docs/${file}`,
 		);
 	}
@@ -114,23 +96,24 @@ async function main(): Promise<void> {
 	const adrFiles = await readdir(adrDir);
 	for (const file of adrFiles) {
 		if (!file.endsWith(".md")) continue;
-		if (file === "adr-template.md") continue;
+		if (EXCLUDED_ADR_FILES.has(file)) continue;
 		const destName = file === "README.md" ? "index.md" : file.toLowerCase();
 		await processFile(
 			join(adrDir, file),
 			join(OUTPUT_DIR, "adr", destName),
 			undefined,
-			"adr/",
 			`docs/adr/${file}`,
 		);
 	}
 
 	const topCount = topLevel.filter((f) => f.endsWith(".md") && !EXCLUDED_FILES.has(f)).length;
-	const adrCount = adrFiles.filter((f) => f.endsWith(".md") && f !== "adr-template.md").length;
+	const adrCount = adrFiles.filter((f) => f.endsWith(".md") && !EXCLUDED_ADR_FILES.has(f)).length;
 	process.stdout.write(`Copied ${topCount} docs + ${adrCount} ADRs → ${OUTPUT_DIR}\n`);
 }
 
-main().catch((err) => {
-	process.stderr.write(`${String(err)}\n`);
-	process.exit(1);
-});
+if (import.meta.main) {
+	main().catch((err) => {
+		process.stderr.write(`${String(err)}\n`);
+		process.exit(1);
+	});
+}

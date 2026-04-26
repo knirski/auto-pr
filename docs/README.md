@@ -2,6 +2,8 @@
 
 ## Structure
 
+User-facing and contributor docs live at the top of `docs/` and are published to the website. ADRs under `docs/adr/` are also published, but historical supporting research and implementation plans remain repository-only unless a published page links to the GitHub source.
+
 | Audience | Document | Purpose |
 |----------|----------|---------|
 | **Users (adopters)** | [INTEGRATION.md](INTEGRATION.md) | Add auto-pr to a repo — setup, GitHub App, workflow |
@@ -14,6 +16,12 @@
 | | [CII.md](CII.md) | OpenSSF Best Practices badge progress |
 | | [CONTRIBUTING.md](../CONTRIBUTING.md) | Development setup, commits, PRs |
 | **Decisions** | [adr/](adr/) | Architecture Decision Records and supporting research |
+
+## Publishing model
+
+- Published to the documentation website: top-level `docs/*.md` except this index, plus top-level ADRs in `docs/adr/`.
+- Linked as GitHub source from the website: workflow/action files, root files such as `CONTRIBUTING.md`, ADR supporting research, and `docs/superpowers/` design artifacts.
+- Canonical operational references: [INTEGRATION.md](INTEGRATION.md) for adopters, [CI.md](CI.md) for workflow behavior, [ARCHITECTURE.md](ARCHITECTURE.md) for code structure.
 
 ## Quick links
 
