@@ -8,21 +8,22 @@
 
 import { join } from "node:path";
 import { Effect, FileSystem, Layer } from "effect";
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import type { PullRequestFailedError } from "#auto-pr";
 import {
 	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
 	ChildProcessSpawnerLayer,
 	type CliMainEffect,
 	FillPrTemplate,
+	GitContext,
+	GitContextLive,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
 	PullRequestClient,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
-	runCommand,
 	runMain,
+	UnexpectedError,
+	unknownToMessage,
 } from "#auto-pr";
 import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
 import { runGeneratePrContent } from "#workflow/auto-pr-generate-content.js";
@@ -42,7 +43,12 @@ function runPipeline(): CliMainEffect {
 		const { workspace, defaultBranch, templatePath, model } = config;
 		const branchVal = yield* config.branch !== undefined
 			? Effect.succeed(config.branch)
-			: getCurrentBranch(workspace);
+			: Effect.gen(function* () {
+					const git = yield* GitContext;
+					return yield* git.getCurrentBranch();
+				})
+					.pipe(Effect.provide(GitContextLive(workspace)))
+					.pipe(Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })));
 
 		yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
 		yield* runGeneratePrContent(
@@ -89,12 +95,6 @@ function runPipeline(): CliMainEffect {
 		Effect.provide(RunAutoPrConfigLayer),
 		Effect.provide(AutoPrLoggerLayer),
 	);
-}
-
-function getCurrentBranch(
-	cwd: string,
-): Effect.Effect<string, PullRequestFailedError, ChildProcessSpawner> {
-	return runCommand("git", ["branch", "--show-current"], cwd);
 }
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
