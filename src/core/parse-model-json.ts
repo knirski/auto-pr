@@ -19,6 +19,26 @@ export type ParsedJsonObject = Schema.MutableJsonObject;
 const NOT_OBJECT = new Error("expected a JSON object");
 const NO_OBJECT_IN_OUTPUT = new Error("no JSON object in model output");
 
+type JsonStringScanState =
+	| { readonly _tag: "OutsideString" }
+	| { readonly _tag: "InsideString"; readonly escaped: boolean };
+
+const OutsideString: JsonStringScanState = { _tag: "OutsideString" };
+
+function nextJsonStringScanState(
+	state: JsonStringScanState,
+	ch: string | undefined,
+): JsonStringScanState {
+	switch (state._tag) {
+		case "OutsideString":
+			return ch === '"' ? { _tag: "InsideString", escaped: false } : state;
+		case "InsideString":
+			if (state.escaped) return { _tag: "InsideString", escaped: false };
+			if (ch === "\\") return { _tag: "InsideString", escaped: true };
+			return ch === '"' ? OutsideString : state;
+	}
+}
+
 function tryParseJson(text: string): Result.Result<ParsedJson, Error> {
 	return Result.try({
 		try: () => JSON.parse(text) as ParsedJson,
@@ -32,9 +52,32 @@ function requireJsonObject(value: ParsedJson): Result.Result<ParsedJsonObject, E
 		: Result.fail(NOT_OBJECT);
 }
 
-/** First `{`…`}` span (greedy). Not a JSON tokenizer: wrong if multiple objects or `{`/`}` inside strings need distinct spans. */
+/** First balanced `{`…`}` span, ignoring braces inside JSON strings. */
 function firstBraceSlice(text: string): Option.Option<string> {
-	return Option.fromNullishOr(text.match(/\{[\s\S]*\}/u)?.[0]);
+	for (let start = text.indexOf("{"); start >= 0; start = text.indexOf("{", start + 1)) {
+		let depth = 0;
+		let stringState = OutsideString;
+		for (let i = start; i < text.length; i += 1) {
+			const ch = text[i];
+			const wasOutsideString = stringState._tag === "OutsideString";
+			stringState = nextJsonStringScanState(stringState, ch);
+			if (!wasOutsideString || ch === '"') {
+				continue;
+			}
+
+			if (ch === "{") {
+				depth += 1;
+				continue;
+			}
+			if (ch === "}") {
+				depth -= 1;
+				if (depth === 0) {
+					return Option.some(text.slice(start, i + 1));
+				}
+			}
+		}
+	}
+	return Option.none();
 }
 
 function parseObjectFromCandidate(text: string): Result.Result<ParsedJsonObject, Error> {

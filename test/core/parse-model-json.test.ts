@@ -37,6 +37,38 @@ describe("parseFirstJsonObject", () => {
 		}
 	});
 
+	test("extracts the first complete object when output contains more JSON afterwards", () => {
+		const r = parseFirstJsonObject('First: {"a":1}\nSecond: {"b":2}');
+		expect(Result.isSuccess(r)).toBe(true);
+		if (Result.isSuccess(r)) {
+			expect(r.success).toEqual({ a: 1 });
+		}
+	});
+
+	test("does not treat braces inside JSON strings as object boundaries", () => {
+		const r = parseFirstJsonObject('Here:\n{"message":"literal } brace","ok":true}\n');
+		expect(Result.isSuccess(r)).toBe(true);
+		if (Result.isSuccess(r)) {
+			expect(r.success).toEqual({ message: "literal } brace", ok: true });
+		}
+	});
+
+	test("does not treat braces after escaped quotes as object boundaries", () => {
+		const r = parseFirstJsonObject('Here:\n{"message":"escaped \\" } still string","ok":true}\n');
+		expect(Result.isSuccess(r)).toBe(true);
+		if (Result.isSuccess(r)) {
+			expect(r.success).toEqual({ message: 'escaped " } still string', ok: true });
+		}
+	});
+
+	test("skips an unmatched object prefix and extracts the next complete object", () => {
+		const r = parseFirstJsonObject('Partial: { "broken": true\nNext: {"ok":true}');
+		expect(Result.isSuccess(r)).toBe(true);
+		if (Result.isSuccess(r)) {
+			expect(r.success).toEqual({ ok: true });
+		}
+	});
+
 	test("fails when no object", () => {
 		const r = parseFirstJsonObject("no json");
 		expect(Result.isFailure(r)).toBe(true);
