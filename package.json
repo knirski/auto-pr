@@ -44,6 +44,7 @@
 		"act": "bun scripts/act-local-ci.ts",
 		"check:code": "bun run check:manifest && bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
 		"check:manifest": "bun run scripts/check-package-manifest.ts",
+		"check:patch-coverage": "bun run scripts/check-patch-coverage.ts",
 		"check:with-links": "bun run check && bun run check:just-links",
 		"check:nix": "scripts/nix-run-if-missing.sh --optional statix check . && scripts/nix-run-if-missing.sh --optional deadnix --exclude bun.nix .",
 		"check:docs": "bun x rumdl check . && scripts/nix-run-if-missing.sh typos",

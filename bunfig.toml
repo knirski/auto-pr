@@ -9,8 +9,8 @@ pathIgnorePatterns = ["test/integration/**"]
 coverage = true
 coverageReporter = ["text", "lcov"]
 coverageDir = "coverage"
-# act-local-ci.ts: CLI + process I/O; per-file coverage still misses most branches. Pure argv helpers: same file; program dry-run path: test/scripts/act-local-ci.test.ts.
-coveragePathIgnorePatterns = ["test/**", "**/core/errors.ts", "scripts/act-local-ci.ts"]
+# CLI scripts include process-exit and subprocess paths; tests cover their pure helpers where useful.
+coveragePathIgnorePatterns = ["test/**", "**/core/errors.ts", "scripts/act-local-ci.ts", "scripts/check-patch-coverage.ts"]
 coverageSkipTestFiles = true
 # Bun enforces per-file threshold on both % funcs and % lines. Floor was 0.68 (weakest line ~68%).
 # Raised to 0.75: still below auto-pr-init (75% funcs) and collapse-prose (~84% lines).
