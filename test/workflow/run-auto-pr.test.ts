@@ -9,7 +9,11 @@ import {
 	createTestTempDirEffect,
 	TestBaseLayer,
 } from "#test/test-utils.js";
-import { prTitleReadError, runAutoPrPipelineWithServices } from "#workflow/auto-pr-run-pipeline.js";
+import {
+	generateContentConfigFromRunAutoPrConfig,
+	prTitleReadError,
+	runAutoPrPipelineWithServices,
+} from "#workflow/auto-pr-run-pipeline.js";
 
 function logContent(...subjects: readonly string[]): string {
 	return `---COMMIT---\n${subjects
@@ -20,6 +24,58 @@ function logContent(...subjects: readonly string[]): string {
 describe("runAutoPrPipelineWithServices", () => {
 	test("formats pr-title read failures", () => {
 		expect(prTitleReadError(new Error("missing")).cause).toBe("pr-title.txt: missing");
+	});
+
+	test("maps local run config to generate-content service config", () => {
+		const ghToken = Redacted.make("ghp_test");
+		const config = generateContentConfigFromRunAutoPrConfig(
+			{
+				provider: "local",
+				defaultBranch: "main",
+				workspace: "/workspace",
+				templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+				model: "gpt-oss",
+				ghToken,
+				openaiCompatUrl: "http://127.0.0.1:8080/v1",
+				openaiCompatApiKey: Redacted.make("sk-test"),
+				existingPrTitle: "feat: existing title",
+			},
+			"ai/example",
+		);
+
+		expect(config).toEqual({
+			provider: "local",
+			defaultBranch: "main",
+			branch: "ai/example",
+			workspace: "/workspace",
+			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+			model: "gpt-oss",
+			existingPrTitle: "feat: existing title",
+		});
+	});
+
+	test("maps github-models run config to generate-content service config", () => {
+		const ghToken = Redacted.make("ghp_test");
+		const config = generateContentConfigFromRunAutoPrConfig(
+			{
+				provider: "github-models",
+				defaultBranch: "main",
+				workspace: "/workspace",
+				templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+				model: "openai/gpt-4.1",
+				ghToken,
+			},
+			"ai/example",
+		);
+
+		expect(config).toEqual({
+			provider: "github-models",
+			defaultBranch: "main",
+			branch: "ai/example",
+			workspace: "/workspace",
+			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+			model: "openai/gpt-4.1",
+		});
 	});
 
 	test("resolves branch via injected GitContext and creates PR via injected PullRequestClient", async () => {

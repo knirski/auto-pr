@@ -519,18 +519,20 @@ export function runGeneratePrContent(
  * This is the Tagless Final runner used by tests and higher-level composition.
  * The CLI-facing `runGeneratePrContent` only builds and provides live layers.
  */
-export function runGeneratePrContentWithServices(config: {
-	defaultBranch: string;
-	branch: string;
-	workspace: string;
-	templatePath: string;
-	provider: AiProvider;
-	model: string;
+export type RunGeneratePrContentWithServicesConfig = {
+	readonly defaultBranch: string;
+	readonly branch: string;
+	readonly workspace: string;
+	readonly templatePath: string;
+	readonly provider: AiProvider;
+	readonly model: string;
 	/** Current PR title override for prompt continuity. */
-	existingPrTitle?: string;
+	readonly existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
-	retryDelay?: Duration.Duration;
-}) {
+	readonly retryDelay?: Duration.Duration;
+};
+
+export function runGeneratePrContentWithServices(config: RunGeneratePrContentWithServicesConfig) {
 	function toUnexpected(ctx: string) {
 		return (e: unknown) => new UnexpectedError({ cause: `${ctx}: ${unknownToMessage(e)}` });
 	}
