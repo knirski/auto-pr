@@ -5,11 +5,11 @@
     "": {
       "name": "auto-pr",
       "dependencies": {
-        "@effect/ai-openai-compat": "4.0.0-beta.51",
-        "@effect/platform-bun": "4.0.0-beta.51",
-        "@effect/platform-node-shared": "4.0.0-beta.51",
+        "@effect/ai-openai-compat": "4.0.0-beta.57",
+        "@effect/platform-bun": "4.0.0-beta.57",
+        "@effect/platform-node-shared": "4.0.0-beta.57",
         "conventional-commits-parser": "^6.4.0",
-        "effect": "4.0.0-beta.51",
+        "effect": "4.0.0-beta.57",
         "micromustache": "^8.0.3",
         "remark": "^15.0.1",
         "unist-util-visit": "^5.1.0",
@@ -97,11 +97,11 @@
 
     "@conventional-changelog/git-client": ["@conventional-changelog/git-client@2.6.0", "", { "dependencies": { "@simple-libs/child-process-utils": "^1.0.0", "@simple-libs/stream-utils": "^1.2.0", "semver": "^7.5.2" }, "peerDependencies": { "conventional-commits-filter": "^5.0.0", "conventional-commits-parser": "^6.3.0" }, "optionalPeers": ["conventional-commits-filter"] }, "sha512-T+uPDciKf0/ioNNDpMGc8FDsehJClZP0yR3Q5MN6wE/Y/1QZ7F+80OgznnTCOlMEG4AV0LvH2UJi3C/nBnaBUg=="],
 
-    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.51", "", { "peerDependencies": { "effect": "^4.0.0-beta.51" } }, "sha512-HCN54ETEGyxB3Z5tfGH8ZCqVxlnJ7YnxYdtg5e0rB4ZbRy9RAEEQpMKEcvk3yGYBTL+JHKyNkEokSTBSfO7D2g=="],
+    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.57", "", { "peerDependencies": { "effect": "^4.0.0-beta.57" } }, "sha512-RYeuikQBlbDbVzPk7YP/3KXswLptGWnzzZAqkUvq/5YoIyKdqxfoP03d6OzALz78fuO7KjL8TDZVKRokO9XHkw=="],
 
-    "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.51", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.51" }, "peerDependencies": { "effect": "^4.0.0-beta.51" } }, "sha512-jXLrwDvItGWWGljua80tBJyacvnDVBXueKbrOSWUStmwElIFH/mXtkG7lpwX+im5WSJeWaw5xidTW11HnCaGLA=="],
+    "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.57", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.57" }, "peerDependencies": { "effect": "^4.0.0-beta.57" } }, "sha512-Z/nG9KLUAPpd4UZXfjjz2giT0W/9iVItbVRJiQ8WReA6n5CEnBsrrE4ioRYOdamq/vRakxWBgqpG/4Mu6Ac7Hg=="],
 
-    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.51", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.20.0" }, "peerDependencies": { "effect": "^4.0.0-beta.51" } }, "sha512-Dy59kDf0UNiHImDN90edoNWbdpdbDqioVjjAPqKTOdebiVEHlD9bUSNTYsSnKrqa/6WU53AWOP0SYwJ1aKKk4Q=="],
+    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.57", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.20.0" }, "peerDependencies": { "effect": "^4.0.0-beta.57" } }, "sha512-C976X6f+qHUtLSqcqImuCrjhAHnJV17NC2RvvybsAuDfkyIWU4MyiO2XwgiBeijeNupyr1M/KPKnyjtkNxV9Hw=="],
 
     "@emnapi/core": ["@emnapi/core@1.9.0", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.0", "tslib": "^2.4.0" } }, "sha512-0DQ98G9ZQZOxfUcQn1waV2yS8aWdZ6kJMbYCJB3oUBecjWYO1fqJ+a1DRfPF3O5JEkwqwP1A9QEN/9mYm2Yd0w=="],
 
@@ -457,7 +457,7 @@
 
     "eastasianwidth": ["eastasianwidth@0.2.0", "", {}, "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA=="],
 
-    "effect": ["effect@4.0.0-beta.51", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "fast-check": "^4.6.0", "find-my-way-ts": "^0.1.6", "ini": "^6.0.0", "kubernetes-types": "^1.30.0", "msgpackr": "^1.11.9", "multipasta": "^0.2.7", "toml": "^4.1.1", "uuid": "^13.0.0", "yaml": "^2.8.3" } }, "sha512-Xo4MDGMhAAw/jPTT5zYk1H2FnllAVsSdZWLag+0yY4Hi1rksgReE2M4vFdqgl9wPV+30wVMvd95oPAczs71HIg=="],
+    "effect": ["effect@4.0.0-beta.57", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "fast-check": "^4.6.0", "find-my-way-ts": "^0.1.6", "ini": "^6.0.0", "kubernetes-types": "^1.30.0", "msgpackr": "^1.11.9", "multipasta": "^0.2.7", "toml": "^4.1.1", "uuid": "^13.0.0", "yaml": "^2.8.3" } }, "sha512-rg32VgXnLKaPRs9tbRDaZ5jxmzNY7ojXt85gSHGUTwdlbWH5Ik+OCUY2q14TXliygPGoHwCAvNWS4bQJOqf00g=="],
 
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
