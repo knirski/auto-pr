@@ -22,7 +22,6 @@ import {
 	Layer,
 	Option,
 	Path,
-	pipe,
 	Result,
 	Schedule,
 	Schema,
@@ -45,7 +44,6 @@ import {
 	GitContext,
 	GitContextLive,
 	getPrDescriptionPromptPath,
-	isBlank,
 	isTransientAiError,
 	makeDiffToolkitLayer,
 	NoSemanticCommitsError,
@@ -61,8 +59,6 @@ import {
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
-	fitConventionalTitleToLengthLimit,
-	getDescription,
 	getDescriptionPromptText,
 	getTitle as getTitleFromCommits,
 	isWithinLengthLimit,
@@ -71,7 +67,11 @@ import {
 	parseFilesContent,
 	renderBody as renderBodyCore,
 } from "#core/fill-pr-template-core.js";
-import { parseFirstJsonObject } from "#core/parse-model-json.js";
+import {
+	getFallbackTitleAndDescription,
+	parseExistingPrTitleOutput as parseExistingPrTitleOutputCore,
+	validateGeneratedContent,
+} from "#core/generated-content.js";
 import { truncateForLog } from "#core/string.js";
 import {
 	parseTitleDescriptionFromAssistantText,
@@ -141,53 +141,20 @@ function logAndValidateTitleDescription(
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 
-const GhPrViewTitleSchema = Schema.Struct({
-	title: Schema.String,
-});
-
 function parseExistingPrTitleOutput(stdout: string): Effect.Effect<Option.Option<string>, never> {
-	const trimmed = stdout.trim();
-	if (trimmed === "") {
-		return Effect.succeed(Option.none());
-	}
+	const parsed = parseExistingPrTitleOutputCore(stdout);
+	if (parsed._tag === "Missing") return Effect.succeed(Option.none());
+	if (parsed._tag === "Found") return Effect.succeed(Option.some(parsed.title));
 
-	return Effect.gen(function* () {
-		const parsed = yield* Effect.fromResult(parseFirstJsonObject(trimmed)).pipe(
-			Effect.map(Option.some),
-			Effect.catch((e: Error) =>
-				Effect.logWarning({
-					event: "generate_pr_content",
-					step: "existing_pr_title",
-					status: "parse_failed",
-					message: e.message,
-				}).pipe(Effect.as(Option.none())),
-			),
-		);
-		if (Option.isNone(parsed)) {
-			return Option.none();
-		}
-
-		const decoded = yield* Schema.decodeUnknownEffect(GhPrViewTitleSchema)(parsed.value).pipe(
-			Effect.map(Option.some),
-			Effect.catch((e: unknown) =>
-				Effect.logWarning({
-					event: "generate_pr_content",
-					step: "existing_pr_title",
-					status: "schema_failed",
-					message: Schema.isSchemaError(e) ? e.message : String(e),
-				}).pipe(Effect.as(Option.none())),
-			),
-		);
-		if (Option.isNone(decoded)) {
-			return Option.none();
-		}
-
-		const title = decoded.value.title.trim();
-		return title === "" ? Option.none() : Option.some(title);
-	});
+	return Effect.logWarning({
+		event: "generate_pr_content",
+		step: "existing_pr_title",
+		status: `${parsed.step}_failed`,
+		message: parsed.reason,
+	}).pipe(Effect.as(Option.none()));
 }
 
-/** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort `gh pr view` (failures → no title). */
+/** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort `gh pr view` (failures -> no title). */
 export function resolveExistingPrTitleForPrompt(input: {
 	readonly workspace: string;
 	readonly branch: string;
@@ -223,63 +190,6 @@ export function resolveExistingPrTitleForPrompt(input: {
 	});
 }
 
-function normalizeRiskItems(risks: readonly string[]): readonly string[] {
-	return risks.map((risk) => risk.trim().replace(/^-+\s*/, "")).filter((risk) => !isBlank(risk));
-}
-
-function normalizeBulletItems(items: readonly string[]): readonly string[] {
-	return items.map((s) => s.trim().replace(/^-+\s*/, "")).filter((s) => !isBlank(s));
-}
-
-/** Callers must pre-normalize all array fields via {@link normalizeBulletItems} / {@link normalizeRiskItems}. */
-function buildDescriptionBlock(value: {
-	motivation: readonly string[];
-	benefits: readonly string[];
-	risks: readonly string[];
-	notesForReviewers: string;
-}): string {
-	const sections = [`### Motivation\n${value.motivation.map((s) => `- ${s}`).join("\n")}`];
-	if (value.benefits.length > 0) {
-		sections.push(`### Benefits\n${value.benefits.map((s) => `- ${s}`).join("\n")}`);
-	}
-	sections.push(`### Risks\n${value.risks.map((risk) => `- ${risk}`).join("\n")}`);
-	const notes = value.notesForReviewers.trim();
-	if (!isBlank(notes)) {
-		sections.push(`### Notes for reviewers\n${notes}`);
-	}
-	return sections.join("\n\n");
-}
-
-function validateGeneratedContent(
-	value: TitleDescription,
-): Result.Result<{ title: string; description: string }, DescriptionParseError> {
-	const { motivation, benefits, notesForReviewers } = value;
-	return pipe(
-		fitConventionalTitleToLengthLimit(value.title),
-		Result.flatMap((title) => {
-			const normalizedMotivation = normalizeBulletItems(motivation);
-			if (normalizedMotivation.length === 0) {
-				return Result.fail(new DescriptionParseError({ cause: "motivation is empty" }));
-			}
-			const normalizedBenefits = normalizeBulletItems(benefits);
-			const normalizedRisks = normalizeRiskItems(value.risks);
-			if (normalizedRisks.length === 0) {
-				return Result.fail(new DescriptionParseError({ cause: "risks are empty" }));
-			}
-			const description = buildDescriptionBlock({
-				motivation: normalizedMotivation,
-				benefits: normalizedBenefits,
-				risks: normalizedRisks,
-				notesForReviewers,
-			});
-			if (isBlank(description)) {
-				return Result.fail(new DescriptionParseError({ cause: "description is empty" }));
-			}
-			return Result.succeed({ title, description });
-		}),
-	);
-}
-
 function makeRetrySchedule(delay: Duration.Duration) {
 	const delayMs = Duration.toMillis(delay);
 	const delayLabel = delayMs >= 1000 ? `${delayMs / 1000}s` : `${delayMs}ms`;
@@ -294,31 +204,6 @@ function makeRetrySchedule(delay: Duration.Duration) {
 		// Effect v4 jitter keeps the delay within 80%-120%, so the log remains approximate.
 		Schedule.jittered,
 	);
-}
-
-function getFallbackTitleAndDescription(filtered: readonly CommitInfo[]): {
-	title: string;
-	description: string;
-} {
-	const firstSubject = filtered[0]?.subject?.trim() ?? "";
-	const title = Result.match(fitConventionalTitleToLengthLimit(firstSubject), {
-		onSuccess: (t) => t,
-		onFailure: () => "chore: update",
-	});
-	// Use each commit's description (body excerpt, or subject-after-colon) as a separate bullet.
-	// This is more readable than one blob of joined bodies.
-	const bullets = filtered
-		.map((c) => getDescription(c))
-		.filter((s) => !isBlank(s))
-		.slice(0, 8);
-	const motivation = bullets.length > 0 ? bullets : [firstSubject];
-	const description = buildDescriptionBlock({
-		motivation,
-		benefits: [],
-		risks: ["AI description unavailable — review changed files directly for risk assessment."],
-		notesForReviewers: "",
-	});
-	return { title, description };
 }
 
 /** Generate title and description via `generateText` + DiffToolkit + JSON parse + schema validation. */

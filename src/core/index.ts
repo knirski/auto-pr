@@ -55,6 +55,18 @@ export {
 	resolveBreakingChangesBody,
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
+export type {
+	ExistingPrTitleParseResult,
+	GeneratedTitleDescription,
+} from "#core/generated-content.js";
+export {
+	buildGeneratedDescriptionBlock,
+	getFallbackTitleAndDescription,
+	normalizeGeneratedBulletItems,
+	normalizeGeneratedRiskItems,
+	parseExistingPrTitleOutput,
+	validateGeneratedContent,
+} from "#core/generated-content.js";
 export type { GhOutputValue } from "#core/gh-output.js";
 export {
 	buildGetCommitsGhEntries,
