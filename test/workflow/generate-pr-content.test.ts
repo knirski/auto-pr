@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Duration, Effect, Exit, FileSystem, Layer, Option, Redacted, Result } from "effect";
+import {
+	Cause,
+	ConfigProvider,
+	Duration,
+	Effect,
+	Exit,
+	FileSystem,
+	Layer,
+	Option,
+	Redacted,
+	Result,
+} from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
@@ -28,6 +39,7 @@ import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content
 import {
 	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
+	program,
 	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
 } from "#workflow/auto-pr-generate-content.js";
@@ -279,151 +291,109 @@ describe("resolveExistingPrTitleForPrompt", () => {
 			),
 		);
 
-	test("returns env title when AUTO_PR_EXISTING_PR_TITLE is non-empty (does not call PR client)", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		process.env.AUTO_PR_EXISTING_PR_TITLE = "  feat: from env  ";
-		try {
-			await runEffect(
-				layerWithPrClient(() => Effect.die(new Error("PR client should not run when env is set"))),
-			)(
-				Effect.gen(function* () {
-					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/tmp",
-						branch: "ai/x",
-					});
-					expect(Option.isSome(opt)).toBe(true);
-					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from env");
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev === undefined) delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-			else process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
+	test("returns configured title when non-empty (does not call PR client)", async () => {
+		await runEffect(
+			layerWithPrClient(() => Effect.die(new Error("PR client should not run when config is set"))),
+		)(
+			Effect.gen(function* () {
+				const opt = yield* resolveExistingPrTitleForPrompt({
+					branch: "ai/x",
+					existingPrTitle: "  feat: from config  ",
+				});
+				expect(Option.isSome(opt)).toBe(true);
+				if (Option.isSome(opt)) expect(opt.value).toBe("feat: from config");
+			}).pipe(Effect.scoped),
+		);
 	});
 
 	test("returns title from PR client on success", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			await runEffect(
-				layerWithPrClient(() =>
-					Effect.succeed(
-						Option.some({
-							number: 1,
-							url: "https://github.com/owner/repo/pull/1",
-							title: "feat: from client",
-						}),
-					),
+		await runEffect(
+			layerWithPrClient(() =>
+				Effect.succeed(
+					Option.some({
+						number: 1,
+						url: "https://github.com/owner/repo/pull/1",
+						title: "feat: from client",
+					}),
 				),
-			)(
-				Effect.gen(function* () {
-					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/w",
-						branch: "ai/b",
-					});
-					expect(Option.isSome(opt)).toBe(true);
-					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from client");
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
+			),
+		)(
+			Effect.gen(function* () {
+				const opt = yield* resolveExistingPrTitleForPrompt({
+					branch: "ai/b",
+				});
+				expect(Option.isSome(opt)).toBe(true);
+				if (Option.isSome(opt)) expect(opt.value).toBe("feat: from client");
+			}).pipe(Effect.scoped),
+		);
 	});
 
 	test("returns none when PR lookup fails", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			await runEffect(
-				layerWithPrClient(() =>
-					Effect.fail(new PrLookupError({ branch: "ai/b", cause: "lookup failed" })),
-				),
-			)(
-				Effect.gen(function* () {
-					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/w",
-						branch: "ai/b",
-					});
-					expect(Option.isNone(opt)).toBe(true);
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
+		await runEffect(
+			layerWithPrClient(() =>
+				Effect.fail(new PrLookupError({ branch: "ai/b", cause: "lookup failed" })),
+			),
+		)(
+			Effect.gen(function* () {
+				const opt = yield* resolveExistingPrTitleForPrompt({
+					branch: "ai/b",
+				});
+				expect(Option.isNone(opt)).toBe(true);
+			}).pipe(Effect.scoped),
+		);
 	});
 
 	test("returns none when PR client returns no PR", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			await runEffect(layerWithPrClient(() => Effect.succeed(Option.none())))(
-				Effect.gen(function* () {
-					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/w",
-						branch: "ai/b",
-					});
-					expect(Option.isNone(opt)).toBe(true);
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
+		await runEffect(layerWithPrClient(() => Effect.succeed(Option.none())))(
+			Effect.gen(function* () {
+				const opt = yield* resolveExistingPrTitleForPrompt({
+					branch: "ai/b",
+				});
+				expect(Option.isNone(opt)).toBe(true);
+			}).pipe(Effect.scoped),
+		);
 	});
 
 	test("returns none when PR info has no title", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
+		await runEffect(
+			layerWithPrClient(() =>
+				Effect.succeed(
+					Option.some({
+						number: 1,
+						url: "https://github.com/owner/repo/pull/1",
+					}),
+				),
+			),
+		)(
+			Effect.gen(function* () {
+				const opt = yield* resolveExistingPrTitleForPrompt({
+					branch: "ai/b",
+				});
+				expect(Option.isNone(opt)).toBe(true);
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("returns none when PR title is empty or whitespace-only after trim", async () => {
+		for (const title of ["", "   \t  "]) {
 			await runEffect(
 				layerWithPrClient(() =>
 					Effect.succeed(
 						Option.some({
 							number: 1,
 							url: "https://github.com/owner/repo/pull/1",
+							title,
 						}),
 					),
 				),
 			)(
 				Effect.gen(function* () {
 					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/w",
 						branch: "ai/b",
 					});
 					expect(Option.isNone(opt)).toBe(true);
 				}).pipe(Effect.scoped),
 			);
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
-	});
-
-	test("returns none when PR title is empty or whitespace-only after trim", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			for (const title of ["", "   \t  "]) {
-				await runEffect(
-					layerWithPrClient(() =>
-						Effect.succeed(
-							Option.some({
-								number: 1,
-								url: "https://github.com/owner/repo/pull/1",
-								title,
-							}),
-						),
-					),
-				)(
-					Effect.gen(function* () {
-						const opt = yield* resolveExistingPrTitleForPrompt({
-							workspace: "/w",
-							branch: "ai/b",
-						});
-						expect(Option.isNone(opt)).toBe(true);
-					}).pipe(Effect.scoped),
-				);
-			}
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
 		}
 	});
 });
@@ -871,6 +841,45 @@ function setupGitRepoForRunGeneratePrContent(
 }
 
 describe("runGeneratePrContent (integration, real git repo)", () => {
+	test("program passes configured existing PR title into runGeneratePrContent", async () => {
+		await runEffect(IntegrationTestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("generate-program-existing-title-");
+				try {
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add x" }],
+						"ai/test",
+					);
+
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+					const configProviderLayer = ConfigProvider.layer(
+						ConfigProvider.fromUnknown({
+							GITHUB_WORKSPACE: tmp.path,
+							DEFAULT_BRANCH: "main",
+							BRANCH: "ai/test",
+							AUTO_PR_EXISTING_PR_TITLE: "  feat: existing title  ",
+							AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+						}),
+					);
+
+					yield* program.pipe(Effect.provide(configProviderLayer));
+
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+					expect(title.trim()).toBe("feat: add x");
+					expect(body).toContain("add x");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("writes pr-title.txt and pr-body.md for 1 commit (no AI call)", async () => {
 		await runEffect(IntegrationTestLayer)(
 			Effect.gen(function* () {
@@ -958,61 +967,49 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 		);
 	});
 
-	test("AUTO_PR_EXISTING_PR_TITLE is sent in the AI request for 2 commits", async () => {
-		const prior = "feat: title from env";
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		process.env.AUTO_PR_EXISTING_PR_TITLE = prior;
-		try {
-			await runEffect(IntegrationTestLayer)(
-				Effect.gen(function* () {
-					const tmp = yield* createTestTempDirEffect("run-generate-envtitle-");
-					try {
-						yield* setupGitRepoForRunGeneratePrContent(
-							tmp.path,
-							[{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
-							"ai/test",
-						);
+	test("existingPrTitle is sent in the AI request for 2 commits", async () => {
+		const prior = "feat: title from config";
+		await runEffect(IntegrationTestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("run-generate-existing-title-");
+				try {
+					yield* setupGitRepoForRunGeneratePrContent(
+						tmp.path,
+						[{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+						"ai/test",
+					);
 
-						const fs = yield* FileSystem.FileSystem;
-						yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
-						yield* fs.writeFileString(
-							tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
-							DEFAULT_TEMPLATE,
-						);
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
 
-						const mockResponse = JSON.stringify({
-							title: "feat: env and AI",
-							motivation: ["M."],
-							benefits: [],
-							risks: ["R."],
-							notesForReviewers: "",
-						});
+					const mockResponse = JSON.stringify({
+						title: "feat: config and AI",
+						motivation: ["M."],
+						benefits: [],
+						risks: ["R."],
+						notesForReviewers: "",
+					});
 
-						yield* runGeneratePrContent({
-							defaultBranch: "main",
-							branch: "ai/test",
-							workspace: tmp.path,
-							templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
-							provider: "local",
-							model: "gpt-oss",
-							retryDelay: Duration.zero,
-							fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, mockResponse),
-						});
+					yield* runGeneratePrContent({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "local",
+						model: "gpt-oss",
+						existingPrTitle: prior,
+						retryDelay: Duration.zero,
+						fetch: createOpenAiMockFetchExpectingPromptSubstring(prior, mockResponse),
+					});
 
-						const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
-						expect(title.trim()).toBe("feat: env and AI");
-					} finally {
-						const fs = yield* FileSystem.FileSystem;
-						yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
-					}
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev === undefined) {
-				delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-			} else {
-				process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-			}
-		}
+					const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+					expect(title.trim()).toBe("feat: config and AI");
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
 	});
 });

@@ -50,6 +50,51 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 				expect(config.templatePath).toBe(join("/workspace", ".github/PULL_REQUEST_TEMPLATE.md"));
 				expect(config.provider).toBe("local");
 				expect(config.model).toBe("llama3.1:8b");
+				expect(config.existingPrTitle).toBeUndefined();
+			}),
+		);
+	});
+
+	test("trims AUTO_PR_EXISTING_PR_TITLE when present", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/workspace",
+				DEFAULT_BRANCH: "main",
+				BRANCH: "ai/feature",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+				AUTO_PR_EXISTING_PR_TITLE: "  feat: existing title  ",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.existingPrTitle).toBe("feat: existing title");
+			}),
+		);
+	});
+
+	test("ignores blank AUTO_PR_EXISTING_PR_TITLE", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/workspace",
+				DEFAULT_BRANCH: "main",
+				BRANCH: "ai/feature",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+				AUTO_PR_EXISTING_PR_TITLE: " \t ",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.existingPrTitle).toBeUndefined();
 			}),
 		);
 	});
@@ -315,6 +360,27 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 					expect(config.openaiCompatUrl).toBe(DEFAULT_OPENAI_COMPAT_URL);
 				}
 				expect(config.branch).toBeUndefined();
+				expect(config.existingPrTitle).toBeUndefined();
+			}),
+		);
+	});
+
+	test("trims AUTO_PR_EXISTING_PR_TITLE", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_EXISTING_PR_TITLE: "  feat: run existing  ",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.existingPrTitle).toBe("feat: run existing");
 			}),
 		);
 	});

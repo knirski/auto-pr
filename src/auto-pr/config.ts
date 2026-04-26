@@ -19,7 +19,7 @@
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
  * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to microsoft/phi-4-mini-instruct when unset (lowest GitHub Models billing multipliers; see docs) |
- * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent (read in run) | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving via `gh pr view`. For tests or custom CI. |
+ * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
  * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  *
@@ -83,6 +83,16 @@ function requireRedactedOption(
 	});
 }
 
+function optionalTrimmedNonEmpty(opt: Option.Option<string>): string | undefined {
+	return Option.match(opt, {
+		onNone: () => undefined,
+		onSome: (value) => {
+			const trimmed = value.trim();
+			return trimmed === "" ? undefined : trimmed;
+		},
+	});
+}
+
 /** Unwrap Option with default; log a warning when the default is used. */
 function getOrDefaultLogged<T>(
 	opt: Option.Option<T>,
@@ -138,6 +148,7 @@ export interface GeneratePrContentConfig {
 	/** Set when `provider` is `local` (OpenAI-compatible HTTP; e.g. llama.cpp today). */
 	readonly openaiCompatUrl?: string;
 	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+	readonly existingPrTitle?: string;
 }
 
 export const GeneratePrContentConfig =
@@ -154,6 +165,7 @@ const GeneratePrContentConfigDef = Config.all({
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
+	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
 });
 
 function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
@@ -197,6 +209,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 				DEFAULT_AI_PROVIDER,
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
+			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
 
 			const shared = {
 				workspace,
@@ -204,6 +217,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 				defaultBranch,
 				branch,
 				provider,
+				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -336,6 +350,7 @@ export type RunAutoPrConfigCommon = {
 	readonly model: string;
 	/** When set from `BRANCH`; omit to resolve the head branch via `git branch --show-current` at run time. */
 	readonly branch?: string;
+	readonly existingPrTitle?: string;
 };
 
 export type RunAutoPrConfigLocal = RunAutoPrConfigCommon & {
@@ -363,6 +378,7 @@ const RunAutoPrConfigDef = Config.all({
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
 	branch: Config.option(Config.string("BRANCH")),
+	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
 });
 
 export const RunAutoPrConfigLayer = Layer.effect(
@@ -390,6 +406,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				DEFAULT_AI_PROVIDER,
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
+			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
 
 			const shared = {
 				defaultBranch,
@@ -397,6 +414,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				templatePath,
 				ghToken: base.ghToken,
 				...(Option.isSome(base.branch) ? { branch: base.branch.value } : {}),
+				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(

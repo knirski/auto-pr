@@ -61,6 +61,9 @@ function runPipeline(): CliMainEffect {
 						provider: "github-models",
 						model,
 						ghToken: config.ghToken,
+						...(config.existingPrTitle !== undefined
+							? { existingPrTitle: config.existingPrTitle }
+							: {}),
 					}
 				: {
 						defaultBranch,
@@ -72,6 +75,9 @@ function runPipeline(): CliMainEffect {
 						openaiCompatUrl: config.openaiCompatUrl,
 						...(config.openaiCompatApiKey !== undefined
 							? { openaiCompatApiKey: config.openaiCompatApiKey }
+							: {}),
+						...(config.existingPrTitle !== undefined
+							? { existingPrTitle: config.existingPrTitle }
 							: {}),
 					},
 		);
