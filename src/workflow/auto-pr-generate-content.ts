@@ -6,7 +6,7 @@
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
- * `parseFirstJsonObject` + {@link TitleDescriptionSchema} (see `decodeTitleDescriptionFromAssistantText`). Retries, then
+ * `parseTitleDescriptionFromAssistantText` (JSON extraction + Schema decode in core). Retries, then
  * commit-derived fallback. Why not `generateObject`: see `docs/ARCHITECTURE.md` and `docs/INTEGRATION.md` (AI providers).
  *
  * Writes `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
@@ -73,39 +73,16 @@ import {
 } from "#core/fill-pr-template-core.js";
 import { parseFirstJsonObject } from "#core/parse-model-json.js";
 import { truncateForLog } from "#core/string.js";
+import {
+	parseTitleDescriptionFromAssistantText,
+	type TitleDescription,
+} from "#core/title-description.js";
 
-// ─── Schema ──────────────────────────────────────────────────────────────────
-
-/** Schema for structured AI output: PR title plus structured review sections. */
-const TitleDescriptionSchema = Schema.Struct({
-	title: Schema.String,
-	motivation: Schema.Array(Schema.String),
-	benefits: Schema.Array(Schema.String),
-	risks: Schema.Array(Schema.String),
-	notesForReviewers: Schema.String,
-});
-
-type TitleDescription = Schema.Schema.Type<typeof TitleDescriptionSchema>;
-
-/** Parse assistant reply → JSON → {@link TitleDescriptionSchema}. */
+/** Parse assistant reply text through the pure core parser. */
 function decodeTitleDescriptionFromAssistantText(
 	text: string,
 ): Effect.Effect<TitleDescription, DescriptionParseError, never> {
-	return pipe(
-		Effect.fromResult(parseFirstJsonObject(text)).pipe(
-			Effect.mapError((e) => new DescriptionParseError({ cause: e.message })),
-		),
-		Effect.flatMap((parsed) =>
-			Schema.decodeUnknownEffect(TitleDescriptionSchema)(parsed).pipe(
-				Effect.mapError(
-					(e) =>
-						new DescriptionParseError({
-							cause: Schema.isSchemaError(e) ? e.message : String(e),
-						}),
-				),
-			),
-		),
-	);
+	return Effect.fromResult(parseTitleDescriptionFromAssistantText(text));
 }
 
 function logAndValidateTitleDescription(
