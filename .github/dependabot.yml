@@ -6,8 +6,40 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      bun-minor-patch:
-        patterns: ["*"]
+      effect-beta-stack:
+        patterns:
+          - "effect"
+          - "@effect/ai-openai-compat"
+          - "@effect/platform-bun"
+          - "@effect/platform-node-shared"
+        update-types: ["minor", "patch"]
+      typescript-native-preview:
+        patterns:
+          - "@typescript/native-preview"
+        update-types: ["minor", "patch"]
+      bun-toolchain:
+        patterns:
+          - "bun-types"
+        update-types: ["minor", "patch"]
+      bun-runtime-deps:
+        patterns:
+          - "conventional-commits-parser"
+          - "micromustache"
+          - "remark"
+          - "unist-util-visit"
+        update-types: ["minor", "patch"]
+      bun-dev-tools:
+        patterns:
+          - "@biomejs/biome"
+          - "@commitlint/*"
+          - "@types/*"
+          - "knip"
+          - "lefthook"
+          - "lint-staged"
+          - "npm-run-all"
+          - "rumdl"
+          - "testcontainers"
+          - "typescript"
         update-types: ["minor", "patch"]
     commit-message:
       prefix: "chore(deps)"
@@ -16,6 +48,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Self-referential workflow pins are maintained by update-workflow-pins.yml
+      # after trusted merges. Dependabot PRs for these refs duplicate the bot's
+      # post-merge maintenance commits.
+      - dependency-name: "knirski/auto-pr*"
     groups:
       gh-actions-minor-patch:
         patterns: ["*"]

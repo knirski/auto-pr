@@ -1,8 +1,9 @@
 # Reusable workflow: Nix build with bun.nix auto-update.
 # Called by ci.yml's `nix` job and update-bun-nix.yml.
 #
-# Uses GitHub App token when push_allowed so the push can trigger CI on the new commit
-# (GITHUB_TOKEN pushes do not trigger workflows). Same App as auto-pr (APP_ID, APP_PRIVATE_KEY).
+# Uses GitHub App token for trusted same-repo update runs so the push can trigger CI
+# on the new commit (GITHUB_TOKEN pushes do not trigger workflows). Dependabot PRs
+# do not receive repository secrets, so they run bun.nix as check-only.
 # The `Trigger check on new commit` step below is retained — see its inline comment for why
 # an explicit `ci.yml` dispatch may still be needed after the App push.
 #
@@ -42,7 +43,7 @@ jobs:
       bun_nix_changed: ${{ steps.bun-nix.outputs.changed != '' }}
     steps:
       - name: Generate GitHub App token
-        if: inputs.push_allowed
+        if: inputs.push_allowed && github.actor != 'dependabot[bot]'
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
@@ -53,7 +54,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ inputs.push_allowed && steps.app-token.outputs.token || github.token }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
           fetch-depth: 1
 
       - name: Setup Nix with cache
@@ -77,7 +78,7 @@ jobs:
           fi
 
       - name: Commit and push bun.nix
-        if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed
+        if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed && github.actor != 'dependabot[bot]'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -93,7 +94,7 @@ jobs:
       # needs checks on the new commit; PR synchronize may not always re-run consolidated
       # CI on the pushed head. Re-evaluate before deleting (Area D Task 5 diagnostic).
       - name: Trigger check on new commit
-        if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed
+        if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed && github.actor != 'dependabot[bot]'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REF: ${{ inputs.ref || github.ref }}
@@ -104,13 +105,13 @@ jobs:
             exit 1
           fi
 
-      - name: Fail on bun.nix mismatch (fork)
-        if: steps.bun-nix.outputs.changed == 'true' && !inputs.push_allowed
+      - name: Fail on bun.nix mismatch (check-only)
+        if: steps.bun-nix.outputs.changed == 'true' && (!inputs.push_allowed || github.actor == 'dependabot[bot]')
         shell: bash
         run: |
-          echo "::error::bun.nix is out of date. CI cannot push to fork PRs."
+          echo "::error::bun.nix is out of date. This run is check-only and cannot push generated artifacts."
           echo ""
-          echo "Update locally and commit:"
+          echo "Update from a trusted branch or run the Update bun.nix workflow:"
           echo "  nix run .#update-bun-nix"
           echo "  git add bun.nix && git commit -m 'fix(nix): update bun.nix for bun.lock'"
           exit 1
