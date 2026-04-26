@@ -13,26 +13,30 @@
 import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
 import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
 import type { Redacted } from "effect";
-import { Effect, Layer, Match, Redacted as RedactedValue } from "effect";
+import { Effect, Layer, Redacted as RedactedValue } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { FetchHttpClient } from "effect/unstable/http";
-import type { AiProvider } from "#auto-pr/config.js";
 import { DEFAULT_OPENAI_COMPAT_URL } from "#auto-pr/config.js";
 import { AutoPrConfigError } from "#core/errors.js";
 
 const GITHUB_MODELS_INFERENCE_URL = "https://models.github.ai/inference";
 
-/** Config for AI provider layer (provider, model, and provider-specific fields). */
-export interface AiProviderConfig {
-	readonly provider: AiProvider;
+export type AiProviderConfigLocal = {
+	readonly provider: "local";
 	readonly model: string;
-	/** Required when `provider` is `github-models`. */
-	readonly ghToken?: Redacted.Redacted<string>;
-	/** Base URL when `provider` is `local` (OpenAI-compatible `/v1/...`). Defaults in config/env. */
+	/** Base URL for OpenAI-compatible `/v1/...`; defaults when omitted for direct tests. */
 	readonly openaiCompatUrl?: string;
-	/** Optional API key when `provider` is `local`. */
 	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
-}
+};
+
+export type AiProviderConfigGithubModels = {
+	readonly provider: "github-models";
+	readonly model: string;
+	readonly ghToken: Redacted.Redacted<string>;
+};
+
+/** Config for AI provider layer (provider, model, and provider-specific fields). */
+export type AiProviderConfig = AiProviderConfigLocal | AiProviderConfigGithubModels;
 
 function openAiLanguageModelStack(
 	clientOptions: OpenAiClient.Options,
@@ -65,8 +69,8 @@ export function aiProviderLayerFromConfig(
 			? Layer.succeed(FetchHttpClient.Fetch, options.fetch)
 			: Layer.empty;
 
-	return Match.value(config.provider).pipe(
-		Match.when("local", () => {
+	switch (config.provider) {
+		case "local": {
 			const apiUrl = config.openaiCompatUrl ?? DEFAULT_OPENAI_COMPAT_URL;
 			const apiKey = config.openaiCompatApiKey;
 			const clientOptions: OpenAiClient.Options = {
@@ -74,9 +78,9 @@ export function aiProviderLayerFromConfig(
 				...(redactedHasText(apiKey) ? { apiKey } : {}),
 			};
 			return openAiLanguageModelStack(clientOptions, config.model, fetchOverrideLayer);
-		}),
-		Match.when("github-models", () => {
-			if (!redactedHasText(config.ghToken) || !config.model) {
+		}
+		case "github-models":
+			if (!redactedHasText(config.ghToken) || config.model.trim() === "") {
 				return Layer.effect(
 					LanguageModel.LanguageModel,
 					Effect.fail(
@@ -88,12 +92,13 @@ export function aiProviderLayerFromConfig(
 					),
 				);
 			}
-			const clientOptions: OpenAiClient.Options = {
-				apiUrl: GITHUB_MODELS_INFERENCE_URL,
-				apiKey: config.ghToken,
-			};
-			return openAiLanguageModelStack(clientOptions, config.model, fetchOverrideLayer);
-		}),
-		Match.exhaustive,
-	);
+			return openAiLanguageModelStack(
+				{
+					apiUrl: GITHUB_MODELS_INFERENCE_URL,
+					apiKey: config.ghToken,
+				},
+				config.model,
+				fetchOverrideLayer,
+			);
+	}
 }
