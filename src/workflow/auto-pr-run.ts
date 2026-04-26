@@ -10,6 +10,7 @@ import { Effect, Layer } from "effect";
 import {
 	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
+	aiProviderConfigFromRunAutoPrConfig,
 	aiProviderLayerFromConfig,
 	ChildProcessSpawnerLayer,
 	type CliMainEffect,
@@ -35,22 +36,7 @@ function livePipeline(config: RunAutoPrConfigService): CliMainEffect {
 	return Effect.gen(function* () {
 		const branch = yield* resolveRunAutoPrBranch(config);
 		const configWithBranch = { ...config, branch };
-		const aiLayer = aiProviderLayerFromConfig(
-			config.provider === "github-models"
-				? {
-						provider: "github-models",
-						model: config.model,
-						ghToken: config.ghToken,
-					}
-				: {
-						provider: "local",
-						model: config.model,
-						openaiCompatUrl: config.openaiCompatUrl,
-						...(config.openaiCompatApiKey !== undefined
-							? { openaiCompatApiKey: config.openaiCompatApiKey }
-							: {}),
-					},
-		);
+		const aiLayer = aiProviderLayerFromConfig(aiProviderConfigFromRunAutoPrConfig(config));
 		const toolkitLayer = makeDiffToolkitLayer(`origin/${config.defaultBranch}`, branch).pipe(
 			Layer.provide(gitLayer),
 		);
