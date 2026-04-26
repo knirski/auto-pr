@@ -111,6 +111,54 @@ describe("runCreateOrUpdatePr", () => {
 			}).pipe(Effect.scoped),
 		);
 	});
+
+	test("retries PR lookup after transient failure", async () => {
+		let viewCalls = 0;
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: (cmd: { _tag: string; command?: string; args?: readonly string[] }) => {
+				const args = "args" in cmd ? cmd.args : [];
+				if (cmd.command === "gh" && args[1] === "view") {
+					viewCalls += 1;
+					if (viewCalls === 1) {
+						return Effect.fail(
+							systemError({
+								_tag: "Unknown",
+								module: "gh",
+								method: "pr view",
+								description: "temporary gh failure",
+							}),
+						);
+					}
+					return Effect.succeed("");
+				}
+				if (cmd.command === "gh" && args[1] === "create") {
+					return Effect.succeed("https://github.com/owner/repo/pull/99\n");
+				}
+				return Effect.succeed("");
+			},
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+
+		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("create-pr-lookup-retry-");
+				const bodyPath = tmp.join("pr-body.md");
+				yield* tmp.writeFile(bodyPath, "# PR body\n\nNew feature description.");
+
+				yield* runCreateOrUpdatePr({
+					branch: "ai/retry-lookup",
+					defaultBranch: "main",
+					title: "feat: retry lookup",
+					bodyFile: bodyPath,
+					workspace: tmp.path,
+					retryDelay: Duration.zero,
+				}).pipe(Effect.provide(PullRequestClient.Live(tmp.path)));
+
+				expect(viewCalls).toBe(2);
+			}).pipe(Effect.scoped),
+		);
+	});
 });
 
 const CreatePathLayer = Layer.mergeAll(
