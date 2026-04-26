@@ -98,13 +98,17 @@ function isConventionalType(s: string): s is ConventionalType {
 function typeFromString(s: Option.Option<string>): TypeOfChange {
 	return pipe(
 		s,
-		Option.match({
-			onNone: () => "Chore",
-			onSome: (value) => {
-				const lower = value.toLowerCase();
-				return isConventionalType(lower) ? TYPE_MAP[lower] : "Chore";
-			},
-		}),
+		Option.map((value) => value.toLowerCase()),
+		Option.filter(isConventionalType),
+		Option.map((type) => TYPE_MAP[type]),
+		Option.getOrElse((): TypeOfChange => "Chore"),
+	);
+}
+
+function nonBlankOption(value: string | null | undefined): Option.Option<string> {
+	return pipe(
+		Option.fromNullishOr(value),
+		Option.filter((s) => s.trim() !== ""),
 	);
 }
 
@@ -128,9 +132,9 @@ function mapParsedToCommitInfo(block: string, parsed: Commit, hash: string): Com
 		subject: header,
 		body,
 		fullMessage: block,
-		type: Option.fromNullishOr(parsed.type),
+		type: nonBlankOption(parsed.type),
 		references: refs,
-		breakingNote: Option.fromNullishOr(breaking?.text),
+		breakingNote: nonBlankOption(breaking?.text),
 	};
 }
 
@@ -400,13 +404,9 @@ export function getBreakingChanges(commits: readonly CommitInfo[]): Option.Optio
 	const texts = commits.flatMap((c) =>
 		pipe(
 			c.breakingNote,
-			Option.match({
-				onNone: () => [],
-				onSome: (note) => {
-					const trimmed = note.trim();
-					return trimmed === "" ? [] : [trimmed];
-				},
-			}),
+			Option.map((note) => note.trim()),
+			Option.filter((note) => note !== ""),
+			Option.toArray,
 		),
 	);
 	if (texts.length === 0) return Option.none();

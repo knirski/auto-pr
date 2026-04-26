@@ -126,6 +126,20 @@ Made-with: Cursor`;
 			);
 		});
 
+		test("normalizes blank optional parser fields to none", () => {
+			pipe(
+				parseCommits("---COMMIT---\nplain subject\n\nBREAKING CHANGE:   "),
+				Result.match({
+					onSuccess: (commits) => {
+						expect(commits).toHaveLength(1);
+						expect(commits[0]?.type).toEqual(Option.none());
+						expect(commits[0]?.breakingNote).toEqual(Option.none());
+					},
+					onFailure: () => expect().fail("expected success"),
+				}),
+			);
+		});
+
 		test("returns empty for empty input", () => {
 			pipe(
 				parseCommits(""),
