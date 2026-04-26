@@ -35,6 +35,27 @@ runs:
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/detect-runtime.sh" >> "$GITHUB_OUTPUT"
 
+    - name: Resolve Bun version
+      if: steps.detect.outputs.runtime == 'bun'
+      id: bun_version
+      shell: bash
+      env:
+        INPUT_BUN_VERSION: ${{ inputs.bun-version }}
+      run: |
+        set -euo pipefail
+        version="$INPUT_BUN_VERSION"
+        if [ -z "$version" ] && [ -f .bun-version ]; then
+          version="$(tr -d '[:space:]' < .bun-version)"
+        fi
+        if [ -z "$version" ] && [ -f package.json ]; then
+          version="$(jq -r '.packageManager // ""' package.json | sed -n 's/^bun@//p')"
+        fi
+        if [ -z "$version" ]; then
+          echo "::error::Bun runtime detected, but no Bun version was found. Add .bun-version, packageManager: bun@<version>, or pass bun-version."
+          exit 1
+        fi
+        echo "value=$version" >> "$GITHUB_OUTPUT"
+
     - name: Setup pnpm
       if: steps.detect.outputs.cache == 'pnpm'
       uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -59,4 +80,4 @@ runs:
       id: setup-bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
-        bun-version: ${{ inputs.bun-version }}
+        bun-version: ${{ steps.bun_version.outputs.value }}

@@ -85,11 +85,21 @@ jobs:
           GITHUB_WORKSPACE_SAFE: ${{ github.workspace }}
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
           AUTO_PR_DIR: ${{ steps.install.outputs.dir }}
+          EXPECTED_BRANCH: ${{ github.ref_name }}
+          EXPECTED_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          cp "$ARTIFACT_DIR/title.txt" "$GITHUB_WORKSPACE_SAFE/pr-title.txt"
-          cp "$ARTIFACT_DIR/body.md" "$GITHUB_WORKSPACE_SAFE/pr-body.md"
           BRANCH=$(cat "$ARTIFACT_DIR/branch.txt")
+          if [ "$BRANCH" != "$EXPECTED_BRANCH" ]; then
+            echo "::error::Artifact branch '$BRANCH' does not match workflow ref '$EXPECTED_BRANCH'."
+            exit 1
+          fi
           export BRANCH
           DEFAULT_BRANCH=$(cat "$ARTIFACT_DIR/default_branch.txt")
+          if [ "$DEFAULT_BRANCH" != "$EXPECTED_DEFAULT_BRANCH" ]; then
+            echo "::error::Artifact default branch '$DEFAULT_BRANCH' does not match repository default '$EXPECTED_DEFAULT_BRANCH'."
+            exit 1
+          fi
           export DEFAULT_BRANCH
+          cp "$ARTIFACT_DIR/title.txt" "$GITHUB_WORKSPACE_SAFE/pr-title.txt"
+          cp "$ARTIFACT_DIR/body.md" "$GITHUB_WORKSPACE_SAFE/pr-body.md"
           bun run --cwd "$AUTO_PR_DIR/node_modules/auto-pr" create-or-update-pr

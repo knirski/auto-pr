@@ -72,7 +72,7 @@ For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` 
 
 | Command | Purpose |
 |---------|---------|
-| `bun run check` | Local checks (Bun, statix, deadnix, typos, lychee, actionlint) |
+| `bun run check` | Local required checks: Nix lint, build, audit, unit tests, Biome, knip, typecheck, markdown lint, typos, actionlint, shellcheck/shfmt |
 | `bun run check:code` | Code only: build, audit, **unit** tests, lint, knip, typecheck. Runs on pre-push (no integration). |
 | `bun run test:integration` | HTTP integration tests: `.env.ci` + optional `.env.local`; Docker + `GH_TOKEN` as needed — see [docs/CI.md](docs/CI.md#integration-tests) |
 | `bun run test:all` | `bun test` then `test:integration` |

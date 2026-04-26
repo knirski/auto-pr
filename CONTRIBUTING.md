@@ -18,9 +18,9 @@ The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`]
 
 **Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/**` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
-### Optional: typos, lychee, and actionlint for full local check
+### Optional: typos, lychee, and actionlint for local checks
 
-`bun run check` runs spell check (typos), link check (lychee), and workflow lint (actionlint). These tools are not on npm; install them for your OS, or use `nix develop` (recommended — puts all tools in PATH).
+`bun run check` runs spell check (typos) and workflow lint (actionlint). `bun run check:with-links` adds link checking (lychee). These tools are not on npm; install them for your OS, or use `nix develop` (recommended — puts all tools in PATH).
 
 Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run .#<tool>` (flake packages) if Nix is available. Otherwise, `check:docs`, `check:just-links`, or `lint:workflows` will fail locally; CI still runs them via GitHub Actions.
 
