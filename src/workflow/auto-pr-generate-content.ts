@@ -278,9 +278,11 @@ function makeRetrySchedule(delay: Duration.Duration) {
 			Effect.logWarning({
 				event: "generate_pr_content",
 				status: "ai_retry",
-				message: `Title invalid or AI failed, retrying in ${delayLabel}...`,
+				message: `Title invalid or AI failed, retrying in about ${delayLabel}...`,
 			}).pipe(Effect.as(delay)),
 		),
+		// Effect v4 jitter keeps the delay within 80%-120%, so the log remains approximate.
+		Schedule.jittered,
 	);
 }
 
