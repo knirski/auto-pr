@@ -69,7 +69,7 @@
 		"@effect/platform-bun": "4.0.0-beta.51",
 		"@effect/platform-node-shared": "4.0.0-beta.51",
 		"conventional-commits-parser": "^6.4.0",
-		"effect": "4.0.0-beta.51",
+		"effect": "4.0.0-beta.57",
 		"micromustache": "^8.0.3",
 		"remark": "^15.0.1",
 		"unist-util-visit": "^5.1.0"
