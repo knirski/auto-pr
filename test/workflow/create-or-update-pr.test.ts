@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Cause, Duration, Effect, Exit, Layer, Option, Result, Stream } from "effect";
 import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { PullRequestClient } from "#auto-pr";
 import { PrLookupError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import {
@@ -12,7 +13,7 @@ import {
 	SilentLoggerLayer,
 	TestBaseLayer,
 } from "#test/test-utils.js";
-import { ghPrViewJson, runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
+import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
 
 const TestLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, ChildProcessSpawnerTestMock);
 const UpdatePathLayer = Layer.mergeAll(
@@ -32,7 +33,7 @@ describe("runCreateOrUpdatePr", () => {
 					title: "feat: add x",
 					bodyFile: tmp.join("nonexistent.md"),
 					workspace: tmp.path,
-				}).pipe(Effect.exit);
+				}).pipe(Effect.provide(PullRequestClient.Live(tmp.path)), Effect.exit);
 				expect(exit._tag).toBe("Failure");
 			}).pipe(Effect.scoped),
 		);
@@ -51,7 +52,7 @@ describe("runCreateOrUpdatePr", () => {
 					title: "feat: add x",
 					bodyFile: bodyPath,
 					workspace: tmp.path,
-				});
+				}).pipe(Effect.provide(PullRequestClient.Live(tmp.path)));
 			}).pipe(Effect.scoped),
 		);
 	});
@@ -104,7 +105,7 @@ describe("runCreateOrUpdatePr", () => {
 					bodyFile: bodyPath,
 					workspace: tmp.path,
 					retryDelay: Duration.zero,
-				});
+				}).pipe(Effect.provide(PullRequestClient.Live(tmp.path)));
 
 				expect(createCalls).toBe(2);
 			}).pipe(Effect.scoped),
@@ -118,7 +119,7 @@ const CreatePathLayer = Layer.mergeAll(
 	ChildProcessSpawnerCreatePathMock,
 );
 
-describe("ghPrViewJson", () => {
+describe("PullRequestClient.findByBranch", () => {
 	test("returns Option.none when stdout empty", async () => {
 		const mock = Layer.mock(ChildProcessSpawner)({
 			string: () => Effect.succeed(""),
@@ -127,9 +128,10 @@ describe("ghPrViewJson", () => {
 		});
 		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
 			Effect.gen(function* () {
-				const result = yield* ghPrViewJson("ai/foo", "/tmp");
+				const client = yield* PullRequestClient;
+				const result = yield* client.findByBranch("ai/foo");
 				expect(Option.isNone(result)).toBe(true);
-			}),
+			}).pipe(Effect.provide(PullRequestClient.Live("/tmp"))),
 		);
 	});
 
@@ -149,9 +151,10 @@ describe("ghPrViewJson", () => {
 		});
 		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
 			Effect.gen(function* () {
-				const result = yield* ghPrViewJson("ai/foo", "/tmp");
+				const client = yield* PullRequestClient;
+				const result = yield* client.findByBranch("ai/foo");
 				expect(Option.isNone(result)).toBe(true);
-			}),
+			}).pipe(Effect.provide(PullRequestClient.Live("/tmp"))),
 		);
 	});
 
@@ -163,13 +166,14 @@ describe("ghPrViewJson", () => {
 		});
 		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
 			Effect.gen(function* () {
-				const result = yield* ghPrViewJson("ai/foo", "/tmp");
+				const client = yield* PullRequestClient;
+				const result = yield* client.findByBranch("ai/foo");
 				expect(Option.isSome(result)).toBe(true);
 				if (Option.isSome(result)) {
 					expect(result.value.number).toBe(42);
 					expect(result.value.url).toBe("https://github.com/o/r/pull/42");
 				}
-			}),
+			}).pipe(Effect.provide(PullRequestClient.Live("/tmp"))),
 		);
 	});
 
@@ -180,7 +184,11 @@ describe("ghPrViewJson", () => {
 			streamLines: () => Stream.empty,
 		});
 		const exit = await Effect.runPromise(
-			ghPrViewJson("ai/foo", "/tmp").pipe(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/foo");
+			}).pipe(
+				Effect.provide(PullRequestClient.Live("/tmp")),
 				Effect.provide(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock)),
 				Effect.exit,
 			),
@@ -209,7 +217,11 @@ describe("ghPrViewJson", () => {
 			streamLines: () => Stream.empty,
 		});
 		const exit = await Effect.runPromise(
-			ghPrViewJson("ai/foo", "/tmp").pipe(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/foo");
+			}).pipe(
+				Effect.provide(PullRequestClient.Live("/tmp")),
 				Effect.provide(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock)),
 				Effect.exit,
 			),
@@ -230,7 +242,11 @@ describe("ghPrViewJson", () => {
 			streamLines: () => Stream.empty,
 		});
 		const exit = await Effect.runPromise(
-			ghPrViewJson("ai/foo", "/tmp").pipe(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/foo");
+			}).pipe(
+				Effect.provide(PullRequestClient.Live("/tmp")),
 				Effect.provide(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock)),
 				Effect.exit,
 			),
@@ -259,7 +275,7 @@ describe("runCreateOrUpdatePr integration (create path)", () => {
 					title: "feat: add feature",
 					bodyFile: bodyPath,
 					workspace: tmp.path,
-				});
+				}).pipe(Effect.provide(PullRequestClient.Live(tmp.path)));
 			}).pipe(Effect.scoped),
 		);
 	});

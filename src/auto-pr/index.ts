@@ -42,11 +42,16 @@ export {
 export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
+export type {
+	PrInfo,
+	PullRequestClientService,
+} from "#auto-pr/interfaces/pull-request-client.js";
 export {
 	type AiProviderConfig,
 	aiProviderLayerFromConfig,
 } from "#auto-pr/live/ai-provider.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
+export { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
 export {
 	getPrDescriptionPromptPath,
 	PR_BODY_FILE_NAME,

@@ -18,6 +18,7 @@ import {
 	FillPrTemplate,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
+	PullRequestClient,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 	runCommand,
@@ -80,7 +81,7 @@ function runPipeline(): CliMainEffect {
 			title,
 			bodyFile: bodyPath,
 			workspace,
-		});
+		}).pipe(Effect.provide(PullRequestClient.Live(workspace)));
 
 		yield* Effect.log({ event: "run_auto_pr", status: "done" });
 	}).pipe(

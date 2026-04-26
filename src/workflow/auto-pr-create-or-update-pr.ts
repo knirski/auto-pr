@@ -1,5 +1,5 @@
 /**
- * Create or update a PR. Thin gh wrapper.
+ * Create or update a PR. Workflow shell over PullRequestClient.
  *
  * Requires env: GH_TOKEN, BRANCH, DEFAULT_BRANCH, GITHUB_WORKSPACE. Reads `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
@@ -10,8 +10,7 @@
  * This repo: bun run create-or-update-pr · installed: npx auto-pr-create-or-update-pr
  */
 
-import { Duration, Effect, FileSystem, Option, Schedule, Schema } from "effect";
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { Duration, Effect, FileSystem, Option, Schedule } from "effect";
 import {
 	AutoPrPlatformLayer,
 	BodyFileNotFoundError,
@@ -20,107 +19,16 @@ import {
 	CreateOrUpdatePrConfigLayer,
 	type FileSystemError,
 	mapFsError,
+	PullRequestClient,
 	type PullRequestFailedError,
-	runCommand,
 	runMain,
 } from "#auto-pr";
-import { PrLookupError, type PrUrlParseError } from "#core/errors.js";
-import { parseGhPrCreateOutput } from "#core/gh-pr-url.js";
-import { parseFirstJsonObject } from "#core/parse-model-json.js";
+import type { PrLookupError, PrUrlParseError } from "#core/errors.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const GH_RETRY_ATTEMPTS = 3;
 const GH_RETRY_DELAY_MS = 5000;
-
-const PrInfoSchema = Schema.Struct({
-	number: Schema.Number,
-	url: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
-});
-type PrInfo = Schema.Schema.Type<typeof PrInfoSchema>;
-
-/**
- * Heuristic: `runCommand` maps gh failures to `PullRequestFailedError` with `String(platformError)`.
- * Treat as “no open PR” only for `gh pr view` phrasing we expect when the branch has no PR.
- * Keep substrings specific so unrelated errors that mention “PR” are not swallowed.
- */
-function ghStdoutMeansNoPrYet(cause: string): boolean {
-	const m = cause.toLowerCase();
-	return (
-		m.includes("no pull requests found") ||
-		m.includes("no pull requests match") ||
-		m.includes("could not find any pull requests") ||
-		m.includes("no pr found")
-	);
-}
-
-/** Reliable PR existence check: gh pr view --json number,url. Returns Option with PR info if exists. */
-export function ghPrViewJson(
-	branch: string,
-	cwd: string,
-): Effect.Effect<Option.Option<PrInfo>, PrLookupError, ChildProcessSpawner> {
-	const toLookupError = (cause: string): PrLookupError => new PrLookupError({ branch, cause });
-
-	return Effect.gen(function* () {
-		const stdout = yield* runCommand(
-			"gh",
-			["pr", "view", branch, "--json", "number,url"],
-			cwd,
-		).pipe(
-			Effect.catchTag("PullRequestFailedError", (e) =>
-				ghStdoutMeansNoPrYet(e.cause) ? Effect.succeed("") : Effect.fail(toLookupError(e.cause)),
-			),
-		);
-		const trimmed = stdout.trim();
-		if (trimmed === "") return Option.none();
-
-		const parsed = yield* Effect.fromResult(parseFirstJsonObject(trimmed)).pipe(
-			Effect.mapError((e) => toLookupError(e.message)),
-		);
-		const decoded = yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
-			Effect.mapError((e) => toLookupError(Schema.isSchemaError(e) ? e.message : String(e))),
-		);
-		return Option.some(decoded);
-	});
-}
-
-function ghPrEdit(
-	prNumber: number,
-	title: string,
-	bodyPath: string,
-	cwd: string,
-): Effect.Effect<void, PullRequestFailedError, ChildProcessSpawner> {
-	return runCommand(
-		"gh",
-		["pr", "edit", String(prNumber), "--title", title, "--body-file", bodyPath],
-		cwd,
-	);
-}
-
-function ghPrCreate(
-	headBranch: string,
-	baseBranch: string,
-	title: string,
-	bodyPath: string,
-	cwd: string,
-): Effect.Effect<string, PullRequestFailedError, ChildProcessSpawner> {
-	return runCommand(
-		"gh",
-		[
-			"pr",
-			"create",
-			"--head",
-			headBranch,
-			"--base",
-			baseBranch,
-			"--title",
-			title,
-			"--body-file",
-			bodyPath,
-		],
-		cwd,
-	);
-}
 
 function formatRetryDelay(delay: Duration.Duration): string {
 	const delayMs = Duration.toMillis(delay);
@@ -179,9 +87,10 @@ export function runCreateOrUpdatePr(params: {
 	bodyFile: string;
 	workspace: string;
 	retryDelay?: Duration.Duration;
-}): Effect.Effect<void, CreateOrUpdatePrError, ChildProcessSpawner | FileSystem.FileSystem> {
+}): Effect.Effect<void, CreateOrUpdatePrError, PullRequestClient | FileSystem.FileSystem> {
 	return Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
+		const prClient = yield* PullRequestClient;
 		const bodyExists = yield* fs
 			.exists(params.bodyFile)
 			.pipe(mapFsError(params.bodyFile, "exists"));
@@ -189,9 +98,7 @@ export function runCreateOrUpdatePr(params: {
 			return yield* Effect.fail(new BodyFileNotFoundError({ path: params.bodyFile }));
 		}
 
-		const cwd = params.workspace;
-
-		const prInfo = yield* ghPrViewJson(params.branch, cwd);
+		const prInfo = yield* prClient.findByBranch(params.branch);
 		if (Option.isSome(prInfo)) {
 			const { number: prNumber, url } = prInfo.value;
 			yield* Effect.log({
@@ -203,7 +110,7 @@ export function runCreateOrUpdatePr(params: {
 				titlePreview: params.title.slice(0, 50),
 			});
 			yield* runGhWithRetry(
-				ghPrEdit(prNumber, params.title, params.bodyFile, cwd),
+				prClient.update(prNumber, params.title, params.bodyFile),
 				params.branch,
 				params.retryDelay,
 			);
@@ -221,12 +128,11 @@ export function runCreateOrUpdatePr(params: {
 				base: params.defaultBranch,
 				titlePreview: params.title.slice(0, 50),
 			});
-			const stdout = yield* runGhWithRetry(
-				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
+			const url = yield* runGhWithRetry(
+				prClient.create(params.branch, params.defaultBranch, params.title, params.bodyFile),
 				params.branch,
 				params.retryDelay,
 			);
-			const url = yield* Effect.fromResult(parseGhPrCreateOutput(stdout));
 			yield* Effect.log({
 				event: "create_or_update_pr",
 				status: "created",
@@ -241,7 +147,7 @@ export function runCreateOrUpdatePr(params: {
 
 const program = Effect.gen(function* () {
 	const params = yield* CreateOrUpdatePrConfig;
-	yield* runCreateOrUpdatePr(params);
+	yield* runCreateOrUpdatePr(params).pipe(Effect.provide(PullRequestClient.Live(params.workspace)));
 }).pipe(
 	Effect.provide(CreateOrUpdatePrConfigLayer),
 	Effect.provide(AutoPrPlatformLayer),
