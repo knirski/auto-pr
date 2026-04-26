@@ -55,7 +55,6 @@ import {
 	runCommand,
 	runMain,
 	TemplateRenderError,
-	toError,
 	UnexpectedError,
 	unknownToMessage,
 } from "#auto-pr";
@@ -507,6 +506,20 @@ const GeneratePrContentErrorSchema = Schema.Union([
 	TemplateRenderError,
 ]);
 
+function hasStringTag(value: unknown): value is { readonly _tag: string } {
+	return (
+		typeof value === "object" && value !== null && "_tag" in value && typeof value._tag === "string"
+	);
+}
+
+function normalizeDecodeFailureCause(input: unknown, decodeError: unknown): string {
+	if (input instanceof Error) return input.message;
+	if (hasStringTag(input)) {
+		return `${input._tag} did not match GeneratePrContentError: ${unknownToMessage(decodeError)}`;
+	}
+	return unknownToMessage(input);
+}
+
 /** Errors from runGeneratePrContent (includes file I/O, AI provider config). */
 export type GeneratePrContentError =
 	| NoSemanticCommitsError
@@ -519,15 +532,15 @@ export type GeneratePrContentError =
 export function normalizeUnknownToGeneratePrContentError(
 	e: unknown,
 ): NoSemanticCommitsError | ParseError | TemplateRenderError {
-	const decoded = Schema.decodeUnknownOption(GeneratePrContentErrorSchema)(e);
-	return Option.getOrElse(
-		decoded,
-		() =>
+	const decoded = Schema.decodeUnknownResult(GeneratePrContentErrorSchema)(e);
+	return Result.match(decoded, {
+		onSuccess: (error) => error,
+		onFailure: (decodeError) =>
 			new TemplateRenderError({
 				message: "Unexpected failure",
-				cause: toError(e).message,
+				cause: normalizeDecodeFailureCause(e, decodeError),
 			}),
-	);
+	});
 }
 
 // ─── Main pipeline ───────────────────────────────────────────────────────
