@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit, Layer, Option, Result, Stream } from "effect";
+import { Cause, Duration, Effect, Exit, Layer, Option, Result, Stream } from "effect";
 import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { PrLookupError } from "#core/errors.js";
@@ -52,6 +52,61 @@ describe("runCreateOrUpdatePr", () => {
 					bodyFile: bodyPath,
 					workspace: tmp.path,
 				});
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("retries gh create after transient failure", async () => {
+		let createCalls = 0;
+		const mock = Layer.mock(ChildProcessSpawner)({
+			string: (cmd: { _tag: string; command?: string; args?: readonly string[] }) => {
+				const args = "args" in cmd ? cmd.args : [];
+				if (cmd.command === "gh" && args[1] === "view") {
+					return Effect.fail(
+						systemError({
+							_tag: "NotFound",
+							module: "gh",
+							method: "pr view",
+							description: "no PR found",
+						}),
+					);
+				}
+				if (cmd.command === "gh" && args[1] === "create") {
+					createCalls += 1;
+					if (createCalls === 1) {
+						return Effect.fail(
+							systemError({
+								_tag: "Unknown",
+								module: "gh",
+								method: "pr create",
+								description: "temporary gh failure",
+							}),
+						);
+					}
+					return Effect.succeed("https://github.com/owner/repo/pull/99\n");
+				}
+				return Effect.succeed("");
+			},
+			streamString: () => Stream.empty,
+			streamLines: () => Stream.empty,
+		});
+
+		await runEffect(Layer.mergeAll(TestBaseLayer, SilentLoggerLayer, mock))(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("create-pr-retry-");
+				const bodyPath = tmp.join("pr-body.md");
+				yield* tmp.writeFile(bodyPath, "# PR body\n\nNew feature description.");
+
+				yield* runCreateOrUpdatePr({
+					branch: "ai/retry",
+					defaultBranch: "main",
+					title: "feat: add retry",
+					bodyFile: bodyPath,
+					workspace: tmp.path,
+					retryDelay: Duration.zero,
+				});
+
+				expect(createCalls).toBe(2);
 			}).pipe(Effect.scoped),
 		);
 	});

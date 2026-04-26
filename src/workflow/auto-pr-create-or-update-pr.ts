@@ -122,15 +122,24 @@ function ghPrCreate(
 	);
 }
 
-function createGhRetrySchedule(branch: string) {
+function formatRetryDelay(delay: Duration.Duration): string {
+	const delayMs = Duration.toMillis(delay);
+	return delayMs >= 1000 ? `${delayMs / 1000}s` : `${delayMs}ms`;
+}
+
+function createGhRetrySchedule(
+	branch: string,
+	delay: Duration.Duration = Duration.millis(GH_RETRY_DELAY_MS),
+) {
+	const delayLabel = formatRetryDelay(delay);
 	return Schedule.recurs(GH_RETRY_ATTEMPTS - 1).pipe(
 		Schedule.addDelay(() =>
 			Effect.logWarning({
 				event: "create_or_update_pr",
 				status: "gh_retry",
 				branch,
-				message: "gh failed, retrying in about 5s...",
-			}).pipe(Effect.as(Duration.millis(GH_RETRY_DELAY_MS))),
+				message: `gh failed, retrying in about ${delayLabel}...`,
+			}).pipe(Effect.as(delay)),
 		),
 		Schedule.jittered,
 	);
@@ -139,9 +148,10 @@ function createGhRetrySchedule(branch: string) {
 function runGhWithRetry<R, E, A>(
 	effect: Effect.Effect<A, E, R>,
 	branch: string,
+	retryDelay?: Duration.Duration,
 ): Effect.Effect<A, E, R> {
 	return effect.pipe(
-		Effect.retry(createGhRetrySchedule(branch)),
+		Effect.retry(createGhRetrySchedule(branch, retryDelay)),
 		Effect.tapError(() =>
 			Effect.logError({
 				event: "create_or_update_pr",
@@ -167,6 +177,7 @@ export function runCreateOrUpdatePr(params: {
 	title: string;
 	bodyFile: string;
 	workspace: string;
+	retryDelay?: Duration.Duration;
 }): Effect.Effect<void, CreateOrUpdatePrError, ChildProcessSpawner | FileSystem.FileSystem> {
 	return Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
@@ -190,7 +201,11 @@ export function runCreateOrUpdatePr(params: {
 				prNumber,
 				titlePreview: params.title.slice(0, 50),
 			});
-			yield* runGhWithRetry(ghPrEdit(prNumber, params.title, params.bodyFile, cwd), params.branch);
+			yield* runGhWithRetry(
+				ghPrEdit(prNumber, params.title, params.bodyFile, cwd),
+				params.branch,
+				params.retryDelay,
+			);
 			yield* Effect.log({
 				event: "create_or_update_pr",
 				status: "updated",
@@ -208,6 +223,7 @@ export function runCreateOrUpdatePr(params: {
 			const stdout = yield* runGhWithRetry(
 				ghPrCreate(params.branch, params.defaultBranch, params.title, params.bodyFile, cwd),
 				params.branch,
+				params.retryDelay,
 			);
 			const url = yield* Effect.fromResult(parseGhPrCreateOutput(stdout));
 			yield* Effect.log({
