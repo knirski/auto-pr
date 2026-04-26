@@ -32,7 +32,7 @@ jobs:
       contents: read
       pull-requests: read # caps reusable generate job (gh pr view for existing title)
       models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@d8e88044d8776c34f8728dc91ec906b85c3fc4f8
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@ba8b98b92bfd0adc03bc6679f4cb293f0ca71b78
     secrets:
       # GitHub API token for the generate job. This workflow grants `models: read` so the default
       # `github.token` works. If you use a PAT, set repo secret `GH_TOKEN` and pass
@@ -45,7 +45,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@d8e88044d8776c34f8728dc91ec906b85c3fc4f8
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@ba8b98b92bfd0adc03bc6679f4cb293f0ca71b78
     with:
       auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
     secrets: inherit
