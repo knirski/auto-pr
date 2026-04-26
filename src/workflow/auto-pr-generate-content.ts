@@ -436,6 +436,36 @@ export type RunGeneratePrContentConfig =
 			ghToken: Redacted.Redacted<string>;
 	  });
 
+export function runGeneratePrContentConfigFromGeneratePrContentConfig(
+	config: GeneratePrContentConfig,
+): RunGeneratePrContentConfig {
+	const common = {
+		defaultBranch: config.defaultBranch,
+		branch: config.branch,
+		workspace: config.workspace,
+		templatePath: config.templatePath,
+		model: config.model,
+		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
+	};
+	switch (config.provider) {
+		case "local":
+			return {
+				...common,
+				provider: "local",
+				openaiCompatUrl: config.openaiCompatUrl,
+				...(config.openaiCompatApiKey !== undefined
+					? { openaiCompatApiKey: config.openaiCompatApiKey }
+					: {}),
+			};
+		case "github-models":
+			return {
+				...common,
+				provider: "github-models",
+				ghToken: config.ghToken,
+			};
+	}
+}
+
 function buildAiProviderConfig(config: RunGeneratePrContentConfig): AiProviderConfig {
 	switch (config.provider) {
 		case "local":
@@ -582,30 +612,9 @@ export function runGeneratePrContentWithServices(config: {
 
 export const program = Effect.gen(function* () {
 	const config = yield* GeneratePrContentConfig;
-	const common = {
-		defaultBranch: config.defaultBranch,
-		branch: config.branch,
-		workspace: config.workspace,
-		templatePath: config.templatePath,
-		model: config.model,
-		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
-	};
-	const params: RunGeneratePrContentConfig =
-		config.provider === "local"
-			? {
-					...common,
-					provider: "local",
-					openaiCompatUrl: config.openaiCompatUrl,
-					...(config.openaiCompatApiKey !== undefined
-						? { openaiCompatApiKey: config.openaiCompatApiKey }
-						: {}),
-				}
-			: {
-					...common,
-					provider: "github-models",
-					ghToken: config.ghToken,
-				};
-	yield* runGeneratePrContent(params).pipe(Effect.provide(AutoPrPlatformLayer));
+	yield* runGeneratePrContent(runGeneratePrContentConfigFromGeneratePrContentConfig(config)).pipe(
+		Effect.provide(AutoPrPlatformLayer),
+	);
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
 
 /* c8 ignore next 3 */

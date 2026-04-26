@@ -42,6 +42,7 @@ import {
 	program,
 	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
+	runGeneratePrContentConfigFromGeneratePrContentConfig,
 	runGeneratePrContentWithServices,
 } from "#workflow/auto-pr-generate-content.js";
 
@@ -230,6 +231,58 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 		expect(result).toBeInstanceOf(TemplateRenderError);
 		expect(result.cause).toContain("ParseError did not match GeneratePrContentError");
 		expect(result.cause).toContain("message");
+	});
+});
+
+describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
+	test("maps local config to runner config", () => {
+		const apiKey = Redacted.make("sk-test", { label: "AUTO_PR_AI_OPENAI_COMPAT_API_KEY" });
+		const config = runGeneratePrContentConfigFromGeneratePrContentConfig({
+			provider: "local",
+			workspace: "/workspace",
+			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+			defaultBranch: "main",
+			branch: "ai/example",
+			model: "gpt-oss",
+			openaiCompatUrl: "http://127.0.0.1:8080/v1",
+			openaiCompatApiKey: apiKey,
+			existingPrTitle: "feat: existing title",
+		});
+
+		expect(config).toEqual({
+			provider: "local",
+			workspace: "/workspace",
+			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+			defaultBranch: "main",
+			branch: "ai/example",
+			model: "gpt-oss",
+			openaiCompatUrl: "http://127.0.0.1:8080/v1",
+			openaiCompatApiKey: apiKey,
+			existingPrTitle: "feat: existing title",
+		});
+	});
+
+	test("maps github-models config to runner config", () => {
+		const ghToken = Redacted.make("ghp_test", { label: "GH_TOKEN" });
+		const config = runGeneratePrContentConfigFromGeneratePrContentConfig({
+			provider: "github-models",
+			workspace: "/workspace",
+			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+			defaultBranch: "main",
+			branch: "ai/example",
+			model: "openai/gpt-4.1",
+			ghToken,
+		});
+
+		expect(config).toEqual({
+			provider: "github-models",
+			workspace: "/workspace",
+			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+			defaultBranch: "main",
+			branch: "ai/example",
+			model: "openai/gpt-4.1",
+			ghToken,
+		});
 	});
 });
 
