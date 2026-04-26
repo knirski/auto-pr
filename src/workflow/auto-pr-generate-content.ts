@@ -90,10 +90,21 @@ type TitleDescription = Schema.Schema.Type<typeof TitleDescriptionSchema>;
 /** Parse assistant reply → JSON → {@link TitleDescriptionSchema}. */
 function decodeTitleDescriptionFromAssistantText(
 	text: string,
-): Effect.Effect<TitleDescription, unknown, never> {
+): Effect.Effect<TitleDescription, DescriptionParseError, never> {
 	return pipe(
-		Effect.fromResult(parseFirstJsonObject(text)),
-		Effect.flatMap(Schema.decodeUnknownEffect(TitleDescriptionSchema)),
+		Effect.fromResult(parseFirstJsonObject(text)).pipe(
+			Effect.mapError((e) => new DescriptionParseError({ cause: e.message })),
+		),
+		Effect.flatMap((parsed) =>
+			Schema.decodeUnknownEffect(TitleDescriptionSchema)(parsed).pipe(
+				Effect.mapError(
+					(e) =>
+						new DescriptionParseError({
+							cause: Schema.isSchemaError(e) ? e.message : String(e),
+						}),
+				),
+			),
+		),
 	);
 }
 
