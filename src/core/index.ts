@@ -80,3 +80,8 @@ export {
 	toError,
 	unknownToMessage,
 } from "#core/string.js";
+export type { TitleDescription } from "#core/title-description.js";
+export {
+	parseTitleDescriptionFromAssistantText,
+	TitleDescriptionSchema,
+} from "#core/title-description.js";
