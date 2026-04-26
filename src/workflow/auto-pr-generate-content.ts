@@ -429,6 +429,60 @@ export function runGeneratePrContent(config: {
 	/** Custom fetch for tests (OpenAI `POST …/chat/completions`). Omit for production. */
 	fetch?: typeof fetch;
 }): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
+	const baseRef = `origin/${config.defaultBranch}`;
+	const aiLayer = aiProviderLayerFromConfig(
+		{
+			provider: config.provider,
+			model: config.model,
+			...(config.ghToken !== undefined ? { ghToken: config.ghToken } : {}),
+			...(config.provider === "local"
+				? {
+						...(config.openaiCompatUrl !== undefined
+							? { openaiCompatUrl: config.openaiCompatUrl }
+							: {}),
+						...(config.openaiCompatApiKey !== undefined
+							? { openaiCompatApiKey: config.openaiCompatApiKey }
+							: {}),
+					}
+				: {}),
+		},
+		config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+	);
+
+	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
+	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch).pipe(Layer.provide(gitLayer));
+	const prClientLayer = PullRequestClient.Live(config.workspace).pipe(
+		Layer.provide(ChildProcessSpawnerLayer),
+	);
+	const liveLayer = Layer.mergeAll(
+		AutoPrPlatformLayer,
+		aiLayer,
+		gitLayer,
+		toolkitLayer,
+		prClientLayer,
+	);
+
+	return runGeneratePrContentWithServices(config).pipe(Effect.provide(liveLayer));
+}
+
+/**
+ * Generate PR content using services from the environment.
+ *
+ * This is the Tagless Final runner used by tests and higher-level composition.
+ * The CLI-facing `runGeneratePrContent` only builds and provides live layers.
+ */
+export function runGeneratePrContentWithServices(config: {
+	defaultBranch: string;
+	branch: string;
+	workspace: string;
+	templatePath: string;
+	provider: AiProvider;
+	model: string;
+	/** Current PR title override for prompt continuity. */
+	existingPrTitle?: string;
+	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
+	retryDelay?: Duration.Duration;
+}) {
 	function toUnexpected(ctx: string) {
 		return (e: unknown) => new UnexpectedError({ cause: `${ctx}: ${unknownToMessage(e)}` });
 	}
@@ -442,9 +496,6 @@ export function runGeneratePrContent(config: {
 			provider,
 			model,
 			retryDelay,
-			ghToken,
-			openaiCompatUrl,
-			openaiCompatApiKey,
 			existingPrTitle: configuredExistingPrTitle,
 		} = config;
 		const pathApi = yield* Path.Path;
@@ -462,35 +513,12 @@ export function runGeneratePrContent(config: {
 			),
 		]);
 
-		const aiLayer = aiProviderLayerFromConfig(
-			{
-				provider,
-				model,
-				...(ghToken !== undefined ? { ghToken } : {}),
-				...(provider === "local"
-					? {
-							...(openaiCompatUrl !== undefined ? { openaiCompatUrl } : {}),
-							...(openaiCompatApiKey !== undefined ? { openaiCompatApiKey } : {}),
-						}
-					: {}),
-			},
-			config.fetch !== undefined ? { fetch: config.fetch } : undefined,
-		);
-
-		const gitLayer = GitContextLive(workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
-		const toolkitLayer = makeDiffToolkitLayer(baseRef, branch).pipe(Layer.provide(gitLayer));
-		const prClientLayer = PullRequestClient.Live(workspace).pipe(
-			Layer.provide(ChildProcessSpawnerLayer),
-		);
-
-		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
-
 		const existingPrTitleOpt = yield* resolveExistingPrTitleForPrompt({
 			branch,
 			...(configuredExistingPrTitle !== undefined
 				? { existingPrTitle: configuredExistingPrTitle }
 				: {}),
-		}).pipe(Effect.provide(prClientLayer));
+		});
 
 		const existingPrTitle = Option.isSome(existingPrTitleOpt)
 			? existingPrTitleOpt.value
@@ -505,7 +533,7 @@ export function runGeneratePrContent(config: {
 			model,
 			...(retryDelay !== undefined && { retryDelay }),
 			...(existingPrTitle !== undefined && { existingPrTitle }),
-		}).pipe(Effect.provide(generateLayer));
+		});
 
 		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
 		const titlePath = pathApi.join(workspace, PR_TITLE_FILE_NAME);
