@@ -28,6 +28,27 @@ const FILES = "src/a.ts\nsrc/b.ts\n";
 const DIFF_STAT = " src/a.ts | 5 +++++\n src/b.ts | 3 +++\n 2 files changed, 8 insertions(+)";
 export const TEMPLATE = "# PR\n\n{{description}}\n\n## Changes\n{{changes}}";
 
+export type LocalLlamaEndpoint = {
+	readonly openAiCompatBaseUrl: URL;
+	readonly modelId: string;
+};
+
+export function localLlamaEndpointFromEnv(
+	env: NodeJS.ProcessEnv = process.env,
+): LocalLlamaEndpoint | undefined {
+	const baseUrlRaw = env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim();
+	const modelId = env.AUTO_PR_AI_OPENAI_COMPAT_MODEL?.trim();
+	if (
+		baseUrlRaw === undefined ||
+		baseUrlRaw.length === 0 ||
+		modelId === undefined ||
+		modelId.length === 0
+	) {
+		return undefined;
+	}
+	return { openAiCompatBaseUrl: new URL(baseUrlRaw), modelId };
+}
+
 const MockDiffToolkitLayer = DiffToolkit.toLayer(
 	Effect.succeed(
 		DiffToolkit.of({
