@@ -69,7 +69,7 @@ The required PR **integration** job runs local llama scenarios only. The real **
 
 **auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
-**ci.yml** is the single entry for push/PR to `main`: the `changes` job applies path filters so each downstream job runs only when relevant. The **`gate`** job aggregates outcomes for branch protection as **`CI / gate`**. The **`nix`** job calls [nix.yml](../.github/workflows/nix.yml): upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), statix/deadnix via `nix flake check`, and auto-updates `bun.nix` for trusted same-repo runs using the same GitHub App as auto-pr when a push is needed (GITHUB_TOKEN pushes do not trigger workflows). Dependabot PRs are check-only because GitHub does not expose repository secrets to Dependabot-triggered runs.
+**ci.yml** is the single entry for push/PR to `main`: the `changes` job applies path filters so each downstream job runs only when relevant. The **`gate`** job aggregates outcomes for branch protection as **`CI / gate`**. The **`nix`** job calls [nix.yml](../.github/workflows/nix.yml): upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), statix/deadnix via `nix flake check`, and auto-updates `bun.nix` for trusted same-repo runs using the same GitHub App as auto-pr when a push is needed (GITHUB_TOKEN pushes do not trigger workflows). The App-token push naturally triggers the PR's next `pull_request` CI run on the generated commit; do not manually dispatch `ci.yml` after the push, because that creates an extra `workflow_dispatch` run that is not part of the PR check rollup. Dependabot PRs are check-only because GitHub does not expose repository secrets to Dependabot-triggered runs.
 
 **sbom.yml** runs nightly and on manual trigger. It generates and uploads a CycloneDX SBOM with npm's native `sbom` command outside the required PR gate. This keeps npm peer-resolution differences from blocking Bun dependency PRs while preserving regular SBOM artifacts.
 
@@ -147,7 +147,7 @@ Do NOT require individual job names (`check / check`, `dependency-review`, etc.)
 
 When the **`nix`** job pushes a `bun.nix` update, the PR head changes to a new commit. **`CI / gate`** must run on that new commit. If you see "waiting for status to be reported":
 
-1. **Wait 1–2 minutes** — The push triggers the check workflow; it may take a moment to start.
+1. **Wait 1–2 minutes** — The App-token push triggers the PR check workflow; it may take a moment to start.
 2. **Re-run workflows** — If the check still hasn't run, use "Re-run all jobs" from the Actions tab.
 3. **Manual trigger** — Push an empty commit: `git commit --allow-empty -m "ci: trigger workflows" && git push`.
 

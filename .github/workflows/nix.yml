@@ -4,8 +4,6 @@
 # Uses GitHub App token for trusted same-repo update runs so the push can trigger CI
 # on the new commit (GITHUB_TOKEN pushes do not trigger workflows). Dependabot PRs
 # do not receive repository secrets, so they run bun.nix as check-only.
-# The `Trigger check on new commit` step below is retained — see its inline comment for why
-# an explicit `ci.yml` dispatch may still be needed after the App push.
 #
 # Uses upstream Nix (cachix/install-nix-action).
 # Builds on x86_64-linux, aarch64-linux, and aarch64-darwin (macos-latest).
@@ -87,21 +85,6 @@ jobs:
           git commit -m "fix(nix): update bun.nix for bun.lock"
           if ! git push; then
             echo "::error::git push failed (exit 128 often = permission denied; check App has Contents: Read and write)"
-            exit 1
-          fi
-
-      # Explicit `gh workflow run ci.yml` after the App-token push: branch protection
-      # needs checks on the new commit; PR synchronize may not always re-run consolidated
-      # CI on the pushed head. Re-evaluate before deleting (Area D Task 5 diagnostic).
-      - name: Trigger check on new commit
-        if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed && github.actor != 'dependabot[bot]'
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          REF: ${{ inputs.ref || github.ref }}
-        run: |
-          BRANCH="${REF#refs/heads/}"
-          if ! gh workflow run ci.yml --ref "$BRANCH"; then
-            echo "::error::Failed to trigger ci.yml. Ensure App has Actions: Read and write permission."
             exit 1
           fi
 
