@@ -219,6 +219,16 @@ describe("normalizeUnknownToGeneratePrContentError", () => {
 		const result = normalizeUnknownToGeneratePrContentError(err);
 		expect(result).toBeInstanceOf(TemplateRenderError);
 	});
+
+	test("includes schema diagnostics for malformed tagged errors", () => {
+		const result = normalizeUnknownToGeneratePrContentError({
+			_tag: "ParseError",
+			cause: "missing message",
+		});
+		expect(result).toBeInstanceOf(TemplateRenderError);
+		expect(result.cause).toContain("ParseError did not match GeneratePrContentError");
+		expect(result.cause).toContain("message");
+	});
 });
 
 const VALID_AI_RESPONSE = JSON.stringify({
