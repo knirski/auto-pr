@@ -4,6 +4,10 @@
  * Path aliases: #auto-pr (this), #core, #workflow/*, #tools/*
  */
 
+export {
+	aiProviderConfigFromGeneratePrContentConfig,
+	aiProviderConfigFromRunAutoPrConfig,
+} from "#auto-pr/ai-provider-config.js";
 export type {
 	AiProvider,
 	RunAutoPrConfigCommon,
