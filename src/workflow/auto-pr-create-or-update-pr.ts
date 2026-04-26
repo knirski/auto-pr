@@ -141,6 +141,7 @@ function createGhRetrySchedule(
 				message: `gh failed, retrying in about ${delayLabel}...`,
 			}).pipe(Effect.as(delay)),
 		),
+		// Effect v4 jitter keeps the delay within 80%-120%, so the log remains approximate.
 		Schedule.jittered,
 	);
 }
