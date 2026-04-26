@@ -6,12 +6,18 @@ name: Integration
 on:
   workflow_call:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-integration
   cancel-in-progress: true
 
 permissions: {}
+
+env:
+  # Exercise Node 24 action compatibility before GitHub makes it the runner default.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # Scenario: local model with no tool-call support → exercises the commit-summary fallback path.
@@ -101,6 +107,7 @@ jobs:
   # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
   # Uses phi-4-mini-instruct. No local model needed — lightweight job.
   integration-github-models:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     permissions:
       contents: read
       models: read

@@ -1,4 +1,4 @@
-# Reusable workflow: run full check (test, lint, typecheck, rumdl, typos, actionlint, shellcheck, lychee, SBOM, Codecov).
+# Reusable workflow: run deterministic PR checks (test, lint, typecheck, rumdl, typos, actionlint, shellcheck, lychee, Codecov).
 # Called by ci.yml (runs when non-.md files change). Integration tests run separately via integration.yml.
 # No Nix — uses GitHub Actions for rumdl/typos/lychee/actionlint/shellcheck.
 
@@ -13,6 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions: {}
+
+env:
+  # Exercise Node 24 action compatibility before GitHub makes it the runner default.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   check:
@@ -71,31 +75,6 @@ jobs:
           sh_checker_exclude: node_modules dist coverage .worktrees website/node_modules
         env:
           SHFMT_OPTS: -d
-
-      # SBOM: lockfile graph only — same concerns as unit tests/lint, not integration or act.
-      - name: Setup Node (for SBOM)
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: ".nvmrc"
-        env:
-          # nektos/act + Docker: /opt/hostedtoolcache may be root-only; host AGENT_TOOLSDIRECTORY can leak into the
-          # container and break mkdir. Workspace-relative cache matches hosted runners (writable) and fixes EACCES.
-          RUNNER_TOOL_CACHE: ${{ github.workspace }}/.cache/github-actions/tool-cache
-          AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.cache/github-actions/tool-cache
-
-      - name: Generate SBOM
-        # --ignore-scripts: skip prepare (bun build); SBOM only needs the lockfile graph.
-        run: npm install --ignore-scripts && npm sbom --sbom-format cyclonedx > sbom.json
-
-      - name: Upload SBOM
-        # upload-artifact@v7 sends mime_type; act's artifact server unmarshals CreateArtifact with strict
-        # protojson and rejects unknown fields (nektos/act#6022). Upstream: open PRs e.g. #6039 / #6053
-        # (DiscardUnknown) — after merge and an act release, this guard can be removed if desired.
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: sbom
-          path: sbom.json
 
       - name: Check links
         continue-on-error: true

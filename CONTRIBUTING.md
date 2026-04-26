@@ -14,6 +14,8 @@ bun run build
 bun x lefthook install
 ```
 
+The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.12 for local parity with CI.
+
 **Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/**` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
 ### Optional: typos, lychee, and actionlint for full local check
@@ -47,11 +49,11 @@ Without these tools installed, `scripts/nix-run-if-missing.sh` will use `nix run
 
 The script prefers standalone `act` (PATH or `nix run .#act` when the flake supports your host), so you do not need `gh extension install nektos/gh-act` unless you rely on `gh act` alone. If neither `act` nor Nix is available, it uses `gh act` when that extension is installed. In code this is the **`direct`** backend (`bash` + `scripts/nix-run-if-missing.sh` + `act`) vs **`gh`** (`gh act`); see `ActBackend` in [`scripts/act-local-ci.ts`](scripts/act-local-ci.ts).
 
-This repo’s workflows use a specific `runs-on` label (see the YAML). [act](https://github.com/nektos/act) needs **`-P <runs-on>=<container image>`** where `<runs-on>` **matches** the workflow job’s label. [scripts/act-local-ci.ts](scripts/act-local-ci.ts) defaults the label to **`ubuntu-24.04`** ([`DEFAULT_ACT_RUNS_ON_LABEL`](scripts/act-local-ci.ts)); set **`ACT_RUNS_ON_LABEL`** if your workflows use something else. It resolves a **container image** via **`ACT_RUNNER_IMAGE`** (optional) or built-in defaults tuned for this repo’s current label. Same script writes a minimal `workflow_dispatch` JSON (`-e`, from `git remote origin` or `package.json` `repository`) to `.act-artifacts/workflow_dispatch.json` so `github.event.repository` exists for actions that need it, and **`--artifact-server-path .act-artifacts/`** so [`actions/upload-artifact`](https://github.com/actions/upload-artifact) (SBOM, gitleaks SARIF) gets a local [artifact server](https://github.com/nektos/act/issues/1929) instead of GitHub’s `ACTIONS_RUNTIME_TOKEN`. If you invoke **`act` by hand**, pass **`-P`** with the same label as `runs-on` and your chosen image.
+This repo’s workflows use a specific `runs-on` label (see the YAML). [act](https://github.com/nektos/act) needs **`-P <runs-on>=<container image>`** where `<runs-on>` **matches** the workflow job’s label. [scripts/act-local-ci.ts](scripts/act-local-ci.ts) defaults the label to **`ubuntu-24.04`** ([`DEFAULT_ACT_RUNS_ON_LABEL`](scripts/act-local-ci.ts)); set **`ACT_RUNS_ON_LABEL`** if your workflows use something else. It resolves a **container image** via **`ACT_RUNNER_IMAGE`** (optional) or built-in defaults tuned for this repo’s current label. Same script writes a minimal `workflow_dispatch` JSON (`-e`, from `git remote origin` or `package.json` `repository`) to `.act-artifacts/workflow_dispatch.json` so `github.event.repository` exists for actions that need it, and **`--artifact-server-path .act-artifacts/`** so [`actions/upload-artifact`](https://github.com/actions/upload-artifact) and gitleaks SARIF get a local [artifact server](https://github.com/nektos/act/issues/1929) instead of GitHub’s `ACTIONS_RUNTIME_TOKEN`. If you invoke **`act` by hand**, pass **`-P`** with the same label as `runs-on` and your chosen image.
 
-**Docker/act gotchas:** The [check](.github/workflows/check.yml) job sets **`RUNNER_TOOL_CACHE`** and **`AGENT_TOOLSDIRECTORY`** under **`github.workspace/.cache`** so **`actions/setup-node`** does not try to create **`/opt/hostedtoolcache/...`** as an unprivileged user (fixes common **`EACCES`** in act). By default **`act-local-ci`** does **not** pass **`--artifact-server-port`** (act listens on its default, usually **34567**) so **[`actions/upload-artifact`](https://github.com/actions/upload-artifact)** and gitleaks SARIF work. **`--artifact-server-port=0`** breaks artifact uploads with current act (bad URL). If **`listen … :34567: address already in use`**, set **`ACT_ARTIFACT_SERVER_PORT`** to a free port (e.g. **`45678`**) or stop a stale **`act`**. **`ACT_ARTIFACT_SERVER_PORT=-`** omits the flag; optional **`ACT_ARTIFACT_SERVER_ADDR`**.
+**Docker/act gotchas:** By default **`act-local-ci`** does **not** pass **`--artifact-server-port`** (act listens on its default, usually **34567**) so **[`actions/upload-artifact`](https://github.com/actions/upload-artifact)** and gitleaks SARIF work. **`--artifact-server-port=0`** breaks artifact uploads with current act (bad URL). If **`listen … :34567: address already in use`**, set **`ACT_ARTIFACT_SERVER_PORT`** to a free port (e.g. **`45678`**) or stop a stale **`act`**. **`ACT_ARTIFACT_SERVER_PORT=-`** omits the flag; optional **`ACT_ARTIFACT_SERVER_ADDR`**.
 
-**Parity limits:** GitHub-hosted CI is still an **Azure VM**, not Docker—kernel, OIDC, and some services differ. act cannot be identical, but **matching runner image + artifact server + event file** lets the [check workflow](.github/workflows/check.yml) run the same steps locally without skipping gitleaks, SBOM upload, or rumdl.
+**Parity limits:** GitHub-hosted CI is still an **Azure VM**, not Docker—kernel, OIDC, and some services differ. act cannot be identical, but **matching runner image + artifact server + event file** lets the [check workflow](.github/workflows/check.yml) run the same steps locally without skipping gitleaks or rumdl.
 
 ### Unit vs integration tests
 
@@ -92,13 +94,13 @@ Lefthook runs `bun run check:code` before each push. It is installed as a devDep
 
 If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 
-**CI handles it:** Push your branch. CI will update `bun.nix` automatically for same-repo PRs and main. No need to commit the change yourself.
+**CI handles it:** Push your branch. CI will update `bun.nix` automatically for trusted same-repo PRs and main. No need to commit the change yourself.
 
 **Local warning:** `bun run check` warns when `bun.nix` is stale. You can ignore it — CI will fix it when you push.
 
 **If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for **`CI / gate`** to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-ci--gate-waiting-for-status) if the required check stays "waiting for status".
 
-**Fork PRs:** CI cannot push to forks. If the **`nix`** job fails in CI, update locally: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
+**Fork and Dependabot PRs:** CI cannot push generated `bun.nix` updates from these contexts. If the **`nix`** job fails in CI, update locally or run the manual **Update bun.nix** workflow from a trusted branch: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
 
 See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architecture.
 
