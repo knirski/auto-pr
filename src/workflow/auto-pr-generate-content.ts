@@ -2,7 +2,7 @@
  * Generate PR title and filled template body. Heavy lifting for auto-PR workflow.
  *
  * Requires env: GITHUB_WORKSPACE, DEFAULT_BRANCH, BRANCH. Uses GitContext to fetch commit log and diff data directly.
- * Optional: `AUTO_PR_EXISTING_PR_TITLE` (non-empty) or best-effort `gh pr view <BRANCH> --json title` supplies the current PR title for multi-commit AI prompts (continuity when updating an open PR).
+ * Optional: `AUTO_PR_EXISTING_PR_TITLE` (non-empty) or best-effort PullRequestClient lookup supplies the current PR title for multi-commit AI prompts (continuity when updating an open PR).
  * PR template is `.github/PULL_REQUEST_TEMPLATE.md` under workspace (edit that file for “how to test” copy). For 2+ commits: `AUTO_PR_AI_PROVIDER` (optional; default `local`) and provider-specific env (see `config.ts`).
  *
  * Parses commits to count semantic commits. For 1: FillPrTemplate only. For 2+: `LanguageModel.generateText`, then
@@ -28,7 +28,6 @@ import {
 } from "effect";
 import type { AiError } from "effect/unstable/ai";
 import { LanguageModel } from "effect/unstable/ai";
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	type AiProvider,
 	AutoPrConfigError,
@@ -50,12 +49,12 @@ import {
 	ParseError,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
-	runCommand,
 	runMain,
 	TemplateRenderError,
 	UnexpectedError,
 	unknownToMessage,
 } from "#auto-pr";
+import { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
@@ -69,7 +68,6 @@ import {
 } from "#core/fill-pr-template-core.js";
 import {
 	getFallbackTitleAndDescription,
-	parseExistingPrTitleOutput as parseExistingPrTitleOutputCore,
 	validateGeneratedContent,
 } from "#core/generated-content.js";
 import { truncateForLog } from "#core/string.js";
@@ -141,24 +139,11 @@ function logAndValidateTitleDescription(
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 
-function parseExistingPrTitleOutput(stdout: string): Effect.Effect<Option.Option<string>, never> {
-	const parsed = parseExistingPrTitleOutputCore(stdout);
-	if (parsed._tag === "Missing") return Effect.succeed(Option.none());
-	if (parsed._tag === "Found") return Effect.succeed(Option.some(parsed.title));
-
-	return Effect.logWarning({
-		event: "generate_pr_content",
-		step: "existing_pr_title",
-		status: `${parsed.step}_failed`,
-		message: parsed.reason,
-	}).pipe(Effect.as(Option.none()));
-}
-
-/** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort `gh pr view` (failures -> no title). */
+/** Env `AUTO_PR_EXISTING_PR_TITLE` wins; else best-effort PR lookup (failures -> no title). */
 export function resolveExistingPrTitleForPrompt(input: {
 	readonly workspace: string;
 	readonly branch: string;
-}): Effect.Effect<Option.Option<string>, never, ChildProcessSpawner> {
+}): Effect.Effect<Option.Option<string>, never, PullRequestClient> {
 	return Effect.gen(function* () {
 		const fromEnv = yield* Effect.sync(() => (process.env.AUTO_PR_EXISTING_PR_TITLE ?? "").trim());
 		if (fromEnv !== "") {
@@ -171,22 +156,29 @@ export function resolveExistingPrTitleForPrompt(input: {
 			return Option.some(fromEnv);
 		}
 
-		const stdout = yield* runCommand(
-			"gh",
-			["pr", "view", input.branch, "--json", "title"],
-			input.workspace,
-		).pipe(Effect.catch(() => Effect.succeed("")));
+		const prClient = yield* PullRequestClient;
+		const prOpt = yield* prClient.findByBranch(input.branch).pipe(
+			Effect.catch((error) =>
+				Effect.logWarning({
+					event: "generate_pr_content",
+					step: "existing_pr_title",
+					status: "lookup_failed",
+					message: formatError(error),
+				}).pipe(Effect.as(Option.none())),
+			),
+		);
+		if (Option.isNone(prOpt)) return Option.none();
 
-		const titleOpt = yield* parseExistingPrTitleOutput(stdout);
-		if (Option.isNone(titleOpt)) return Option.none();
+		const title = prOpt.value.title?.trim() ?? "";
+		if (title === "") return Option.none();
 
 		yield* Effect.log({
 			event: "generate_pr_content",
 			step: "existing_pr_title",
-			source: "gh",
-			title_chars: titleOpt.value.length,
+			source: "pull_request_client",
+			title_chars: title.length,
 		});
-		return titleOpt;
+		return Option.some(title);
 	});
 }
 
@@ -483,13 +475,16 @@ export function runGeneratePrContent(config: {
 
 		const gitLayer = GitContextLive(workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
 		const toolkitLayer = makeDiffToolkitLayer(baseRef, branch).pipe(Layer.provide(gitLayer));
+		const prClientLayer = PullRequestClient.Live(workspace).pipe(
+			Layer.provide(ChildProcessSpawnerLayer),
+		);
 
 		const generateLayer = Layer.mergeAll(AutoPrPlatformLayer, aiLayer, gitLayer, toolkitLayer);
 
 		const existingPrTitleOpt = yield* resolveExistingPrTitleForPrompt({
 			workspace,
 			branch,
-		}).pipe(Effect.provide(ChildProcessSpawnerLayer));
+		}).pipe(Effect.provide(prClientLayer));
 
 		const existingPrTitle = Option.isSome(existingPrTitleOpt)
 			? existingPrTitleOpt.value

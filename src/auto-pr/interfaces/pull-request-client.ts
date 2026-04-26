@@ -10,6 +10,7 @@ import type { PrLookupError, PrUrlParseError, PullRequestFailedError } from "#co
 export type PrInfo = {
 	readonly number: number;
 	readonly url: string;
+	readonly title?: string | undefined;
 };
 
 export interface PullRequestClientService {

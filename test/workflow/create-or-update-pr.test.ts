@@ -159,8 +159,14 @@ describe("PullRequestClient.findByBranch", () => {
 	});
 
 	test("returns Option.some when gh returns valid JSON", async () => {
+		const seenArgs: Array<readonly string[]> = [];
 		const mock = Layer.mock(ChildProcessSpawner)({
-			string: () => Effect.succeed('{"number":42,"url":"https://github.com/o/r/pull/42"}'),
+			string: (cmd: { _tag: string; command?: string; args?: readonly string[] }) => {
+				if (cmd.args !== undefined) seenArgs.push(cmd.args);
+				return Effect.succeed(
+					'{"number":42,"url":"https://github.com/o/r/pull/42","title":"feat: existing"}',
+				);
+			},
 			streamString: () => Stream.empty,
 			streamLines: () => Stream.empty,
 		});
@@ -172,7 +178,9 @@ describe("PullRequestClient.findByBranch", () => {
 				if (Option.isSome(result)) {
 					expect(result.value.number).toBe(42);
 					expect(result.value.url).toBe("https://github.com/o/r/pull/42");
+					expect(result.value.title).toBe("feat: existing");
 				}
+				expect(seenArgs.at(0)).toEqual(["pr", "view", "ai/foo", "--json", "number,url,title"]);
 			}).pipe(Effect.provide(PullRequestClient.Live("/tmp"))),
 		);
 	});

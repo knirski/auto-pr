@@ -1,20 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-	Cause,
-	Duration,
-	Effect,
-	Exit,
-	FileSystem,
-	Layer,
-	Option,
-	Redacted,
-	Result,
-	Stream,
-} from "effect";
-import type { PlatformError } from "effect/PlatformError";
-import { systemError } from "effect/PlatformError";
+import { Cause, Duration, Effect, Exit, FileSystem, Layer, Option, Redacted, Result } from "effect";
 import { ChildProcess } from "effect/unstable/process";
-import type { Command } from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	AutoPrConfigError,
@@ -23,10 +9,11 @@ import {
 	DiffToolkit,
 	NoSemanticCommitsError,
 	ParseError,
+	PullRequestClient,
 	TemplateRenderError,
 } from "#auto-pr";
 import { GitContext } from "#auto-pr/git-context.js";
-import { FillPrTemplateValidationError } from "#core/errors.js";
+import { FillPrTemplateValidationError, PrLookupError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
 import {
@@ -273,50 +260,31 @@ const twoCommits = [
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
 
-function isGhPrViewTitleCmd(cmd: Command): boolean {
-	if (cmd._tag !== "StandardCommand") {
-		return false;
-	}
-	const { command, args } = cmd;
-	return (
-		command === "gh" &&
-		args[0] === "pr" &&
-		args[1] === "view" &&
-		args.includes("--json") &&
-		args.includes("title")
-	);
-}
-
-/** Spawner mock: only `gh pr view … --json title` is special-cased; other commands succeed with "". */
-function ghPrViewTitleSpawnerLayer(
-	resolveGh: () => Effect.Effect<string, PlatformError, never>,
-): Layer.Layer<ChildProcessSpawner> {
-	return Layer.mock(ChildProcessSpawner)({
-		string: (cmd) => (isGhPrViewTitleCmd(cmd) ? resolveGh() : Effect.succeed("")),
-		streamString: () => Stream.empty,
-		streamLines: () => Stream.empty,
-	});
-}
-
 describe("resolveExistingPrTitleForPrompt", () => {
-	const layerWithGh = (gh: () => Effect.Effect<string, PlatformError, never>) =>
-		Layer.mergeAll(TestBaseLayer, ghPrViewTitleSpawnerLayer(gh));
+	const layerWithPrClient = (
+		findByBranch: () => Effect.Effect<
+			Option.Option<{ readonly number: number; readonly url: string; readonly title?: string }>,
+			PrLookupError
+		>,
+	) =>
+		Layer.mergeAll(
+			TestBaseLayer,
+			Layer.succeed(
+				PullRequestClient,
+				PullRequestClient.of({
+					findByBranch,
+					update: () => Effect.die(new Error("update should not be called")),
+					create: () => Effect.die(new Error("create should not be called")),
+				}),
+			),
+		);
 
-	test("returns env title when AUTO_PR_EXISTING_PR_TITLE is non-empty (does not call gh)", async () => {
+	test("returns env title when AUTO_PR_EXISTING_PR_TITLE is non-empty (does not call PR client)", async () => {
 		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
 		process.env.AUTO_PR_EXISTING_PR_TITLE = "  feat: from env  ";
 		try {
 			await runEffect(
-				layerWithGh(() =>
-					Effect.fail(
-						systemError({
-							_tag: "Unknown",
-							module: "test",
-							method: "string",
-							description: "gh should not run when env is set",
-						}),
-					),
-				),
+				layerWithPrClient(() => Effect.die(new Error("PR client should not run when env is set"))),
 			)(
 				Effect.gen(function* () {
 					const opt = yield* resolveExistingPrTitleForPrompt({
@@ -333,12 +301,20 @@ describe("resolveExistingPrTitleForPrompt", () => {
 		}
 	});
 
-	test("returns title from gh JSON on success", async () => {
+	test("returns title from PR client on success", async () => {
 		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
 		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
 		try {
 			await runEffect(
-				layerWithGh(() => Effect.succeed(JSON.stringify({ title: "feat: from gh" }))),
+				layerWithPrClient(() =>
+					Effect.succeed(
+						Option.some({
+							number: 1,
+							url: "https://github.com/owner/repo/pull/1",
+							title: "feat: from client",
+						}),
+					),
+				),
 			)(
 				Effect.gen(function* () {
 					const opt = yield* resolveExistingPrTitleForPrompt({
@@ -346,7 +322,7 @@ describe("resolveExistingPrTitleForPrompt", () => {
 						branch: "ai/b",
 					});
 					expect(Option.isSome(opt)).toBe(true);
-					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from gh");
+					if (Option.isSome(opt)) expect(opt.value).toBe("feat: from client");
 				}).pipe(Effect.scoped),
 			);
 		} finally {
@@ -354,18 +330,56 @@ describe("resolveExistingPrTitleForPrompt", () => {
 		}
 	});
 
-	test("returns none when gh command fails", async () => {
+	test("returns none when PR lookup fails", async () => {
 		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
 		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
 		try {
 			await runEffect(
-				layerWithGh(() =>
-					Effect.fail(
-						systemError({
-							_tag: "NotFound",
-							module: "gh",
-							method: "pr view",
-							description: "no PR",
+				layerWithPrClient(() =>
+					Effect.fail(new PrLookupError({ branch: "ai/b", cause: "lookup failed" })),
+				),
+			)(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when PR client returns no PR", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(layerWithPrClient(() => Effect.succeed(Option.none())))(
+				Effect.gen(function* () {
+					const opt = yield* resolveExistingPrTitleForPrompt({
+						workspace: "/w",
+						branch: "ai/b",
+					});
+					expect(Option.isNone(opt)).toBe(true);
+				}).pipe(Effect.scoped),
+			);
+		} finally {
+			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
+		}
+	});
+
+	test("returns none when PR info has no title", async () => {
+		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
+		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
+		try {
+			await runEffect(
+				layerWithPrClient(() =>
+					Effect.succeed(
+						Option.some({
+							number: 1,
+							url: "https://github.com/owner/repo/pull/1",
 						}),
 					),
 				),
@@ -383,68 +397,22 @@ describe("resolveExistingPrTitleForPrompt", () => {
 		}
 	});
 
-	test("returns none when gh stdout is empty or whitespace-only", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			for (const out of ["", "  \n  "]) {
-				await runEffect(layerWithGh(() => Effect.succeed(out)))(
-					Effect.gen(function* () {
-						const opt = yield* resolveExistingPrTitleForPrompt({
-							workspace: "/w",
-							branch: "ai/b",
-						});
-						expect(Option.isNone(opt)).toBe(true);
-					}).pipe(Effect.scoped),
-				);
-			}
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
-	});
-
-	test("returns none when gh stdout is not valid JSON", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			await runEffect(layerWithGh(() => Effect.succeed("not-json")))(
-				Effect.gen(function* () {
-					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/w",
-						branch: "ai/b",
-					});
-					expect(Option.isNone(opt)).toBe(true);
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
-	});
-
-	test("returns none when JSON does not match { title: string }", async () => {
-		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
-		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
-		try {
-			await runEffect(layerWithGh(() => Effect.succeed(JSON.stringify({ foo: 1 }))))(
-				Effect.gen(function* () {
-					const opt = yield* resolveExistingPrTitleForPrompt({
-						workspace: "/w",
-						branch: "ai/b",
-					});
-					expect(Option.isNone(opt)).toBe(true);
-				}).pipe(Effect.scoped),
-			);
-		} finally {
-			if (prev !== undefined) process.env.AUTO_PR_EXISTING_PR_TITLE = prev;
-		}
-	});
-
-	test("returns none when title is empty or whitespace-only after trim", async () => {
+	test("returns none when PR title is empty or whitespace-only after trim", async () => {
 		const prev = process.env.AUTO_PR_EXISTING_PR_TITLE;
 		delete process.env.AUTO_PR_EXISTING_PR_TITLE;
 		try {
 			for (const title of ["", "   \t  "]) {
-				await runEffect(layerWithGh(() => Effect.succeed(JSON.stringify({ title }))))(
+				await runEffect(
+					layerWithPrClient(() =>
+						Effect.succeed(
+							Option.some({
+								number: 1,
+								url: "https://github.com/owner/repo/pull/1",
+								title,
+							}),
+						),
+					),
+				)(
 					Effect.gen(function* () {
 						const opt = yield* resolveExistingPrTitleForPrompt({
 							workspace: "/w",
