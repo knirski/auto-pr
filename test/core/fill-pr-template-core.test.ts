@@ -236,6 +236,13 @@ Made-with: Cursor`;
 		test("feat! → Breaking change", () => {
 			expect(inferTypeOfChange([commit("feat!: x", "")])).toBe("Breaking change");
 		});
+		test("later breaking subject → Breaking change", () => {
+			const commits = [
+				commit("chore: cleanup", "", { type: "chore" }),
+				commit("feat!: remove legacy API", "", { type: "feat" }),
+			];
+			expect(inferTypeOfChange(commits)).toBe("Breaking change");
+		});
 		test("empty commits → Chore", () => {
 			expect(inferTypeOfChange([])).toBe("Chore");
 		});

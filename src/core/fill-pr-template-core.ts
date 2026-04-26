@@ -177,6 +177,10 @@ export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: stri
 		return "Breaking change";
 	}
 
+	if (commits.some((c) => Option.isSome(extractBreakingDescriptionFromLine(c.subject)))) {
+		return "Breaking change";
+	}
+
 	if (titleTrim && matchesConventionalTitleFormat(titleTrim)) {
 		return pipe(extractConventionalTypeFromTitle(titleTrim), typeFromString);
 	}
@@ -184,7 +188,6 @@ export function inferTypeOfChange(commits: readonly CommitInfo[], prTitle?: stri
 	const first = commits[0];
 	if (!first) return "Chore";
 	const sub = first.subject;
-	if (/^feat!|^feat\(.*\)!:|^BREAKING/.test(sub)) return "Breaking change";
 
 	const fromType = typeFromString(first.type);
 	if (fromType !== "Chore") return fromType;
