@@ -2,9 +2,20 @@
  * Pure string helpers. No Effect, no I/O.
  */
 
+import { Option, pipe } from "effect";
+
 /** Check if string is empty or whitespace-only. */
 export function isBlank(s: string): boolean {
 	return s.trim().length === 0;
+}
+
+/** Convert nullish or blank strings to None, otherwise return the trimmed value. */
+export function nonBlankOption(value: string | null | undefined): Option.Option<string> {
+	return pipe(
+		Option.fromNullishOr(value),
+		Option.map((s) => s.trim()),
+		Option.filter((s) => s !== ""),
+	);
 }
 
 /** Merge commits (e.g. "Merge branch 'x' into y") add no semantic value. */

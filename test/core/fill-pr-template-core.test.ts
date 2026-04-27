@@ -31,6 +31,7 @@ import {
 	validateTitleDescription,
 } from "#core/fill-pr-template-core.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
+import { nonBlankOption } from "#core/string.js";
 
 /** Subject repeat count so `feat: ${"x".repeat(...)}` is one character over {@link PR_TITLE_LINE_MAX_LENGTH}. */
 const FEAT_COLON_SUBJECT_OVER_MAX = PR_TITLE_LINE_MAX_LENGTH - "feat: ".length + 1;
@@ -62,13 +63,6 @@ const TEST_TEMPLATE = `## Description
 {{breakingChanges}}
 `;
 
-const toNonBlankOption = (value: string | null | undefined): Option.Option<string> =>
-	pipe(
-		Option.fromNullishOr(value),
-		Option.map((s) => s.trim()),
-		Option.filter((s) => s !== ""),
-	);
-
 const commit = (
 	subject: string,
 	body: string,
@@ -78,9 +72,9 @@ const commit = (
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: toNonBlankOption(opts?.type),
+	type: nonBlankOption(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: toNonBlankOption(opts?.breakingNote),
+	breakingNote: nonBlankOption(opts?.breakingNote),
 });
 
 describe("fill-pr-template-core", () => {

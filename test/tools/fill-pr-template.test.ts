@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit, Layer, Option, pipe } from "effect";
+import { Cause, Effect, Exit, Layer, Option } from "effect";
 import { Command } from "effect/unstable/cli";
 import { FillPrTemplate, renderBody } from "#auto-pr";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
+import { nonBlankOption } from "#core/string.js";
 import { runEffect } from "#test/run-effect.js";
 import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
 import {
@@ -42,13 +43,6 @@ const TEST_TEMPLATE = `## Description
 {{breakingChanges}}
 `;
 
-const toNonBlankOption = (value: string | null | undefined): Option.Option<string> =>
-	pipe(
-		Option.fromNullishOr(value),
-		Option.map((s) => s.trim()),
-		Option.filter((s) => s !== ""),
-	);
-
 const commit = (
 	subject: string,
 	body: string,
@@ -58,9 +52,9 @@ const commit = (
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: toNonBlankOption(opts?.type),
+	type: nonBlankOption(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: toNonBlankOption(opts?.breakingNote),
+	breakingNote: nonBlankOption(opts?.breakingNote),
 });
 
 /** Format commit blocks for parseCommits (---COMMIT--- separated). */

@@ -88,6 +88,7 @@ export {
 	isBlank,
 	isHttpError,
 	isMergeCommitSubject,
+	nonBlankOption,
 	parseSubjects,
 	toError,
 	unknownToMessage,

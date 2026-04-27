@@ -34,6 +34,7 @@ import {
 	isValidConventionalTitle,
 	parseCommits,
 } from "#core/fill-pr-template-core.js";
+import { nonBlankOption } from "#core/string.js";
 import pkg from "../../package.json" with { type: "json" };
 
 // ─── Shell (Effect) ────────────────────────────────────────────────────────
@@ -67,9 +68,7 @@ export function runFillBody(
 	| TemplateRenderError,
 	FileSystem.FileSystem | FillPrTemplate | Path.Path
 > {
-	const prTitle = Option.fromNullishOr(options?.prTitleForTypeOfChange?.trim()).pipe(
-		Option.filter((s) => s !== ""),
-	);
+	const prTitle = nonBlankOption(options?.prTitleForTypeOfChange);
 	const params = {
 		logFilePath,
 		filesFilePath,
