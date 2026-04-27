@@ -19,6 +19,7 @@ sbom.json
 result
 .cursor/worktrees.json
 .cursor/debug-*.log
+.codex
 website/.astro/
 website/src/content/docs/
 .superpowers/

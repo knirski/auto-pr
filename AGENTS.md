@@ -8,7 +8,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 
 ## Before any task
 
-### Skills
+### Skills And Rule Sources
 
 [Superpowers](https://github.com/obra/superpowers). **Invoke relevant skills before any task** — if a skill might apply (even 1%), use it. User instructions override skills.
 
@@ -23,7 +23,13 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 | Implementation done | finishing-a-development-branch — verify, present options |
 | Between tasks | requesting-code-review |
 
-**Project-specific:** ts-scripting (TypeScript, Effect v4, FC/IS), create-rule (Cursor rules). **Philosophy:** TDD, systematic over ad-hoc, evidence over claims.
+**Project-specific:** ts-scripting (TypeScript, Effect v4, FC/IS). **Philosophy:** TDD, systematic over ad-hoc, evidence over claims.
+
+Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; keep them aligned when changing agent policy. Prefer nested `AGENTS.md` files for path-scoped Codex rules:
+
+- `.github/AGENTS.md` — workflows, composite actions, pins, workflow tests.
+- `src/core/AGENTS.md` — functional core purity.
+- `scripts/AGENTS.md` — shell scripts and local CI harness exception.
 
 ---
 
