@@ -55,6 +55,31 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 		);
 	});
 
+	test("trims required string values", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: " /workspace ",
+				DEFAULT_BRANCH: " main ",
+				BRANCH: " ai/feature ",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: " llama3.1:8b ",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.workspace).toBe("/workspace");
+				expect(config.defaultBranch).toBe("main");
+				expect(config.branch).toBe("ai/feature");
+				expect(config.model).toBe("llama3.1:8b");
+				expect(config.templatePath).toBe(join("/workspace", ".github/PULL_REQUEST_TEMPLATE.md"));
+			}),
+		);
+	});
+
 	test("trims AUTO_PR_EXISTING_PR_TITLE when present", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
@@ -555,6 +580,39 @@ describe("GeneratePrContentConfigLayer rejects branch === defaultBranch", () => 
 				GITHUB_WORKSPACE: "/workspace",
 				DEFAULT_BRANCH: "main",
 				BRANCH: "main",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		const exit = await Effect.runPromise(
+			Effect.gen(function* () {
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(AutoPrConfigError);
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain("BRANCH");
+					expect((err as AutoPrConfigError).missing.join(" ")).toContain("DEFAULT_BRANCH");
+				},
+				onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+			});
+		}
+	});
+
+	test("fails when trimmed BRANCH equals trimmed DEFAULT_BRANCH", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/workspace",
+				DEFAULT_BRANCH: " main ",
+				BRANCH: " main ",
 				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
 			}),
 		);
