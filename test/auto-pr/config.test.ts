@@ -388,6 +388,46 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 		);
 	});
 
+	test("trims BRANCH when present", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				BRANCH: "  ai/feature  ",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.branch).toBe("ai/feature");
+			}),
+		);
+	});
+
+	test("ignores blank BRANCH", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				BRANCH: " \t ",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.branch).toBeUndefined();
+			}),
+		);
+	});
+
 	test("with github-models provider and default model", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({

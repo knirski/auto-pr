@@ -42,6 +42,7 @@ import {
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
 import { AutoPrConfigError } from "#core/errors.js";
 import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
+import { nonBlankOption } from "#core/string.js";
 
 /** Type guard for cause with message property. */
 function hasMessage(obj: unknown): obj is { message?: string } {
@@ -84,13 +85,7 @@ function requireRedactedOption(
 }
 
 function optionalTrimmedNonEmpty(opt: Option.Option<string>): string | undefined {
-	return Option.match(opt, {
-		onNone: () => undefined,
-		onSome: (value) => {
-			const trimmed = value.trim();
-			return trimmed === "" ? undefined : trimmed;
-		},
-	});
+	return Option.getOrUndefined(Option.flatMap(opt, nonBlankOption));
 }
 
 /** Unwrap Option with default; log a warning when the default is used. */
@@ -403,12 +398,12 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
-			if (Option.isSome(base.branch) && base.branch.value === defaultBranch) {
+			const branch = optionalTrimmedNonEmpty(base.branch);
+
+			if (branch === defaultBranch) {
 				return yield* Effect.fail(
 					new AutoPrConfigError({
-						missing: [
-							`BRANCH (${base.branch.value}) must differ from DEFAULT_BRANCH (${defaultBranch})`,
-						],
+						missing: [`BRANCH (${branch}) must differ from DEFAULT_BRANCH (${defaultBranch})`],
 					}),
 				);
 			}
@@ -426,7 +421,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				workspace,
 				templatePath,
 				ghToken: base.ghToken,
-				...(Option.isSome(base.branch) ? { branch: base.branch.value } : {}),
+				...(branch !== undefined ? { branch } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 			};
 
