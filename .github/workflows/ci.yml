@@ -21,6 +21,9 @@ concurrency:
 
 permissions: {}
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # Determine which groups of files changed, so work jobs only run when relevant.
   # Filter definitions mirror the pre-Area-A entry workflows' paths / paths-ignore exactly.
