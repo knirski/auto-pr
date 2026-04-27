@@ -59,9 +59,10 @@ function requireNonEmpty(
 	name: string,
 	value: string,
 ): Effect.Effect<string, AutoPrConfigError, never> {
-	return value.trim() === ""
+	const trimmed = value.trim();
+	return trimmed === ""
 		? Effect.fail(new AutoPrConfigError({ missing: [`${name} must be non-empty`] }))
-		: Effect.succeed(value);
+		: Effect.succeed(trimmed);
 }
 
 function requireRedactedNonEmpty(
