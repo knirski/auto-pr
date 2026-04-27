@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit, Layer, Option } from "effect";
+import { Cause, Effect, Exit, Layer, Option, pipe } from "effect";
 import { Command } from "effect/unstable/cli";
 import { FillPrTemplate, renderBody } from "#auto-pr";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
@@ -42,6 +42,13 @@ const TEST_TEMPLATE = `## Description
 {{breakingChanges}}
 `;
 
+const toNonBlankOption = (value: string | null | undefined): Option.Option<string> =>
+	pipe(
+		Option.fromNullishOr(value),
+		Option.map((s) => s.trim()),
+		Option.filter((s) => s !== ""),
+	);
+
 const commit = (
 	subject: string,
 	body: string,
@@ -51,9 +58,9 @@ const commit = (
 	subject,
 	body,
 	fullMessage: `${subject}\n\n${body}`.trim(),
-	type: Option.fromNullishOr(opts?.type),
+	type: toNonBlankOption(opts?.type),
 	references: opts?.references ?? [],
-	breakingNote: Option.fromNullishOr(opts?.breakingNote),
+	breakingNote: toNonBlankOption(opts?.breakingNote),
 });
 
 /** Format commit blocks for parseCommits (---COMMIT--- separated). */
@@ -120,6 +127,23 @@ describe("renderBody", () => {
 				const body = yield* renderBody(commits, files, TEST_TEMPLATE, undefined);
 				expect(body).toContain("Use {{ and }} in your code");
 				expect(body).toContain("{{");
+			}),
+		);
+	});
+
+	test("normalizes blank optional commit fixture fields", async () => {
+		await runEffect(SilentLoggerLayer)(
+			Effect.gen(function* () {
+				const commits = [
+					commit("feat: add x", "Description here", {
+						type: " feat ",
+						breakingNote: "   ",
+					}),
+				];
+				const body = yield* renderBody(commits, ["src/foo.ts"], TEST_TEMPLATE, undefined);
+				expect(body).toContain("**New feature**");
+				expect(body).toContain("## Breaking changes\n\n");
+				expect(body).not.toContain("## Breaking changes\n   ");
 			}),
 		);
 	});
