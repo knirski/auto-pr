@@ -10,7 +10,13 @@ import { render } from "micromustache";
 import { collapseProseParagraphs } from "#core/collapse-prose-paragraphs.js";
 import { DescriptionParseError, ParseError, TemplateRenderError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
-import { isBlank, isMergeCommitSubject, parseSubjects, toError } from "#core/string.js";
+import {
+	isBlank,
+	isMergeCommitSubject,
+	nonBlankOption,
+	parseSubjects,
+	toError,
+} from "#core/string.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -102,14 +108,6 @@ function typeFromString(s: Option.Option<string>): TypeOfChange {
 		Option.filter(isConventionalType),
 		Option.map((type) => TYPE_MAP[type]),
 		Option.getOrElse((): TypeOfChange => "Chore"),
-	);
-}
-
-function nonBlankOption(value: string | null | undefined): Option.Option<string> {
-	return pipe(
-		Option.fromNullishOr(value),
-		Option.map((s) => s.trim()),
-		Option.filter((s) => s !== ""),
 	);
 }
 
