@@ -13,7 +13,7 @@
 import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
 import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
 import type { Redacted } from "effect";
-import { Effect, Layer, Redacted as RedactedValue } from "effect";
+import { Effect, Layer, Match, Redacted as RedactedValue } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { FetchHttpClient } from "effect/unstable/http";
 import { DEFAULT_OPENAI_COMPAT_URL } from "#auto-pr/config.js";
@@ -69,18 +69,18 @@ export function aiProviderLayerFromConfig(
 			? Layer.succeed(FetchHttpClient.Fetch, options.fetch)
 			: Layer.empty;
 
-	switch (config.provider) {
-		case "local": {
-			const apiUrl = config.openaiCompatUrl ?? DEFAULT_OPENAI_COMPAT_URL;
-			const apiKey = config.openaiCompatApiKey;
+	return Match.value(config).pipe(
+		Match.when({ provider: "local" }, (local) => {
+			const apiUrl = local.openaiCompatUrl ?? DEFAULT_OPENAI_COMPAT_URL;
+			const apiKey = local.openaiCompatApiKey;
 			const clientOptions: OpenAiClient.Options = {
 				apiUrl,
 				...(redactedHasText(apiKey) ? { apiKey } : {}),
 			};
-			return openAiLanguageModelStack(clientOptions, config.model, fetchOverrideLayer);
-		}
-		case "github-models":
-			if (!redactedHasText(config.ghToken) || config.model.trim() === "") {
+			return openAiLanguageModelStack(clientOptions, local.model, fetchOverrideLayer);
+		}),
+		Match.when({ provider: "github-models" }, (githubModels) => {
+			if (!redactedHasText(githubModels.ghToken) || githubModels.model.trim() === "") {
 				return Layer.effect(
 					LanguageModel.LanguageModel,
 					Effect.fail(
@@ -95,10 +95,12 @@ export function aiProviderLayerFromConfig(
 			return openAiLanguageModelStack(
 				{
 					apiUrl: GITHUB_MODELS_INFERENCE_URL,
-					apiKey: config.ghToken,
+					apiKey: githubModels.ghToken,
 				},
-				config.model,
+				githubModels.model,
 				fetchOverrideLayer,
 			);
-	}
+		}),
+		Match.exhaustive,
+	);
 }

@@ -20,6 +20,7 @@ import {
 	Effect,
 	FileSystem,
 	Layer,
+	Match,
 	Option,
 	Path,
 	Result,
@@ -168,18 +169,19 @@ export function resolveExistingPrTitleForPrompt(input: {
 				}).pipe(Effect.as(Option.none())),
 			),
 		);
-		if (Option.isNone(prOpt)) return Option.none();
-
-		const title = prOpt.value.title?.trim() ?? "";
-		if (title === "") return Option.none();
-
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "existing_pr_title",
-			source: "pull_request_client",
-			title_chars: title.length,
+		return yield* Option.match(prOpt, {
+			onNone: () => Effect.succeed(Option.none()),
+			onSome: (prInfo) => {
+				const title = prInfo.title?.trim() ?? "";
+				if (title === "") return Effect.succeed(Option.none());
+				return Effect.log({
+					event: "generate_pr_content",
+					step: "existing_pr_title",
+					source: "pull_request_client",
+					title_chars: title.length,
+				}).pipe(Effect.as(Option.some(title)));
+			},
 		});
-		return Option.some(title);
 	});
 }
 
@@ -448,45 +450,53 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 		model: config.model,
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
-	switch (config.provider) {
-		case "local":
-			return {
+	return Match.value(config).pipe(
+		Match.when(
+			{ provider: "local" },
+			(local): RunGeneratePrContentConfig => ({
 				...common,
 				provider: "local",
-				openaiCompatUrl: config.openaiCompatUrl,
-				...(config.openaiCompatApiKey !== undefined
-					? { openaiCompatApiKey: config.openaiCompatApiKey }
+				openaiCompatUrl: local.openaiCompatUrl,
+				...(local.openaiCompatApiKey !== undefined
+					? { openaiCompatApiKey: local.openaiCompatApiKey }
 					: {}),
-			};
-		case "github-models":
-			return {
+			}),
+		),
+		Match.when(
+			{ provider: "github-models" },
+			(githubModels): RunGeneratePrContentConfig => ({
 				...common,
 				provider: "github-models",
-				ghToken: config.ghToken,
-			};
-	}
+				ghToken: githubModels.ghToken,
+			}),
+		),
+		Match.exhaustive,
+	);
 }
 
 function buildAiProviderConfig(config: RunGeneratePrContentConfig): AiProviderConfig {
-	switch (config.provider) {
-		case "local":
-			return {
+	return Match.value(config).pipe(
+		Match.when(
+			{ provider: "local" },
+			(local): AiProviderConfig => ({
 				provider: "local",
-				model: config.model,
-				...(config.openaiCompatUrl !== undefined
-					? { openaiCompatUrl: config.openaiCompatUrl }
+				model: local.model,
+				...(local.openaiCompatUrl !== undefined ? { openaiCompatUrl: local.openaiCompatUrl } : {}),
+				...(local.openaiCompatApiKey !== undefined
+					? { openaiCompatApiKey: local.openaiCompatApiKey }
 					: {}),
-				...(config.openaiCompatApiKey !== undefined
-					? { openaiCompatApiKey: config.openaiCompatApiKey }
-					: {}),
-			};
-		case "github-models":
-			return {
+			}),
+		),
+		Match.when(
+			{ provider: "github-models" },
+			(githubModels): AiProviderConfig => ({
 				provider: "github-models",
-				model: config.model,
-				ghToken: config.ghToken,
-			};
-	}
+				model: githubModels.model,
+				ghToken: githubModels.ghToken,
+			}),
+		),
+		Match.exhaustive,
+	);
 }
 
 export function runGeneratePrContent(
@@ -500,9 +510,7 @@ export function runGeneratePrContent(
 
 	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
 	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch).pipe(Layer.provide(gitLayer));
-	const prClientLayer = PullRequestClient.Live(config.workspace).pipe(
-		Layer.provide(ChildProcessSpawnerLayer),
-	);
+	const prClientLayer = PullRequestClient.Live(config.workspace);
 	const liveLayer = Layer.mergeAll(
 		AutoPrPlatformLayer,
 		aiLayer,
@@ -571,9 +579,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 				: {}),
 		});
 
-		const existingPrTitle = Option.isSome(existingPrTitleOpt)
-			? existingPrTitleOpt.value
-			: undefined;
+		const existingPrTitle = Option.getOrUndefined(existingPrTitleOpt);
 
 		const { title, body, count } = yield* generatePrContent({
 			baseRef,

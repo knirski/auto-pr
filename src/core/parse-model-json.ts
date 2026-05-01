@@ -4,7 +4,7 @@
  * Used when APIs reject OpenAI `json_schema` response_format (e.g. GitHub Models).
  */
 
-import { Option, pipe, Result, type Schema } from "effect";
+import { Match, Option, pipe, Result, type Schema } from "effect";
 import { toError } from "#core/string.js";
 
 /**
@@ -24,19 +24,22 @@ type JsonStringScanState =
 	| { readonly _tag: "InsideString"; readonly escaped: boolean };
 
 const OutsideString: JsonStringScanState = { _tag: "OutsideString" };
+const InsideStringUnescaped: JsonStringScanState = { _tag: "InsideString", escaped: false };
+const InsideStringEscaped: JsonStringScanState = { _tag: "InsideString", escaped: true };
 
 function nextJsonStringScanState(
 	state: JsonStringScanState,
 	ch: string | undefined,
 ): JsonStringScanState {
-	switch (state._tag) {
-		case "OutsideString":
-			return ch === '"' ? { _tag: "InsideString", escaped: false } : state;
-		case "InsideString":
-			if (state.escaped) return { _tag: "InsideString", escaped: false };
-			if (ch === "\\") return { _tag: "InsideString", escaped: true };
-			return ch === '"' ? OutsideString : state;
-	}
+	return Match.value(state).pipe(
+		Match.when({ _tag: "OutsideString" }, () => (ch === '"' ? InsideStringUnescaped : state)),
+		Match.when({ _tag: "InsideString" }, (insideStringState) => {
+			if (insideStringState.escaped) return InsideStringUnescaped;
+			if (ch === "\\") return InsideStringEscaped;
+			return ch === '"' ? OutsideString : insideStringState;
+		}),
+		Match.exhaustive,
+	);
 }
 
 function tryParseJson(text: string): Result.Result<ParsedJson, Error> {
