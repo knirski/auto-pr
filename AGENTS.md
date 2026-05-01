@@ -79,11 +79,13 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 | Rule | Requirement |
 |------|-------------|
 | Effect first | `effect` and `@effect/*` |
+| ADT branching | Prefer `Match.value(...).pipe(..., Match.exhaustive)` over `switch` for discriminated unions |
 | No `any`/`!`/`enum` | `unknown`, no non-null asserts, string literal unions |
 | No `console.log` | Use `Effect.log` |
 | Core pure | No Effect/I/O in `*-core.ts`; bridge with `Effect.fromResult` |
 | Domain errors | `Schema.TaggedErrorClass` in `core/errors.ts` |
 | Optionals | `Option<T>`, not `T \| null` |
+| Nullish style | Prefer optional props / `undefined`; avoid introducing `null` unless API-contract-required |
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
 | Workflow / action pins | Self-refs `knirski/auto-pr/...@` must be **one** full **40-char SHA** (ancestor of branch, every path exists at that commit). Third-party `uses:` = SHA + `# v…` comment; Dependabot updates weekly. Same-repo `uses: ./.github/...` needs no SHA. Llama image: `.github/llama-server/Dockerfile`. Details: [docs/CI.md](docs/CI.md#workflow-pin-automation) |
@@ -141,6 +143,11 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 
 - Add tests when fixing bugs, adding features, or changing risky code. Skip for trivial branches/CLI.
 - Coverage ~85%; don't chase for its own sake. Pre-push: `check:code` (Lefthook). `bun x lefthook install` after clone.
+- `bun test` can exit non-zero with `0 fail` when `coverageThreshold` is not met. If this happens, inspect the coverage table and raise coverage in changed files (or update threshold intentionally with justification).
+
+## Testing style
+
+- Prefer `runEffect(...)` test helpers over direct `Effect.runPromise(...)` in tests unless there is no practical helper path.
 
 ---
 

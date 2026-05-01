@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { GeneratePrContentConfig, RunAutoPrConfig } from "#auto-pr/config.js";
 import type { AiProviderConfig } from "#auto-pr/live/ai-provider.js";
 
@@ -14,21 +15,26 @@ export function aiProviderConfigFromRunAutoPrConfig(config: RunAutoPrConfig): Ai
 }
 
 function aiProviderConfigFromConfig(config: ConfigWithAiProvider): AiProviderConfig {
-	switch (config.provider) {
-		case "local":
-			return {
+	return Match.value(config).pipe(
+		Match.when(
+			{ provider: "local" },
+			(local): AiProviderConfig => ({
 				provider: "local",
-				model: config.model,
-				openaiCompatUrl: config.openaiCompatUrl,
-				...(config.openaiCompatApiKey !== undefined
-					? { openaiCompatApiKey: config.openaiCompatApiKey }
+				model: local.model,
+				openaiCompatUrl: local.openaiCompatUrl,
+				...(local.openaiCompatApiKey !== undefined
+					? { openaiCompatApiKey: local.openaiCompatApiKey }
 					: {}),
-			};
-		case "github-models":
-			return {
+			}),
+		),
+		Match.when(
+			{ provider: "github-models" },
+			(githubModels): AiProviderConfig => ({
 				provider: "github-models",
-				model: config.model,
-				ghToken: config.ghToken,
-			};
-	}
+				model: githubModels.model,
+				ghToken: githubModels.ghToken,
+			}),
+		),
+		Match.exhaustive,
+	);
 }

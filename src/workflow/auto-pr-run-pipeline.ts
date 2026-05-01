@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path } from "effect";
+import { Effect, FileSystem, Match, Path } from "effect";
 import {
 	GitContext,
 	PR_BODY_FILE_NAME,
@@ -39,18 +39,23 @@ export function generateContentConfigFromRunAutoPrConfig(
 		model: config.model,
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
-	switch (config.provider) {
-		case "github-models":
-			return {
+	return Match.value(config).pipe(
+		Match.when(
+			{ provider: "github-models" },
+			(): RunGeneratePrContentWithServicesConfig => ({
 				...common,
 				provider: "github-models",
-			};
-		case "local":
-			return {
+			}),
+		),
+		Match.when(
+			{ provider: "local" },
+			(): RunGeneratePrContentWithServicesConfig => ({
 				...common,
 				provider: "local",
-			};
-	}
+			}),
+		),
+		Match.exhaustive,
+	);
 }
 
 /**
