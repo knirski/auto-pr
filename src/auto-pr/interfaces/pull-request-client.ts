@@ -1,13 +1,17 @@
 /**
  * PullRequestClient — Tagless Final interface for GitHub PR operations.
  *
- * Live implementation uses `gh`; workflow code depends on this capability instead of command shapes.
+ * Live implementation uses GitHub REST (Octokit); workflow code depends on this capability instead of transport details.
  */
 
 import type { Effect, Option } from "effect";
-import type { PrLookupError, PrUrlParseError, PullRequestFailedError } from "#core/errors.js";
+import type {
+	PullRequestFailedError,
+	PullRequestLookupError,
+	PullRequestUrlParseError,
+} from "#core/errors.js";
 
-export type PrInfo = {
+export type PullRequestInfo = {
 	readonly number: number;
 	readonly url: string;
 	readonly title?: string | undefined;
@@ -15,7 +19,9 @@ export type PrInfo = {
 
 export interface PullRequestClientService {
 	/** Find an open PR for a branch. `Option.none` means no PR exists yet. */
-	readonly findByBranch: (branch: string) => Effect.Effect<Option.Option<PrInfo>, PrLookupError>;
+	readonly findByBranch: (
+		branch: string,
+	) => Effect.Effect<Option.Option<PullRequestInfo>, PullRequestLookupError>;
 
 	/** Update an existing PR by number. */
 	readonly update: (
@@ -30,5 +36,5 @@ export interface PullRequestClientService {
 		baseBranch: string,
 		title: string,
 		bodyPath: string,
-	) => Effect.Effect<string, PullRequestFailedError | PrUrlParseError>;
+	) => Effect.Effect<string, PullRequestFailedError | PullRequestUrlParseError>;
 }

@@ -31,7 +31,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 ## Pipeline Flow
 
 1. **generate-content** — `GitContext` fetches commits, files, and diff stat directly from git. 1 commit: fill from body; 2+: `LanguageModel.generateText` with `DiffToolkit` (`get_diff`, `get_commit_diff` tools), parse assistant JSON, validate with Effect Schema (`TitleDescriptionSchema`), using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config). Not `generateObject` (OpenAI `json_schema` is unsupported on GitHub Models and flaky on some compat servers). Retries → commit-derived fallback on failure → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
-2. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `gh pr view` → `gh pr edit` or `gh pr create`
+2. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `PullRequestClient` lookup by branch → PR update or create through Octokit REST API
 
 ## Functional Core / Imperative Shell (FC/IS)
 

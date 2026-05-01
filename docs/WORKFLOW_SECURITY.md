@@ -34,7 +34,7 @@ The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must 
 
 - **Checkout:** None. The job installs the trusted auto-pr package and uses only the downloaded artifact as data.
 - **Input:** Artifact from generate job.
-- **Runs:** GitHub App token generation, `gh pr create` or `gh pr edit`.
+- **Runs:** GitHub App token generation, auto-pr create/update workflow (Octokit-backed PR client).
 - **Risk:** Mitigated. No untrusted code is checked out or executed. Artifact content is treated as data, not code. The create workflow validates artifact `branch` and `default_branch` against the triggering ref and repository default before calling `gh`.
 
 ## Artifact Handling
@@ -42,8 +42,8 @@ The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must 
 The create workflow downloads the artifact produced by generate. Artifacts from unprivileged jobs are considered **untrusted data**:
 
 - **Extraction:** Artifact is downloaded to `${{ runner.temp }}/pr-artifact` (not workspace) to avoid overwriting trusted files.
-- **Usage:** Artifact files (title.txt, body.md, branch.txt, default_branch.txt) are read as data and passed to `gh`. No scripts from the artifact are executed.
-- **Validation:** The create-or-update-pr CLI validates inputs before calling `gh`.
+- **Usage:** Artifact files (title.txt, body.md, branch.txt, default_branch.txt) are read as data and passed to the PR client. No scripts from the artifact are executed.
+- **Validation:** The create-or-update-pr CLI validates inputs before calling the GitHub API.
 
 ## CodeQL and Suppression
 

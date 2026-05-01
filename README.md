@@ -31,13 +31,13 @@ Auto-create pull requests from conventional commits on `ai/**` branches. Parses 
 - **Conventional commits** — Parses `feat:`, `fix:`, `docs:`, etc. for PR title and type
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
 - **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **local** (OpenAI-compatible HTTP, e.g. llama.cpp) or **github-models**
-- **gh CLI** — Thin wrapper around `gh pr create` / `gh pr edit`
-- **CI-agnostic** — **generate-content** reads git state in the workspace and writes `pr-title.txt` and `pr-body.md`; **create-or-update-pr** reads those files and runs `gh`. Works with GitHub Actions or any orchestrator that sets the same env conventions.
+- **Octokit PR client** — Uses GitHub's official JavaScript SDK for PR lookup/create/update
+- **CI-agnostic** — **generate-content** reads git state in the workspace and writes `pr-title.txt` and `pr-body.md`; **create-or-update-pr** reads those files and calls the GitHub API. Works with GitHub Actions or any orchestrator that sets the same env conventions.
 
 ## How it works
 
 1. **Generate content** — `auto-pr-generate-content` uses git in the workspace (`git log`, diffs as needed), parses commits, and counts semantic (non-merge) commits. For one commit: fills the PR template from the commit body. For two or more: calls the AI provider to summarize, then fills the template. Writes `pr-title.txt` and `pr-body.md` under `{GITHUB_WORKSPACE}`.
-2. **Create or update PR** — `auto-pr-create-or-update-pr` reads those files, then runs `gh pr view` → `gh pr edit` or `gh pr create`.
+2. **Create or update PR** — `auto-pr-create-or-update-pr` reads those files, then looks up an open PR by branch and updates it or creates a new one via Octokit.
 
 For local runs, `auto-pr-run` orchestrates generate → create with the same env contract.
 
@@ -88,7 +88,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup, Nix flake, and pre-push h
 | Command | Purpose |
 |--------|---------|
 | `npx auto-pr-generate-content` | Generate PR title and filled body (AI for 2+ commits) |
-| `npx auto-pr-create-or-update-pr` | Create or update PR via `gh` |
+| `npx auto-pr-create-or-update-pr` | Create or update PR via GitHub REST API (Octokit) |
 | `npx auto-pr-run` | Run generate → create with the same env contract |
 | `npx auto-pr-fill-pr-template` | CLI for filling PR template from commits (standalone use) |
 | `npx auto-pr-init` | Create workflow, PR template, and .nvmrc in current repo |

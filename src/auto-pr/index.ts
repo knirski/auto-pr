@@ -35,7 +35,7 @@ export {
 	FillPrTemplateValidationError,
 	formatError,
 	isTransientAiError,
-	isTransientGhError,
+	isTransientPrClientError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -48,8 +48,8 @@ export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export type {
-	PrInfo,
 	PullRequestClientService,
+	PullRequestInfo,
 } from "#auto-pr/interfaces/pull-request-client.js";
 export {
 	type AiProviderConfig,

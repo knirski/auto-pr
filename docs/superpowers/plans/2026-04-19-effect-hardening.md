@@ -4,7 +4,7 @@
 
 **Goal:** Tighten type safety and FC/IS rigor across the PR-writing hot path (`src/workflow/auto-pr-create-or-update-pr.ts`), the AI provider layer (`src/auto-pr/live/ai-provider.ts`), `src/core/errors.ts`, and `src/auto-pr/config.ts`, using only the project's existing idioms.
 
-**Architecture:** Three logical PRs. **PR A** (Tasks 1-2) replaces silent catches in `ghPrViewJson` with a typed `PrLookupError` and moves fragile PR-URL parsing to a pure core helper `parseGhPrCreateOutput` returning `Result`. **PR B** (Task 3) removes two `as Layer.Layer<…>` casts in the AI provider so `Match.exhaustive` carries real type information. **PR C** (Tasks 4-6) narrows `Schema.Unknown` cause fields on tagged errors, unifies the config warn-on-default pattern into `getOrDefaultLogged`, and adds pure URL-shape validation for `AUTO_PR_AI_OPENAI_COMPAT_URL`.
+**Architecture:** Three logical PRs. **PR A** (Tasks 1-2) replaces silent catches in `ghPrViewJson` with a typed `PullRequestLookupError` and moves fragile PR-URL parsing to a pure core helper `parseGhPrCreateOutput` returning `Result`. **PR B** (Task 3) removes two `as Layer.Layer<…>` casts in the AI provider so `Match.exhaustive` carries real type information. **PR C** (Tasks 4-6) narrows `Schema.Unknown` cause fields on tagged errors, unifies the config warn-on-default pattern into `getOrDefaultLogged`, and adds pure URL-shape validation for `AUTO_PR_AI_OPENAI_COMPAT_URL`.
 
 **Tech Stack:** TypeScript, Effect v4 beta (`effect`, `@effect/ai-openai-compat`, `@effect/platform-bun`), bun:test, Biome, Nix, Lefthook. Pinned via `package.json`; run `bun run check:code` to verify.
 
@@ -17,19 +17,19 @@
 ## File structure (what this plan touches)
 
 **New files:**
-- `src/core/gh-pr-url.ts` — pure `parseGhPrCreateOutput(stdout)` returning `Result<string, PrUrlParseError>`.
+- `src/core/gh-pr-url.ts` — pure `parseGhPrCreateOutput(stdout)` returning `Result<string, PullRequestUrlParseError>`.
 - `src/core/openai-compat-url.ts` — pure `parseOpenAiCompatUrl(raw)` returning `Result<string, { reason }>`.
 - `test/core/gh-pr-url.test.ts` — pure unit tests for the URL parser.
 - `test/core/openai-compat-url.test.ts` — pure unit tests for the URL validator.
 
 **Modified files:**
-- `src/core/errors.ts` — add `PrLookupError`, `PrUrlParseError`; narrow `ParseError.cause` and `TemplateRenderError.cause` from `Schema.Unknown` → `Schema.String`.
+- `src/core/errors.ts` — add `PullRequestLookupError`, `PullRequestUrlParseError`; narrow `ParseError.cause` and `TemplateRenderError.cause` from `Schema.Unknown` → `Schema.String`.
 - `src/auto-pr/errors.ts` — integrate two new errors (import, re-export, `instanceof` guard, `Match.tag`); simplify the `String(cause)` calls in `ParseError`/`TemplateRenderError` branches.
 - `src/workflow/auto-pr-create-or-update-pr.ts` — rewrite `ghPrViewJson` (lines 40-59), delete `extractPrUrl` (lines 129-131), call `parseGhPrCreateOutput` via `Effect.fromResult`, widen `CreateOrUpdatePrError` union.
 - `src/auto-pr/live/ai-provider.ts` — remove two `as Layer.Layer<…>` casts (lines 47 and 96).
 - `src/auto-pr/config.ts` — add private `getOrDefaultLogged` helper; replace 3-5 warn-on-default call sites; integrate `parseOpenAiCompatUrl` after the existing `requireNonEmpty` at `:205`.
 - `test/workflow/create-or-update-pr.test.ts` — append tests for `ghPrViewJson` outcomes.
-- `test/auto-pr/errors.test.ts` — add `formatError` tests for `PrLookupError`, `PrUrlParseError`; assert `ParseError.cause` flows as string.
+- `test/auto-pr/errors.test.ts` — add `formatError` tests for `PullRequestLookupError`, `PullRequestUrlParseError`; assert `ParseError.cause` flows as string.
 - `test/core/errors.test.ts` — add constructor tests for the two new error classes.
 
 **Sweep files** (touched by Task 4 caller sweep; exact list emerges from grep):
@@ -41,10 +41,10 @@
 
 Two tasks, one PR, two commits.
 
-### Task 1: Typed `ghPrViewJson` with `PrLookupError`
+### Task 1: Typed `ghPrViewJson` with `PullRequestLookupError`
 
 **Files:**
-- Modify: `src/core/errors.ts` (add `PrLookupError` class near `PullRequestFailedError`)
+- Modify: `src/core/errors.ts` (add `PullRequestLookupError` class near `PullRequestFailedError`)
 - Modify: `src/auto-pr/errors.ts` (import, re-export, `instanceof` chain, `Match.tag` branch)
 - Modify: `src/workflow/auto-pr-create-or-update-pr.ts:40-59` (rewrite `ghPrViewJson`; widen `CreateOrUpdatePrError` at `:133`)
 - Test: `test/core/errors.test.ts` (add constructor test)
@@ -63,14 +63,14 @@ Read the function. Answer: when the spawner fails with a `PlatformError.systemEr
 
 If unclear, consult LLMS.md § on `Effect.catch` / `Effect.catchTag` and the `effect-smol/packages/unstable-process` source.
 
-- [ ] **Step 2: Add `PrLookupError` class**
+- [ ] **Step 2: Add `PullRequestLookupError` class**
 
 In `src/core/errors.ts`, add after the `PullRequestFailedError` class (around line 14):
 
 ```ts
 /** `gh pr view` failed or returned unparseable JSON. Distinct from "no PR yet" (Option.none). */
-export class PrLookupError extends Schema.TaggedErrorClass<PrLookupError>()(
-	"PrLookupError",
+export class PullRequestLookupError extends Schema.TaggedErrorClass<PullRequestLookupError>()(
+	"PullRequestLookupError",
 	{ branch: Schema.String, cause: Schema.String },
 ) {}
 ```
@@ -80,11 +80,11 @@ export class PrLookupError extends Schema.TaggedErrorClass<PrLookupError>()(
 Append to `test/core/errors.test.ts`:
 
 ```ts
-import { PrLookupError } from "#core/errors.js";
+import { PullRequestLookupError } from "#core/errors.js";
 
-test("PrLookupError carries branch and cause", () => {
-	const e = new PrLookupError({ branch: "ai/foo", cause: "gh auth error" });
-	expect(e._tag).toBe("PrLookupError");
+test("PullRequestLookupError carries branch and cause", () => {
+	const e = new PullRequestLookupError({ branch: "ai/foo", cause: "gh auth error" });
+	expect(e._tag).toBe("PullRequestLookupError");
 	expect(e.branch).toBe("ai/foo");
 	expect(e.cause).toBe("gh auth error");
 });
@@ -98,45 +98,45 @@ bun test test/core/errors.test.ts
 
 Expected: PASS (the class already exists from Step 2).
 
-- [ ] **Step 4: Integrate `PrLookupError` in `formatError` (five-point integration)**
+- [ ] **Step 4: Integrate `PullRequestLookupError` in `formatError` (five-point integration)**
 
 In `src/auto-pr/errors.ts`:
 
 - Add to the import block from `#core/errors.js` (around line 14-28), alphabetised:
 
 ```ts
-PrLookupError,
+PullRequestLookupError,
 ```
 
 - Add to the re-export block (around line 30-44):
 
 ```ts
-PrLookupError,
+PullRequestLookupError,
 ```
 
 - Add to the `instanceof` guard chain in `formatError` (around line 52-64), alphabetised among peers:
 
 ```ts
-e instanceof PrLookupError ||
+e instanceof PullRequestLookupError ||
 ```
 
 - Add a `Match.tag` branch before `Match.exhaustive` (near line 67-102):
 
 ```ts
-Match.tag("PrLookupError", ({ branch, cause }) =>
+Match.tag("PullRequestLookupError", ({ branch, cause }) =>
 	`Failed to look up PR for branch ${branch}: ${cause}`,
 ),
 ```
 
-- [ ] **Step 5: Add failing `formatError` test for `PrLookupError`**
+- [ ] **Step 5: Add failing `formatError` test for `PullRequestLookupError`**
 
 Append to `test/auto-pr/errors.test.ts`:
 
 ```ts
-import { PrLookupError } from "#core/errors.js";
+import { PullRequestLookupError } from "#core/errors.js";
 
-test("formatError formats PrLookupError", () => {
-	const out = formatError(new PrLookupError({ branch: "ai/foo", cause: "boom" }));
+test("formatError formats PullRequestLookupError", () => {
+	const out = formatError(new PullRequestLookupError({ branch: "ai/foo", cause: "boom" }));
 	expect(out).toContain("ai/foo");
 	expect(out).toContain("boom");
 });
@@ -158,7 +158,7 @@ Append to `test/workflow/create-or-update-pr.test.ts` (the file already exists; 
 import { Exit, Option, Stream } from "effect";
 import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { PrLookupError } from "#core/errors.js";
+import { PullRequestLookupError } from "#core/errors.js";
 import { ghPrViewJson } from "#workflow/auto-pr-create-or-update-pr.js";
 
 describe("ghPrViewJson", () => {
@@ -202,7 +202,7 @@ describe("ghPrViewJson", () => {
 		);
 	});
 
-	test("fails with PrLookupError on malformed JSON", async () => {
+	test("fails with PullRequestLookupError on malformed JSON", async () => {
 		const mock = Layer.mock(ChildProcessSpawner)({
 			string: () => Effect.succeed("not-json"),
 			streamString: () => Stream.empty,
@@ -214,13 +214,13 @@ describe("ghPrViewJson", () => {
 				expect(Exit.isFailure(exit)).toBe(true);
 				if (Exit.isFailure(exit)) {
 					const failure = Array.from(exit.cause.failures)[0];
-					expect(failure).toBeInstanceOf(PrLookupError);
+					expect(failure).toBeInstanceOf(PullRequestLookupError);
 				}
 			}),
 		);
 	});
 
-	test("fails with PrLookupError on schema mismatch", async () => {
+	test("fails with PullRequestLookupError on schema mismatch", async () => {
 		const mock = Layer.mock(ChildProcessSpawner)({
 			string: () => Effect.succeed('{"wrong":"shape"}'),
 			streamString: () => Stream.empty,
@@ -259,13 +259,13 @@ function looksLikeNoPrError(e: unknown): boolean {
 	return msg.includes("no pull") || msg.includes("no pr") || msg.includes("not found");
 }
 
-/** PR existence check: Option.none when no PR; fail with PrLookupError on every other error. */
+/** PR existence check: Option.none when no PR; fail with PullRequestLookupError on every other error. */
 export function ghPrViewJson(
 	branch: string,
 	cwd: string,
-): Effect.Effect<Option.Option<PrInfo>, PrLookupError, ChildProcessSpawner> {
-	const toLookupError = (cause: unknown): PrLookupError =>
-		new PrLookupError({ branch, cause: String(cause) });
+): Effect.Effect<Option.Option<PullRequestInfo>, PullRequestLookupError, ChildProcessSpawner> {
+	const toLookupError = (cause: unknown): PullRequestLookupError =>
+		new PullRequestLookupError({ branch, cause: String(cause) });
 
 	return Effect.gen(function* () {
 		const stdout = yield* runCommand("gh", ["pr", "view", branch, "--json", "number,url"], cwd).pipe(
@@ -279,7 +279,7 @@ export function ghPrViewJson(
 		const parsed = yield* Effect.fromResult(parseFirstJsonObject(trimmed)).pipe(
 			Effect.mapError(toLookupError),
 		);
-		const decoded = yield* Schema.decodeUnknownEffect(PrInfoSchema)(parsed).pipe(
+		const decoded = yield* Schema.decodeUnknownEffect(PullRequestInfoSchema)(parsed).pipe(
 			Effect.mapError(toLookupError),
 		);
 		return Option.some(decoded);
@@ -291,7 +291,7 @@ Add imports at the top of the file (alphabetise existing imports):
 
 ```ts
 import { parseFirstJsonObject } from "#core/parse-model-json.js";
-import { PrLookupError } from "#core/errors.js";
+import { PullRequestLookupError } from "#core/errors.js";
 ```
 
 Remove now-unused imports (e.g., the inline `Effect.try(JSON.parse…)` block's `Effect.try`/etc. is gone; `tsgo` will flag dead imports).
@@ -311,7 +311,7 @@ type CreateOrUpdatePrError =
 	| PullRequestFailedError
 	| BodyFileNotFoundError
 	| FileSystemError
-	| PrLookupError;
+	| PullRequestLookupError;
 ```
 
 - [ ] **Step 9: Verify `bun run check:code` passes**
@@ -331,7 +331,7 @@ git add src/core/errors.ts src/auto-pr/errors.ts \
 	src/workflow/auto-pr-create-or-update-pr.ts \
 	test/core/errors.test.ts test/auto-pr/errors.test.ts \
 	test/workflow/create-or-update-pr.test.ts
-git commit -m "refactor(workflow): typed PrLookupError instead of silent catch in ghPrViewJson"
+git commit -m "refactor(workflow): typed PullRequestLookupError instead of silent catch in ghPrViewJson"
 ```
 
 ---
@@ -341,7 +341,7 @@ git commit -m "refactor(workflow): typed PrLookupError instead of silent catch i
 **Files:**
 - Create: `src/core/gh-pr-url.ts`
 - Create: `test/core/gh-pr-url.test.ts`
-- Modify: `src/core/errors.ts` (add `PrUrlParseError`)
+- Modify: `src/core/errors.ts` (add `PullRequestUrlParseError`)
 - Modify: `src/auto-pr/errors.ts` (five-point integration)
 - Modify: `src/workflow/auto-pr-create-or-update-pr.ts` (delete `extractPrUrl:129-131`, call `parseGhPrCreateOutput`, widen `CreateOrUpdatePrError`)
 - Test: `test/auto-pr/errors.test.ts` (format test)
@@ -359,28 +359,28 @@ If a project-internal `Url.fromString` exists and accepts arbitrary http(s) URLs
 
 Consult `effect-smol/LLMS.md` for Effect v4's URL parsing primitives if LLMS.md covers them.
 
-- [ ] **Step 2: Add `PrUrlParseError` class**
+- [ ] **Step 2: Add `PullRequestUrlParseError` class**
 
-In `src/core/errors.ts`, add after `PrLookupError`:
+In `src/core/errors.ts`, add after `PullRequestLookupError`:
 
 ```ts
 /** `gh pr create` output could not be parsed into a PR URL. */
-export class PrUrlParseError extends Schema.TaggedErrorClass<PrUrlParseError>()(
-	"PrUrlParseError",
+export class PullRequestUrlParseError extends Schema.TaggedErrorClass<PullRequestUrlParseError>()(
+	"PullRequestUrlParseError",
 	{ raw: Schema.String, reason: Schema.String },
 ) {}
 ```
 
-- [ ] **Step 3: Constructor test for `PrUrlParseError`**
+- [ ] **Step 3: Constructor test for `PullRequestUrlParseError`**
 
 Append to `test/core/errors.test.ts`:
 
 ```ts
-import { PrUrlParseError } from "#core/errors.js";
+import { PullRequestUrlParseError } from "#core/errors.js";
 
-test("PrUrlParseError carries raw and reason", () => {
-	const e = new PrUrlParseError({ raw: "garbage", reason: "not a URL" });
-	expect(e._tag).toBe("PrUrlParseError");
+test("PullRequestUrlParseError carries raw and reason", () => {
+	const e = new PullRequestUrlParseError({ raw: "garbage", reason: "not a URL" });
+	expect(e._tag).toBe("PullRequestUrlParseError");
 	expect(e.raw).toBe("garbage");
 	expect(e.reason).toBe("not a URL");
 });
@@ -394,45 +394,45 @@ bun test test/core/errors.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 4: Integrate `PrUrlParseError` in `formatError` (five-point integration)**
+- [ ] **Step 4: Integrate `PullRequestUrlParseError` in `formatError` (five-point integration)**
 
 In `src/auto-pr/errors.ts`:
 
 - Add to import block:
 
 ```ts
-PrUrlParseError,
+PullRequestUrlParseError,
 ```
 
 - Add to re-export block:
 
 ```ts
-PrUrlParseError,
+PullRequestUrlParseError,
 ```
 
 - Add to `instanceof` guard chain, alphabetised:
 
 ```ts
-e instanceof PrUrlParseError ||
+e instanceof PullRequestUrlParseError ||
 ```
 
 - Add `Match.tag` branch before `Match.exhaustive`:
 
 ```ts
-Match.tag("PrUrlParseError", ({ raw, reason }) =>
+Match.tag("PullRequestUrlParseError", ({ raw, reason }) =>
 	`gh PR URL parse failed (${reason}). Raw: ${raw.slice(0, 200)}`,
 ),
 ```
 
-- [ ] **Step 5: `formatError` test for `PrUrlParseError`**
+- [ ] **Step 5: `formatError` test for `PullRequestUrlParseError`**
 
 Append to `test/auto-pr/errors.test.ts`:
 
 ```ts
-import { PrUrlParseError } from "#core/errors.js";
+import { PullRequestUrlParseError } from "#core/errors.js";
 
-test("formatError formats PrUrlParseError", () => {
-	const out = formatError(new PrUrlParseError({ raw: "hi", reason: "not a URL" }));
+test("formatError formats PullRequestUrlParseError", () => {
+	const out = formatError(new PullRequestUrlParseError({ raw: "hi", reason: "not a URL" }));
 	expect(out).toContain("not a URL");
 	expect(out).toContain("hi");
 });
@@ -498,24 +498,24 @@ Expected: FAIL — module `#core/gh-pr-url.js` does not exist.
 
 ```ts
 import { Result } from "effect";
-import { PrUrlParseError } from "./errors.js";
+import { PullRequestUrlParseError } from "./errors.js";
 
 /** GitHub PR URL: https(s)://host/owner/repo/pull/<digits> */
 const GH_PR_URL = /^https?:\/\/\S+\/pull\/\d+$/;
 
 /** Pure: extract the PR URL from `gh pr create` stdout. Validates shape. */
-export function parseGhPrCreateOutput(stdout: string): Result.Result<string, PrUrlParseError> {
+export function parseGhPrCreateOutput(stdout: string): Result.Result<string, PullRequestUrlParseError> {
 	const lines = stdout
 		.split("\n")
 		.map((l) => l.trim())
 		.filter((l) => l !== "");
 	const last = lines.at(-1);
 	if (last === undefined) {
-		return Result.err(new PrUrlParseError({ raw: stdout, reason: "empty output" }));
+		return Result.err(new PullRequestUrlParseError({ raw: stdout, reason: "empty output" }));
 	}
 	if (!GH_PR_URL.test(last)) {
 		return Result.err(
-			new PrUrlParseError({ raw: stdout, reason: `last line is not a PR URL: ${last}` }),
+			new PullRequestUrlParseError({ raw: stdout, reason: `last line is not a PR URL: ${last}` }),
 		);
 	}
 	return Result.ok(last);
@@ -541,7 +541,7 @@ In `src/workflow/auto-pr-create-or-update-pr.ts`:
 
 ```ts
 import { parseGhPrCreateOutput } from "#core/gh-pr-url.js";
-import { PrUrlParseError } from "#core/errors.js";
+import { PullRequestUrlParseError } from "#core/errors.js";
 ```
 
 - Find the single call site of `extractPrUrl` (grep):
@@ -556,15 +556,15 @@ grep -n "extractPrUrl(" src/workflow/auto-pr-create-or-update-pr.ts
 const url = yield* Effect.fromResult(parseGhPrCreateOutput(stdout));
 ```
 
-- Widen `CreateOrUpdatePrError` at `:133` to include `PrUrlParseError`:
+- Widen `CreateOrUpdatePrError` at `:133` to include `PullRequestUrlParseError`:
 
 ```ts
 type CreateOrUpdatePrError =
 	| PullRequestFailedError
 	| BodyFileNotFoundError
 	| FileSystemError
-	| PrLookupError
-	| PrUrlParseError;
+	| PullRequestLookupError
+	| PullRequestUrlParseError;
 ```
 
 - [ ] **Step 9: Optionally add to `src/core/index.ts` re-export**
@@ -1213,12 +1213,12 @@ Useful when landing the combined change — confirms no CI-time regression befor
 | Spec requirement | Covered by |
 |---|---|
 | Typed `ghPrViewJson` (§2.1) | Task 1, Steps 2-10 |
-| `PrLookupError` five-point integration (§1.1, §2.1, §5) | Task 1, Steps 2-5 |
+| `PullRequestLookupError` five-point integration (§1.1, §2.1, §5) | Task 1, Steps 2-5 |
 | `parseFirstJsonObject` reuse (§1.1, §2.1) | Task 1, Step 7 |
 | `Schema.decodeUnknownEffect` usage (§1.1, §2.1) | Task 1, Step 7 |
 | `Layer.mock(ChildProcessSpawner)` in tests (§1.1, §2.1) | Task 1, Step 6 |
 | Pure `parseGhPrCreateOutput` in core (§2.2) | Task 2, Steps 6-7 |
-| `PrUrlParseError` five-point integration (§2.2, §5) | Task 2, Steps 2-5 |
+| `PullRequestUrlParseError` five-point integration (§2.2, §5) | Task 2, Steps 2-5 |
 | Research existing `Url.fromString` (§2.2, §4.3) | Task 2, Step 1 |
 | Shell calls core via `Effect.fromResult` (§1.1) | Task 2, Step 8; Task 6, Step 3 |
 | Remove inner Layer cast with outcome a/b/c handling (§3.1) | Task 3, Steps 2-3 |
@@ -1242,12 +1242,12 @@ All code steps contain concrete code. All test steps contain concrete assertions
 
 **Type consistency**
 
-- `PrLookupError({ branch, cause })` — consistent across Task 1, Task 2 integration table, Step 5 format test.
-- `PrUrlParseError({ raw, reason })` — consistent across Task 2 Steps 2, 3, 5, 7.
-- `parseGhPrCreateOutput(stdout): Result<string, PrUrlParseError>` — consistent across Task 2 tests (Step 6) and implementation (Step 7).
+- `PullRequestLookupError({ branch, cause })` — consistent across Task 1, Task 2 integration table, Step 5 format test.
+- `PullRequestUrlParseError({ raw, reason })` — consistent across Task 2 Steps 2, 3, 5, 7.
+- `parseGhPrCreateOutput(stdout): Result<string, PullRequestUrlParseError>` — consistent across Task 2 tests (Step 6) and implementation (Step 7).
 - `parseOpenAiCompatUrl(raw): Result<string, InvalidOpenAiCompatUrl>` — consistent across Task 6 tests (Step 1) and implementation (Step 2).
 - `getOrDefaultLogged<T>(opt, name, fallback): Effect<T, never>` — consistent across Task 5 Steps 2-5.
-- `CreateOrUpdatePrError` gains `PrLookupError` in Task 1 Step 8 and `PrUrlParseError` in Task 2 Step 8 — cumulative, consistent order.
-- Five-point integration pattern — used identically for `PrLookupError` (Task 1 Step 4) and `PrUrlParseError` (Task 2 Step 4).
+- `CreateOrUpdatePrError` gains `PullRequestLookupError` in Task 1 Step 8 and `PullRequestUrlParseError` in Task 2 Step 8 — cumulative, consistent order.
+- Five-point integration pattern — used identically for `PullRequestLookupError` (Task 1 Step 4) and `PullRequestUrlParseError` (Task 2 Step 4).
 
 No type drift between tasks.

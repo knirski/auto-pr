@@ -3,9 +3,8 @@
  *
  * Requires env: GH_TOKEN, BRANCH, DEFAULT_BRANCH, GITHUB_WORKSPACE. Reads `{GITHUB_WORKSPACE}/pr-title.txt` and `{GITHUB_WORKSPACE}/pr-body.md`.
  *
- * Validates required env at startup, then calls gh pr view --json → gh pr edit or gh pr create.
- * Uses --json number,url for reliable PR existence check (avoids exit-code ambiguity).
- * Uses PR number for edits (more robust than branch name). Uses --head for create (CI-safe).
+ * Validates required env at startup, then queries/updates/creates PRs via PullRequestClient.
+ * Uses PR number for edits (more robust than branch name). Uses explicit head/base on create.
  *
  * This repo: bun run create-or-update-pr · installed: npx auto-pr-create-or-update-pr
  */
@@ -18,36 +17,36 @@ import {
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
 	type FileSystemError,
-	isTransientGhError,
+	isTransientPrClientError,
 	mapFsError,
 	PullRequestClient,
 	type PullRequestFailedError,
 	runMain,
 } from "#auto-pr";
-import type { PrLookupError, PrUrlParseError } from "#core/errors.js";
+import type { PullRequestLookupError, PullRequestUrlParseError } from "#core/errors.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
-const GH_RETRY_ATTEMPTS = 3;
-const GH_RETRY_DELAY_MS = 5000;
+const PR_CLIENT_RETRY_ATTEMPTS = 3;
+const PR_CLIENT_RETRY_DELAY_MS = 5000;
 
 function formatRetryDelay(delay: Duration.Duration): string {
 	const delayMs = Duration.toMillis(delay);
 	return delayMs >= 1000 ? `${delayMs / 1000}s` : `${delayMs}ms`;
 }
 
-function createGhRetrySchedule(
+function createPrClientRetrySchedule(
 	branch: string,
-	delay: Duration.Duration = Duration.millis(GH_RETRY_DELAY_MS),
+	delay: Duration.Duration = Duration.millis(PR_CLIENT_RETRY_DELAY_MS),
 ) {
 	const delayLabel = formatRetryDelay(delay);
-	return Schedule.recurs(GH_RETRY_ATTEMPTS - 1).pipe(
+	return Schedule.recurs(PR_CLIENT_RETRY_ATTEMPTS - 1).pipe(
 		Schedule.addDelay(() =>
 			Effect.logWarning({
 				event: "create_or_update_pr",
-				status: "gh_retry",
+				status: "pr_client_retry",
 				branch,
-				message: `gh failed, retrying in about ${delayLabel}...`,
+				message: `GitHub PR request failed, retrying in about ${delayLabel}...`,
 			}).pipe(Effect.as(delay)),
 		),
 		// Effect v4 jitter keeps the delay within 80%-120%, so the log remains approximate.
@@ -55,22 +54,22 @@ function createGhRetrySchedule(
 	);
 }
 
-function runGhWithRetry<R, E, A>(
+function runPrClientWithRetry<R, E, A>(
 	effect: Effect.Effect<A, E, R>,
 	branch: string,
 	retryDelay?: Duration.Duration,
 ): Effect.Effect<A, E, R> {
 	return effect.pipe(
 		Effect.retry({
-			schedule: createGhRetrySchedule(branch, retryDelay),
-			while: (error: E) => isTransientGhError(error),
+			schedule: createPrClientRetrySchedule(branch, retryDelay),
+			while: (error: E) => isTransientPrClientError(error),
 		}),
 		Effect.tapError(() =>
 			Effect.logError({
 				event: "create_or_update_pr",
 				status: "failed_after_retries",
 				branch,
-				message: "gh pr failed after 3 attempts",
+				message: "GitHub PR request failed after 3 attempts",
 			}),
 		),
 	);
@@ -80,8 +79,8 @@ type CreateOrUpdatePrError =
 	| PullRequestFailedError
 	| BodyFileNotFoundError
 	| FileSystemError
-	| PrLookupError
-	| PrUrlParseError;
+	| PullRequestLookupError
+	| PullRequestUrlParseError;
 
 /** Main pipeline. Exported for tests. */
 export function runCreateOrUpdatePr(params: {
@@ -102,7 +101,7 @@ export function runCreateOrUpdatePr(params: {
 			return yield* Effect.fail(new BodyFileNotFoundError({ path: params.bodyFile }));
 		}
 
-		const prInfo = yield* runGhWithRetry(
+		const prInfo = yield* runPrClientWithRetry(
 			prClient.findByBranch(params.branch),
 			params.branch,
 			params.retryDelay,
@@ -117,7 +116,7 @@ export function runCreateOrUpdatePr(params: {
 				prNumber,
 				titlePreview: params.title.slice(0, 50),
 			});
-			yield* runGhWithRetry(
+			yield* runPrClientWithRetry(
 				prClient.update(prNumber, params.title, params.bodyFile),
 				params.branch,
 				params.retryDelay,
@@ -136,7 +135,7 @@ export function runCreateOrUpdatePr(params: {
 				base: params.defaultBranch,
 				titlePreview: params.title.slice(0, 50),
 			});
-			const url = yield* runGhWithRetry(
+			const url = yield* runPrClientWithRetry(
 				prClient.create(params.branch, params.defaultBranch, params.title, params.bodyFile),
 				params.branch,
 				params.retryDelay,
