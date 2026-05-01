@@ -20,11 +20,11 @@ import {
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
-	PrLookupError,
-	PrUrlParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
+	PullRequestLookupError,
 	PullRequestTitleBlankError,
+	PullRequestUrlParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#core/errors.js";
@@ -38,11 +38,11 @@ export {
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
-	PrLookupError,
-	PrUrlParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
+	PullRequestLookupError,
 	PullRequestTitleBlankError,
+	PullRequestUrlParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#core/errors.js";
@@ -62,8 +62,8 @@ export function formatError(e: unknown): string {
 		e instanceof BodyFileNotFoundError ||
 		e instanceof DescriptionParseError ||
 		e instanceof ParseError ||
-		e instanceof PrLookupError ||
-		e instanceof PrUrlParseError ||
+		e instanceof PullRequestLookupError ||
+		e instanceof PullRequestUrlParseError ||
 		e instanceof NoSemanticCommitsError ||
 		e instanceof TemplateRenderError ||
 		e instanceof FillPrTemplateValidationError ||
@@ -94,9 +94,12 @@ export function formatError(e: unknown): string {
 					`PR body file does not exist: ${path}. Check generate-content step succeeded. See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md#troubleshooting`,
 			),
 			Match.tag("DescriptionParseError", ({ cause }) => cause),
-			Match.tag("PrLookupError", ({ branch, cause }) => `PR lookup failed (${branch}): ${cause}`),
 			Match.tag(
-				"PrUrlParseError",
+				"PullRequestLookupError",
+				({ branch, cause }) => `PR lookup failed (${branch}): ${cause}`,
+			),
+			Match.tag(
+				"PullRequestUrlParseError",
 				({ raw, reason }) => `gh PR URL parse failed (${reason}). Raw: ${raw.slice(0, 200)}`,
 			),
 			Match.tag("ParseError", ({ message, cause }) =>
@@ -142,11 +145,11 @@ export function isTransientAiError(e: unknown): boolean {
 }
 
 /**
- * Returns true when a `gh` CLI error is likely transient and worth retrying.
+ * Returns true when a PullRequestClient error is likely transient and worth retrying.
  * Permanent/auth/config errors should fail fast.
  */
-export function isTransientGhError(e: unknown): boolean {
-	if (!(e instanceof PullRequestFailedError || e instanceof PrLookupError)) return false;
+export function isTransientPrClientError(e: unknown): boolean {
+	if (!(e instanceof PullRequestFailedError || e instanceof PullRequestLookupError)) return false;
 	const cause = e.cause.toLowerCase();
 	if (
 		cause.includes("authentication failed") ||

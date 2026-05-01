@@ -24,7 +24,7 @@ import {
 	TemplateRenderError,
 } from "#auto-pr";
 import { GitContext } from "#auto-pr/git-context.js";
-import { FillPrTemplateValidationError, PrLookupError } from "#core/errors.js";
+import { FillPrTemplateValidationError, PullRequestLookupError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
 import {
@@ -332,7 +332,7 @@ describe("resolveExistingPrTitleForPrompt", () => {
 	const layerWithPrClient = (
 		findByBranch: () => Effect.Effect<
 			Option.Option<{ readonly number: number; readonly url: string; readonly title?: string }>,
-			PrLookupError
+			PullRequestLookupError
 		>,
 	) =>
 		Layer.mergeAll(
@@ -387,7 +387,7 @@ describe("resolveExistingPrTitleForPrompt", () => {
 	test("returns none when PR lookup fails", async () => {
 		await runEffect(
 			layerWithPrClient(() =>
-				Effect.fail(new PrLookupError({ branch: "ai/b", cause: "lookup failed" })),
+				Effect.fail(new PullRequestLookupError({ branch: "ai/b", cause: "lookup failed" })),
 			),
 		)(
 			Effect.gen(function* () {

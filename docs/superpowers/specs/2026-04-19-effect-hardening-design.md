@@ -57,12 +57,12 @@ Shared scope: `src/workflow/auto-pr-create-or-update-pr.ts`. Two commits, one PR
 
 **Design.**
 
-- **New tagged error** `PrLookupError` in `src/core/errors.ts`:
+- **New tagged error** `PullRequestLookupError` in `src/core/errors.ts`:
 
   ```ts
   /** `gh pr view` failed or returned unparseable JSON. Distinct from "no PR yet" (Option.none). */
-  export class PrLookupError extends Schema.TaggedErrorClass<PrLookupError>()(
-    "PrLookupError",
+  export class PullRequestLookupError extends Schema.TaggedErrorClass<PullRequestLookupError>()(
+    "PullRequestLookupError",
     { branch: Schema.String, cause: Schema.String },
   ) {}
   ```
@@ -72,29 +72,29 @@ Shared scope: `src/workflow/auto-pr-create-or-update-pr.ts`. Two commits, one PR
 - **New signature** for `ghPrViewJson`:
 
   ```ts
-  Effect.Effect<Option.Option<PrInfo>, PrLookupError, ChildProcessSpawner>
+  Effect.Effect<Option.Option<PullRequestInfo>, PullRequestLookupError, ChildProcessSpawner>
   ```
 
-  `Option.none()` means "no PR exists" and nothing else. Every other failure is `Fail(PrLookupError)`.
+  `Option.none()` means "no PR exists" and nothing else. Every other failure is `Fail(PullRequestLookupError)`.
 
-- **"No PR exists" detection.** `runCommand` returns `Effect<string, PullRequestFailedError, ChildProcessSpawner>` today. Wrap with `Effect.catchTag("PullRequestFailedError", …)`: if `e.cause` contains "no pull requests found" (case-insensitive substring — `gh`-version-tolerant), resolve to empty string (downstream `Option.none()`); otherwise map to `PrLookupError`. The exact error string is verified during implementation against real `gh` output on a branch with no PR.
+- **"No PR exists" detection.** `runCommand` returns `Effect<string, PullRequestFailedError, ChildProcessSpawner>` today. Wrap with `Effect.catchTag("PullRequestFailedError", …)`: if `e.cause` contains "no pull requests found" (case-insensitive substring — `gh`-version-tolerant), resolve to empty string (downstream `Option.none()`); otherwise map to `PullRequestLookupError`. The exact error string is verified during implementation against real `gh` output on a branch with no PR.
 
-- **JSON parsing** uses `parseFirstJsonObject` from `src/core/parse-model-json.ts` — bridged via `Effect.fromResult`, errors mapped to `PrLookupError`. No bespoke `Effect.try(JSON.parse)`.
+- **JSON parsing** uses `parseFirstJsonObject` from `src/core/parse-model-json.ts` — bridged via `Effect.fromResult`, errors mapped to `PullRequestLookupError`. No bespoke `Effect.try(JSON.parse)`.
 
-- **Schema decoding** uses `Schema.decodeUnknownEffect(PrInfoSchema)` (the project's existing choice; `Schema.decodeUnknownOption` is wrong here because we want failure to surface, not collapse to `Option.none()`).
+- **Schema decoding** uses `Schema.decodeUnknownEffect(PullRequestInfoSchema)` (the project's existing choice; `Schema.decodeUnknownOption` is wrong here because we want failure to surface, not collapse to `Option.none()`).
 
-- **Caller update.** `CreateOrUpdatePrError` at `:133` gains `PrLookupError`. TypeScript enforces via `tsgo`; any missing `formatError` branch fails compilation.
+- **Caller update.** `CreateOrUpdatePrError` at `:133` gains `PullRequestLookupError`. TypeScript enforces via `tsgo`; any missing `formatError` branch fails compilation.
 
 **Tests.** Append to `test/workflow/create-or-update-pr.test.ts` (**already exists**). Use `Layer.mock(ChildProcessSpawner)(…)` following the existing `ChildProcessSpawnerTestMock` / `ChildProcessSpawnerCreatePathMock` / `ChildProcessSpawnerUpdatePathMock` pattern in `test/test-utils.ts` — do not invent a new mock builder. Cases:
 
 - empty stdout → `Option.none`
-- valid JSON matching `PrInfoSchema` → `Option.some(…)`
-- malformed JSON → `Fail(PrLookupError)`
+- valid JSON matching `PullRequestInfoSchema` → `Option.some(…)`
+- malformed JSON → `Fail(PullRequestLookupError)`
 - `gh` "no pull requests found" error → `Option.none`
-- other `gh` error (e.g., auth) → `Fail(PrLookupError)`
-- schema mismatch (wrong shape) → `Fail(PrLookupError)`
+- other `gh` error (e.g., auth) → `Fail(PullRequestLookupError)`
+- schema mismatch (wrong shape) → `Fail(PullRequestLookupError)`
 
-**Commit.** `refactor(workflow): typed PrLookupError instead of silent catch in ghPrViewJson`.
+**Commit.** `refactor(workflow): typed PullRequestLookupError instead of silent catch in ghPrViewJson`.
 
 ### 2.2 Task 2 — pure `parseGhPrCreateOutput`
 
@@ -107,17 +107,17 @@ Shared scope: `src/workflow/auto-pr-create-or-update-pr.ts`. Two commits, one PR
   ```ts
   export function parseGhPrCreateOutput(
     stdout: string,
-  ): Result.Result<string, PrUrlParseError>
+  ): Result.Result<string, PullRequestUrlParseError>
   ```
 
   Returns the last non-empty line, validated as a GitHub PR URL.
 
-- **New tagged error** `PrUrlParseError` in `src/core/errors.ts`:
+- **New tagged error** `PullRequestUrlParseError` in `src/core/errors.ts`:
 
   ```ts
   /** `gh pr create` output could not be parsed into a PR URL. */
-  export class PrUrlParseError extends Schema.TaggedErrorClass<PrUrlParseError>()(
-    "PrUrlParseError",
+  export class PullRequestUrlParseError extends Schema.TaggedErrorClass<PullRequestUrlParseError>()(
+    "PullRequestUrlParseError",
     { raw: Schema.String, reason: Schema.String },
   ) {}
   ```
@@ -126,7 +126,7 @@ Shared scope: `src/workflow/auto-pr-create-or-update-pr.ts`. Two commits, one PR
 
 - **URL validation.** Prefer reuse: check whether the existing `Url.fromString(…)` helper (used at `src/tools/auto-pr-init.ts:34`) accepts arbitrary http(s) URLs and returns `Result<URL, E>`. If yes, use it inside `parseGhPrCreateOutput` and additionally verify the path matches `/pull/<digits>$`. If it's too narrow (e.g., only `import.meta.url`-style parsing), fall back to a regex (`/^https?:\/\/\S+\/pull\/\d+$/`) with a one-line comment justifying why reuse was rejected. Plan records the decision during implementation.
 
-- **Shell integration.** `src/workflow/auto-pr-create-or-update-pr.ts` deletes `extractPrUrl` (`:129-131`), imports `parseGhPrCreateOutput` via `#core/gh-pr-url.js` (or `#core/index.js` if re-exported), and calls via `Effect.fromResult`. `CreateOrUpdatePrError` gains `PrUrlParseError`.
+- **Shell integration.** `src/workflow/auto-pr-create-or-update-pr.ts` deletes `extractPrUrl` (`:129-131`), imports `parseGhPrCreateOutput` via `#core/gh-pr-url.js` (or `#core/index.js` if re-exported), and calls via `Effect.fromResult`. `CreateOrUpdatePrError` gains `PullRequestUrlParseError`.
 
 **Tests.** New `test/core/gh-pr-url.test.ts` — pure-function tests, no Layers. Cases:
 
@@ -324,8 +324,8 @@ Tracks the five-point integration for every new tagged error, so the plan author
 
 | Error | `src/core/errors.ts` | `src/auto-pr/errors.ts` import | re-export | `instanceof` guard | `Match.tag` branch |
 |---|---|---|---|---|---|
-| `PrLookupError` (Task 1) | ✔ define | ✔ import | ✔ re-export | ✔ guard | ✔ `Match.tag("PrLookupError", ({ branch, cause }) => \`PR lookup failed (\${branch}): \${cause}\`)` |
-| `PrUrlParseError` (Task 2) | ✔ define | ✔ import | ✔ re-export | ✔ guard | ✔ `Match.tag("PrUrlParseError", ({ raw, reason }) => \`gh PR URL parse failed (\${reason}). Raw: \${raw.slice(0, 200)}\`)` |
+| `PullRequestLookupError` (Task 1) | ✔ define | ✔ import | ✔ re-export | ✔ guard | ✔ `Match.tag("PullRequestLookupError", ({ branch, cause }) => \`PR lookup failed (\${branch}): \${cause}\`)` |
+| `PullRequestUrlParseError` (Task 2) | ✔ define | ✔ import | ✔ re-export | ✔ guard | ✔ `Match.tag("PullRequestUrlParseError", ({ raw, reason }) => \`gh PR URL parse failed (\${reason}). Raw: \${raw.slice(0, 200)}\`)` |
 
 No error from this spec arises from AI provider calls, so `isTransientAiError` is not touched.
 
@@ -347,7 +347,7 @@ If Task 3 outcome (c) fires (§3.1) and a new tagged error must be introduced to
 
 Implementation is complete when:
 
-- **PR A:** `PrLookupError` and `PrUrlParseError` exist with five-point integration; `ghPrViewJson` has precise error channel; `extractPrUrl` deleted; `parseGhPrCreateOutput` exists in `src/core/gh-pr-url.ts`; new tests in `test/workflow/create-or-update-pr.test.ts` (appended) and `test/core/gh-pr-url.test.ts` (new) all pass; `CreateOrUpdatePrError` includes both new errors.
+- **PR A:** `PullRequestLookupError` and `PullRequestUrlParseError` exist with five-point integration; `ghPrViewJson` has precise error channel; `extractPrUrl` deleted; `parseGhPrCreateOutput` exists in `src/core/gh-pr-url.ts`; new tests in `test/workflow/create-or-update-pr.test.ts` (appended) and `test/core/gh-pr-url.test.ts` (new) all pass; `CreateOrUpdatePrError` includes both new errors.
 - **PR B:** Both `as Layer.Layer<…>` casts removed from `ai-provider.ts`; inferred error channel honoured per outcome (a/b/c from §3.1); no `as`, `as unknown as`, or widening to `unknown` introduced; all tests pass.
 - **PR C:** `ParseError.cause` and `TemplateRenderError.cause` are `Schema.optional(Schema.String)`; every caller passes a string; `getOrDefaultLogged` helper in use at all three (or five) call sites in `config.ts`; `parseOpenAiCompatUrl` validates `http(s)` URLs and the config loader fails loudly with `AutoPrConfigError` on typos.
 - **Repo-wide:** `bun run check:code` passes; coverage does not regress; no new type escapes (`any`, `as unknown`, `!`, `enum`); `.cursor/rules/` conventions all honoured.

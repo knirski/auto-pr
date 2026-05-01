@@ -26,6 +26,7 @@ When creating or editing ADRs, follow the workflow in [AGENTS.md](../../AGENTS.m
 | 0011 | [GitContext service and AI diff tool use](0011-gitcontext-and-diff-tool-use.md) |
 | 0012 | [Documentation website with Starlight on GitHub Pages](0012-documentation-website.md) |
 | 0013 | [Transient vs permanent AI error classification](0013-transient-vs-permanent-ai-errors.md) |
+| 0014 | [Replace gh PR wrapper with Octokit](0014-replace-gh-pr-wrapper-with-octokit.md) |
 
 ## Supporting documents (research and plans)
 

@@ -13,11 +13,11 @@ import {
 	isTransientAiError,
 	NoSemanticCommitsError,
 	ParseError,
-	PrLookupError,
-	PrUrlParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
+	PullRequestLookupError,
 	PullRequestTitleBlankError,
+	PullRequestUrlParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#auto-pr/errors.js";
@@ -76,14 +76,14 @@ test("formatError formats PullRequestBodyBlankError", () => {
 	);
 });
 
-test("formatError formats PrLookupError", () => {
-	const out = formatError(new PrLookupError({ branch: "ai/foo", cause: "boom" }));
+test("formatError formats PullRequestLookupError", () => {
+	const out = formatError(new PullRequestLookupError({ branch: "ai/foo", cause: "boom" }));
 	expect(out).toContain("ai/foo");
 	expect(out).toContain("boom");
 });
 
-test("formatError formats PrUrlParseError", () => {
-	const out = formatError(new PrUrlParseError({ raw: "hi", reason: "not a URL" }));
+test("formatError formats PullRequestUrlParseError", () => {
+	const out = formatError(new PullRequestUrlParseError({ raw: "hi", reason: "not a URL" }));
 	expect(out).toContain("not a URL");
 	expect(out).toContain("hi");
 });

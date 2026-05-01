@@ -7,7 +7,7 @@ A single template at [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUES
 | Mode | How |
 |------|-----|
 | **Manual** | GitHub shows the template when creating a PR. Replace each `{{placeholder}}` with your content. Edit the **How to test** section as plain markdown (no `{{…}}` there). |
-| **Automated** | `auto-pr-generate-content` runs FillPrTemplate for title and body; AI provider generates title and description for 2+ commits. Writes `pr-title.txt` and `pr-body.md` under the workspace. `auto-pr-create-or-update-pr` reads those files and calls `gh`. |
+| **Automated** | `auto-pr-generate-content` runs FillPrTemplate for title and body; AI provider generates title and description for 2+ commits. Writes `pr-title.txt` and `pr-body.md` under the workspace. `auto-pr-create-or-update-pr` reads those files and uses Octokit (GitHub REST API). |
 
 ### Single-commit vs multi-commit (automated)
 

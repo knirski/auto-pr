@@ -16,11 +16,11 @@ export {
 	FillPrTemplateValidationError,
 	NoSemanticCommitsError,
 	ParseError,
-	PrLookupError,
-	PrUrlParseError,
 	PullRequestBodyBlankError,
 	PullRequestFailedError,
+	PullRequestLookupError,
 	PullRequestTitleBlankError,
+	PullRequestUrlParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#core/errors.js";
