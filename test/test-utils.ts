@@ -3,7 +3,6 @@
  * For tests needing real time (no TestClock), use layer(MyLayer, { excludeTestServices: true }).
  */
 import { Effect, FileSystem, Layer, Logger, Path, Stream } from "effect";
-import { systemError } from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { AutoPrPlatformLayer, cleanGitEnv } from "#auto-pr";
 
@@ -21,48 +20,6 @@ export const TestBaseLayer = Layer.mergeAll(SilentLoggerLayer, AutoPrPlatformLay
 /** Mock ChildProcessSpawner for tests. string() returns empty; stream methods return empty streams. */
 export const ChildProcessSpawnerTestMock = Layer.mock(ChildProcessSpawner)({
 	string: () => Effect.succeed(""),
-	streamString: () => Stream.empty,
-	streamLines: () => Stream.empty,
-});
-
-/**
- * Mock that simulates "no PR exists" for gh pr view --json, success for gh pr create/edit.
- * Exercises the create path (vs update path) in runCreateOrUpdatePr.
- */
-export const ChildProcessSpawnerCreatePathMock = Layer.mock(ChildProcessSpawner)({
-	string: (cmd: { _tag: string; command?: string; args?: readonly string[] }) => {
-		const args = "args" in cmd ? cmd.args : [];
-		if (cmd.command === "gh" && args[1] === "view") {
-			return Effect.fail(
-				systemError({
-					_tag: "NotFound",
-					module: "gh",
-					method: "pr view",
-					description: "no PR found",
-				}),
-			);
-		}
-		if (cmd.command === "gh" && args[1] === "create") {
-			return Effect.succeed("https://github.com/owner/repo/pull/99\n");
-		}
-		return Effect.succeed("");
-	},
-	streamString: () => Stream.empty,
-	streamLines: () => Stream.empty,
-});
-
-/**
- * Mock that simulates "PR exists" for gh pr view --json (returns number,url), success for gh pr edit.
- * Exercises the update path in runCreateOrUpdatePr.
- */
-export const ChildProcessSpawnerUpdatePathMock = Layer.mock(ChildProcessSpawner)({
-	string: (cmd: { _tag: string; command?: string; args?: readonly string[] }) => {
-		const args = "args" in cmd ? cmd.args : [];
-		if (cmd.command === "gh" && args[1] === "view" && args.includes("--json")) {
-			return Effect.succeed('{"number":1,"url":"https://github.com/owner/repo/pull/1"}');
-		}
-		return Effect.succeed("");
-	},
 	streamString: () => Stream.empty,
 	streamLines: () => Stream.empty,
 });
