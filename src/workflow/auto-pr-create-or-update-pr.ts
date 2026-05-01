@@ -18,6 +18,7 @@ import {
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
 	type FileSystemError,
+	isTransientGhError,
 	mapFsError,
 	PullRequestClient,
 	type PullRequestFailedError,
@@ -60,7 +61,10 @@ function runGhWithRetry<R, E, A>(
 	retryDelay?: Duration.Duration,
 ): Effect.Effect<A, E, R> {
 	return effect.pipe(
-		Effect.retry(createGhRetrySchedule(branch, retryDelay)),
+		Effect.retry({
+			schedule: createGhRetrySchedule(branch, retryDelay),
+			while: (error: E) => isTransientGhError(error),
+		}),
 		Effect.tapError(() =>
 			Effect.logError({
 				event: "create_or_update_pr",
