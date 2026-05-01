@@ -35,6 +35,7 @@ export {
 	FillPrTemplateValidationError,
 	formatError,
 	isTransientAiError,
+	isTransientGhError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,

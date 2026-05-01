@@ -192,6 +192,22 @@ function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError
 const parseProviderOrDefault = (raw: string) =>
 	raw === "" ? Effect.succeed(DEFAULT_AI_PROVIDER) : parseProvider(raw);
 
+function resolveProviderModel(input: {
+	readonly provider: AiProvider;
+	readonly aiOpenaiCompatModel: Option.Option<string>;
+}): Effect.Effect<string, AutoPrConfigError, never> {
+	const defaultModel =
+		input.provider === "github-models" ? DEFAULT_GITHUB_MODELS_MODEL : DEFAULT_OPENAI_COMPAT_MODEL;
+	return Effect.gen(function* () {
+		const model = yield* getOrDefaultLogged(
+			input.aiOpenaiCompatModel,
+			"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
+			defaultModel,
+		);
+		return yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+	});
+}
+
 export const GeneratePrContentConfigLayer = Layer.effect(
 	GeneratePrContentConfig,
 	mapConfigError(
@@ -242,12 +258,10 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 									}),
 							),
 						);
-						const model = yield* getOrDefaultLogged(
-							base.aiOpenaiCompatModel,
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
-							DEFAULT_OPENAI_COMPAT_MODEL,
-						);
-						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+						const modelId = yield* resolveProviderModel({
+							provider,
+							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						});
 						const generatePrContentLocal: GeneratePrContentConfigLocal = {
 							...shared,
 							provider: "local",
@@ -267,12 +281,10 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.ghToken,
 							"GH_TOKEN required for github-models",
 						);
-						const model = yield* getOrDefaultLogged(
-							base.aiOpenaiCompatModel,
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
-							DEFAULT_GITHUB_MODELS_MODEL,
-						);
-						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+						const modelId = yield* resolveProviderModel({
+							provider,
+							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						});
 						const generatePrContentGithub: GeneratePrContentConfigGithubModels = {
 							...shared,
 							provider: "github-models",
@@ -443,12 +455,10 @@ export const RunAutoPrConfigLayer = Layer.effect(
 									}),
 							),
 						);
-						const model = yield* getOrDefaultLogged(
-							base.aiOpenaiCompatModel,
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
-							DEFAULT_OPENAI_COMPAT_MODEL,
-						);
-						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+						const modelId = yield* resolveProviderModel({
+							provider,
+							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						});
 						const runAutoPrLocal: RunAutoPrConfigLocal = {
 							...shared,
 							provider: "local",
@@ -463,12 +473,10 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				),
 				Match.when("github-models", () =>
 					Effect.gen(function* () {
-						const model = yield* getOrDefaultLogged(
-							base.aiOpenaiCompatModel,
-							"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
-							DEFAULT_GITHUB_MODELS_MODEL,
-						);
-						const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+						const modelId = yield* resolveProviderModel({
+							provider,
+							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						});
 						const runAutoPrGithub: RunAutoPrConfigGithubModels = {
 							...shared,
 							provider: "github-models",

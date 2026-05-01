@@ -140,3 +140,25 @@ export function isTransientAiError(e: unknown): boolean {
 	}
 	return true; // schema decode failures and other unknown errors are transient
 }
+
+/**
+ * Returns true when a `gh` CLI error is likely transient and worth retrying.
+ * Permanent/auth/config errors should fail fast.
+ */
+export function isTransientGhError(e: unknown): boolean {
+	if (!(e instanceof PullRequestFailedError || e instanceof PrLookupError)) return false;
+	const cause = e.cause.toLowerCase();
+	if (
+		cause.includes("authentication failed") ||
+		cause.includes("gh auth") ||
+		cause.includes("bad credentials") ||
+		cause.includes("forbidden") ||
+		cause.includes("401") ||
+		cause.includes("403") ||
+		cause.includes("not found (404)") ||
+		cause.includes("not found:")
+	) {
+		return false;
+	}
+	return true;
+}

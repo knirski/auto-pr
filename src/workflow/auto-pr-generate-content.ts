@@ -365,11 +365,12 @@ export function generatePrContent(params: GeneratePrContentParams) {
 	);
 }
 
-/** Schema union for generate-content errors (single source of truth). No UnexpectedError. */
+/** Schema union for generate-content errors (single source of truth). */
 const GeneratePrContentErrorSchema = Schema.Union([
 	NoSemanticCommitsError,
 	ParseError,
 	TemplateRenderError,
+	UnexpectedError,
 ]);
 
 function hasStringTag(value: unknown): value is { readonly _tag: string } {
@@ -397,7 +398,7 @@ export type GeneratePrContentError =
 /** Normalize unknown (defect or non-tagged failure) to a GeneratePrContentError. Exported for tests. */
 export function normalizeUnknownToGeneratePrContentError(
 	e: unknown,
-): NoSemanticCommitsError | ParseError | TemplateRenderError {
+): NoSemanticCommitsError | ParseError | TemplateRenderError | UnexpectedError {
 	const decoded = Schema.decodeUnknownResult(GeneratePrContentErrorSchema)(e);
 	return Result.match(decoded, {
 		onSuccess: (error) => error,
