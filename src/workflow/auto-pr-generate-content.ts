@@ -510,7 +510,9 @@ export function runGeneratePrContent(
 
 	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
 	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch).pipe(Layer.provide(gitLayer));
-	const prClientLayer = PullRequestClient.Live(config.workspace);
+	const prClientLayer = PullRequestClient.Live(config.workspace).pipe(
+		Layer.provide(ChildProcessSpawnerLayer),
+	);
 	const liveLayer = Layer.mergeAll(
 		AutoPrPlatformLayer,
 		aiLayer,
