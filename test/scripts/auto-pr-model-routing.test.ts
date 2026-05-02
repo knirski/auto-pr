@@ -5,9 +5,9 @@ import {
 	resolveLocalRunnerResources,
 	resolveModelBand,
 	selectModel,
-} from "../../.github/actions/auto-pr-build-model-routing-context/model-routing.js";
+} from "../../src/workflow/model-routing.js";
 
-describe("model band routing action policy", () => {
+describe("model band routing command policy", () => {
 	test("routes tiny docs-only changes to band A", () => {
 		const signals = {
 			semanticCommitCount: 1,

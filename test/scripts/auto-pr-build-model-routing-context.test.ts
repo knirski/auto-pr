@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import {
 	program,
 	runBuildModelRoutingContext,
-} from "../../.github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.js";
+} from "../../src/workflow/auto-pr-build-model-routing-context.js";
 
 function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
 	return Effect.try({
@@ -36,23 +36,45 @@ function tempRepo(prefix: string): string {
 }
 
 describe("build-model-routing-context", () => {
-	test("action metadata runs the checked-in Node bundle as a Node 24 JavaScript action", () => {
-		const actionDir = join(process.cwd(), ".github/actions/auto-pr-build-model-routing-context");
-		const action = readFileSync(join(actionDir, "action.yml"), "utf8");
+	test("routing context is a packaged command instead of an action-local compiled bundle", () => {
+		const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+			bin: Record<string, string>;
+			scripts: Record<string, string>;
+		};
+		const buildScript = readFileSync(join(process.cwd(), "scripts/build.ts"), "utf8");
+		const runCommandAction = readFileSync(
+			join(process.cwd(), ".github/actions/auto-pr-run-command/action.yml"),
+			"utf8",
+		);
+		const runCommandScript = readFileSync(
+			join(process.cwd(), ".github/actions/auto-pr-run-command/auto-pr-run-command.sh"),
+			"utf8",
+		);
 
-		expect(action).toContain("using: node24");
-		expect(action).toContain("main: auto-pr-build-model-routing-context.mjs");
-		expect(action).not.toContain("using: composite");
-		expect(action).not.toContain("run: bun ");
-		expect(action).not.toContain("run: node ");
+		expect(pkg.bin["auto-pr-build-model-routing-context"]).toBe(
+			"./dist/workflow/auto-pr-build-model-routing-context.js",
+		);
+		expect(pkg.scripts["build-model-routing-context"]).toBe(
+			"bun run src/workflow/auto-pr-build-model-routing-context.ts",
+		);
+		expect(buildScript).not.toContain("auto-pr-build-model-routing-context.mjs");
 		expect(
-			readFileSync(join(actionDir, "auto-pr-build-model-routing-context.mjs"), "utf8"),
-		).toContain("Generated from auto-pr-build-model-routing-context.ts");
+			existsSync(
+				join(
+					process.cwd(),
+					".github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.mjs",
+				),
+			),
+		).toBe(false);
+		expect(runCommandAction).toContain("selected_model:");
+		expect(runCommandAction).toContain("routing_context:");
+		expect(runCommandScript).toContain("build-model-routing-context)");
+		expect(runCommandScript).toContain('BIN="auto-pr-build-model-routing-context"');
+		expect(runCommandScript).toContain('SCRIPT="build-model-routing-context"');
 	});
 
-	test("checked-in Node bundle runs without Bun or action repo node_modules", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-node-");
-		const bundleDir = tempRepo("auto-pr-build-model-routing-context-bundle-");
+	test("auto-pr-run-command invokes build-model-routing-context from workspace source", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-command-");
 		try {
 			await Effect.runPromise(
 				Effect.gen(function* () {
@@ -72,37 +94,91 @@ describe("build-model-routing-context", () => {
 				}),
 			);
 
-			const bundle = join(bundleDir, "auto-pr-build-model-routing-context.mjs");
-			copyFileSync(
-				join(
-					process.cwd(),
-					".github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.mjs",
-				),
-				bundle,
-			);
 			const githubOutput = join(dir, "github_output");
-			const result = spawnSync(process.execPath, [bundle], {
-				cwd: dir,
-				encoding: "utf8",
-				env: {
-					...process.env,
-					GITHUB_OUTPUT: githubOutput,
-					INPUT_AI_PROVIDER: "local",
-					INPUT_COMMITS_COUNT: "1",
-					INPUT_DEFAULT_BRANCH: "main",
-					INPUT_AI_OPENAI_COMPAT_MODEL: "",
-					INPUT_REPOSITORY_VISIBILITY: "private",
-					INPUT_RUNNER_LABEL: "ubuntu-24.04",
-					INPUT_WORKSPACE: dir,
+			const result = spawnSync(
+				"bash",
+				[
+					join(process.cwd(), ".github/actions/auto-pr-run-command/auto-pr-run-command.sh"),
+					"build-model-routing-context",
+				],
+				{
+					cwd: process.cwd(),
+					encoding: "utf8",
+					env: {
+						...process.env,
+						AUTO_PR_AI_PROVIDER: "local",
+						AUTO_PR_AI_OPENAI_COMPAT_MODEL: "",
+						AUTO_PR_AI_OPENAI_COMPAT_URL: "",
+						AUTO_PR_AI_LLAMACPP_MODEL_URL: "",
+						AUTO_PR_PKG: "github:knirski/auto-pr",
+						COMMITS_COUNT: "1",
+						DEFAULT_BRANCH: "main",
+						GITHUB_OUTPUT: githubOutput,
+						GITHUB_WORKSPACE: dir,
+						REPOSITORY_VISIBILITY: "private",
+						RUNNER: "npx",
+						RUNNER_LABEL: "ubuntu-24.04",
+						USE_WORKSPACE: "true",
+					},
 				},
-			});
+			);
+
+			expect(result.status).toBe(0);
+			expect(readFileSync(githubOutput, "utf8")).toContain("selected_model=qwen3-1.7b-q4_k_m");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("packaged command runs with Node from built dist", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-node-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "src", "app.ts"), "export const app = 2;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: update app"]);
+				}),
+			);
+
+			const githubOutput = join(dir, "github_output");
+			const result = spawnSync(
+				process.execPath,
+				[join(process.cwd(), "dist/workflow/auto-pr-build-model-routing-context.js")],
+				{
+					cwd: dir,
+					encoding: "utf8",
+					env: {
+						...process.env,
+						AUTO_PR_AI_PROVIDER: "local",
+						AUTO_PR_AI_OPENAI_COMPAT_MODEL: "",
+						AUTO_PR_AI_OPENAI_COMPAT_URL: "",
+						AUTO_PR_AI_LLAMACPP_MODEL_URL: "",
+						COMMITS_COUNT: "1",
+						DEFAULT_BRANCH: "main",
+						GITHUB_OUTPUT: githubOutput,
+						GITHUB_WORKSPACE: dir,
+						REPOSITORY_VISIBILITY: "private",
+						RUNNER_LABEL: "ubuntu-24.04",
+					},
+				},
+			);
 
 			expect(result.status).toBe(0);
 			expect(result.stderr).toBe("");
 			expect(readFileSync(githubOutput, "utf8")).toContain("selected_model=qwen3-1.7b-q4_k_m");
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
-			rmSync(bundleDir, { recursive: true, force: true });
 		}
 	});
 
@@ -298,18 +374,18 @@ describe("build-model-routing-context", () => {
 	test("program reads required env vars and emits routing outputs", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-program-");
 		const originalEnv = {
+			AUTO_PR_AI_LLAMACPP_MODEL_URL: process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL,
+			AUTO_PR_AI_OPENAI_COMPAT_MODEL: process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL,
+			AUTO_PR_AI_OPENAI_COMPAT_URL: process.env.AUTO_PR_AI_OPENAI_COMPAT_URL,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
 			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
-			INPUT_AI_LLAMACPP_MODEL_URL: process.env.INPUT_AI_LLAMACPP_MODEL_URL,
-			INPUT_AI_OPENAI_COMPAT_MODEL: process.env.INPUT_AI_OPENAI_COMPAT_MODEL,
-			INPUT_AI_OPENAI_COMPAT_URL: process.env.INPUT_AI_OPENAI_COMPAT_URL,
-			INPUT_AI_PROVIDER: process.env.INPUT_AI_PROVIDER,
-			INPUT_COMMITS_COUNT: process.env.INPUT_COMMITS_COUNT,
-			INPUT_DEFAULT_BRANCH: process.env.INPUT_DEFAULT_BRANCH,
-			INPUT_LOCAL_RUNNER_CPUS: process.env.INPUT_LOCAL_RUNNER_CPUS,
-			INPUT_LOCAL_RUNNER_MEMORY_GB: process.env.INPUT_LOCAL_RUNNER_MEMORY_GB,
-			INPUT_REPOSITORY_VISIBILITY: process.env.INPUT_REPOSITORY_VISIBILITY,
-			INPUT_RUNNER_LABEL: process.env.INPUT_RUNNER_LABEL,
-			INPUT_WORKSPACE: process.env.INPUT_WORKSPACE,
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+			REPOSITORY_VISIBILITY: process.env.REPOSITORY_VISIBILITY,
+			RUNNER_LABEL: process.env.RUNNER_LABEL,
 		};
 		try {
 			await Effect.runPromise(
@@ -330,17 +406,17 @@ describe("build-model-routing-context", () => {
 
 					const githubOutput = join(dir, "github_output");
 					process.env.GITHUB_OUTPUT = githubOutput;
-					process.env.INPUT_WORKSPACE = dir;
-					process.env.INPUT_DEFAULT_BRANCH = "main";
-					process.env.INPUT_AI_PROVIDER = "local";
-					process.env.INPUT_AI_LLAMACPP_MODEL_URL = "";
-					process.env.INPUT_AI_OPENAI_COMPAT_URL = "";
-					process.env.INPUT_AI_OPENAI_COMPAT_MODEL = "";
-					process.env.INPUT_LOCAL_RUNNER_CPUS = "";
-					process.env.INPUT_LOCAL_RUNNER_MEMORY_GB = "";
-					process.env.INPUT_REPOSITORY_VISIBILITY = "private";
-					process.env.INPUT_RUNNER_LABEL = "ubuntu-24.04";
-					process.env.INPUT_COMMITS_COUNT = "1";
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL = "";
+					process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = "";
+					process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL = "";
+					process.env.LOCAL_RUNNER_CPUS = "";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "";
+					process.env.REPOSITORY_VISIBILITY = "private";
+					process.env.RUNNER_LABEL = "ubuntu-24.04";
+					process.env.COMMITS_COUNT = "1";
 
 					yield* program;
 
@@ -353,18 +429,18 @@ describe("build-model-routing-context", () => {
 				}),
 			);
 		} finally {
+			process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL = originalEnv.AUTO_PR_AI_LLAMACPP_MODEL_URL;
+			process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_MODEL;
+			process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_URL;
+			process.env.AUTO_PR_AI_PROVIDER = originalEnv.AUTO_PR_AI_PROVIDER;
+			process.env.COMMITS_COUNT = originalEnv.COMMITS_COUNT;
+			process.env.DEFAULT_BRANCH = originalEnv.DEFAULT_BRANCH;
 			process.env.GITHUB_OUTPUT = originalEnv.GITHUB_OUTPUT;
-			process.env.INPUT_AI_LLAMACPP_MODEL_URL = originalEnv.INPUT_AI_LLAMACPP_MODEL_URL;
-			process.env.INPUT_AI_OPENAI_COMPAT_MODEL = originalEnv.INPUT_AI_OPENAI_COMPAT_MODEL;
-			process.env.INPUT_AI_OPENAI_COMPAT_URL = originalEnv.INPUT_AI_OPENAI_COMPAT_URL;
-			process.env.INPUT_AI_PROVIDER = originalEnv.INPUT_AI_PROVIDER;
-			process.env.INPUT_COMMITS_COUNT = originalEnv.INPUT_COMMITS_COUNT;
-			process.env.INPUT_DEFAULT_BRANCH = originalEnv.INPUT_DEFAULT_BRANCH;
-			process.env.INPUT_LOCAL_RUNNER_CPUS = originalEnv.INPUT_LOCAL_RUNNER_CPUS;
-			process.env.INPUT_LOCAL_RUNNER_MEMORY_GB = originalEnv.INPUT_LOCAL_RUNNER_MEMORY_GB;
-			process.env.INPUT_REPOSITORY_VISIBILITY = originalEnv.INPUT_REPOSITORY_VISIBILITY;
-			process.env.INPUT_RUNNER_LABEL = originalEnv.INPUT_RUNNER_LABEL;
-			process.env.INPUT_WORKSPACE = originalEnv.INPUT_WORKSPACE;
+			process.env.GITHUB_WORKSPACE = originalEnv.GITHUB_WORKSPACE;
+			process.env.LOCAL_RUNNER_CPUS = originalEnv.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = originalEnv.LOCAL_RUNNER_MEMORY_GB;
+			process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
+			process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});

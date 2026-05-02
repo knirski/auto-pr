@@ -1,8 +1,5 @@
 /**
- * Self-contained routing policy for auto-pr's reusable workflow action.
- *
- * Keep this file inside the action directory: adopter workflows execute the
- * action from the published repository path and should not depend on src/**.
+ * Routing policy for auto-pr's packaged build-model-routing-context workflow command.
  */
 
 export type ModelProvider = "local" | "github-models";
@@ -220,7 +217,7 @@ export function resolveBand(signals: ModelBandSignals): ModelBand {
 	return "B";
 }
 
-export function resolveReasoningNeed(signals: ModelBandSignals, band: ModelBand): ReasoningNeed {
+function resolveReasoningNeed(signals: ModelBandSignals, band: ModelBand): ReasoningNeed {
 	if (
 		band === "C" ||
 		signals.hasBreakingChange ||
@@ -233,7 +230,7 @@ export function resolveReasoningNeed(signals: ModelBandSignals, band: ModelBand)
 	return "low";
 }
 
-export function resolveToolStrategy(signals: ModelBandSignals, band: ModelBand): ToolStrategy {
+function resolveToolStrategy(signals: ModelBandSignals, band: ModelBand): ToolStrategy {
 	if (band === "A" && !signals.hasBreakingChange) return "none";
 	if (
 		band === "C" ||
@@ -320,7 +317,7 @@ function usesExternalOpenAiCompat(localModel: LocalModelContext | undefined): bo
 	return !isBlank(localModel?.openaiCompatUrl);
 }
 
-export function resolveLocalModelResourceFit(input: {
+function resolveLocalModelResourceFit(input: {
 	readonly localModel?: LocalModelContext;
 }): LocalModelResourceFit | undefined {
 	const local = input.localModel;

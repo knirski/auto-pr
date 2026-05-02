@@ -68,7 +68,7 @@ function parseProvider(raw: string): Effect.Effect<ModelProvider, Error> {
 	return Effect.try({
 		try: () => {
 			if (raw === "local" || raw === "github-models") return raw;
-			throw new Error(`AI_PROVIDER must be local or github-models, got ${raw}`);
+			throw new Error(`AUTO_PR_AI_PROVIDER must be local or github-models, got ${raw}`);
 		},
 		catch: toError,
 	});
@@ -457,39 +457,37 @@ export function runBuildModelRoutingContext(
 }
 
 export const program = Effect.gen(function* () {
-	const workspace = yield* readRequiredEnv("INPUT_WORKSPACE");
-	const defaultBranch = yield* readRequiredEnv("INPUT_DEFAULT_BRANCH");
-	const providerRaw = yield* readRequiredEnv("INPUT_AI_PROVIDER");
+	const workspace = yield* readRequiredEnv("GITHUB_WORKSPACE");
+	const defaultBranch = yield* readRequiredEnv("DEFAULT_BRANCH");
+	const providerRaw = yield* readRequiredEnv("AUTO_PR_AI_PROVIDER");
 	const githubOutput = yield* readRequiredEnv("GITHUB_OUTPUT");
 	const explicitModelRaw = yield* Effect.sync(
-		() => process.env.INPUT_AI_OPENAI_COMPAT_MODEL?.trim() ?? "",
+		() => process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL?.trim() ?? "",
 	);
 	const openaiCompatUrlRaw = yield* Effect.sync(
-		() => process.env.INPUT_AI_OPENAI_COMPAT_URL?.trim() ?? "",
+		() => process.env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim() ?? "",
 	);
 	const llamacppModelUrlRaw = yield* Effect.sync(
-		() => process.env.INPUT_AI_LLAMACPP_MODEL_URL?.trim() ?? "",
+		() => process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL?.trim() ?? "",
 	);
-	const runnerLabelRaw = yield* Effect.sync(() => process.env.INPUT_RUNNER_LABEL?.trim() ?? "");
+	const runnerLabelRaw = yield* Effect.sync(() => process.env.RUNNER_LABEL?.trim() ?? "");
 	const repositoryVisibilityRaw = yield* Effect.sync(
-		() => process.env.INPUT_REPOSITORY_VISIBILITY?.trim() ?? "",
+		() => process.env.REPOSITORY_VISIBILITY?.trim() ?? "",
 	);
-	const localRunnerCpusRaw = yield* Effect.sync(
-		() => process.env.INPUT_LOCAL_RUNNER_CPUS?.trim() ?? "",
-	);
+	const localRunnerCpusRaw = yield* Effect.sync(() => process.env.LOCAL_RUNNER_CPUS?.trim() ?? "");
 	const localRunnerMemoryGbRaw = yield* Effect.sync(
-		() => process.env.INPUT_LOCAL_RUNNER_MEMORY_GB?.trim() ?? "",
+		() => process.env.LOCAL_RUNNER_MEMORY_GB?.trim() ?? "",
 	);
-	const commitsCountRaw = yield* Effect.sync(() => process.env.INPUT_COMMITS_COUNT?.trim() ?? "");
+	const commitsCountRaw = yield* Effect.sync(() => process.env.COMMITS_COUNT?.trim() ?? "");
 	const provider = yield* parseProvider(providerRaw);
-	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw, "INPUT_COMMITS_COUNT");
+	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw, "COMMITS_COUNT");
 	const localRunnerCpus = yield* parseOptionalPositiveNumber(
 		localRunnerCpusRaw,
-		"INPUT_LOCAL_RUNNER_CPUS",
+		"LOCAL_RUNNER_CPUS",
 	);
 	const localRunnerMemoryGb = yield* parseOptionalPositiveNumber(
 		localRunnerMemoryGbRaw,
-		"INPUT_LOCAL_RUNNER_MEMORY_GB",
+		"LOCAL_RUNNER_MEMORY_GB",
 	);
 	yield* runBuildModelRoutingContext({
 		workspace,

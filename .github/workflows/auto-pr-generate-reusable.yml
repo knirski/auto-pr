@@ -119,17 +119,21 @@ jobs:
 
       - name: Build model routing context
         id: ai_routing
-        uses: knirski/auto-pr/.github/actions/auto-pr-build-model-routing-context@78f2be0265279501e342c46fe8a95480bc519c45
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@78f2be0265279501e342c46fe8a95480bc519c45
         with:
-          workspace: ${{ github.workspace }}
-          default_branch: ${{ github.event.repository.default_branch }}
-          commits_count: ${{ steps.commits.outputs.count }}
-          ai_provider: ${{ inputs.ai_provider }}
-          ai_openai_compat_model: ${{ inputs.ai_openai_compat_model }}
-          ai_openai_compat_url: ${{ inputs.ai_openai_compat_url }}
-          ai_llamacpp_model_url: ${{ inputs.ai_llamacpp_model_url }}
-          runner_label: ubuntu-24.04
-          repository_visibility: ${{ github.event.repository.visibility }}
+          command: build-model-routing-context
+          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
+          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
+          runner: ${{ steps.setup.outputs.runner }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          COMMITS_COUNT: ${{ steps.commits.outputs.count }}
+          AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
+          AUTO_PR_AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
+          RUNNER_LABEL: ubuntu-24.04
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
 
       - name: Resolve llama Docker image
         id: llama_release

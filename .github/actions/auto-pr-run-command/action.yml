@@ -1,10 +1,10 @@
-# Composite action: run generate-content (workspace or npx/bunx package).
+# Composite action: run auto-pr workflow commands (workspace or npx/bunx package).
 name: Run auto-pr command
-description: Run generate-content via bun workspace or npx/bunx package
+description: Run an auto-pr workflow command via bun workspace or npx/bunx package
 
 inputs:
   command:
-    description: generate-content
+    description: build-model-routing-context or generate-content
     required: true
   use_workspace:
     description: "true to use bun run from workspace"
@@ -15,6 +15,35 @@ inputs:
   runner:
     description: npx or bunx (from setup-runtime)
     required: true
+
+outputs:
+  selected_model:
+    description: Final model id to pass to generate-content.
+    value: ${{ steps.run.outputs.selected_model }}
+  routing_context:
+    description: Trusted routing context string for prompt conditioning.
+    value: ${{ steps.run.outputs.routing_context }}
+  band:
+    description: Model band selected by the heuristic.
+    value: ${{ steps.run.outputs.band }}
+  tool_strategy:
+    description: Tool-use strategy for later AI prompt execution.
+    value: ${{ steps.run.outputs.tool_strategy }}
+  reasoning_need:
+    description: Reasoning level implied by the change signals.
+    value: ${{ steps.run.outputs.reasoning_need }}
+  requires_tool_calls:
+    description: Whether the selected model should support tool calls.
+    value: ${{ steps.run.outputs.requires_tool_calls }}
+  local_runner_resources:
+    description: Resolved local-runner resource profile used for local model selection.
+    value: ${{ steps.run.outputs.local_runner_resources }}
+  local_model_resource_fit:
+    description: Whether the bundled GGUF URL appears to fit the resolved local-runner resources.
+    value: ${{ steps.run.outputs.local_model_resource_fit }}
+  local_model_recommendation:
+    description: Local model recommendation for the resolved runner profile.
+    value: ${{ steps.run.outputs.local_model_recommendation }}
 
 runs:
   using: composite

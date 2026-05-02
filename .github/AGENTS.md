@@ -22,5 +22,5 @@ These rules apply to `.github/**`.
 - Shell entrypoints must follow `scripts/AGENTS.md`: `shellcheck`, `shfmt`, strict quoting, and no secret printing.
 - Use explicit inputs for paths and secrets. Do not rely on hidden repository layout when a caller can pass the value.
 - Reusable-workflow actions run inside adopter repositories. They must not require Bun, this repo's `node_modules`, or runtime imports from `src/**`.
-- If a reusable action needs TypeScript or Effect logic, prefer a JavaScript action (`runs.using: node24`) with source files and the generated Node runtime bundle in the same action directory. Regenerate bundles with `bun run build`.
-- Commit action-local bundles with their source changes. Do not stage root `dist/` for ordinary PRs; root `dist/` is owned by the dist update workflows.
+- For auto-pr TypeScript/Effect workflow logic, prefer a packaged command in `src/workflow/` invoked through `auto-pr-run-command`; do not add generated JavaScript bundles under `.github/actions/**`.
+- Do not stage root `dist/` for ordinary PRs; root `dist/` is owned by the dist update workflows.

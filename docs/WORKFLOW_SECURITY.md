@@ -58,6 +58,6 @@ CodeQL does not fully model cross-workflow permission separation, so it may repo
 
 - [ADR 0002: Two-Phase Auto-PR Workflow](adr/0002-two-phase-auto-pr-workflow.md) — Design decision and alternatives
 - [ADR 0014: Replace gh PR wrapper with Octokit](adr/0014-replace-gh-pr-wrapper-with-octokit.md) — Privileged PR client transport
-- [ADR 0015: Action-local bundled model routing context](adr/0015-action-local-bundled-model-routing-context.md) — Generate-job routing context action design
+- [ADR 0015: Packaged model routing context command](adr/0015-packaged-model-routing-context-command.md) — Generate-job routing context command design
 - [docs/CI.md](CI.md) — Workflow overview
 - [GitHub: Keeping your GitHub Actions and workflows secure](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/)
