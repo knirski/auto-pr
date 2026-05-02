@@ -262,33 +262,6 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 		});
 	});
 
-	test("maps optional GitHub host settings to runner config", () => {
-		const ghToken = Redacted.make("ghp_test", { label: "GH_TOKEN" });
-		const config = runGeneratePrContentConfigFromGeneratePrContentConfig({
-			provider: "github-models",
-			workspace: "/workspace",
-			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
-			defaultBranch: "main",
-			branch: "ai/example",
-			model: "openai/gpt-4.1",
-			ghToken,
-			githubApiUrl: "https://api.github.com",
-			ghHost: "github.com",
-		});
-
-		expect(config).toEqual({
-			provider: "github-models",
-			workspace: "/workspace",
-			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
-			defaultBranch: "main",
-			branch: "ai/example",
-			model: "openai/gpt-4.1",
-			ghToken,
-			githubApiUrl: "https://api.github.com",
-			ghHost: "github.com",
-		});
-	});
-
 	test("maps github-models config to runner config", () => {
 		const ghToken = Redacted.make("ghp_test", { label: "GH_TOKEN" });
 		const config = runGeneratePrContentConfigFromGeneratePrContentConfig({
@@ -299,6 +272,8 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
 			ghToken,
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
 		});
 
 		expect(config).toEqual({
@@ -309,6 +284,8 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
 			ghToken,
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
 		});
 	});
 });
