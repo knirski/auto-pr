@@ -49,6 +49,9 @@ jobs:
         id: filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         with:
+          # `every` is required for the `code` filter because it uses a broad include (`**`)
+          # plus excludes. With `some`, docs-only changes also match `code`.
+          predicate-quantifier: every
           filters: |
             code:
               - '**'
