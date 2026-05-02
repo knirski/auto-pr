@@ -28,7 +28,12 @@ describe("model band routing", () => {
 
 		expect(resolveBand(signals)).toBe("A");
 		expect(selectModel("local", "A")).toBe("gpt-oss");
-		expect(resolveModelBand({ provider: "local", signals }).selectedModel).toBe("gpt-oss");
+		expect(resolveModelBand({ provider: "local", signals })).toMatchObject({
+			selectedModel: "gpt-oss",
+			toolStrategy: "none",
+			reasoningNeed: "low",
+			requiresToolCalls: false,
+		});
 	});
 
 	test("routes broad cross-cutting changes to band C", () => {
@@ -52,9 +57,12 @@ describe("model band routing", () => {
 
 		expect(resolveBand(signals)).toBe("C");
 		expect(selectModel("github-models", "C")).toBe("openai/gpt-4.1");
-		expect(resolveModelBand({ provider: "github-models", signals }).selectedModel).toBe(
-			"openai/gpt-4.1",
-		);
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			selectedModel: "openai/gpt-4.1",
+			toolStrategy: "full-diff",
+			reasoningNeed: "high",
+			requiresToolCalls: true,
+		});
 	});
 
 	test("explicit model override wins over provider defaults", () => {
@@ -80,6 +88,34 @@ describe("model band routing", () => {
 			resolveModelBand({ provider: "github-models", explicitModel: "openai/gpt-4.1", signals })
 				.selectedModel,
 		).toBe("openai/gpt-4.1");
+	});
+
+	test("routes bounded source changes to a tool-capable GitHub model", () => {
+		const signals = {
+			semanticCommitCount: 2,
+			conventionalTypeCount: 1,
+			topLevelSpread: 1,
+			changedFileCount: 4,
+			sourceFileCount: 3,
+			docsFileCount: 0,
+			testFileCount: 1,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 320,
+			sourceChurn: 320,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "B",
+			selectedModel: "openai/gpt-4.1",
+			toolStrategy: "hotspot",
+			reasoningNeed: "medium",
+			requiresToolCalls: true,
+		});
 	});
 
 	test("builds a rich routing context string", () => {

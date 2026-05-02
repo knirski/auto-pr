@@ -84,12 +84,16 @@ export type {
 	ModelBandDecision,
 	ModelBandSignals,
 	ModelProvider,
+	ReasoningNeed,
 	ResolveModelBandInput,
+	ToolStrategy,
 } from "#core/model-band.js";
 export {
 	buildRoutingContext,
 	resolveBand,
 	resolveModelBand,
+	resolveReasoningNeed,
+	resolveToolStrategy,
 	selectModel,
 } from "#core/model-band.js";
 export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";

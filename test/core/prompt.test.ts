@@ -45,19 +45,22 @@ describe("buildDescriptionPrompt", () => {
 		expect(buildDescriptionPrompt("S.", "- a", "", "   ")).not.toContain("Existing PR title");
 	});
 
-	test("includes routing context section before commits when provided", () => {
+	test("includes routing context section after commits and diff stat when provided", () => {
 		const result = buildDescriptionPrompt(
 			"System prompt.",
 			"- feat: add a",
-			"",
+			" src/a.ts | 10 +++\n 1 file changed",
 			undefined,
-			"band=B; n_sem=3; delta_src=medium; gen_ratio=low; hardness=medium",
+			"Trusted change analysis:\nmodel_route: band=B",
 		);
+		const diffIdx = result.indexOf("Changed files (diff stat):");
 		const routingIdx = result.indexOf("Routing context:");
 		const commitsIdx = result.indexOf("Commits:\n- feat: add a");
+		expect(diffIdx).not.toBe(-1);
 		expect(routingIdx).not.toBe(-1);
 		expect(commitsIdx).not.toBe(-1);
-		expect(routingIdx).toBeLessThan(commitsIdx);
+		expect(commitsIdx).toBeLessThan(diffIdx);
+		expect(diffIdx).toBeLessThan(routingIdx);
 	});
 
 	test("omits routing context section when empty or whitespace", () => {

@@ -30,10 +30,14 @@ type GitResult = {
 };
 
 type ParsedCommit = {
-	readonly subject: string;
 	readonly type: string | undefined;
 	readonly breaking: boolean;
 };
+
+type RoutingContextSignalInput = Pick<
+	BuildDetailedRoutingContextInput,
+	"signals" | "commits" | "files"
+>;
 
 function toError(cause: unknown): Error {
 	return cause instanceof Error ? cause : new Error(String(cause));
@@ -94,9 +98,16 @@ function classifyFile(
 	path: string,
 ): "source" | "docs" | "test" | "generated" | "lockfile" | "package" | "other" {
 	if (
+		/^(package-lock\.json|bun\.lock|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|go\.sum|flake\.lock)$/.test(
+			path,
+		)
+	) {
+		return "lockfile";
+	}
+	if (/^(package\.json|bun\.config\.[^/]+|flake\.nix)$/.test(path)) return "package";
+	if (
 		/(^|\/)(dist|build|out|coverage|vendor|__snapshots__|\.terraform)(\/|$)/.test(path) ||
 		/(^|\/)\.next(\/|$)/.test(path) ||
-		/(^|\/)(pnpm-lock\.yaml|package-lock\.json|Cargo\.lock|go\.sum)$/.test(path) ||
 		/\.lock$/.test(path) ||
 		/\.min\.js$/.test(path) ||
 		/\.map$/.test(path)
@@ -107,13 +118,6 @@ function classifyFile(
 	if (/^src\//.test(path)) return "source";
 	if (/(^|\/)(test|tests|spec|specs)(\/|$)/.test(path) || /\.(test|spec)\.[^/]+$/.test(path))
 		return "test";
-	if (
-		/^(package(?:-lock)?\.json|bun\.lock|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|go\.sum)$/.test(
-			path,
-		)
-	)
-		return "lockfile";
-	if (/^(package\.json|bun\.config\.[^/]+)$/.test(path)) return "package";
 	return "other";
 }
 
@@ -123,9 +127,7 @@ function buildCommitSummary(
 ): RoutingContextCommitSummary {
 	const typeCounts: Record<string, number> = Object.create(null);
 	let breakingCommitCount = 0;
-	const subjects: string[] = [];
 	for (const commit of commits) {
-		subjects.push(commit.subject);
 		if (commit.breaking) breakingCommitCount++;
 		const type = commit.type?.trim().toLowerCase();
 		if (type) {
@@ -137,7 +139,6 @@ function buildCommitSummary(
 		mergeCommitCount,
 		breakingCommitCount,
 		typeCounts,
-		subjects,
 	};
 }
 
@@ -151,6 +152,7 @@ function sortHotspots(items: RoutingContextHotspot[]): RoutingContextHotspot[] {
 function buildFileSummary(input: {
 	readonly files: readonly string[];
 	readonly numstat: readonly string[];
+	readonly nameStatus: readonly string[];
 }): RoutingContextFileSummary {
 	const topLevelDirs = new Set<string>();
 	const topDirChurn = new Map<string, RoutingContextHotspot>();
@@ -166,6 +168,10 @@ function buildFileSummary(input: {
 	let sourceChurn = 0;
 	let generatedChurn = 0;
 	let hasBinaryFiles = false;
+	let addedFileCount = 0;
+	let modifiedFileCount = 0;
+	let deletedFileCount = 0;
+	let renamedFileCount = 0;
 
 	for (const file of input.files) {
 		const top = file.split("/", 1)[0] ?? "";
@@ -190,6 +196,15 @@ function buildFileSummary(input: {
 				packageManifestCount++;
 				break;
 		}
+	}
+
+	for (const line of input.nameStatus) {
+		const [statusRaw] = line.split(/\s+/);
+		const status = statusRaw?.charAt(0) ?? "";
+		if (status === "A") addedFileCount++;
+		if (status === "M") modifiedFileCount++;
+		if (status === "D") deletedFileCount++;
+		if (status === "R") renamedFileCount++;
 	}
 
 	for (const line of input.numstat) {
@@ -226,6 +241,7 @@ function buildFileSummary(input: {
 	}
 
 	return {
+		changedFiles: [...input.files],
 		topLevelDirs: [...topLevelDirs].sort((a, b) => a.localeCompare(b)),
 		topFiles: sortHotspots([...fileHotspots.values()]),
 		topDirs: sortHotspots([...topDirChurn.values()]),
@@ -239,16 +255,21 @@ function buildFileSummary(input: {
 		sourceChurn,
 		generatedChurn,
 		hasBinaryFiles,
+		addedFileCount,
+		modifiedFileCount,
+		deletedFileCount,
+		renamedFileCount,
 	};
 }
 
 function buildRoutingContextInput(
 	input: RoutingContextInputs,
-): Effect.Effect<BuildDetailedRoutingContextInput, Error> {
+): Effect.Effect<RoutingContextSignalInput, Error> {
 	return Effect.gen(function* () {
 		const range = `origin/${input.defaultBranch}..HEAD`;
 		const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
 		const numstatOutput = yield* runGit(input.workspace, ["diff", "--numstat", range]);
+		const nameStatusOutput = yield* runGit(input.workspace, ["diff", "--name-status", range]);
 		const logOutput = yield* runGit(input.workspace, [
 			"log",
 			"--format=%H%n%B%n---COMMIT---",
@@ -263,6 +284,10 @@ function buildRoutingContextInput(
 			.split("\n")
 			.map((line) => line.trim())
 			.filter(Boolean);
+		const nameStatus = nameStatusOutput.stdout
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
 		const parsed = parseCommits(logOutput.stdout);
 		if (Result.isFailure(parsed)) {
 			return yield* Effect.fail(new Error(parsed.failure.message));
@@ -273,13 +298,12 @@ function buildRoutingContextInput(
 		const mergeCommitCount = commits.length - semanticCommits.length;
 		const commitSummary = buildCommitSummary(
 			semanticCommits.map((commit) => ({
-				subject: commit.subject,
 				type: Option.getOrElse(commit.type, () => undefined),
 				breaking: Option.isSome(commit.breakingNote),
 			})),
 			mergeCommitCount,
 		);
-		const fileSummary = buildFileSummary({ files, numstat });
+		const fileSummary = buildFileSummary({ files, numstat, nameStatus });
 		const semanticCommitCount = input.commitsCount ?? semanticCommits.length;
 		const signals: ModelBandSignals = {
 			semanticCommitCount,
@@ -303,11 +327,6 @@ function buildRoutingContextInput(
 			hasBinaryFiles: fileSummary.hasBinaryFiles,
 		};
 		return {
-			band: resolveModelBand({
-				provider: input.provider,
-				signals,
-				...(input.explicitModel === undefined ? {} : { explicitModel: input.explicitModel }),
-			}).band,
 			signals,
 			commits: {
 				...commitSummary,
@@ -325,6 +344,12 @@ function writeDecisionOutputs(
 	return Effect.try({
 		try: () => {
 			appendFileSync(githubOutput, `selected_model=${decision.selectedModel}\n`);
+			appendFileSync(githubOutput, `tool_strategy=${decision.toolStrategy}\n`);
+			appendFileSync(githubOutput, `reasoning_need=${decision.reasoningNeed}\n`);
+			appendFileSync(
+				githubOutput,
+				`requires_tool_calls=${decision.requiresToolCalls ? "true" : "false"}\n`,
+			);
 			const delimiter = `__AUTO_PR_ROUTING_CONTEXT_${randomUUID()}__`;
 			appendFileSync(
 				githubOutput,
@@ -348,6 +373,10 @@ export function runBuildModelRoutingContext(
 		});
 		const routingContext = buildDetailedRoutingContext({
 			band: decision.band,
+			selectedModel: decision.selectedModel,
+			toolStrategy: decision.toolStrategy,
+			reasoningNeed: decision.reasoningNeed,
+			requiresToolCalls: decision.requiresToolCalls,
 			signals: routingInput.signals,
 			commits: routingInput.commits,
 			files: routingInput.files,

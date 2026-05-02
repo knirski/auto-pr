@@ -8,6 +8,10 @@ export type ModelProvider = "local" | "github-models";
 
 export type ModelBand = "A" | "B" | "C";
 
+export type ToolStrategy = "none" | "hotspot" | "full-diff" | "commit-diff";
+
+export type ReasoningNeed = "low" | "medium" | "high";
+
 export type ModelBandSignals = {
 	readonly semanticCommitCount: number;
 	readonly conventionalTypeCount: number;
@@ -30,6 +34,9 @@ export type ModelBandDecision = {
 	readonly band: ModelBand;
 	readonly selectedModel: string;
 	readonly routingContext: string;
+	readonly toolStrategy: ToolStrategy;
+	readonly reasoningNeed: ReasoningNeed;
+	readonly requiresToolCalls: boolean;
 };
 
 export type ResolveModelBandInput = {
@@ -138,13 +145,57 @@ export function selectModel(
 	provider: ModelProvider,
 	band: ModelBand,
 	explicitModel?: string,
+	routing?: {
+		readonly requiresToolCalls?: boolean;
+		readonly reasoningNeed?: ReasoningNeed;
+	},
 ): string {
 	const override = explicitModel?.trim() ?? "";
 	if (!isBlank(override)) return override;
 	if (provider === "github-models") {
-		return band === "C" ? "openai/gpt-4.1" : "microsoft/phi-4-mini-instruct";
+		return band === "C" || routing?.requiresToolCalls === true || routing?.reasoningNeed === "high"
+			? "openai/gpt-4.1"
+			: "microsoft/phi-4-mini-instruct";
 	}
 	return "gpt-oss";
+}
+
+export function resolveReasoningNeed(signals: ModelBandSignals, band: ModelBand): ReasoningNeed {
+	if (
+		band === "C" ||
+		signals.hasBreakingChange ||
+		signals.sourceChurn >= 1200 ||
+		signals.topLevelSpread >= 4
+	) {
+		return "high";
+	}
+	if (band === "B") return "medium";
+	return "low";
+}
+
+export function resolveToolStrategy(signals: ModelBandSignals, band: ModelBand): ToolStrategy {
+	if (band === "A" && !signals.hasBreakingChange) return "none";
+	if (
+		band === "C" ||
+		signals.hasBreakingChange ||
+		signals.sourceChurn >= 1200 ||
+		signals.topLevelSpread >= 4 ||
+		(signals.changedFileCount >= 15 && signals.sourceFileCount >= 4)
+	) {
+		return "full-diff";
+	}
+	if (signals.semanticCommitCount >= 4 && signals.conventionalTypeCount >= 2) {
+		return "commit-diff";
+	}
+	if (
+		signals.sourceFileCount > 0 ||
+		signals.testFileCount > 0 ||
+		signals.packageManifestCount > 0 ||
+		signals.lockfileCount > 0
+	) {
+		return "hotspot";
+	}
+	return "none";
 }
 
 function summarizeFlags(signals: ModelBandSignals): string[] {
@@ -250,7 +301,20 @@ export function buildRoutingContext(input: {
 
 export function resolveModelBand(input: ResolveModelBandInput): ModelBandDecision {
 	const band = resolveBand(input.signals);
-	const selectedModel = selectModel(input.provider, band, input.explicitModel);
+	const reasoningNeed = resolveReasoningNeed(input.signals, band);
+	const toolStrategy = resolveToolStrategy(input.signals, band);
+	const requiresToolCalls = toolStrategy !== "none";
+	const selectedModel = selectModel(input.provider, band, input.explicitModel, {
+		reasoningNeed,
+		requiresToolCalls,
+	});
 	const routingContext = buildRoutingContext({ band, signals: input.signals });
-	return { band, selectedModel, routingContext };
+	return {
+		band,
+		selectedModel,
+		routingContext,
+		toolStrategy,
+		reasoningNeed,
+		requiresToolCalls,
+	};
 }

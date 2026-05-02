@@ -26,11 +26,20 @@ outputs:
     description: Final model id to pass to generate-content.
     value: ${{ steps.build.outputs.selected_model }}
   routing_context:
-    description: Small trusted routing context string for prompt conditioning.
+    description: Trusted routing context string for prompt conditioning.
     value: ${{ steps.build.outputs.routing_context }}
   band:
     description: Model band selected by the heuristic.
     value: ${{ steps.build.outputs.band }}
+  tool_strategy:
+    description: Tool-use strategy for later AI prompt execution.
+    value: ${{ steps.build.outputs.tool_strategy }}
+  reasoning_need:
+    description: Reasoning level implied by the change signals.
+    value: ${{ steps.build.outputs.reasoning_need }}
+  requires_tool_calls:
+    description: Whether the selected model should support tool calls.
+    value: ${{ steps.build.outputs.requires_tool_calls }}
 
 runs:
   using: composite

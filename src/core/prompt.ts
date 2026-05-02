@@ -11,13 +11,13 @@ export function buildDescriptionPrompt(
 	routingContext?: string,
 ): string {
 	const sections = [promptTemplate.trim()];
+	sections.push(`Commits:\n${commitContent}`);
 	if (diffStat?.trim()) {
 		sections.push(`Changed files (diff stat):\n${diffStat.trim()}`);
 	}
 	if (routingContext?.trim()) {
 		sections.push(`Routing context:\n${routingContext.trim()}`);
 	}
-	sections.push(`Commits:\n${commitContent}`);
 	const prior = existingPrTitle?.trim();
 	if (prior) {
 		sections.push(

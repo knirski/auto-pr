@@ -2,7 +2,7 @@
  * Pure prompt-context builder for model routing.
  */
 
-import { buildRoutingContext, type ModelBand, type ModelBandSignals } from "#core/model-band.js";
+import type { ModelBand, ModelBandSignals, ReasoningNeed, ToolStrategy } from "#core/model-band.js";
 
 export type RoutingContextHotspot = {
 	path: string;
@@ -17,10 +17,10 @@ export type RoutingContextCommitSummary = {
 	readonly mergeCommitCount: number;
 	readonly breakingCommitCount: number;
 	readonly typeCounts: Readonly<Record<string, number>>;
-	readonly subjects: readonly string[];
 };
 
 export type RoutingContextFileSummary = {
+	readonly changedFiles: readonly string[];
 	readonly topLevelDirs: readonly string[];
 	readonly topFiles: readonly RoutingContextHotspot[];
 	readonly topDirs: readonly RoutingContextHotspot[];
@@ -34,10 +34,18 @@ export type RoutingContextFileSummary = {
 	readonly sourceChurn: number;
 	readonly generatedChurn: number;
 	readonly hasBinaryFiles: boolean;
+	readonly addedFileCount: number;
+	readonly modifiedFileCount: number;
+	readonly deletedFileCount: number;
+	readonly renamedFileCount: number;
 };
 
 export type BuildDetailedRoutingContextInput = {
 	readonly band: ModelBand;
+	readonly selectedModel: string;
+	readonly toolStrategy: ToolStrategy;
+	readonly reasoningNeed: ReasoningNeed;
+	readonly requiresToolCalls: boolean;
 	readonly signals: ModelBandSignals;
 	readonly commits: RoutingContextCommitSummary;
 	readonly files: RoutingContextFileSummary;
@@ -112,18 +120,113 @@ function summarizeScope(files: RoutingContextFileSummary): string {
 							files.docsFileCount === 0 &&
 							files.testFileCount === 0
 						? "generated-only"
-						: files.lockfileCount > 0 || files.packageManifestCount > 0
-							? "dependency/config"
-							: files.docsFileCount > 0 && files.sourceFileCount > 0
-								? "docs+source"
-								: files.testFileCount > 0 && files.sourceFileCount > 0
-									? "tests+source"
+						: files.docsFileCount > 0 && files.sourceFileCount > 0
+							? "docs+source"
+							: files.testFileCount > 0 && files.sourceFileCount > 0
+								? "tests+source"
+								: files.lockfileCount > 0 || files.packageManifestCount > 0
+									? "dependency/config"
 									: "mixed";
 	return scope;
 }
 
+function summarizeCoverage(files: RoutingContextFileSummary): string {
+	if (files.sourceFileCount > 0 && files.testFileCount > 0) return "source+tests";
+	if (files.sourceFileCount > 0) return "source-without-tests";
+	if (files.testFileCount > 0) return "tests-only";
+	return "no-source";
+}
+
+function summarizeReviewFocus(files: RoutingContextFileSummary): string {
+	const priorityKinds = new Set(["source", "test", "package", "lockfile", "other"]);
+	const focused = files.topFiles.filter((file) => priorityKinds.has(file.kind));
+	const hotspots = focused.length > 0 ? focused : files.topFiles;
+	return formatHotspots(hotspots.slice(0, 3));
+}
+
+function summarizeSensitiveScope(files: RoutingContextFileSummary): string {
+	const paths = files.changedFiles;
+	const scopes = [
+		paths.some((path) => path.startsWith(".github/workflows/")) ? "workflows" : "",
+		paths.some((path) => path.startsWith(".github/actions/")) ? "composite-actions" : "",
+		paths.some((path) => path.startsWith("src/auto-pr/prompts/")) ? "prompts" : "",
+		paths.some((path) => path === "src/auto-pr/config.ts" || path.includes(".env"))
+			? "config/env"
+			: "",
+		paths.some((path) => /(auth|token|secret|ai-provider|pull-request-client)/i.test(path))
+			? "auth/provider"
+			: "",
+		paths.some((path) =>
+			/^(package(?:-lock)?\.json|bun\.lock|bun\.lockb|bun\.nix|flake\.(nix|lock))$/.test(path),
+		)
+			? "dependencies"
+			: "",
+		paths.some((path) => path === "src/core/index.ts" || path === "src/auto-pr/index.ts")
+			? "exported-api"
+			: "",
+	].filter(Boolean);
+	return scopes.length === 0 ? "none" : scopes.join(", ");
+}
+
+function summarizePublicSurface(files: RoutingContextFileSummary): string {
+	const paths = files.changedFiles;
+	const surfaces = [
+		paths.some((path) => path.endsWith("action.yml") || path.startsWith(".github/workflows/"))
+			? "workflow/action contract"
+			: "",
+		paths.some((path) => path.startsWith("src/tools/")) ? "cli" : "",
+		paths.some((path) => path.startsWith("src/workflow/")) ? "workflow command" : "",
+		paths.some((path) => path === "src/auto-pr/config.ts") ? "config/env" : "",
+		paths.some((path) => path.startsWith("src/auto-pr/prompts/")) ? "prompt" : "",
+		paths.some((path) => path === "src/core/index.ts" || path === "src/auto-pr/index.ts")
+			? "exported-api"
+			: "",
+	].filter(Boolean);
+	return surfaces.length === 0 ? "none" : surfaces.join(", ");
+}
+
+function summarizeChangeShape(input: {
+	readonly scope: string;
+	readonly signals: ModelBandSignals;
+	readonly files: RoutingContextFileSummary;
+	readonly generatedRatio: string;
+}): string {
+	const { scope, signals, files, generatedRatio } = input;
+	const shapes = [
+		scope,
+		signals.rawChurn > 0 && signals.generatedChurn * 100 >= signals.rawChurn * 80
+			? `generated-heavy (${generatedRatio})`
+			: "",
+		files.addedFileCount > 0 ? `added=${files.addedFileCount}` : "",
+		files.modifiedFileCount > 0 ? `modified=${files.modifiedFileCount}` : "",
+		files.deletedFileCount > 0 ? `deleted=${files.deletedFileCount}` : "",
+		files.renamedFileCount > 0 ? `renamed=${files.renamedFileCount}` : "",
+		signals.topLevelSpread >= 3 ? `cross-dir=${signals.topLevelSpread}` : "",
+	].filter(Boolean);
+	return shapes.join(", ");
+}
+
+function summarizeToolGuidance(toolStrategy: ToolStrategy): string {
+	const guidance: Record<ToolStrategy, string> = {
+		none: "no tools needed; use commits and diff stat",
+		hotspot: "inspect review_focus files before writing risks or reviewer notes",
+		"full-diff": "inspect full diff first; if truncated, inspect review_focus files",
+		"commit-diff": "inspect commit diffs for mixed intent before writing risks",
+	};
+	return guidance[toolStrategy];
+}
+
 export function buildDetailedRoutingContext(input: BuildDetailedRoutingContextInput): string {
-	const { band, signals, commits, files } = input;
+	const {
+		band,
+		selectedModel,
+		toolStrategy,
+		reasoningNeed,
+		requiresToolCalls,
+		signals,
+		commits,
+		files,
+	} = input;
 	const generatedRatio = formatPercent(signals.generatedChurn, signals.rawChurn);
 	const sourceRatio = formatPercent(signals.sourceChurn, signals.rawChurn);
 	const scope = summarizeScope(files);
@@ -142,16 +245,21 @@ export function buildDetailedRoutingContext(input: BuildDetailedRoutingContextIn
 				? "tight / docs-only / generated-heavy"
 				: "mixed but bounded";
 	const lines = [
+		"Trusted change analysis:",
 		`decision: band=${band}; reason=${decisionReason}`,
 		`intent: ${formatCountLabel(commits.semanticCommitCount, "semantic commit")}; merge=${commits.mergeCommitCount}; breaking=${commits.breakingCommitCount}; types=${formatTypeCounts(commits.typeCounts)}`,
-		`subjects: ${joinList(commits.subjects.slice(0, 3))}`,
 		`scope: ${scope}; dirs=${joinList(files.topLevelDirs.slice(0, 8))}`,
 		`file-kinds: source=${files.sourceFileCount}; docs=${files.docsFileCount}; test=${files.testFileCount}; generated=${files.generatedFileCount}; lockfiles=${files.lockfileCount}; package-manifests=${files.packageManifestCount}`,
 		`churn: raw=${files.rawChurn}; source=${files.sourceChurn}; generated=${files.generatedChurn}; generated-share=${generatedRatio}; source-share=${sourceRatio}`,
 		`hotspots: files=${formatHotspots(files.topFiles.slice(0, 5))}; dirs=${formatHotspots(files.topDirs.slice(0, 5))}`,
+		`review_focus: ${summarizeReviewFocus(files)}`,
+		`coverage_signal: ${summarizeCoverage(files)}`,
+		`change_shape: ${summarizeChangeShape({ scope, signals, files, generatedRatio })}`,
+		`public_surface: ${summarizePublicSurface(files)}`,
+		`sensitive_scope: ${summarizeSensitiveScope(files)}`,
 		`risk: ${flags.length === 0 ? "none" : flags.join(", ")}`,
-		`compact: ${buildRoutingContext({ band, signals })}`,
-		"policy: prefer user-visible and breaking changes over lockfiles/generated churn.",
+		`tool_guidance: ${summarizeToolGuidance(toolStrategy)}`,
+		`model_route: band=${band}; reasoning=${reasoningNeed}; tool_strategy=${toolStrategy}; requires_tool_calls=${requiresToolCalls ? "true" : "false"}; selected_model=${selectedModel}`,
 	];
 	return lines.join("\n");
 }

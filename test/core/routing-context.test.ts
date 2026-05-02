@@ -36,12 +36,18 @@ function commits(): RoutingContextCommitSummary {
 			fix: 1,
 			docs: 1,
 		},
-		subjects: ["feat: add routing", "fix: refine scope", "docs: update notes"],
 	};
 }
 
 function files(): RoutingContextFileSummary {
 	return {
+		changedFiles: [
+			"src/workflow/auto-pr-generate-content.ts",
+			"src/core/model-band.ts",
+			"docs/superpowers/spec.md",
+			"test/core/model-band.test.ts",
+			"bun.lock",
+		],
 		topLevelDirs: ["src", "docs", "test"],
 		topFiles: [
 			{
@@ -69,13 +75,21 @@ function files(): RoutingContextFileSummary {
 		sourceChurn: 100,
 		generatedChurn: 20,
 		hasBinaryFiles: false,
+		addedFileCount: 1,
+		modifiedFileCount: 4,
+		deletedFileCount: 0,
+		renamedFileCount: 0,
 	};
 }
 
 describe("buildDetailedRoutingContext", () => {
-	test("includes intent scope churn hotspots and decision sections", () => {
+	test("includes analysis-oriented sections without repeating commit subjects", () => {
 		const ctx = buildDetailedRoutingContext({
 			band: "B",
+			selectedModel: "openai/gpt-4.1",
+			toolStrategy: "hotspot",
+			reasoningNeed: "medium",
+			requiresToolCalls: true,
 			signals: signals(),
 			commits: commits(),
 			files: files(),
@@ -86,9 +100,17 @@ describe("buildDetailedRoutingContext", () => {
 		expect(ctx).toContain("scope:");
 		expect(ctx).toContain("churn:");
 		expect(ctx).toContain("hotspots:");
-		expect(ctx).toContain("policy:");
+		expect(ctx).toContain("review_focus:");
+		expect(ctx).toContain("tool_guidance:");
+		expect(ctx).toContain("model_route:");
+		expect(ctx).toContain("coverage_signal: source+tests");
+		expect(ctx).toContain("sensitive_scope:");
+		expect(ctx).toContain("public_surface:");
 		expect(ctx).toContain("feat=1");
 		expect(ctx).toContain("lockfiles=1");
 		expect(ctx).toContain("src/workflow/auto-pr-generate-content.ts");
+		expect(ctx).not.toContain("subjects:");
+		expect(ctx).not.toContain("compact:");
+		expect(ctx).not.toContain("feat: add routing");
 	});
 });
