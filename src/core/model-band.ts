@@ -1,0 +1,210 @@
+/**
+ * Pure model-band routing policy for auto-pr.
+ */
+
+import { isBlank } from "#core/string.js";
+
+export type ModelProvider = "local" | "github-models";
+
+export type ModelBand = "A" | "B" | "C";
+
+export type ModelBandSignals = {
+	readonly semanticCommitCount: number;
+	readonly conventionalTypeCount: number;
+	readonly topLevelSpread: number;
+	readonly changedFileCount: number;
+	readonly sourceFileCount: number;
+	readonly docsFileCount: number;
+	readonly testFileCount: number;
+	readonly generatedFileCount: number;
+	readonly lockfileCount: number;
+	readonly packageManifestCount: number;
+	readonly rawChurn: number;
+	readonly sourceChurn: number;
+	readonly generatedChurn: number;
+	readonly hasBreakingChange: boolean;
+	readonly hasBinaryFiles: boolean;
+};
+
+export type ModelBandDecision = {
+	readonly band: ModelBand;
+	readonly selectedModel: string;
+	readonly routingContext: string;
+};
+
+export type ResolveModelBandInput = {
+	readonly provider: ModelProvider;
+	readonly explicitModel?: string;
+	readonly signals: ModelBandSignals;
+};
+
+function toBucket(
+	value: number,
+	thresholds: readonly [number, number],
+	labels: readonly [string, string, string],
+): string {
+	if (value >= thresholds[1]) return labels[2];
+	if (value >= thresholds[0]) return labels[1];
+	return labels[0];
+}
+
+function safeRatio(numerator: number, denominator: number): number {
+	if (denominator <= 0) return 0;
+	return Math.floor((numerator * 100) / denominator);
+}
+
+function hasDocsAndSource(signals: ModelBandSignals): boolean {
+	return signals.docsFileCount > 0 && signals.sourceFileCount > 0;
+}
+
+function hasTestsAndSource(signals: ModelBandSignals): boolean {
+	return signals.testFileCount > 0 && signals.sourceFileCount > 0;
+}
+
+function isDocsOnly(signals: ModelBandSignals): boolean {
+	return (
+		signals.docsFileCount > 0 &&
+		signals.sourceFileCount === 0 &&
+		signals.testFileCount === 0 &&
+		signals.generatedFileCount === 0
+	);
+}
+
+function isGeneratedOnly(signals: ModelBandSignals): boolean {
+	return (
+		signals.generatedFileCount > 0 &&
+		signals.sourceFileCount === 0 &&
+		signals.docsFileCount === 0 &&
+		signals.testFileCount === 0
+	);
+}
+
+function isTinyAndFocused(signals: ModelBandSignals): boolean {
+	return (
+		signals.semanticCommitCount <= 2 &&
+		signals.changedFileCount <= 3 &&
+		signals.topLevelSpread <= 1 &&
+		signals.sourceChurn < 200 &&
+		signals.conventionalTypeCount <= 2
+	);
+}
+
+function isBroadChange(signals: ModelBandSignals): boolean {
+	return (
+		signals.hasBreakingChange ||
+		signals.sourceChurn >= 1200 ||
+		signals.semanticCommitCount >= 8 ||
+		signals.conventionalTypeCount >= 3 ||
+		signals.topLevelSpread >= 3 ||
+		(signals.changedFileCount >= 15 && signals.sourceFileCount >= 4)
+	);
+}
+
+function isCrossCutting(signals: ModelBandSignals): boolean {
+	return (
+		hasDocsAndSource(signals) ||
+		hasTestsAndSource(signals) ||
+		signals.lockfileCount > 0 ||
+		signals.packageManifestCount > 0
+	);
+}
+
+function isGeneratedDominant(signals: ModelBandSignals): boolean {
+	return (
+		signals.rawChurn > 0 &&
+		safeRatio(signals.generatedChurn, signals.rawChurn) >= 80 &&
+		signals.sourceChurn < 120
+	);
+}
+
+export function resolveBand(signals: ModelBandSignals): ModelBand {
+	if (
+		isGeneratedDominant(signals) ||
+		isTinyAndFocused(signals) ||
+		isDocsOnly(signals) ||
+		isGeneratedOnly(signals)
+	) {
+		return "A";
+	}
+
+	if (isBroadChange(signals) || (isCrossCutting(signals) && signals.sourceChurn >= 400)) {
+		return "C";
+	}
+
+	return "B";
+}
+
+export function selectModel(
+	provider: ModelProvider,
+	band: ModelBand,
+	explicitModel?: string,
+): string {
+	const override = explicitModel?.trim() ?? "";
+	if (!isBlank(override)) return override;
+	if (provider === "github-models") {
+		return band === "C" ? "openai/gpt-4.1" : "microsoft/phi-4-mini-instruct";
+	}
+	return "gpt-oss";
+}
+
+function summarizeFlags(signals: ModelBandSignals): string[] {
+	const flags: string[] = [];
+	if (signals.hasBreakingChange) flags.push("breaking");
+	if (signals.hasBinaryFiles) flags.push("binary");
+	if (hasDocsAndSource(signals)) flags.push("docs+src");
+	if (hasTestsAndSource(signals)) flags.push("tests+src");
+	if (signals.lockfileCount > 0) flags.push("lockfiles");
+	if (signals.packageManifestCount > 0) flags.push("package-manifests");
+	return flags;
+}
+
+export function buildRoutingContext(input: {
+	readonly band: ModelBand;
+	readonly signals: ModelBandSignals;
+}): string {
+	const { signals, band } = input;
+	const generatedRatio = safeRatio(signals.generatedChurn, signals.rawChurn);
+	const srcBucket = toBucket(signals.sourceChurn, [350, 1200], ["small", "medium", "large"]);
+	const rawBucket = toBucket(signals.rawChurn, [250, 1200], ["small", "medium", "large"]);
+	const filesBucket = toBucket(signals.changedFileCount, [4, 12], ["small", "medium", "large"]);
+	const spreadBucket = toBucket(signals.topLevelSpread, [2, 4], ["narrow", "medium", "wide"]);
+	const hardness =
+		band === "C"
+			? "high"
+			: band === "A"
+				? "low"
+				: signals.conventionalTypeCount >= 2 ||
+						signals.topLevelSpread >= 2 ||
+						signals.sourceChurn >= 400
+					? "medium"
+					: "low";
+	const flags = summarizeFlags(signals);
+	const parts = [
+		`band=${band}`,
+		`commits=${signals.semanticCommitCount}`,
+		`types=${signals.conventionalTypeCount}`,
+		`files=${filesBucket}`,
+		`spread=${spreadBucket}`,
+		`src=${srcBucket}`,
+		`raw=${rawBucket}`,
+		`generated_ratio=${generatedRatio}`,
+		`source_files=${signals.sourceFileCount}`,
+		`docs_files=${signals.docsFileCount}`,
+		`test_files=${signals.testFileCount}`,
+		`generated_files=${signals.generatedFileCount}`,
+		`lockfiles=${signals.lockfileCount}`,
+		`packages=${signals.packageManifestCount}`,
+		`hardness=${hardness}`,
+	];
+	if (flags.length > 0) {
+		parts.push(`signals=${flags.join(",")}`);
+	}
+	return `${parts.join("; ")}. Prefer user-visible and breaking changes over lockfiles/generated churn.`;
+}
+
+export function resolveModelBand(input: ResolveModelBandInput): ModelBandDecision {
+	const band = resolveBand(input.signals);
+	const selectedModel = selectModel(input.provider, band, input.explicitModel);
+	const routingContext = buildRoutingContext({ band, signals: input.signals });
+	return { band, selectedModel, routingContext };
+}

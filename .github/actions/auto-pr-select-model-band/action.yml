@@ -37,7 +37,7 @@ runs:
   steps:
     - id: select
       shell: bash
-      run: bash "$GITHUB_ACTION_PATH/auto-pr-select-model-band.sh"
+      run: bun "$GITHUB_ACTION_PATH/auto-pr-select-model-band.ts"
       env:
         WORKSPACE: ${{ inputs.workspace }}
         DEFAULT_BRANCH: ${{ inputs.default_branch }}

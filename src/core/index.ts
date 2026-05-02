@@ -79,6 +79,19 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
+export type {
+	ModelBand,
+	ModelBandDecision,
+	ModelBandSignals,
+	ModelProvider,
+	ResolveModelBandInput,
+} from "#core/model-band.js";
+export {
+	buildRoutingContext,
+	resolveBand,
+	resolveModelBand,
+	selectModel,
+} from "#core/model-band.js";
 export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
 export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";

@@ -7,7 +7,7 @@ import { join } from "node:path";
 const repoRoot = join(import.meta.dir, "..", "..");
 const scriptPath = join(
 	repoRoot,
-	".github/actions/auto-pr-select-model-band/auto-pr-select-model-band.sh",
+	".github/actions/auto-pr-select-model-band/auto-pr-select-model-band.ts",
 );
 
 function git(cwd: string, args: string[]): void {
@@ -34,7 +34,7 @@ test("select-model-band emits a default model for single-commit PRs", () => {
 	git(dir, ["commit", "-m", "feat: add app"]);
 
 	const githubOutput = join(dir, "github_output");
-	const r = spawnSync("bash", [scriptPath], {
+	const r = spawnSync("bun", [scriptPath], {
 		cwd: dir,
 		env: {
 			...process.env,
@@ -53,7 +53,8 @@ test("select-model-band emits a default model for single-commit PRs", () => {
 	const output = readFileSync(githubOutput, "utf8");
 	expect(output).toContain("selected_model=gpt-oss");
 	expect(output).toContain("band=A");
-	expect(output).toContain("n_sem=1");
+	expect(output).toContain("commits=1");
+	expect(output).toContain("source_files=1");
 });
 
 test("select-model-band respects an explicit model override", () => {
@@ -72,7 +73,7 @@ test("select-model-band respects an explicit model override", () => {
 	git(dir, ["commit", "-m", "feat: change"]);
 
 	const githubOutput = join(dir, "github_output");
-	const r = spawnSync("bash", [scriptPath], {
+	const r = spawnSync("bun", [scriptPath], {
 		cwd: dir,
 		env: {
 			...process.env,
