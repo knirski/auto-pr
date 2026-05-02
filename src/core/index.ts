@@ -21,6 +21,10 @@ export {
 	PullRequestLookupError,
 	PullRequestTitleBlankError,
 	PullRequestUrlParseError,
+	RoutingContextEnvError,
+	RoutingContextGitError,
+	RoutingContextOutputError,
+	RoutingContextParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#core/errors.js";
@@ -79,6 +83,19 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
+export type {
+	BuildFileSummaryInput,
+	CommitSummaryInput,
+	FileKind,
+	RoutingContextCommitSummary,
+	RoutingContextFileSummary,
+	RoutingContextHotspot,
+} from "#core/model-routing-context-core.js";
+export {
+	buildCommitSummary,
+	buildFileSummary,
+	classifyFile,
+} from "#core/model-routing-context-core.js";
 export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
 export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";

@@ -1,6 +1,12 @@
 /**
  * Routing policy for auto-pr's packaged build-model-routing-context workflow command.
  */
+import { Match } from "effect";
+import type {
+	RoutingContextCommitSummary as CoreRoutingContextCommitSummary,
+	RoutingContextFileSummary as CoreRoutingContextFileSummary,
+	RoutingContextHotspot as CoreRoutingContextHotspot,
+} from "#core/model-routing-context-core.js";
 
 export type ModelProvider = "local" | "github-models";
 
@@ -62,41 +68,9 @@ export type ResolveModelBandInput = {
 	readonly localModel?: LocalModelContext;
 };
 
-export type RoutingContextHotspot = {
-	path: string;
-	churn: number;
-	insertions: number;
-	deletions: number;
-	kind: string;
-};
-
-export type RoutingContextCommitSummary = {
-	readonly semanticCommitCount: number;
-	readonly mergeCommitCount: number;
-	readonly breakingCommitCount: number;
-	readonly typeCounts: Readonly<Record<string, number>>;
-};
-
-export type RoutingContextFileSummary = {
-	readonly changedFiles: readonly string[];
-	readonly topLevelDirs: readonly string[];
-	readonly topFiles: readonly RoutingContextHotspot[];
-	readonly topDirs: readonly RoutingContextHotspot[];
-	readonly sourceFileCount: number;
-	readonly docsFileCount: number;
-	readonly testFileCount: number;
-	readonly generatedFileCount: number;
-	readonly lockfileCount: number;
-	readonly packageManifestCount: number;
-	readonly rawChurn: number;
-	readonly sourceChurn: number;
-	readonly generatedChurn: number;
-	readonly hasBinaryFiles: boolean;
-	readonly addedFileCount: number;
-	readonly modifiedFileCount: number;
-	readonly deletedFileCount: number;
-	readonly renamedFileCount: number;
-};
+export type RoutingContextHotspot = CoreRoutingContextHotspot;
+export type RoutingContextCommitSummary = CoreRoutingContextCommitSummary;
+export type RoutingContextFileSummary = CoreRoutingContextFileSummary;
 
 export type BuildDetailedRoutingContextInput = {
 	readonly band: ModelBand;
@@ -218,16 +192,15 @@ export function resolveBand(signals: ModelBandSignals): ModelBand {
 }
 
 function resolveReasoningNeed(signals: ModelBandSignals, band: ModelBand): ReasoningNeed {
-	if (
-		band === "C" ||
-		signals.hasBreakingChange ||
-		signals.sourceChurn >= 1200 ||
-		signals.topLevelSpread >= 4
-	) {
+	if (signals.hasBreakingChange || signals.sourceChurn >= 1200 || signals.topLevelSpread >= 4) {
 		return "high";
 	}
-	if (band === "B") return "medium";
-	return "low";
+	return Match.value(band).pipe(
+		Match.when("A", () => "low" as const),
+		Match.when("B", () => "medium" as const),
+		Match.when("C", () => "high" as const),
+		Match.exhaustive,
+	);
 }
 
 function resolveToolStrategy(signals: ModelBandSignals, band: ModelBand): ToolStrategy {
@@ -288,18 +261,45 @@ export function resolveLocalRunnerResources(input: {
 }
 
 function selectLocalModelForRunner(runner: LocalRunnerResources): string {
-	if (runner.memoryGb <= 5 || runner.cpuCount <= 1) return LOCAL_TINY_MODEL;
-	if (runner.memoryGb <= 8 || runner.cpuCount <= 2) return LOCAL_SMALL_MODEL;
-	if (runner.memoryGb <= 16 || runner.cpuCount <= 4) return LOCAL_MEDIUM_MODEL;
-	return LOCAL_LARGE_MODEL;
+	const thresholds = [
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 5 || r.cpuCount <= 1,
+			model: LOCAL_TINY_MODEL,
+		},
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 8 || r.cpuCount <= 2,
+			model: LOCAL_SMALL_MODEL,
+		},
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 16 || r.cpuCount <= 4,
+			model: LOCAL_MEDIUM_MODEL,
+		},
+	] as const;
+	const matched = thresholds.find((threshold) => threshold.when(runner));
+	return matched?.model ?? LOCAL_LARGE_MODEL;
 }
 
 function recommendedMaxParamsB(runner: LocalRunnerResources): number {
-	if (runner.memoryGb <= 5 || runner.cpuCount <= 1) return 1;
-	if (runner.memoryGb <= 8 || runner.cpuCount <= 2) return 3;
-	if (runner.memoryGb <= 16 || runner.cpuCount <= 4) return 7;
-	if (runner.memoryGb <= 32) return 14;
-	return 32;
+	const thresholds = [
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 5 || r.cpuCount <= 1,
+			maxParamsB: 1,
+		},
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 8 || r.cpuCount <= 2,
+			maxParamsB: 3,
+		},
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 16 || r.cpuCount <= 4,
+			maxParamsB: 7,
+		},
+		{
+			when: (r: LocalRunnerResources) => r.memoryGb <= 32,
+			maxParamsB: 14,
+		},
+	] as const;
+	const matched = thresholds.find((threshold) => threshold.when(runner));
+	return matched?.maxParamsB ?? 32;
 }
 
 function estimateParamsBFromModelUrl(modelUrl: string | undefined): number | undefined {
@@ -346,14 +346,20 @@ export function selectModel(
 ): string {
 	const override = explicitModel?.trim() ?? "";
 	if (!isBlank(override)) return override;
-	if (provider === "github-models") {
-		return band === "C" || routing?.requiresToolCalls === true || routing?.reasoningNeed === "high"
-			? GITHUB_MODELS_STRONG_MODEL
-			: GITHUB_MODELS_SMALL_MODEL;
-	}
-	if (usesExternalOpenAiCompat(routing?.localModel)) return LOCAL_LARGE_MODEL;
-	return selectLocalModelForRunner(
-		routing?.localModel?.runner ?? resolveLocalRunnerResources({ repositoryVisibility: "private" }),
+	return Match.value(provider).pipe(
+		Match.when("github-models", () =>
+			band === "C" || routing?.requiresToolCalls === true || routing?.reasoningNeed === "high"
+				? GITHUB_MODELS_STRONG_MODEL
+				: GITHUB_MODELS_SMALL_MODEL,
+		),
+		Match.when("local", () => {
+			if (usesExternalOpenAiCompat(routing?.localModel)) return LOCAL_LARGE_MODEL;
+			return selectLocalModelForRunner(
+				routing?.localModel?.runner ??
+					resolveLocalRunnerResources({ repositoryVisibility: "private" }),
+			);
+		}),
+		Match.exhaustive,
 	);
 }
 

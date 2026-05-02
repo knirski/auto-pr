@@ -102,6 +102,40 @@ export class ActLocalCiError extends Schema.TaggedErrorClass<ActLocalCiError>()(
 	reason: Schema.String,
 }) {}
 
+/** Required env var for routing-context command is missing or blank. */
+export class RoutingContextEnvError extends Schema.TaggedErrorClass<RoutingContextEnvError>()(
+	"RoutingContextEnvError",
+	{ name: Schema.String },
+) {}
+
+/** Routing-context command env value has invalid shape/range. */
+export class RoutingContextParseError extends Schema.TaggedErrorClass<RoutingContextParseError>()(
+	"RoutingContextParseError",
+	{
+		name: Schema.String,
+		requirement: Schema.String,
+		value: Schema.String,
+	},
+) {}
+
+/** Git command failed while collecting routing signals. */
+export class RoutingContextGitError extends Schema.TaggedErrorClass<RoutingContextGitError>()(
+	"RoutingContextGitError",
+	{
+		command: Schema.String,
+		cause: Schema.String,
+	},
+) {}
+
+/** Writing command outputs to GITHUB_OUTPUT failed. */
+export class RoutingContextOutputError extends Schema.TaggedErrorClass<RoutingContextOutputError>()(
+	"RoutingContextOutputError",
+	{
+		path: Schema.String,
+		cause: Schema.String,
+	},
+) {}
+
 /** Unexpected error during generate-content; wraps unknown failures (e.g. non-Error throws). */
 export class UnexpectedError extends Schema.TaggedErrorClass<UnexpectedError>()("UnexpectedError", {
 	cause: Schema.String,

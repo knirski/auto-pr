@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Match } from "effect";
+import {
+	RoutingContextEnvError,
+	RoutingContextGitError,
+	RoutingContextParseError,
+} from "#core/errors.js";
 import {
 	program,
 	reportProgramError,
@@ -11,6 +16,17 @@ type SpawnSyncResult = {
 	readonly stdout: string;
 	readonly stderr: string;
 };
+
+type CommandSuccess = SpawnSyncResult & {
+	readonly _tag: "Success";
+	readonly status: 0;
+};
+
+type CommandFailure = SpawnSyncResult & {
+	readonly _tag: "Failure";
+};
+
+type CommandResult = CommandSuccess | CommandFailure;
 
 const textDecoder = new TextDecoder();
 
@@ -35,7 +51,7 @@ function spawnSync(
 		readonly encoding?: "utf8";
 		readonly env?: Record<string, string | undefined>;
 	},
-): SpawnSyncResult {
+): CommandResult {
 	const env =
 		options?.env === undefined
 			? undefined
@@ -50,23 +66,42 @@ function spawnSync(
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	return {
+	const output: SpawnSyncResult = {
 		status: result.exitCode,
 		stdout: textDecoder.decode(result.stdout),
 		stderr: textDecoder.decode(result.stderr),
 	};
+	return Match.value(output.status).pipe(
+		Match.when(0, () => ({ ...output, _tag: "Success" as const, status: 0 as const })),
+		Match.orElse(() => ({ ...output, _tag: "Failure" as const })),
+	);
+}
+
+function requireCommandSuccess(
+	command: string,
+	args: readonly string[],
+	result: CommandResult,
+): CommandSuccess {
+	return Match.value(result).pipe(
+		Match.when({ _tag: "Success" }, (success) => success),
+		Match.when({ _tag: "Failure" }, (failure) => {
+			throw new Error(`${command} ${args.join(" ")} failed: ${failure.stderr || failure.stdout}`);
+		}),
+		Match.exhaustive,
+	);
 }
 
 function existsSync(path: string): boolean {
-	return spawnSync("test", ["-e", path]).status === 0;
+	return Match.value(spawnSync("test", ["-e", path])).pipe(
+		Match.when({ _tag: "Success" }, () => true),
+		Match.when({ _tag: "Failure" }, () => false),
+		Match.exhaustive,
+	);
 }
 
 function mkdirSync(path: string, options?: { readonly recursive?: boolean }): void {
 	const args = [options?.recursive === true ? "-p" : "", path].filter((arg) => arg !== "");
-	const result = spawnSync("mkdir", args);
-	if (result.status !== 0) {
-		throw new Error(`mkdir ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
-	}
+	requireCommandSuccess("mkdir", args, spawnSync("mkdir", args));
 }
 
 function rmSync(
@@ -81,10 +116,7 @@ function rmSync(
 		options?.force === true ? "-f" : "",
 		path,
 	].filter((arg) => arg !== "");
-	const result = spawnSync("rm", args);
-	if (result.status !== 0) {
-		throw new Error(`rm ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
-	}
+	requireCommandSuccess("rm", args, spawnSync("rm", args));
 }
 
 function tmpdir(): string {
@@ -92,10 +124,11 @@ function tmpdir(): string {
 }
 
 function mkdtempSync(prefixPath: string): string {
-	const result = spawnSync("mktemp", ["-d", `${prefixPath}XXXXXX`]);
-	if (result.status !== 0) {
-		throw new Error(`mktemp failed: ${result.stderr || result.stdout}`);
-	}
+	const result = requireCommandSuccess(
+		"mktemp",
+		["-d", `${prefixPath}XXXXXX`],
+		spawnSync("mktemp", ["-d", `${prefixPath}XXXXXX`]),
+	);
 	return result.stdout.trim();
 }
 
@@ -103,20 +136,14 @@ function readFileSync(path: string, encoding: "utf8"): string {
 	if (encoding !== "utf8") {
 		throw new Error(`Unsupported encoding: ${encoding}`);
 	}
-	const result = spawnSync("cat", [path]);
-	if (result.status !== 0) {
-		throw new Error(`cat ${path} failed: ${result.stderr || result.stdout}`);
-	}
+	const result = requireCommandSuccess("cat", [path], spawnSync("cat", [path]));
 	return result.stdout;
 }
 
 function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
 	return Effect.try({
 		try: () => {
-			const result = spawnSync("git", [...args], { cwd, encoding: "utf8" });
-			if (result.status !== 0) {
-				throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
-			}
+			requireCommandSuccess("git", args, spawnSync("git", [...args], { cwd, encoding: "utf8" }));
 		},
 		catch: toError,
 	});
@@ -130,7 +157,22 @@ function write(path: string, content: string): Effect.Effect<void, Error> {
 }
 
 function read(path: string): Effect.Effect<string, Error> {
-	return Effect.sync(() => readFileSync(path, "utf8"));
+	return Effect.try({
+		try: () => readFileSync(path, "utf8"),
+		catch: toError,
+	});
+}
+
+function mkdir(
+	path: string,
+	options?: { readonly recursive?: boolean },
+): Effect.Effect<void, Error> {
+	return Effect.try({
+		try: () => {
+			mkdirSync(path, options);
+		},
+		catch: toError,
+	});
 }
 
 function tempRepo(prefix: string): string {
@@ -208,7 +250,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* mkdir(join(dir, "src"), { recursive: true });
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -265,7 +307,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* mkdir(join(dir, "src"), { recursive: true });
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -317,14 +359,14 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
+					yield* mkdir(join(dir, "docs"), { recursive: true });
 					yield* write(join(dir, "docs", "base.md"), "base\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "docs: base"]);
 					yield* runGit(dir, ["branch", "origin/main"]);
 
 					yield* runGit(dir, ["checkout", "-b", "feature"]);
-					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* mkdir(join(dir, "src"), { recursive: true });
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -389,7 +431,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["branch", "origin/main"]);
 
 					yield* runGit(dir, ["checkout", "-b", "feature"]);
-					yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
+					yield* mkdir(join(dir, "docs"), { recursive: true });
 					yield* write(
 						join(dir, "docs", "guide.md"),
 						Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n"),
@@ -520,7 +562,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* mkdir(join(dir, "src"), { recursive: true });
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -580,7 +622,12 @@ describe("build-model-routing-context", () => {
 				GITHUB_OUTPUT: join(tempRepo("auto-pr-build-model-routing-context-missing-env-"), "out"),
 			},
 			async () => {
-				await expect(Effect.runPromise(program)).rejects.toThrow("GITHUB_WORKSPACE is required");
+				const error = await Effect.runPromise(program.pipe(Effect.flip));
+				expect(error).toBeInstanceOf(RoutingContextEnvError);
+				expect(error).toMatchObject({
+					_tag: "RoutingContextEnvError",
+					name: "GITHUB_WORKSPACE",
+				});
 			},
 		);
 	});
@@ -599,9 +646,14 @@ describe("build-model-routing-context", () => {
 				LOCAL_RUNNER_MEMORY_GB: "bad",
 			},
 			async () => {
-				await expect(Effect.runPromise(program)).rejects.toThrow(
-					"COMMITS_COUNT must be a non-negative integer",
-				);
+				const error = await Effect.runPromise(program.pipe(Effect.flip));
+				expect(error).toBeInstanceOf(RoutingContextParseError);
+				expect(error).toMatchObject({
+					_tag: "RoutingContextParseError",
+					name: "COMMITS_COUNT",
+					requirement: "a non-negative integer",
+					value: "-1",
+				});
 			},
 		);
 	});
@@ -627,7 +679,12 @@ describe("build-model-routing-context", () => {
 						githubOutput,
 						commitsCount: 1,
 					}).pipe(Effect.flip);
-					expect(error.message).toContain("git diff --name-only origin/main..HEAD failed");
+					expect(error).toBeInstanceOf(RoutingContextGitError);
+					expect(error).toMatchObject({
+						_tag: "RoutingContextGitError",
+						command: "diff --name-only origin/main..HEAD",
+					});
+					expect(error.cause).toContain("unknown revision");
 				}),
 			);
 		} finally {
@@ -644,11 +701,9 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* Effect.sync(() => {
-						mkdirSync(join(dir, "src"), { recursive: true });
-						mkdirSync(join(dir, "test"), { recursive: true });
-						mkdirSync(join(dir, "dist"), { recursive: true });
-					});
+					yield* mkdir(join(dir, "src"), { recursive: true });
+					yield* mkdir(join(dir, "test"), { recursive: true });
+					yield* mkdir(join(dir, "dist"), { recursive: true });
 					yield* write(join(dir, "src", "a.ts"), "export const a = 1;\n");
 					yield* write(join(dir, "src", "b.ts"), "export const b = 1;\n");
 					yield* write(join(dir, "test", "a.test.ts"), "test('a', () => {});\n");
@@ -703,9 +758,14 @@ describe("build-model-routing-context", () => {
 				LOCAL_RUNNER_MEMORY_GB: "bad",
 			},
 			async () => {
-				await expect(Effect.runPromise(program)).rejects.toThrow(
-					"LOCAL_RUNNER_CPUS must be a positive number",
-				);
+				const error = await Effect.runPromise(program.pipe(Effect.flip));
+				expect(error).toBeInstanceOf(RoutingContextParseError);
+				expect(error).toMatchObject({
+					_tag: "RoutingContextParseError",
+					name: "LOCAL_RUNNER_CPUS",
+					requirement: "a positive number",
+					value: "0",
+				});
 			},
 		);
 	});
@@ -724,9 +784,14 @@ describe("build-model-routing-context", () => {
 				LOCAL_RUNNER_MEMORY_GB: "0",
 			},
 			async () => {
-				await expect(Effect.runPromise(program)).rejects.toThrow(
-					"LOCAL_RUNNER_MEMORY_GB must be a positive number",
-				);
+				const error = await Effect.runPromise(program.pipe(Effect.flip));
+				expect(error).toBeInstanceOf(RoutingContextParseError);
+				expect(error).toMatchObject({
+					_tag: "RoutingContextParseError",
+					name: "LOCAL_RUNNER_MEMORY_GB",
+					requirement: "a positive number",
+					value: "0",
+				});
 			},
 		);
 	});
@@ -747,7 +812,7 @@ describe("build-model-routing-context", () => {
 			expect(process.exitCode).toBe(1);
 		} finally {
 			process.stderr.write = originalWrite as typeof process.stderr.write;
-			process.exitCode = originalExitCode;
+			process.exitCode = originalExitCode ?? 0;
 		}
 	});
 });
