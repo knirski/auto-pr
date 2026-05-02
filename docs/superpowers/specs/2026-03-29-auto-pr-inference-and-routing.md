@@ -40,13 +40,13 @@ ADR 0007: revise after implementation; do not edit preemptively ([index](2026-03
 - Env: `AUTO_PR_AI_PROVIDER=github-models`, `GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
 - Defaults: prefer mini/small chat rows for quota on free Actions; confirm ids in live catalog.
 
-### `llamacpp`
+### `local` (OpenAI-compatible, including llama.cpp)
 
 - OpenAI-compatible `…/v1` (e.g. [llama.cpp](https://github.com/ggerganov/llama.cpp) llama-server `http://127.0.0.1:8080/v1` — port from your flags).
-- Env: `AUTO_PR_AI_LLAMACPP_URL` (optional default), `AUTO_PR_AI_LLAMACPP_MODEL`, optional `AUTO_PR_AI_LLAMACPP_API_KEY`.
+- Env: `AUTO_PR_AI_OPENAI_COMPAT_URL` (optional default), `AUTO_PR_AI_OPENAI_COMPAT_MODEL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`.
 - Any OpenAI-compatible gateway: same preset, override URL/key.
 - Tool calling / JSON: depends on server + model — re-test after upgrades.
-- GitHub-hosted runners: poor fit for local inference; use `github-models` or self-hosted for `llamacpp`.
+- GitHub-hosted runners: poor fit for local inference; use `github-models` or self-hosted for local OpenAI-compatible servers.
 
 ### Structured PR output
 
@@ -56,12 +56,11 @@ Shipped path: `LanguageModel.generateText` + JSON matching `TitleDescriptionSche
 
 | Variable | When |
 |----------|------|
-| `AUTO_PR_AI_PROVIDER` | `llamacpp` \| `github-models` |
+| `AUTO_PR_AI_PROVIDER` | `local` \| `github-models` |
 | `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | Model for both providers; `github-models` defaults to `openai/gpt-4.1` when unset |
 | `GH_TOKEN` | GitHub Models + existing PR flows |
-| `AUTO_PR_AI_LLAMACPP_URL` | Optional; default e.g. llama-server `/v1` |
-| `AUTO_PR_AI_LLAMACPP_MODEL` | Required if `llamacpp` |
-| `AUTO_PR_AI_LLAMACPP_API_KEY` | Optional Bearer for gated endpoints |
+| `AUTO_PR_AI_OPENAI_COMPAT_URL` | Optional for `local`; default e.g. llama-server `/v1` |
+| `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | Optional Bearer for gated local endpoints |
 
 Removed: `ollama` package, `AUTO_PR_AI_OLLAMA_MODEL`, `ollama` provider string. **Local** uses `AUTO_PR_AI_OPENAI_COMPAT_*` for the OpenAI-compatible endpoint.
 
@@ -77,7 +76,7 @@ Perfect “importance” ranking without human review or deep analysis is not av
 
 Resolve one model id before `generate-content` (workflow step or orchestration writes env). `generate-content` does not embed a router.
 
-Pattern: get-commits → select model (compute §3 signals, allowlist id to `GITHUB_OUTPUT`) → generate job passes `AUTO_PR_AI_*`. Security: only fixed model strings (`case` / regex), never free-form branch output.
+Pattern: collect commit/diff metrics from git context → select model (compute §3 signals, allowlist id to `GITHUB_OUTPUT`) → generate job passes `AUTO_PR_AI_*`. Security: only fixed model strings (`case` / regex), never free-form branch output.
 
 Separate step rationale: quota/cost policy (e.g. GitHub Models free tier: small PR → mini; hard PR → stronger id).
 
@@ -145,7 +144,7 @@ Fixed allowlists in workflow: band → model id. Calibrate thresholds per repo.
 Validate against the live [GitHub Models catalog](https://github.com/marketplace/models) or API. Names/tiers change.
 
 - Hosted CI: e.g. `openai/gpt-4o-mini` for bands A–B; step up for C when `delta_src` or hardness warrants — confirm quota/tier.
-- Local `llamacpp`: instruction-tuned GGUFs; match server’s registered model string for `/v1/chat/completions`. Re-test JSON output quality after model/server changes.
+- Local OpenAI-compatible servers (including llama.cpp): match the server’s registered model string for `/v1/chat/completions`. Re-test JSON output quality after model/server changes.
 
 Deprioritize: branch name alone; raw `commits.txt` byte length.
 
@@ -198,5 +197,5 @@ Do not feed unbounded diff just because metrics are large — still truncate/pat
 
 - Workflows: `.github/workflows/auto-pr-generate-reusable.yml` — env after [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
 - Config: `src/auto-pr/config.ts` — two-provider union; single dispatch.
-- Scripts: step between get-commits and generate sets model env; optional emission of bounded routing fields for §3.10.
+- Scripts/workflow steps: pre-generate metrics + model-selection step sets model env; optional emission of bounded routing fields for §3.10.
 - Prompts: `pr-description.txt` + `buildDescriptionPrompt` — placeholders above.
