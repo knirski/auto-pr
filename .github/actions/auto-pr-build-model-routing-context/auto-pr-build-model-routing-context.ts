@@ -1,13 +1,19 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { Effect, Option, Result } from "effect";
 import { parseCommits } from "../../../src/core/fill-pr-template-core.js";
 import {
+	type BuildDetailedRoutingContextInput,
+	buildDetailedRoutingContext,
 	type ModelBandDecision,
 	type ModelBandSignals,
 	type ModelProvider,
+	type RoutingContextCommitSummary,
+	type RoutingContextFileSummary,
+	type RoutingContextHotspot,
 	resolveModelBand,
-} from "../../../src/core/model-band.js";
+} from "../../../src/core/index.js";
 
 type RoutingContextInputs = {
 	readonly workspace: string;
@@ -21,6 +27,12 @@ type RoutingContextInputs = {
 type GitResult = {
 	readonly stdout: string;
 	readonly stderr: string;
+};
+
+type ParsedCommit = {
+	readonly subject: string;
+	readonly type: string | undefined;
+	readonly breaking: boolean;
 };
 
 function toError(cause: unknown): Error {
@@ -105,7 +117,134 @@ function classifyFile(
 	return "other";
 }
 
-function buildSignals(input: RoutingContextInputs): Effect.Effect<ModelBandSignals, Error> {
+function buildCommitSummary(
+	commits: readonly ParsedCommit[],
+	mergeCommitCount: number,
+): RoutingContextCommitSummary {
+	const typeCounts: Record<string, number> = Object.create(null);
+	let breakingCommitCount = 0;
+	const subjects: string[] = [];
+	for (const commit of commits) {
+		subjects.push(commit.subject);
+		if (commit.breaking) breakingCommitCount++;
+		const type = commit.type?.trim().toLowerCase();
+		if (type) {
+			typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+		}
+	}
+	return {
+		semanticCommitCount: commits.length,
+		mergeCommitCount,
+		breakingCommitCount,
+		typeCounts,
+		subjects,
+	};
+}
+
+function sortHotspots(items: RoutingContextHotspot[]): RoutingContextHotspot[] {
+	return items.sort((a, b) => {
+		if (b.churn !== a.churn) return b.churn - a.churn;
+		return a.path.localeCompare(b.path);
+	});
+}
+
+function buildFileSummary(input: {
+	readonly files: readonly string[];
+	readonly numstat: readonly string[];
+}): RoutingContextFileSummary {
+	const topLevelDirs = new Set<string>();
+	const topDirChurn = new Map<string, RoutingContextHotspot>();
+	const fileHotspots = new Map<string, RoutingContextHotspot>();
+
+	let sourceFileCount = 0;
+	let docsFileCount = 0;
+	let testFileCount = 0;
+	let generatedFileCount = 0;
+	let lockfileCount = 0;
+	let packageManifestCount = 0;
+	let rawChurn = 0;
+	let sourceChurn = 0;
+	let generatedChurn = 0;
+	let hasBinaryFiles = false;
+
+	for (const file of input.files) {
+		const top = file.split("/", 1)[0] ?? "";
+		topLevelDirs.add(top);
+		switch (classifyFile(file)) {
+			case "source":
+				sourceFileCount++;
+				break;
+			case "docs":
+				docsFileCount++;
+				break;
+			case "test":
+				testFileCount++;
+				break;
+			case "generated":
+				generatedFileCount++;
+				break;
+			case "lockfile":
+				lockfileCount++;
+				break;
+			case "package":
+				packageManifestCount++;
+				break;
+		}
+	}
+
+	for (const line of input.numstat) {
+		const [insRaw, delRaw, ...rest] = line.split(/\s+/);
+		const path = rest.join(" ");
+		if (!path) continue;
+		const insertions = insRaw === "-" ? 0 : Number(insRaw);
+		const deletions = delRaw === "-" ? 0 : Number(delRaw);
+		if (insRaw === "-" || delRaw === "-") hasBinaryFiles = true;
+		const churn = insertions + deletions;
+		rawChurn += churn;
+		const kind = classifyFile(path);
+		if (kind === "generated") generatedChurn += churn;
+		else sourceChurn += churn;
+
+		const fileEntry: RoutingContextHotspot = {
+			path,
+			churn,
+			insertions,
+			deletions,
+			kind,
+		};
+		fileHotspots.set(path, fileEntry);
+
+		const top = path.split("/", 1)[0] ?? path;
+		const dirEntry = topDirChurn.get(top);
+		if (dirEntry === undefined) {
+			topDirChurn.set(top, { ...fileEntry, path: top });
+		} else {
+			dirEntry.churn += churn;
+			dirEntry.insertions += insertions;
+			dirEntry.deletions += deletions;
+		}
+	}
+
+	return {
+		topLevelDirs: [...topLevelDirs].sort((a, b) => a.localeCompare(b)),
+		topFiles: sortHotspots([...fileHotspots.values()]),
+		topDirs: sortHotspots([...topDirChurn.values()]),
+		sourceFileCount,
+		docsFileCount,
+		testFileCount,
+		generatedFileCount,
+		lockfileCount,
+		packageManifestCount,
+		rawChurn,
+		sourceChurn,
+		generatedChurn,
+		hasBinaryFiles,
+	};
+}
+
+function buildRoutingContextInput(
+	input: RoutingContextInputs,
+): Effect.Effect<BuildDetailedRoutingContextInput, Error> {
 	return Effect.gen(function* () {
 		const range = `origin/${input.defaultBranch}..HEAD`;
 		const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
@@ -131,79 +270,50 @@ function buildSignals(input: RoutingContextInputs): Effect.Effect<ModelBandSigna
 
 		const commits = parsed.success;
 		const semanticCommits = commits.filter((commit) => !commit.subject.startsWith("Merge "));
-		const conventionalTypeCount = new Set(
-			semanticCommits
-				.map((commit) => Option.getOrElse(commit.type, () => "").toLowerCase())
-				.filter(Boolean),
-		).size;
-
-		let sourceFileCount = 0;
-		let docsFileCount = 0;
-		let testFileCount = 0;
-		let generatedFileCount = 0;
-		let lockfileCount = 0;
-		let packageManifestCount = 0;
-		const topLevel = new Set<string>();
-		for (const file of files) {
-			const top = file.split("/", 1)[0] ?? "";
-			topLevel.add(top);
-			switch (classifyFile(file)) {
-				case "source":
-					sourceFileCount++;
-					break;
-				case "docs":
-					docsFileCount++;
-					break;
-				case "test":
-					testFileCount++;
-					break;
-				case "generated":
-					generatedFileCount++;
-					break;
-				case "lockfile":
-					lockfileCount++;
-					break;
-				case "package":
-					packageManifestCount++;
-					break;
-			}
-		}
-
-		let rawChurn = 0;
-		let sourceChurn = 0;
-		let generatedChurn = 0;
-		let hasBinaryFiles = false;
-		for (const line of numstat) {
-			const [insRaw, delRaw, ...rest] = line.split(/\s+/);
-			const path = rest.join(" ");
-			if (!path) continue;
-			const insertions = insRaw === "-" ? 0 : Number(insRaw);
-			const deletions = delRaw === "-" ? 0 : Number(delRaw);
-			if (insRaw === "-" || delRaw === "-") hasBinaryFiles = true;
-			const churn = insertions + deletions;
-			rawChurn += churn;
-			if (classifyFile(path) === "generated") generatedChurn += churn;
-			else sourceChurn += churn;
-		}
-
-		const hasBreakingChange = semanticCommits.some((commit) => Option.isSome(commit.breakingNote));
+		const mergeCommitCount = commits.length - semanticCommits.length;
+		const commitSummary = buildCommitSummary(
+			semanticCommits.map((commit) => ({
+				subject: commit.subject,
+				type: Option.getOrElse(commit.type, () => undefined),
+				breaking: Option.isSome(commit.breakingNote),
+			})),
+			mergeCommitCount,
+		);
+		const fileSummary = buildFileSummary({ files, numstat });
 		const semanticCommitCount = input.commitsCount ?? semanticCommits.length;
-		return {
+		const signals: ModelBandSignals = {
 			semanticCommitCount,
-			conventionalTypeCount,
-			topLevelSpread: topLevel.size,
+			conventionalTypeCount: new Set(
+				semanticCommits
+					.map((commit) => Option.getOrElse(commit.type, () => "").toLowerCase())
+					.filter(Boolean),
+			).size,
+			topLevelSpread: fileSummary.topLevelDirs.length,
 			changedFileCount: files.length,
-			sourceFileCount,
-			docsFileCount,
-			testFileCount,
-			generatedFileCount,
-			lockfileCount,
-			packageManifestCount,
-			rawChurn,
-			sourceChurn,
-			generatedChurn,
-			hasBreakingChange,
-			hasBinaryFiles,
+			sourceFileCount: fileSummary.sourceFileCount,
+			docsFileCount: fileSummary.docsFileCount,
+			testFileCount: fileSummary.testFileCount,
+			generatedFileCount: fileSummary.generatedFileCount,
+			lockfileCount: fileSummary.lockfileCount,
+			packageManifestCount: fileSummary.packageManifestCount,
+			rawChurn: fileSummary.rawChurn,
+			sourceChurn: fileSummary.sourceChurn,
+			generatedChurn: fileSummary.generatedChurn,
+			hasBreakingChange: semanticCommits.some((commit) => Option.isSome(commit.breakingNote)),
+			hasBinaryFiles: fileSummary.hasBinaryFiles,
+		};
+		return {
+			band: resolveModelBand({
+				provider: input.provider,
+				signals,
+				...(input.explicitModel === undefined ? {} : { explicitModel: input.explicitModel }),
+			}).band,
+			signals,
+			commits: {
+				...commitSummary,
+				semanticCommitCount,
+			},
+			files: fileSummary,
 		};
 	});
 }
@@ -215,7 +325,11 @@ function writeDecisionOutputs(
 	return Effect.try({
 		try: () => {
 			appendFileSync(githubOutput, `selected_model=${decision.selectedModel}\n`);
-			appendFileSync(githubOutput, `routing_context=${decision.routingContext}\n`);
+			const delimiter = `__AUTO_PR_ROUTING_CONTEXT_${randomUUID()}__`;
+			appendFileSync(
+				githubOutput,
+				`routing_context<<${delimiter}\n${decision.routingContext}\n${delimiter}\n`,
+			);
 			appendFileSync(githubOutput, `band=${decision.band}\n`);
 		},
 		catch: toError,
@@ -226,13 +340,22 @@ export function runBuildModelRoutingContext(
 	input: RoutingContextInputs,
 ): Effect.Effect<void, Error> {
 	return Effect.gen(function* () {
-		const signals = yield* buildSignals(input);
+		const routingInput = yield* buildRoutingContextInput(input);
 		const decision = resolveModelBand({
 			provider: input.provider,
-			signals,
+			signals: routingInput.signals,
 			...(input.explicitModel === undefined ? {} : { explicitModel: input.explicitModel }),
 		});
-		yield* writeDecisionOutputs(input.githubOutput, decision);
+		const routingContext = buildDetailedRoutingContext({
+			band: decision.band,
+			signals: routingInput.signals,
+			commits: routingInput.commits,
+			files: routingInput.files,
+		});
+		yield* writeDecisionOutputs(input.githubOutput, {
+			...decision,
+			routingContext,
+		});
 	});
 }
 

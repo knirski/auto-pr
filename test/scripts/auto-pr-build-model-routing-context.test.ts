@@ -70,9 +70,15 @@ describe("build-model-routing-context", () => {
 					const output = yield* read(githubOutput);
 					expect(output).toContain("selected_model=gpt-oss");
 					expect(output).toContain("band=A");
-					expect(output).toContain("commits=1");
-					expect(output).toContain("summary=source-only, 1 commit, 1 file");
-					expect(output).toContain("source_files=1");
+					expect(output).toContain("routing_context<<");
+					expect(output).toContain("decision: band=A; reason=tight / docs-only / generated-heavy");
+					expect(output).toContain("intent: 1 semantic commit; merge=0; breaking=0; types=feat=1");
+					expect(output).toContain("scope: source-only; dirs=src");
+					expect(output).toContain(
+						"churn: raw=1; source=1; generated=0; generated-share=0%; source-share=100%",
+					);
+					expect(output).toContain("hotspots: files=src/app.ts (+1/-0, source)");
+					expect(output).toContain("compact: summary=source-only, 1 commit, 1 file");
 				}),
 			);
 		} finally {
@@ -157,7 +163,9 @@ describe("build-model-routing-context", () => {
 					const output = yield* read(githubOutput);
 					expect(output).toContain("selected_model=gpt-oss");
 					expect(output).toContain("band=A");
-					expect(output).toContain("routing_context=");
+					expect(output).toContain("routing_context<<");
+					expect(output).toContain("decision:");
+					expect(output).toContain("subjects:");
 				}),
 			);
 		} finally {

@@ -96,6 +96,13 @@ export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
 export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 export { buildDescriptionPrompt } from "#core/prompt.js";
+export type {
+	BuildDetailedRoutingContextInput,
+	RoutingContextCommitSummary,
+	RoutingContextFileSummary,
+	RoutingContextHotspot,
+} from "#core/routing-context.js";
+export { buildDetailedRoutingContext } from "#core/routing-context.js";
 export {
 	filterSemanticSubjects,
 	isBlank,
