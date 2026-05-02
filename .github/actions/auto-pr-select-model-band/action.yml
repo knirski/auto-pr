@@ -1,0 +1,46 @@
+# Composite: select AI model band and build routing context for auto-pr generate.
+name: Select model band and build routing context
+description: >-
+  Computes a lightweight routing band and trusted routing context from the current PR diff.
+  Always emits a non-empty selected_model so generate-content keeps working for single-commit PRs.
+
+inputs:
+  workspace:
+    description: Repository checkout path to run git commands against.
+    required: true
+  default_branch:
+    description: Base branch name used for the PR range, e.g. main.
+    required: true
+  commits_count:
+    description: Semantic (non-merge) commit count from the workflow preflight step.
+    required: true
+  ai_provider:
+    required: true
+  ai_openai_compat_model:
+    description: Explicit model override; when empty, the action selects a provider default.
+    required: false
+    default: ""
+
+outputs:
+  selected_model:
+    description: Final model id to pass to generate-content.
+    value: ${{ steps.select.outputs.selected_model }}
+  routing_context:
+    description: Small trusted routing context string for prompt conditioning.
+    value: ${{ steps.select.outputs.routing_context }}
+  band:
+    description: Model band selected by the heuristic.
+    value: ${{ steps.select.outputs.band }}
+
+runs:
+  using: composite
+  steps:
+    - id: select
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/auto-pr-select-model-band.sh"
+      env:
+        WORKSPACE: ${{ inputs.workspace }}
+        DEFAULT_BRANCH: ${{ inputs.default_branch }}
+        COMMITS_COUNT: ${{ inputs.commits_count }}
+        AI_PROVIDER: ${{ inputs.ai_provider }}
+        INPUT_MODEL: ${{ inputs.ai_openai_compat_model }}
