@@ -229,6 +229,22 @@ function openAiModelsListUrl(openAiCompatBase: URL): URL {
 	return new URL("models", base);
 }
 
+const failOnNonSuccessStatus = Effect.fn("failOnNonSuccessStatus")(function* (options: {
+	readonly response: { readonly status: number };
+	readonly operation: string;
+	readonly requestUrl: URL;
+}) {
+	const { response, operation, requestUrl } = options;
+	if (response.status < 200 || response.status >= 300) {
+		return yield* Effect.fail(
+			new LlamaIntegrationHttpError({
+				operation: `${operation}: unexpected HTTP status ${response.status} from ${requestUrl.href}`,
+				cause: response,
+			}),
+		);
+	}
+});
+
 const readPinnedImageFromDockerfile = Effect.fn("readPinnedImageFromDockerfile")(function* () {
 	const integrationTestDir = yield* integrationTestDirectory();
 	const p = yield* Path.Path;
@@ -320,14 +336,11 @@ const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options:
 					new LlamaIntegrationHttpError({ operation: "download GGUF model (HTTPS)", cause }),
 			),
 		);
-	if (response.status < 200 || response.status >= 300) {
-		return yield* Effect.fail(
-			new LlamaIntegrationHttpError({
-				operation: `download GGUF model (HTTPS): unexpected HTTP status ${response.status} from ${modelUrlParsed.href}`,
-				cause: response,
-			}),
-		);
-	}
+	yield* failOnNonSuccessStatus({
+		response,
+		operation: "download GGUF model (HTTPS)",
+		requestUrl: modelUrlParsed,
+	});
 	const buf = yield* response.arrayBuffer.pipe(
 		Effect.map((ab) => new Uint8Array(ab)),
 		Effect.mapError(
@@ -354,14 +367,11 @@ const fetchFirstModelId = Effect.fn("fetchFirstModelId")(function* (openAiCompat
 				(cause) => new LlamaIntegrationHttpError({ operation: "request GET /v1/models", cause }),
 			),
 		);
-	if (response.status < 200 || response.status >= 300) {
-		return yield* Effect.fail(
-			new LlamaIntegrationHttpError({
-				operation: `request GET /v1/models: unexpected HTTP status ${response.status} from ${modelsUrl.href}`,
-				cause: response,
-			}),
-		);
-	}
+	yield* failOnNonSuccessStatus({
+		response,
+		operation: "request GET /v1/models",
+		requestUrl: modelsUrl,
+	});
 	const json: unknown = yield* response.json.pipe(
 		Effect.mapError(
 			(cause) =>
