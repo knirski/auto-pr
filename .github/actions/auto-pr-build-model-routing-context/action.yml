@@ -1,7 +1,7 @@
-# Composite: select AI model band and build routing context for auto-pr generate.
-name: Select model band and build routing context
+# Composite: build AI model routing context for auto-pr generate.
+name: Build model routing context
 description: >-
-  Computes a lightweight routing band and trusted routing context from the current PR diff.
+  Collects diff signals, resolves a routing band, and emits prompt-ready routing context.
   Always emits a non-empty selected_model so generate-content keeps working for single-commit PRs.
 
 inputs:
@@ -24,20 +24,20 @@ inputs:
 outputs:
   selected_model:
     description: Final model id to pass to generate-content.
-    value: ${{ steps.select.outputs.selected_model }}
+    value: ${{ steps.build.outputs.selected_model }}
   routing_context:
     description: Small trusted routing context string for prompt conditioning.
-    value: ${{ steps.select.outputs.routing_context }}
+    value: ${{ steps.build.outputs.routing_context }}
   band:
     description: Model band selected by the heuristic.
-    value: ${{ steps.select.outputs.band }}
+    value: ${{ steps.build.outputs.band }}
 
 runs:
   using: composite
   steps:
-    - id: select
+    - id: build
       shell: bash
-      run: bun "$GITHUB_ACTION_PATH/auto-pr-select-model-band.ts"
+      run: bun "$GITHUB_ACTION_PATH/auto-pr-build-model-routing-context.ts"
       env:
         WORKSPACE: ${{ inputs.workspace }}
         DEFAULT_BRANCH: ${{ inputs.default_branch }}

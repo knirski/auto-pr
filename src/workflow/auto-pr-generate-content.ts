@@ -267,7 +267,7 @@ export type GeneratePrContentParams = {
 	headRef: string;
 	templateContent: string;
 	descriptionPromptText: string;
-	/** Trusted routing summary computed by workflow/job logic (not model output). */
+	/** Trusted routing context computed by workflow/job logic (signal summary, not model output). */
 	routingContext?: string;
 	provider: AiProvider;
 	model: string;

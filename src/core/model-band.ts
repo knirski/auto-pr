@@ -158,6 +158,50 @@ function summarizeFlags(signals: ModelBandSignals): string[] {
 	return flags;
 }
 
+function summarizeSignalContext(input: {
+	readonly band: ModelBand;
+	readonly signals: ModelBandSignals;
+	readonly generatedRatio: number;
+	readonly hardness: string;
+}): string {
+	const { signals, band, generatedRatio, hardness } = input;
+	const scope = isDocsOnly(signals)
+		? "docs-only"
+		: isGeneratedOnly(signals)
+			? "generated-only"
+			: signals.sourceFileCount > 0 &&
+					signals.docsFileCount === 0 &&
+					signals.testFileCount === 0 &&
+					signals.generatedFileCount === 0
+				? "source-only"
+				: signals.testFileCount > 0 &&
+						signals.sourceFileCount === 0 &&
+						signals.docsFileCount === 0 &&
+						signals.generatedFileCount === 0
+					? "test-only"
+					: hasDocsAndSource(signals)
+						? "docs+source"
+						: hasTestsAndSource(signals)
+							? "tests+source"
+							: signals.lockfileCount > 0 || signals.packageManifestCount > 0
+								? "dependency/config"
+								: "mixed";
+	const flags = summarizeFlags(signals);
+	const details = [
+		scope,
+		`${signals.semanticCommitCount} commit${signals.semanticCommitCount === 1 ? "" : "s"}`,
+		`${signals.changedFileCount} file${signals.changedFileCount === 1 ? "" : "s"}`,
+		`${signals.sourceChurn} source churn`,
+		`${generatedRatio}% generated churn`,
+		`band=${band}`,
+		`hardness=${hardness}`,
+	];
+	if (flags.length > 0) {
+		details.push(`signals=${flags.join(",")}`);
+	}
+	return details.join(", ");
+}
+
 export function buildRoutingContext(input: {
 	readonly band: ModelBand;
 	readonly signals: ModelBandSignals;
@@ -179,7 +223,9 @@ export function buildRoutingContext(input: {
 					? "medium"
 					: "low";
 	const flags = summarizeFlags(signals);
+	const summary = summarizeSignalContext({ band, signals, generatedRatio, hardness });
 	const parts = [
+		`summary=${summary}`,
 		`band=${band}`,
 		`commits=${signals.semanticCommitCount}`,
 		`types=${signals.conventionalTypeCount}`,

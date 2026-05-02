@@ -1,0 +1,116 @@
+import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect } from "effect";
+import { runBuildModelRoutingContext } from "../../.github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.js";
+
+function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
+	return Effect.try({
+		try: () => {
+			const result = spawnSync("git", [...args], { cwd, encoding: "utf8" });
+			if (result.status !== 0) {
+				throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
+			}
+		},
+		catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+	});
+}
+
+function write(path: string, content: string): Effect.Effect<void, Error> {
+	return Effect.sync(() => {
+		writeFileSync(path, content);
+	});
+}
+
+function read(path: string): Effect.Effect<string, Error> {
+	return Effect.sync(() => readFileSync(path, "utf8"));
+}
+
+function tempRepo(prefix: string): string {
+	return mkdtempSync(join(tmpdir(), prefix));
+}
+
+describe("build-model-routing-context", () => {
+	test("emits a default model and signal summary for single-commit PRs", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
+					yield* write(join(dir, "docs", "base.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "docs: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain("selected_model=gpt-oss");
+					expect(output).toContain("band=A");
+					expect(output).toContain("commits=1");
+					expect(output).toContain("summary=source-only, 1 commit, 1 file");
+					expect(output).toContain("source_files=1");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("respects an explicit model override", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-override-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* write(join(dir, "base.txt"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "docs: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "change.txt"), "change\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: change"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "github-models",
+						explicitModel: "openai/gpt-4.1",
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain("selected_model=openai/gpt-4.1");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});

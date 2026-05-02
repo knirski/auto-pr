@@ -102,6 +102,7 @@ describe("model band routing", () => {
 		} as const;
 
 		const ctx = buildRoutingContext({ band: "B", signals });
+		expect(ctx).toContain("summary=docs+source, 3 commits, 6 files");
 		expect(ctx).toContain("band=B");
 		expect(ctx).toContain("commits=3");
 		expect(ctx).toContain("signals=binary,docs+src,tests+src,lockfiles,package-manifests");
