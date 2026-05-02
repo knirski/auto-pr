@@ -4,7 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { runBuildModelRoutingContext } from "../../.github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.js";
+import {
+	program,
+	runBuildModelRoutingContext,
+} from "../../.github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.js";
 
 function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
 	return Effect.try({
@@ -110,6 +113,60 @@ describe("build-model-routing-context", () => {
 				}),
 			);
 		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program reads required env vars and emits routing outputs", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-program-");
+		const originalEnv = {
+			AI_PROVIDER: process.env.AI_PROVIDER,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			INPUT_MODEL: process.env.INPUT_MODEL,
+			WORKSPACE: process.env.WORKSPACE,
+		};
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "src", "app.ts"), "export const app = 2;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: update app"]);
+
+					const githubOutput = join(dir, "github_output");
+					process.env.WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AI_PROVIDER = "local";
+					process.env.INPUT_MODEL = "";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "1";
+
+					yield* program;
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain("selected_model=gpt-oss");
+					expect(output).toContain("band=A");
+					expect(output).toContain("routing_context=");
+				}),
+			);
+		} finally {
+			process.env.AI_PROVIDER = originalEnv.AI_PROVIDER;
+			process.env.COMMITS_COUNT = originalEnv.COMMITS_COUNT;
+			process.env.DEFAULT_BRANCH = originalEnv.DEFAULT_BRANCH;
+			process.env.GITHUB_OUTPUT = originalEnv.GITHUB_OUTPUT;
+			process.env.INPUT_MODEL = originalEnv.INPUT_MODEL;
+			process.env.WORKSPACE = originalEnv.WORKSPACE;
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
