@@ -1,10 +1,11 @@
 # Architecture
 
-This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. Prompts at `dist/prompts/`. No declaration emit.
+This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. It also builds the action-local Node bundle for the model routing context composite action. Prompts at `dist/prompts/`. No declaration emit.
 
 ## Repository layout (on disk)
 
 - **`src/`** — TypeScript source. `src/core/` is pure (no Effect I/O); `src/auto-pr/` holds config, errors, live interpreters, and shell; `src/workflow/` and `src/tools/` are CLI entrypoints compiled to `dist/` by `scripts/build.ts`.
+- **`.github/actions/auto-pr-build-model-routing-context/`** — Action-local TypeScript/Effect source and generated Node bundle for reusable-workflow model routing. Kept outside `src/` because remote composite actions execute in adopter repositories.
 - **`scripts/`** — Build and check helpers (`build.ts`, shell wrappers, Nix shims). Not application library code.
 - **`test/`** — Unit tests, mirroring `src/` where applicable.
 
@@ -30,7 +31,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 
 ## Pipeline Flow
 
-1. **generate-content** — `GitContext` fetches commits, files, and diff stat directly from git. 1 commit: fill from body; 2+: `LanguageModel.generateText` with `DiffToolkit` (`get_diff`, `get_commit_diff` tools), parse assistant JSON, validate with Effect Schema (`TitleDescriptionSchema`), using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config). Not `generateObject` (OpenAI `json_schema` is unsupported on GitHub Models and flaky on some compat servers). Retries → commit-derived fallback on failure → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
+1. **generate-content** — In the reusable workflow, `auto-pr-build-model-routing-context` first classifies commits, files, diff signals, runner resources, and local-model risk, then exports a model band, model fallback, tool-use strategy, and structured signal summary for the later prompt. `GitContext` then fetches commits, files, and diff stat directly from git. 1 commit: fill from body; 2+: `LanguageModel.generateText` with `DiffToolkit` (`get_diff`, `get_commit_diff` tools), parse assistant JSON, validate with Effect Schema (`TitleDescriptionSchema`), using **local** (OpenAI-compatible HTTP) or **github-models** (selected by config). Not `generateObject` (OpenAI `json_schema` is unsupported on GitHub Models and flaky on some compat servers). Retries → commit-derived fallback on failure → fill template (including `{{typeOfChange}}` aligned with the final PR title) → write `pr-title.txt` and `pr-body.md` under workspace
 2. **create-or-update-pr** — Read `pr-title.txt` / `pr-body.md` → `PullRequestClient` lookup by branch → PR update or create through Octokit REST API
 
 ## Functional Core / Imperative Shell (FC/IS)
@@ -54,6 +55,7 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 - **Local CI parity (optional):** `scripts/act-local-ci.ts` (`bun run act`) — Docker + nektos act or `gh act`; pure argv/event planning lives in the same file (scoped FC/IS exception). See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job).
 - **Core logic:** `src/core/*.ts` (fill-pr-template-core, gh-output, string, etc.)
 - **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateText` and decodes JSON to `TitleDescriptionSchema` (see file header). CI uses composite actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
+- **Model routing context action:** `.github/actions/auto-pr-build-model-routing-context/` owns the reusable-workflow routing policy. Its TypeScript/Effect source is bundled by `scripts/build.ts` to `auto-pr-build-model-routing-context.mjs`; `action.yml` runs that bundle with `node` so adopter repositories do not need Bun or auto-pr source.
 - **Config:** `src/auto-pr/config.ts` — env schema and validation
 
 ## Dependency Direction
@@ -88,3 +90,5 @@ AI errors are split into **permanent** and **transient** via `isTransientAiError
 - [ADR 0002: Two-phase auto-PR workflow](adr/0002-two-phase-auto-pr-workflow.md)
 - [ADR 0007: AI provider abstraction](adr/0007-ai-abstraction-layer.md)
 - [ADR 0009: Ollama removal and OpenAI-compat-only LanguageModel](adr/0009-ollama-to-openai-compat-migration.md)
+- [ADR 0014: Replace gh PR wrapper with Octokit](adr/0014-replace-gh-pr-wrapper-with-octokit.md)
+- [ADR 0015: Action-local bundled model routing context](adr/0015-action-local-bundled-model-routing-context.md)

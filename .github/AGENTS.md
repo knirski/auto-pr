@@ -21,3 +21,6 @@ These rules apply to `.github/**`.
 - Put new composite actions under `.github/actions/<name>/`.
 - Shell entrypoints must follow `scripts/AGENTS.md`: `shellcheck`, `shfmt`, strict quoting, and no secret printing.
 - Use explicit inputs for paths and secrets. Do not rely on hidden repository layout when a caller can pass the value.
+- Reusable-workflow composites run inside adopter repositories. They must not require Bun, this repo's `node_modules`, or runtime imports from `src/**`.
+- If a composite needs TypeScript or Effect logic, keep the source files and generated Node runtime bundle in the same action directory, run the bundle with `node` from `action.yml`, and regenerate it with `bun run build`.
+- Commit action-local bundles with their source changes. Do not stage root `dist/` for ordinary PRs; root `dist/` is owned by the dist update workflows.

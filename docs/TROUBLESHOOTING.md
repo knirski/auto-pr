@@ -40,6 +40,12 @@
 
 **Fix:** In any **custom or forked** workflow, update `uses:` to `knirski/auto-pr/.github/actions/llama-server-docker-start@<SHA>` and `…/llama-server-docker-stop@<SHA>`, pass **`llama_server_root`** (not `llama_ci_root`), and use the Dockerfile path above. See [INTEGRATION.md](INTEGRATION.md#local-llama-dockerfile-pin).
 
+### "`bun: command not found`" in model routing context
+
+**Cause:** The workflow is pinned to an old revision of the model routing context action that still tried to execute Bun inside the adopter repository.
+
+**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh the workflow pin, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch. Current reusable workflows run the routing action through an action-local Node bundle and do not require Bun in adopter repositories.
+
 ### "Missing secrets APP_ID or APP_PRIVATE_KEY"
 
 **Cause:** The workflow needs a GitHub App token to create PRs.

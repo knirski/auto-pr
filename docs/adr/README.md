@@ -27,6 +27,7 @@ When creating or editing ADRs, follow the workflow in [AGENTS.md](../../AGENTS.m
 | 0012 | [Documentation website with Starlight on GitHub Pages](0012-documentation-website.md) |
 | 0013 | [Transient vs permanent AI error classification](0013-transient-vs-permanent-ai-errors.md) |
 | 0014 | [Replace gh PR wrapper with Octokit](0014-replace-gh-pr-wrapper-with-octokit.md) |
+| 0015 | [Action-local bundled model routing context](0015-action-local-bundled-model-routing-context.md) |
 
 ## Supporting documents (research and plans)
 

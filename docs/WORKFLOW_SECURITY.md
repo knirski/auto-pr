@@ -26,7 +26,7 @@ The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must 
 ### Generate (Unprivileged)
 
 - **Checkout:** The pushed branch — untrusted, but acceptable because the workflow has no privileged permissions.
-- **Runs:** `auto-pr-generate-content` (AI), artifact preparation.
+- **Runs:** model routing context classification, `auto-pr-generate-content` (AI), artifact preparation.
 - **Output:** Artifact `pr-content` (title, body, branch, default_branch).
 - **Risk:** Limited. It cannot write to the repo. The stock workflow passes the ephemeral default **`github.token`** with `models: read`, not a long-lived PAT and not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`). Custom workflows should not forward repository secrets to generate unless branch authors are trusted to see them.
 
@@ -35,7 +35,7 @@ The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must 
 - **Checkout:** None. The job installs the trusted auto-pr package and uses only the downloaded artifact as data.
 - **Input:** Artifact from generate job.
 - **Runs:** GitHub App token generation, auto-pr create/update workflow (Octokit-backed PR client).
-- **Risk:** Mitigated. No untrusted code is checked out or executed. Artifact content is treated as data, not code. The create workflow validates artifact `branch` and `default_branch` against the triggering ref and repository default before calling `gh`.
+- **Risk:** Mitigated. No untrusted code is checked out or executed. Artifact content is treated as data, not code. The create workflow validates artifact `branch` and `default_branch` against the triggering ref and repository default before calling the GitHub API.
 
 ## Artifact Handling
 
@@ -57,5 +57,7 @@ CodeQL does not fully model cross-workflow permission separation, so it may repo
 ## Related
 
 - [ADR 0002: Two-Phase Auto-PR Workflow](adr/0002-two-phase-auto-pr-workflow.md) — Design decision and alternatives
+- [ADR 0014: Replace gh PR wrapper with Octokit](adr/0014-replace-gh-pr-wrapper-with-octokit.md) — Privileged PR client transport
+- [ADR 0015: Action-local bundled model routing context](adr/0015-action-local-bundled-model-routing-context.md) — Generate-job routing context action design
 - [docs/CI.md](CI.md) — Workflow overview
 - [GitHub: Keeping your GitHub Actions and workflows secure](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/)

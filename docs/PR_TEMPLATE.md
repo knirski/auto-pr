@@ -12,7 +12,7 @@ A single template at [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUES
 ### Single-commit vs multi-commit (automated)
 
 - **One commit on the branch:** The PR **description** comes from that commit’s message (body and subject rules as below). There is **no** AI summary step.
-- **Two or more commits:** The workflow asks the model for a **title** and **description** that summarize the set. Fallbacks exist if the model fails; see implementation notes.
+- **Two or more commits:** The workflow asks the model for a **title** and **description** that summarize the set. The prompt includes routing context built from commit, file, diff, and runner-resource signals. Fallbacks exist if the model fails; see implementation notes.
 
 Polish the PR on GitHub if a commit message was too terse—the template reflects commits, it does not invent product context.
 
