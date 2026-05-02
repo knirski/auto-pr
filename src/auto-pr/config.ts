@@ -19,6 +19,7 @@
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
  * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to microsoft/phi-4-mini-instruct when unset (lowest GitHub Models billing multipliers; see docs) |
+ * | AUTO_PR_ROUTING_CONTEXT | | GeneratePrContent, RunAutoPr | Optional trusted routing summary (band/metrics buckets) injected into the AI prompt. |
  * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
  * | GITHUB_API_URL | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional Octokit REST base URL (advanced; overrides GH_HOST mapping). |
  * | GH_HOST | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional GitHub host. `github.com` maps to api.github.com; other hosts map to `https://<host>/api/v3`. |
@@ -140,6 +141,7 @@ export type GeneratePrContentConfigCommon = {
 	readonly defaultBranch: string;
 	readonly branch: string;
 	readonly model: string;
+	readonly routingContext?: string;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
 	readonly existingPrTitle?: string;
@@ -178,6 +180,7 @@ const GeneratePrContentConfigDef = Config.all({
 	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
 	ghHost: Config.option(Config.string("GH_HOST")),
 	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
+	routingContext: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT")),
 });
 
 function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
@@ -238,6 +241,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
+			const routingContext = optionalTrimmedNonEmpty(base.routingContext);
 			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
 			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
 
@@ -249,6 +253,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 				...(githubApiUrl !== undefined ? { githubApiUrl } : {}),
 				...(ghHost !== undefined ? { ghHost } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
+				...(routingContext !== undefined ? { routingContext } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -387,6 +392,7 @@ export type RunAutoPrConfigCommon = {
 	readonly templatePath: string;
 	readonly ghToken: Redacted.Redacted<string>;
 	readonly model: string;
+	readonly routingContext?: string;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
 	/** When set from `BRANCH`; omit to resolve the head branch via `git branch --show-current` at run time. */
@@ -422,6 +428,7 @@ const RunAutoPrConfigDef = Config.all({
 	ghHost: Config.option(Config.string("GH_HOST")),
 	branch: Config.option(Config.string("BRANCH")),
 	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
+	routingContext: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT")),
 });
 
 export const RunAutoPrConfigLayer = Layer.effect(
@@ -452,6 +459,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
+			const routingContext = optionalTrimmedNonEmpty(base.routingContext);
 
 			const shared = {
 				defaultBranch,
@@ -462,6 +470,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				...(ghHost !== undefined ? { ghHost } : {}),
 				...(branch !== undefined ? { branch } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
+				...(routingContext !== undefined ? { routingContext } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(

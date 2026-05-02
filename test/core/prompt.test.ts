@@ -44,4 +44,26 @@ describe("buildDescriptionPrompt", () => {
 		expect(buildDescriptionPrompt("S.", "- a", "", "")).not.toContain("Existing PR title");
 		expect(buildDescriptionPrompt("S.", "- a", "", "   ")).not.toContain("Existing PR title");
 	});
+
+	test("includes routing context section before commits when provided", () => {
+		const result = buildDescriptionPrompt(
+			"System prompt.",
+			"- feat: add a",
+			"",
+			undefined,
+			"band=B; n_sem=3; delta_src=medium; gen_ratio=low; hardness=medium",
+		);
+		const routingIdx = result.indexOf("Routing context:");
+		const commitsIdx = result.indexOf("Commits:\n- feat: add a");
+		expect(routingIdx).not.toBe(-1);
+		expect(commitsIdx).not.toBe(-1);
+		expect(routingIdx).toBeLessThan(commitsIdx);
+	});
+
+	test("omits routing context section when empty or whitespace", () => {
+		expect(buildDescriptionPrompt("S.", "- a", "", undefined, "")).not.toContain("Routing context");
+		expect(buildDescriptionPrompt("S.", "- a", "", undefined, "   ")).not.toContain(
+			"Routing context",
+		);
+	});
 });
