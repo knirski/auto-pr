@@ -75,4 +75,23 @@ describe("model-routing-context-core", () => {
 		expect(summary.lockfileCount).toBe(1);
 		expect(summary.packageManifestCount).toBe(1);
 	});
+
+	test("buildFileSummary parses tab-delimited numstat rename paths as the new path", () => {
+		const summary = buildFileSummary({
+			files: ["src/new-name.ts"],
+			numstat: ["8\t2\tdocs/old-name.md\tsrc/new-name.ts"],
+			nameStatus: ["R100\tdocs/old-name.md\tsrc/new-name.ts"],
+		});
+
+		expect(summary.sourceChurn).toBe(10);
+		expect(summary.docsFileCount).toBe(0);
+		expect(summary.sourceFileCount).toBe(1);
+		expect(summary.topFiles).toContainEqual({
+			path: "src/new-name.ts",
+			churn: 10,
+			insertions: 8,
+			deletions: 2,
+			kind: "source",
+		});
+	});
 });

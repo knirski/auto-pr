@@ -192,6 +192,28 @@ function bumpChurn(summary: MutableFileSummary, kind: FileKind, churn: number): 
 	);
 }
 
+function parseNumstatLine(line: string):
+	| {
+			readonly insertions: number;
+			readonly deletions: number;
+			readonly path: string;
+			readonly binary: boolean;
+	  }
+	| undefined {
+	const [insRaw, delRaw, ...paths] = line.split("\t");
+	const path = paths[paths.length - 1];
+	if (insRaw === undefined || delRaw === undefined || path === undefined || path === "") {
+		return undefined;
+	}
+	const binary = insRaw === "-" || delRaw === "-";
+	return {
+		insertions: binary ? 0 : Number(insRaw),
+		deletions: binary ? 0 : Number(delRaw),
+		path,
+		binary,
+	};
+}
+
 export function buildCommitSummary(
 	commits: readonly CommitSummaryInput[],
 	mergeCommitCount: number,
@@ -229,12 +251,10 @@ export function buildFileSummary(input: BuildFileSummaryInput): RoutingContextFi
 	}
 
 	for (const line of input.numstat) {
-		const [insRaw, delRaw, ...rest] = line.split(/\s+/);
-		const path = rest.join(" ");
-		if (path === "") continue;
-		const insertions = insRaw === "-" ? 0 : Number(insRaw);
-		const deletions = delRaw === "-" ? 0 : Number(delRaw);
-		if (insRaw === "-" || delRaw === "-") {
+		const parsed = parseNumstatLine(line);
+		if (parsed === undefined) continue;
+		const { insertions, deletions, path } = parsed;
+		if (parsed.binary) {
 			summary.hasBinaryFiles = true;
 		}
 		const churn = insertions + deletions;
