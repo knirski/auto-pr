@@ -7,7 +7,8 @@ This design is implemented in the live PR client:
 - [`src/auto-pr/live/pull-request-client.ts`](../../../src/auto-pr/live/pull-request-client.ts) (Octokit-backed `PullRequestClient`)
 - [`test/workflow/create-or-update-pr.test.ts`](../../../test/workflow/create-or-update-pr.test.ts) (lookup/create/update and error mapping tests)
 
-> Note: The sections below preserve the original proposal text for historical context.
+> Note: The sections below preserve the original proposal text for historical context only.
+> They are intentionally archived as-written (including pending/imperative phrasing) and are not current implementation requirements.
 > Current implementation status is defined by ADR 0014 and the code/test links above.
 
 ## Problem
