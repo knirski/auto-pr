@@ -13,7 +13,10 @@ let
       builtins.baseNameOf path != "node_modules"
       && builtins.baseNameOf path != ".git"
       && builtins.baseNameOf path != "result"
-      && builtins.baseNameOf path != "coverage";
+      && builtins.baseNameOf path != "coverage"
+      && builtins.baseNameOf path != ".worktrees"
+      && builtins.baseNameOf path != "test"
+      && builtins.baseNameOf path != "docs";
   };
 in
 pkgs.stdenv.mkDerivation rec {
@@ -30,7 +33,7 @@ pkgs.stdenv.mkDerivation rec {
 
   installPhase = ''
     mkdir -p $out/lib/node_modules/auto-pr
-    cp -r package.json bun.lock node_modules dist .github .nvmrc $out/lib/node_modules/auto-pr/
+    cp -r package.json bun.lock dist .github .nvmrc $out/lib/node_modules/auto-pr/
     mkdir -p $out/bin
     echo '#!${pkgs.runtimeShell}
     cd "$out/lib/node_modules/auto-pr" && exec node dist/workflow/auto-pr-run.js "$@"' > $out/bin/run-auto-pr
