@@ -15,6 +15,24 @@ describe("buildDescriptionPrompt", () => {
 		expect(prompt).toContain("Do not mention model_route, selected model, band");
 	});
 
+	test("prompt template gives concrete tool-call policy for routing guidance", async () => {
+		const prompt = await Bun.file(
+			new URL("../../src/auto-pr/prompts/pr-description.txt", import.meta.url),
+		).text();
+
+		expect(prompt).toContain("Tool interface:");
+		expect(prompt).toContain("Use these tools only as tool calls, not as text references.");
+		expect(prompt).toContain('For one file: {"path": "src/foo.ts"}');
+		expect(prompt).toContain("For all changed files: {}");
+		expect(prompt).toContain('For one commit: {"hash": "<hash-from-commit-list>"}');
+		expect(prompt).toContain("Tool policy:");
+		expect(prompt).toContain("Follow tool_guidance from Routing context");
+		expect(prompt).toContain("usually 1-3 calls");
+		expect(prompt).toContain("When sources disagree");
+		expect(prompt).toContain("If a tool result starts with [TOOL_ERROR]");
+		expect(prompt).toContain("Final output:");
+	});
+
 	test("includes diffstat when provided", () => {
 		const result = buildDescriptionPrompt(
 			"System prompt.",
