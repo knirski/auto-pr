@@ -140,6 +140,45 @@ function logAndValidateTitleDescription(
 
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
+const TOOL_RESULT_FOLLOWUP_MAX_ITEMS = 3;
+const TOOL_RESULT_FOLLOWUP_MAX_CHARS_PER_ITEM = 4_000;
+
+type ToolResultForFollowup = {
+	readonly name: string;
+	readonly isFailure: boolean;
+	readonly result: unknown;
+};
+
+function stringifyToolResultForPrompt(value: unknown): string {
+	if (typeof value === "string") return value;
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
+	}
+}
+
+function buildToolResultFollowupPrompt(
+	basePrompt: string,
+	toolResults: readonly ToolResultForFollowup[],
+): string {
+	const renderedResults = toolResults
+		.slice(0, TOOL_RESULT_FOLLOWUP_MAX_ITEMS)
+		.map((toolResult, index) => {
+			const status = toolResult.isFailure ? "failure" : "success";
+			const raw = stringifyToolResultForPrompt(toolResult.result);
+			const truncated = truncateForLog(raw, TOOL_RESULT_FOLLOWUP_MAX_CHARS_PER_ITEM);
+			return `Tool result ${index + 1} (${toolResult.name}, ${status}):\n${truncated}`;
+		})
+		.join("\n\n");
+
+	return `${basePrompt}
+
+Tool outputs from the previous step:
+${renderedResults}
+
+Return ONLY one JSON object matching the requested schema. Do not call tools.`;
+}
 
 /** Configured title wins; else best-effort PR lookup (failures -> no title). */
 export function resolveExistingPrTitleForPrompt(input: {
@@ -218,20 +257,57 @@ function generateTitleAndDescriptionWithToolkit(
 			model,
 			prompt_chars: prompt.length,
 		});
-		const res = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
+		const firstResponse = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
 		yield* Effect.log({
 			event: "generate_pr_content",
 			step: "token_usage",
 			provider,
 			model,
-			prompt_tokens: res.usage.inputTokens.total ?? null,
-			completion_tokens: res.usage.outputTokens.total ?? null,
+			prompt_tokens: firstResponse.usage.inputTokens.total ?? null,
+			completion_tokens: firstResponse.usage.outputTokens.total ?? null,
 			total_tokens:
-				res.usage.inputTokens.total != null && res.usage.outputTokens.total != null
-					? res.usage.inputTokens.total + res.usage.outputTokens.total
+				firstResponse.usage.inputTokens.total != null &&
+				firstResponse.usage.outputTokens.total != null
+					? firstResponse.usage.inputTokens.total + firstResponse.usage.outputTokens.total
 					: null,
 		});
-		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
+		const toolOnlyResponse =
+			firstResponse.text.trim() === "" &&
+			(firstResponse.toolCalls.length > 0 || firstResponse.toolResults.length > 0);
+		const finalText = yield* toolOnlyResponse
+			? Effect.gen(function* () {
+					yield* Effect.log({
+						event: "generate_pr_content",
+						step: "ai_query",
+						status: "followup_start",
+						provider,
+						model,
+						tool_calls: firstResponse.toolCalls.length,
+						tool_results: firstResponse.toolResults.length,
+					});
+					const followupPrompt = buildToolResultFollowupPrompt(prompt, firstResponse.toolResults);
+					const followupResponse = yield* LanguageModel.generateText({
+						prompt: followupPrompt,
+						toolChoice: "none",
+					});
+					yield* Effect.log({
+						event: "generate_pr_content",
+						step: "token_usage_followup",
+						provider,
+						model,
+						prompt_tokens: followupResponse.usage.inputTokens.total ?? null,
+						completion_tokens: followupResponse.usage.outputTokens.total ?? null,
+						total_tokens:
+							followupResponse.usage.inputTokens.total != null &&
+							followupResponse.usage.outputTokens.total != null
+								? followupResponse.usage.inputTokens.total +
+									followupResponse.usage.outputTokens.total
+								: null,
+					});
+					return followupResponse.text;
+				})
+			: Effect.succeed(firstResponse.text);
+		const raw = yield* decodeTitleDescriptionFromAssistantText(finalText);
 		return yield* logAndValidateTitleDescription(raw, provider, model);
 	}).pipe(
 		Effect.tapError((e) =>
