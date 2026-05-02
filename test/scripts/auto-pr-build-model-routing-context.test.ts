@@ -350,6 +350,121 @@ describe("build-model-routing-context", () => {
 		}
 	});
 
+	test("auto-pr-run-command package mode executes packaged routing binary via runner", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-package-mode-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* mkdir(join(dir, "src"), { recursive: true });
+					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "src", "app.ts"), "export const app = 2;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: update app"]);
+				}),
+			);
+
+			const argsFile = join(dir, "runner_args.txt");
+			const runnerScript = join(dir, "mock-runner.sh");
+			const githubOutput = join(dir, "github_output");
+			await Effect.runPromise(
+				write(
+					runnerScript,
+					[
+						"#!/usr/bin/env bash",
+						"set -euo pipefail",
+						'printf "%s\\n" "$@" > "$RUNNER_ARGS_FILE"',
+						'node "$AUTO_PR_BIN_PATH"',
+					].join("\n"),
+				),
+			);
+			requireCommandSuccess(
+				"chmod",
+				["+x", runnerScript],
+				spawnSync("chmod", ["+x", runnerScript]),
+			);
+
+			const result = spawnSync(
+				"bash",
+				[
+					join(process.cwd(), ".github/actions/auto-pr-run-command/auto-pr-run-command.sh"),
+					"build-model-routing-context",
+				],
+				{
+					cwd: process.cwd(),
+					encoding: "utf8",
+					env: {
+						...process.env,
+						AUTO_PR_AI_PROVIDER: "local",
+						AUTO_PR_AI_OPENAI_COMPAT_MODEL: "",
+						AUTO_PR_AI_OPENAI_COMPAT_URL: "",
+						AUTO_PR_AI_LLAMACPP_MODEL_URL: "",
+						AUTO_PR_BIN_PATH: join(
+							process.cwd(),
+							"dist/workflow/auto-pr-build-model-routing-context.js",
+						),
+						AUTO_PR_PKG: "github:knirski/auto-pr",
+						COMMITS_COUNT: "1",
+						DEFAULT_BRANCH: "main",
+						GITHUB_OUTPUT: githubOutput,
+						GITHUB_WORKSPACE: dir,
+						REPOSITORY_VISIBILITY: "private",
+						RUNNER: runnerScript,
+						RUNNER_ARGS_FILE: argsFile,
+						RUNNER_LABEL: "ubuntu-24.04",
+						USE_WORKSPACE: "false",
+					},
+				},
+			);
+
+			expect(result.status).toBe(0);
+			expect(readFileSync(argsFile, "utf8")).toContain("-p");
+			expect(readFileSync(argsFile, "utf8")).toContain("github:knirski/auto-pr");
+			expect(readFileSync(argsFile, "utf8")).toContain("auto-pr-build-model-routing-context");
+			expect(readFileSync(githubOutput, "utf8")).toContain("selected_model=qwen3-1.7b-q4_k_m");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("reusable generate workflow wires routing outputs into generate-content env", () => {
+		const workflow = readFileSync(
+			join(process.cwd(), ".github/workflows/auto-pr-generate-reusable.yml"),
+			"utf8",
+		);
+		expect(workflow).toContain(
+			"AUTO_PR_AI_OPENAI_COMPAT_MODEL: $" +
+				"{{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}",
+		);
+		expect(workflow).toContain(
+			"AUTO_PR_ROUTING_CONTEXT: $" + "{{ steps.ai_routing.outputs.routing_context }}",
+		);
+	});
+
+	test("reusable generate workflow fetches origin/default before routing and generation", () => {
+		const workflow = readFileSync(
+			join(process.cwd(), ".github/workflows/auto-pr-generate-reusable.yml"),
+			"utf8",
+		);
+		const fetchIndex = workflow.indexOf("name: Fetch base branch");
+		const routingIndex = workflow.indexOf("name: Build model routing context");
+		const generateIndex = workflow.indexOf("name: Generate PR content");
+
+		expect(fetchIndex).toBeGreaterThanOrEqual(0);
+		expect(routingIndex).toBeGreaterThanOrEqual(0);
+		expect(generateIndex).toBeGreaterThanOrEqual(0);
+		expect(fetchIndex).toBeLessThan(routingIndex);
+		expect(fetchIndex).toBeLessThan(generateIndex);
+		expect(workflow).toContain('run: git fetch origin "$DEFAULT_BRANCH"');
+	});
+
 	test("emits a default model and signal summary for single-commit PRs", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-");
 		try {
