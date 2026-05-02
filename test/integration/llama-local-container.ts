@@ -229,6 +229,22 @@ function openAiModelsListUrl(openAiCompatBase: URL): URL {
 	return new URL("models", base);
 }
 
+const failOnNonSuccessStatus = Effect.fn("failOnNonSuccessStatus")(function* (options: {
+	readonly response: { readonly status: number };
+	readonly operation: string;
+	readonly requestUrl: URL;
+}) {
+	const { response, operation, requestUrl } = options;
+	if (response.status < 200 || response.status >= 300) {
+		return yield* Effect.fail(
+			new LlamaIntegrationHttpError({
+				operation: `${operation}: unexpected HTTP status ${response.status} from ${requestUrl.href}`,
+				cause: response,
+			}),
+		);
+	}
+});
+
 const readPinnedImageFromDockerfile = Effect.fn("readPinnedImageFromDockerfile")(function* () {
 	const integrationTestDir = yield* integrationTestDirectory();
 	const p = yield* Path.Path;
@@ -312,12 +328,23 @@ const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options:
 			),
 		);
 	const http = yield* HttpClient.HttpClient;
-	const okClient = pipe(http, HttpClient.filterStatusOk);
-	const buf = yield* okClient.get(modelUrlParsed).pipe(
-		Effect.flatMap((response) => response.arrayBuffer),
+	const response = yield* http
+		.get(modelUrlParsed)
+		.pipe(
+			Effect.mapError(
+				(cause) =>
+					new LlamaIntegrationHttpError({ operation: "download GGUF model (HTTPS)", cause }),
+			),
+		);
+	yield* failOnNonSuccessStatus({
+		response,
+		operation: "download GGUF model (HTTPS)",
+		requestUrl: modelUrlParsed,
+	});
+	const buf = yield* response.arrayBuffer.pipe(
 		Effect.map((ab) => new Uint8Array(ab)),
 		Effect.mapError(
-			(cause) => new LlamaIntegrationHttpError({ operation: "download GGUF model (HTTPS)", cause }),
+			(cause) => new LlamaIntegrationHttpError({ operation: "read GGUF response bytes", cause }),
 		),
 	);
 	yield* fs
@@ -333,9 +360,19 @@ const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options:
 const fetchFirstModelId = Effect.fn("fetchFirstModelId")(function* (openAiCompatBaseUrl: URL) {
 	const modelsUrl = openAiModelsListUrl(openAiCompatBaseUrl);
 	const http = yield* HttpClient.HttpClient;
-	const okClient = pipe(http, HttpClient.filterStatusOk);
-	const json: unknown = yield* okClient.get(modelsUrl).pipe(
-		Effect.flatMap((response) => response.json),
+	const response = yield* http
+		.get(modelsUrl)
+		.pipe(
+			Effect.mapError(
+				(cause) => new LlamaIntegrationHttpError({ operation: "request GET /v1/models", cause }),
+			),
+		);
+	yield* failOnNonSuccessStatus({
+		response,
+		operation: "request GET /v1/models",
+		requestUrl: modelsUrl,
+	});
+	const json: unknown = yield* response.json.pipe(
 		Effect.mapError(
 			(cause) =>
 				new LlamaIntegrationHttpError({ operation: "read JSON from GET /v1/models", cause }),
