@@ -15,7 +15,7 @@
       "aarch64-darwin"
     ] (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = nixpkgs.legacyPackages.${system};
       in
       {
         checks = {
@@ -45,7 +45,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
+          packages = with pkgs; [
             act
             bun
             statix
