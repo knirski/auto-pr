@@ -6,23 +6,29 @@
 
 let
   packageJson = builtins.fromJSON (builtins.readFile ./package.json);
-  src = builtins.path {
-    path = ./.;
+  src = pkgs.lib.cleanSourceWith {
+    src = ./.;
     name = "auto-pr-src";
     filter = path: _:
-      builtins.baseNameOf path != "node_modules"
-      && builtins.baseNameOf path != ".git"
-      && builtins.baseNameOf path != "result"
-      && builtins.baseNameOf path != "coverage"
-      && builtins.baseNameOf path != ".worktrees"
-      && builtins.baseNameOf path != "test"
-      && builtins.baseNameOf path != "docs";
+      let
+        baseName = builtins.baseNameOf path;
+      in
+      !builtins.elem baseName [
+        "node_modules"
+        ".git"
+        "result"
+        "coverage"
+        ".worktrees"
+        "test"
+        "docs"
+      ];
   };
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "auto-pr";
   inherit (packageJson) version;
   inherit src;
+  strictDeps = true;
 
   nativeBuildInputs = [ bun2nix.hook pkgs.bun ];
   bunDeps = bun2nix.fetchBunDeps { bunNix = ./bun.nix; };
