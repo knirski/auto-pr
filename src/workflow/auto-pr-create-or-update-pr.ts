@@ -9,7 +9,7 @@
  * This repo: bun run create-or-update-pr · installed: npx auto-pr-create-or-update-pr
  */
 
-import { Duration, Effect, FileSystem, Option, Schedule } from "effect";
+import { Duration, Effect, FileSystem, Option, Redacted, Schedule } from "effect";
 import {
 	AutoPrPlatformLayer,
 	BodyFileNotFoundError,
@@ -82,6 +82,24 @@ type CreateOrUpdatePrError =
 	| PullRequestLookupError
 	| PullRequestUrlParseError;
 
+type PullRequestClientLiveConfig = {
+	ghToken: string;
+	githubApiUrl?: string;
+	ghHost?: string;
+};
+
+export function pullRequestClientLiveConfigFromParams(params: {
+	ghToken: Redacted.Redacted<string>;
+	githubApiUrl?: string;
+	ghHost?: string;
+}): PullRequestClientLiveConfig {
+	return {
+		ghToken: Redacted.value(params.ghToken),
+		...(params.githubApiUrl !== undefined ? { githubApiUrl: params.githubApiUrl } : {}),
+		...(params.ghHost !== undefined ? { ghHost: params.ghHost } : {}),
+	};
+}
+
 /** Main pipeline. Exported for tests. */
 export function runCreateOrUpdatePr(params: {
 	branch: string;
@@ -152,9 +170,13 @@ export function runCreateOrUpdatePr(params: {
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const program = Effect.gen(function* () {
+export const program = Effect.gen(function* () {
 	const params = yield* CreateOrUpdatePrConfig;
-	yield* runCreateOrUpdatePr(params).pipe(Effect.provide(PullRequestClient.Live(params.workspace)));
+	yield* runCreateOrUpdatePr(params).pipe(
+		Effect.provide(
+			PullRequestClient.Live(params.workspace, pullRequestClientLiveConfigFromParams(params)),
+		),
+	);
 }).pipe(
 	Effect.provide(CreateOrUpdatePrConfigLayer),
 	Effect.provide(AutoPrPlatformLayer),

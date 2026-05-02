@@ -20,6 +20,8 @@
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
  * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to microsoft/phi-4-mini-instruct when unset (lowest GitHub Models billing multipliers; see docs) |
  * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
+ * | GITHUB_API_URL | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional Octokit REST base URL (advanced; overrides GH_HOST mapping). |
+ * | GH_HOST | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional GitHub host. `github.com` maps to api.github.com; other hosts map to `https://<host>/api/v3`. |
  * | NO_COLOR | | — | Disable ANSI colors (read in shell.ts) |
  * | AUTO_PR_DEBUG | | — | 1 or true for verbose errors (read in shell.ts) |
  *
@@ -138,6 +140,8 @@ export type GeneratePrContentConfigCommon = {
 	readonly defaultBranch: string;
 	readonly branch: string;
 	readonly model: string;
+	readonly githubApiUrl?: string;
+	readonly ghHost?: string;
 	readonly existingPrTitle?: string;
 };
 
@@ -171,6 +175,8 @@ const GeneratePrContentConfigDef = Config.all({
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
+	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
+	ghHost: Config.option(Config.string("GH_HOST")),
 	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
 });
 
@@ -232,12 +238,16 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
+			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
+			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
 
 			const shared = {
 				workspace,
 				templatePath,
 				defaultBranch,
 				branch,
+				...(githubApiUrl !== undefined ? { githubApiUrl } : {}),
+				...(ghHost !== undefined ? { ghHost } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 			};
 
@@ -309,6 +319,8 @@ export interface CreateOrUpdatePrConfig {
 	readonly bodyFile: string;
 	readonly workspace: string;
 	readonly ghToken: Redacted.Redacted<string>;
+	readonly githubApiUrl?: string;
+	readonly ghHost?: string;
 }
 
 export const CreateOrUpdatePrConfig =
@@ -319,6 +331,8 @@ const CreateOrUpdatePrConfigDef = Config.all({
 	defaultBranch: Config.string("DEFAULT_BRANCH"),
 	workspace: Config.string("GITHUB_WORKSPACE"),
 	ghToken: Config.redacted("GH_TOKEN"),
+	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
+	ghHost: Config.option(Config.string("GH_HOST")),
 });
 
 export const CreateOrUpdatePrConfigLayer = Layer.effect(
@@ -329,6 +343,8 @@ export const CreateOrUpdatePrConfigLayer = Layer.effect(
 			const branch = yield* requireNonEmpty("BRANCH", base.branch);
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
+			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
+			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
 			const fs = yield* FileSystem.FileSystem;
 			const titlePath = join(workspace, PR_TITLE_FILE_NAME);
 			const bodyFile = join(workspace, PR_BODY_FILE_NAME);
@@ -350,6 +366,8 @@ export const CreateOrUpdatePrConfigLayer = Layer.effect(
 				bodyFile,
 				workspace,
 				ghToken: base.ghToken,
+				...(githubApiUrl !== undefined ? { githubApiUrl } : {}),
+				...(ghHost !== undefined ? { ghHost } : {}),
 			};
 		}),
 	),
@@ -369,6 +387,8 @@ export type RunAutoPrConfigCommon = {
 	readonly templatePath: string;
 	readonly ghToken: Redacted.Redacted<string>;
 	readonly model: string;
+	readonly githubApiUrl?: string;
+	readonly ghHost?: string;
 	/** When set from `BRANCH`; omit to resolve the head branch via `git branch --show-current` at run time. */
 	readonly branch?: string;
 	readonly existingPrTitle?: string;
@@ -398,6 +418,8 @@ const RunAutoPrConfigDef = Config.all({
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
+	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
+	ghHost: Config.option(Config.string("GH_HOST")),
 	branch: Config.option(Config.string("BRANCH")),
 	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
 });
@@ -412,6 +434,8 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const branch = optionalTrimmedNonEmpty(base.branch);
+			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
+			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
 
 			if (branch === defaultBranch) {
 				return yield* Effect.fail(
@@ -434,6 +458,8 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				workspace,
 				templatePath,
 				ghToken: base.ghToken,
+				...(githubApiUrl !== undefined ? { githubApiUrl } : {}),
+				...(ghHost !== undefined ? { ghHost } : {}),
 				...(branch !== undefined ? { branch } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 			};

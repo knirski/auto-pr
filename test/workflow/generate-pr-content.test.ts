@@ -272,6 +272,8 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
 			ghToken,
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
 		});
 
 		expect(config).toEqual({
@@ -282,6 +284,8 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
 			ghToken,
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
 		});
 	});
 });

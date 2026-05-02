@@ -14,7 +14,6 @@
  * This repo: bun run generate-content · installed: npx auto-pr-generate-content
  */
 
-import type { Redacted } from "effect";
 import {
 	Duration,
 	Effect,
@@ -23,6 +22,7 @@ import {
 	Match,
 	Option,
 	Path,
+	Redacted,
 	Result,
 	Schedule,
 	Schema,
@@ -420,6 +420,8 @@ type RunGeneratePrContentConfigCommon = {
 	workspace: string;
 	templatePath: string;
 	model: string;
+	githubApiUrl?: string;
+	ghHost?: string;
 	/** Current PR title override for prompt continuity. */
 	existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
@@ -448,6 +450,8 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
+		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
+		...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
 	return Match.value(config).pipe(
@@ -510,9 +514,11 @@ export function runGeneratePrContent(
 
 	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
 	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch).pipe(Layer.provide(gitLayer));
-	const prClientLayer = PullRequestClient.Live(config.workspace).pipe(
-		Layer.provide(ChildProcessSpawnerLayer),
-	);
+	const prClientLayer = PullRequestClient.Live(config.workspace, {
+		...(config.provider === "github-models" ? { ghToken: Redacted.value(config.ghToken) } : {}),
+		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
+		...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
+	}).pipe(Layer.provide(ChildProcessSpawnerLayer));
 	const liveLayer = Layer.mergeAll(
 		AutoPrPlatformLayer,
 		aiLayer,

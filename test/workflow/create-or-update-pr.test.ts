@@ -1,10 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { Duration, Effect, Exit, type FileSystem, Layer, Option, type Path } from "effect";
+import {
+	ConfigProvider,
+	Duration,
+	Effect,
+	Exit,
+	type FileSystem,
+	Layer,
+	Option,
+	type Path,
+	Redacted,
+} from "effect";
 import { PullRequestClient, PullRequestFailedError } from "#auto-pr";
 import { PullRequestLookupError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
-import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
+import {
+	program,
+	pullRequestClientLiveConfigFromParams,
+	runCreateOrUpdatePr,
+} from "#workflow/auto-pr-create-or-update-pr.js";
 
 type Pull = { number: number; html_url: string; title?: string };
 
@@ -368,6 +382,126 @@ describe("PullRequestClient create/update", () => {
 	});
 });
 
+describe("PullRequestClient Octokit host injection", () => {
+	test("uses default Octokit config when neither GITHUB_API_URL nor GH_HOST is set", async () => {
+		const layer = PullRequestClient.Live("/tmp", {
+			githubRepository: "owner/repo",
+			ghToken: "token",
+			apiTimeout: Duration.millis(1),
+		});
+		const exit = await runExit(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/default-octokit-no-host");
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
+		}
+	});
+
+	test("uses default Octokit config when GITHUB_API_URL is invalid", async () => {
+		const layer = PullRequestClient.Live("/tmp", {
+			githubRepository: "owner/repo",
+			ghToken: "token",
+			githubApiUrl: "not-a-url",
+			apiTimeout: Duration.millis(1),
+		});
+		const exit = await runExit(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/fallback-default-octokit");
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
+		}
+	});
+
+	test("accepts GITHUB_API_URL with trailing slash", async () => {
+		const layer = PullRequestClient.Live("/tmp", {
+			githubRepository: "owner/repo",
+			ghToken: "token",
+			githubApiUrl: "https://api.github.com/",
+			apiTimeout: Duration.millis(1),
+		});
+		const exit = await runExit(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/github-api-url");
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
+		}
+	});
+
+	test("maps GH_HOST=github.com to GitHub API host", async () => {
+		const layer = PullRequestClient.Live("/tmp", {
+			githubRepository: "owner/repo",
+			ghToken: "token",
+			ghHost: "github.com",
+			apiTimeout: Duration.millis(1),
+		});
+		const exit = await runExit(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/gh-host-dotcom");
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
+		}
+	});
+
+	test("maps GH_HOST to GHES v3 API path", async () => {
+		const layer = PullRequestClient.Live("/tmp", {
+			githubRepository: "owner/repo",
+			ghToken: "token",
+			ghHost: "ghe.example.com",
+			apiTimeout: Duration.millis(1),
+		});
+		const exit = await runExit(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/ghes-host");
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
+		}
+	});
+});
+
+describe("pullRequestClientLiveConfigFromParams", () => {
+	test("maps ghToken and optional host fields", () => {
+		const config = pullRequestClientLiveConfigFromParams({
+			ghToken: Redacted.make("ghp_test"),
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
+		});
+		expect(config).toEqual({
+			ghToken: "ghp_test",
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
+		});
+	});
+
+	test("omits optional host fields when unset", () => {
+		const config = pullRequestClientLiveConfigFromParams({
+			ghToken: Redacted.make("ghp_test"),
+		});
+		expect(config).toEqual({
+			ghToken: "ghp_test",
+		});
+	});
+});
+
 describe("runCreateOrUpdatePr", () => {
 	test("fails when body file missing", async () => {
 		const { layer } = makeClient({ githubRepository: "owner/repo" });
@@ -508,5 +642,31 @@ describe("runCreateOrUpdatePr", () => {
 			}).pipe(Effect.scoped),
 		);
 		expect(Exit.isFailure(exit)).toBe(true);
+	});
+
+	test("program wires PullRequestClient layer and fails fast when body file is missing", async () => {
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("program-missing-body-");
+				yield* tmp.writeFile(tmp.join("pr-title.txt"), "feat: missing body\n");
+
+				const providerLayer = ConfigProvider.layer(
+					ConfigProvider.fromUnknown({
+						BRANCH: "ai/test",
+						DEFAULT_BRANCH: "main",
+						GITHUB_WORKSPACE: tmp.path,
+						GH_TOKEN: "ghp_test_token",
+						GITHUB_API_URL: "https://api.github.com",
+						GH_HOST: "github.com",
+					}),
+				);
+
+				const exit = yield* program.pipe(Effect.provide(providerLayer), Effect.exit);
+				expect(Exit.isFailure(exit)).toBe(true);
+				if (Exit.isFailure(exit)) {
+					expect(String(exit.cause).includes("BodyFileNotFoundError")).toBe(true);
+				}
+			}).pipe(Effect.scoped),
+		);
 	});
 });

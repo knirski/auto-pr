@@ -123,6 +123,30 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 			}),
 		);
 	});
+
+	test("trims optional GITHUB_API_URL and GH_HOST", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				GITHUB_WORKSPACE: "/workspace",
+				DEFAULT_BRANCH: "main",
+				BRANCH: "ai/feature",
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+				GITHUB_API_URL: " https://api.github.com/ ",
+				GH_HOST: " github.com ",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* GeneratePrContentConfig;
+				expect(config.githubApiUrl).toBe("https://api.github.com/");
+				expect(config.ghHost).toBe("github.com");
+			}),
+		);
+	});
 });
 
 const generatePrContentBaseEnv = {
@@ -289,6 +313,34 @@ describe("CreateOrUpdatePrConfigLayer succeeds when all vars present", () => {
 			}).pipe(Effect.scoped),
 		);
 	});
+
+	test("includes trimmed optional GitHub API host settings", async () => {
+		await runEffect(TestBaseLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("cou-pr-api-host-");
+				yield* tmp.writeFile(join(tmp.path, "pr-title.txt"), "feat: add x\n");
+				const providerLayer = ConfigProvider.layer(
+					ConfigProvider.fromUnknown({
+						BRANCH: "ai/feature",
+						DEFAULT_BRANCH: "main",
+						GITHUB_WORKSPACE: tmp.path,
+						GH_TOKEN: "ghp_test_token",
+						GITHUB_API_URL: " https://api.github.com/ ",
+						GH_HOST: " ghe.example.com ",
+					}),
+				);
+				const fullLayer = Layer.mergeAll(
+					TestBaseLayer,
+					CreateOrUpdatePrConfigLayer.pipe(Layer.provide(providerLayer)),
+				);
+				return yield* Effect.gen(function* () {
+					const config = yield* CreateOrUpdatePrConfig;
+					expect(config.githubApiUrl).toBe("https://api.github.com/");
+					expect(config.ghHost).toBe("ghe.example.com");
+				}).pipe(Effect.provide(fullLayer));
+			}).pipe(Effect.scoped),
+		);
+	});
 });
 
 describe("config layers fail when required env vars missing", () => {
@@ -409,6 +461,28 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 			Effect.gen(function* () {
 				const config = yield* RunAutoPrConfig;
 				expect(config.existingPrTitle).toBe("feat: run existing");
+			}),
+		);
+	});
+
+	test("trims optional GITHUB_API_URL and GH_HOST", async () => {
+		const providerLayer = ConfigProvider.layer(
+			ConfigProvider.fromUnknown({
+				...runAutoPrBaseEnv,
+				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				GITHUB_API_URL: " https://api.github.com/ ",
+				GH_HOST: " ghe.example.com ",
+			}),
+		);
+		const layer = Layer.mergeAll(
+			TestBaseLayer,
+			RunAutoPrConfigLayer.pipe(Layer.provide(providerLayer)),
+		);
+		await runEffect(layer)(
+			Effect.gen(function* () {
+				const config = yield* RunAutoPrConfig;
+				expect(config.githubApiUrl).toBe("https://api.github.com/");
+				expect(config.ghHost).toBe("ghe.example.com");
 			}),
 		);
 	});
