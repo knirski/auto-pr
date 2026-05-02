@@ -14,7 +14,9 @@ const GetDiff = Tool.make("get_diff", {
 	description: "Get the git diff for changed files. Provide path for one file, omit for all.",
 	parameters: Schema.Struct({
 		path: Schema.optionalKey(
-			Schema.String.annotate({ description: "File path to diff. Omit for all changed files." }),
+			Schema.Union([Schema.String, Schema.Null]).annotate({
+				description: "File path to diff. Omit or pass null for all changed files.",
+			}),
 		),
 	}),
 	success: Schema.String,
@@ -44,13 +46,14 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 			const git = yield* GitContext;
 			return DiffToolkit.of({
 				get_diff: Effect.fn("DiffToolkit.get_diff")(function* ({ path }) {
+					const normalizedPath = path ?? undefined;
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_diff",
 						status: "request",
-						path: path ?? "(all)",
+						path: normalizedPath ?? "(all)",
 					});
-					const result = yield* git.getDiff(baseRef, headRef, path).pipe(
+					const result = yield* git.getDiff(baseRef, headRef, normalizedPath).pipe(
 						Effect.tapError((e) =>
 							Effect.log({
 								event: "diff_toolkit",
