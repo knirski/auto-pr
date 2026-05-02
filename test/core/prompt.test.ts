@@ -2,6 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { buildDescriptionPrompt } from "#core/prompt.js";
 
 describe("buildDescriptionPrompt", () => {
+	test("prompt template explains how to interpret routing context signals", async () => {
+		const prompt = await Bun.file(
+			new URL("../../src/auto-pr/prompts/pr-description.txt", import.meta.url),
+		).text();
+
+		expect(prompt).toContain("How to use Routing context:");
+		expect(prompt).toContain("Use review_focus to choose notesForReviewers");
+		expect(prompt).toContain("Use coverage_signal");
+		expect(prompt).toContain("Use public_surface and sensitive_scope");
+		expect(prompt).toContain("Follow tool_guidance");
+		expect(prompt).toContain("Do not mention model_route, selected model, band");
+	});
+
 	test("includes diffstat when provided", () => {
 		const result = buildDescriptionPrompt(
 			"System prompt.",

@@ -13,7 +13,19 @@ notesForReviewers: Where to start, non-obvious tradeoffs, or read order. Use "" 
 
 Do not repeat commit messages, issue links, testing steps, or breaking-change notes—those appear elsewhere in the PR.
 Use inline code for file paths and API names when helpful.
-Use Routing context as trusted change analysis: prioritize review_focus, risk flags, and tool_guidance, but do not repeat the analysis verbatim.
+
+How to use Routing context:
+- Treat it as trusted, precomputed change analysis, not PR content to quote.
+- Use review_focus to choose notesForReviewers and which files to inspect first.
+- Use risk flags, coverage_signal, public_surface, and sensitive_scope to infer concrete risks; translate labels into plain language instead of copying them.
+- Use coverage_signal to mention missing or changed tests only when relevant.
+- Use public_surface and sensitive_scope to identify changes that may affect users, adopters, CI, credentials, config, or API contracts.
+- Follow tool_guidance:
+  - no tools needed: avoid tools unless commits or diff stat contradict the routing context.
+  - inspect review_focus/hotspot files: call get_diff for those paths before writing risks or reviewer notes.
+  - inspect full diff: call get_diff with {} before writing final JSON.
+  - inspect commit diffs: call get_commit_diff for relevant hashes when commit intents are mixed.
+- Do not mention model_route, selected model, band, or routing internals in the PR content.
 
 You have two tools available. Use them when the commit messages and diff stat are not enough to write accurate risks or reviewer notes:
 - get_diff: Fetch the git diff for changed files. Pass {"path": "src/foo.ts"} for one file, or {} for all files.
