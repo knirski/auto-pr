@@ -93,6 +93,7 @@ function makeParams(
 			provider: "local" as const,
 			model: "gpt-oss",
 			retryDelay: Duration.zero,
+			...(overrides?.fetch !== undefined ? { fetch: overrides.fetch } : {}),
 			...overrides,
 		},
 		gitCtx: mockGitContext(commits, overrides?.files, overrides?.diffStat),
@@ -682,6 +683,67 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					expect(result.body).toContain("### Motivation");
 				}).pipe(Effect.scoped),
 			);
+		});
+
+		test("falls back to strongest local model when github-models is rate-limited with retry-after", async () => {
+			const originalEnv = {
+				AUTO_PR_AI_OPENAI_COMPAT_URL: process.env.AUTO_PR_AI_OPENAI_COMPAT_URL,
+				REPOSITORY_VISIBILITY: process.env.REPOSITORY_VISIBILITY,
+				RUNNER_LABEL: process.env.RUNNER_LABEL,
+			};
+			const localFetch = createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE);
+			let sawGithubRequest = false;
+			let sawLocalFallbackRequest = false;
+			try {
+				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
+				process.env.REPOSITORY_VISIBILITY = "private";
+				process.env.RUNNER_LABEL = "ubuntu-24.04";
+				const fallbackFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+					const url = String(
+						input instanceof URL ? input : input instanceof Request ? input.url : input,
+					);
+					if (url.includes("models.github.ai/inference")) {
+						sawGithubRequest = true;
+						return new Response(
+							JSON.stringify({
+								error: { message: "Rate limit exceeded. Retry after 16h 54m 38s" },
+							}),
+							{
+								status: 429,
+								headers: { "Content-Type": "application/json" },
+							},
+						);
+					}
+					if (url.includes("127.0.0.1:8080/v1")) {
+						sawLocalFallbackRequest = true;
+						if (typeof init?.body === "string") {
+							expect(init.body).toContain('"model":"qwen3-1.7b-q4_k_m"');
+						}
+						return localFetch(input, init);
+					}
+					throw new Error(`Unexpected URL in fallback fetch: ${url}`);
+				}) as typeof fetch;
+				const p = makeParams(twoCommits, {
+					provider: "github-models",
+					model: "openai/gpt-4.1",
+					files: "src/a.ts\nsrc/b.ts\n",
+					templateContent: TEMPLATE_WITH_CHANGES,
+					fetch: fallbackFetch,
+				});
+				await runEffect(layerForTest(p))(
+					Effect.gen(function* () {
+						const result = yield* generatePrContent(p.params);
+						expect(result.title).toBe("feat: add X and fix B");
+						expect(result.body).toContain("### Motivation");
+					}).pipe(Effect.scoped),
+				);
+				expect(sawGithubRequest).toBe(true);
+				expect(sawLocalFallbackRequest).toBe(true);
+			} finally {
+				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_URL;
+				process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
+				process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
+			}
 		});
 
 		test("runs no-tool follow-up when first response has only tool calls and empty text", async () => {

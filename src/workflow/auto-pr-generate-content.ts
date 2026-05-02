@@ -27,16 +27,17 @@ import {
 	Schedule,
 	Schema,
 } from "effect";
-import type { AiError } from "effect/unstable/ai";
-import { LanguageModel } from "effect/unstable/ai";
+import { type AiError, AiError as EffectAiError, LanguageModel } from "effect/unstable/ai";
 import {
 	type AiProvider,
 	type AiProviderConfig,
+	AiProviderError,
 	AutoPrConfigError,
 	AutoPrPlatformLayer,
 	aiProviderLayerFromConfig,
 	buildDescriptionPrompt,
 	ChildProcessSpawnerLayer,
+	DEFAULT_OPENAI_COMPAT_URL,
 	DescriptionParseError,
 	DiffToolkit,
 	formatError,
@@ -77,6 +78,7 @@ import {
 	parseTitleDescriptionFromAssistantText,
 	type TitleDescription,
 } from "#core/title-description.js";
+import { resolveLocalRunnerResources, selectModel } from "#workflow/model-routing.js";
 
 /** Parse assistant reply text through the pure core parser. */
 function decodeTitleDescriptionFromAssistantText(
@@ -142,6 +144,58 @@ const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 const TOOL_RESULT_FOLLOWUP_MAX_ITEMS = 3;
 const TOOL_RESULT_FOLLOWUP_MAX_CHARS_PER_ITEM = 4_000;
+
+function parseOptionalPositiveNumber(raw: string | undefined): number | undefined {
+	if (raw === undefined) return undefined;
+	const trimmed = raw.trim();
+	if (trimmed.length === 0) return undefined;
+	const parsed = Number(trimmed);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function isRateLimitWithRetryAfterError(error: unknown): boolean {
+	const message = formatError(error).toLowerCase();
+	const hasRetryAfter = message.includes("retry after");
+	const isStatus429 = error instanceof AiProviderError && error.status === 429;
+	const isEffectRateLimitError =
+		EffectAiError.isAiError(error) && error.reason._tag === "RateLimitError";
+	const hasRateLimitSignal =
+		isStatus429 ||
+		isEffectRateLimitError ||
+		message.includes("rate limit") ||
+		message.includes("ratelimit");
+	return hasRateLimitSignal && (hasRetryAfter || isStatus429 || isEffectRateLimitError);
+}
+
+function resolveStrongestLocalFallbackModel(): string {
+	const runnerLabel = process.env.RUNNER_LABEL;
+	const repositoryVisibility = process.env.REPOSITORY_VISIBILITY;
+	const cpuCount = parseOptionalPositiveNumber(process.env.LOCAL_RUNNER_CPUS);
+	const memoryGb = parseOptionalPositiveNumber(process.env.LOCAL_RUNNER_MEMORY_GB);
+	const runner = resolveLocalRunnerResources({
+		...(runnerLabel !== undefined ? { runnerLabel } : {}),
+		...(repositoryVisibility !== undefined ? { repositoryVisibility } : {}),
+		...(cpuCount !== undefined ? { cpuCount } : {}),
+		...(memoryGb !== undefined ? { memoryGb } : {}),
+	});
+	return selectModel("local", "C", undefined, {
+		reasoningNeed: "high",
+		requiresToolCalls: true,
+		localModel: { runner },
+	});
+}
+
+function buildCommitFallbackEffect(filtered: readonly CommitInfo[]) {
+	return Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
+		Effect.tap(() =>
+			Effect.logWarning({
+				event: "generate_pr_content",
+				status: "fallback",
+				message: "Using fallback title after 5 invalid attempts",
+			}),
+		),
+	);
+}
 
 type ToolResultForFollowup = {
 	readonly name: string;
@@ -247,91 +301,123 @@ function generateTitleAndDescriptionWithToolkit(
 	retryDelay: Duration.Duration,
 	provider: AiProvider,
 	model: string,
+	options?: {
+		readonly fetch?: typeof fetch;
+	},
 ) {
-	return Effect.gen(function* () {
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "ai_query",
-			status: "start",
-			provider,
-			model,
-			prompt_chars: prompt.length,
-		});
-		const firstResponse = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "token_usage",
-			provider,
-			model,
-			prompt_tokens: firstResponse.usage.inputTokens.total ?? null,
-			completion_tokens: firstResponse.usage.outputTokens.total ?? null,
-			total_tokens:
-				firstResponse.usage.inputTokens.total != null &&
-				firstResponse.usage.outputTokens.total != null
-					? firstResponse.usage.inputTokens.total + firstResponse.usage.outputTokens.total
-					: null,
-		});
-		const toolOnlyResponse =
-			firstResponse.text.trim() === "" &&
-			(firstResponse.toolCalls.length > 0 || firstResponse.toolResults.length > 0);
-		const finalText = yield* toolOnlyResponse
-			? Effect.gen(function* () {
-					yield* Effect.log({
-						event: "generate_pr_content",
-						step: "ai_query",
-						status: "followup_start",
-						provider,
-						model,
-						tool_calls: firstResponse.toolCalls.length,
-						tool_results: firstResponse.toolResults.length,
-					});
-					const followupPrompt = buildToolResultFollowupPrompt(prompt, firstResponse.toolResults);
-					const followupResponse = yield* LanguageModel.generateText({
-						prompt: followupPrompt,
-						toolChoice: "none",
-					});
-					yield* Effect.log({
-						event: "generate_pr_content",
-						step: "token_usage_followup",
-						provider,
-						model,
-						prompt_tokens: followupResponse.usage.inputTokens.total ?? null,
-						completion_tokens: followupResponse.usage.outputTokens.total ?? null,
-						total_tokens:
-							followupResponse.usage.inputTokens.total != null &&
-							followupResponse.usage.outputTokens.total != null
-								? followupResponse.usage.inputTokens.total +
-									followupResponse.usage.outputTokens.total
-								: null,
-					});
-					return followupResponse.text;
-				})
-			: Effect.succeed(firstResponse.text);
-		const raw = yield* decodeTitleDescriptionFromAssistantText(finalText);
-		return yield* logAndValidateTitleDescription(raw, provider, model);
-	}).pipe(
-		Effect.tapError((e) =>
-			Effect.logWarning({
+	const runAttempt = (attemptProvider: AiProvider, attemptModel: string) =>
+		Effect.gen(function* () {
+			yield* Effect.log({
 				event: "generate_pr_content",
-				step: e instanceof DescriptionParseError ? "validation" : "ai_query",
-				status: "failed",
+				step: "ai_query",
+				status: "start",
+				provider: attemptProvider,
+				model: attemptModel,
+				prompt_chars: prompt.length,
+			});
+			const firstResponse = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
+			yield* Effect.log({
+				event: "generate_pr_content",
+				step: "token_usage",
+				provider: attemptProvider,
+				model: attemptModel,
+				prompt_tokens: firstResponse.usage.inputTokens.total ?? null,
+				completion_tokens: firstResponse.usage.outputTokens.total ?? null,
+				total_tokens:
+					firstResponse.usage.inputTokens.total != null &&
+					firstResponse.usage.outputTokens.total != null
+						? firstResponse.usage.inputTokens.total + firstResponse.usage.outputTokens.total
+						: null,
+			});
+			const toolOnlyResponse =
+				firstResponse.text.trim() === "" &&
+				(firstResponse.toolCalls.length > 0 || firstResponse.toolResults.length > 0);
+			const finalText = yield* toolOnlyResponse
+				? Effect.gen(function* () {
+						yield* Effect.log({
+							event: "generate_pr_content",
+							step: "ai_query",
+							status: "followup_start",
+							provider: attemptProvider,
+							model: attemptModel,
+							tool_calls: firstResponse.toolCalls.length,
+							tool_results: firstResponse.toolResults.length,
+						});
+						const followupPrompt = buildToolResultFollowupPrompt(prompt, firstResponse.toolResults);
+						const followupResponse = yield* LanguageModel.generateText({
+							prompt: followupPrompt,
+							toolChoice: "none",
+						});
+						yield* Effect.log({
+							event: "generate_pr_content",
+							step: "token_usage_followup",
+							provider: attemptProvider,
+							model: attemptModel,
+							prompt_tokens: followupResponse.usage.inputTokens.total ?? null,
+							completion_tokens: followupResponse.usage.outputTokens.total ?? null,
+							total_tokens:
+								followupResponse.usage.inputTokens.total != null &&
+								followupResponse.usage.outputTokens.total != null
+									? followupResponse.usage.inputTokens.total +
+										followupResponse.usage.outputTokens.total
+									: null,
+						});
+						return followupResponse.text;
+					})
+				: Effect.succeed(firstResponse.text);
+			const raw = yield* decodeTitleDescriptionFromAssistantText(finalText);
+			return yield* logAndValidateTitleDescription(raw, attemptProvider, attemptModel);
+		}).pipe(
+			Effect.tapError((e) =>
+				Effect.logWarning({
+					event: "generate_pr_content",
+					step: e instanceof DescriptionParseError ? "validation" : "ai_query",
+					status: "failed",
+					provider: attemptProvider,
+					model: attemptModel,
+					reason: formatError(e),
+				}),
+			),
+			Effect.retry(makeRetrySchedule(retryDelay)),
+		);
+
+	return runAttempt(provider, model).pipe(
+		Effect.catchIf(isTransientAiError, (error) => {
+			const shouldAttemptLocalFallback =
+				provider !== "local" && isRateLimitWithRetryAfterError(error);
+			if (!shouldAttemptLocalFallback) {
+				return buildCommitFallbackEffect(filtered);
+			}
+			const fallbackModel = resolveStrongestLocalFallbackModel();
+			const fallbackUrl =
+				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim() || DEFAULT_OPENAI_COMPAT_URL;
+			const fallbackApiKey = process.env.AUTO_PR_AI_OPENAI_COMPAT_API_KEY?.trim();
+			const localFallbackLayer = aiProviderLayerFromConfig(
+				{
+					provider: "local",
+					model: fallbackModel,
+					openaiCompatUrl: fallbackUrl,
+					...(fallbackApiKey === undefined || fallbackApiKey === ""
+						? {}
+						: { openaiCompatApiKey: Redacted.make(fallbackApiKey) }),
+				},
+				options?.fetch !== undefined ? { fetch: options.fetch } : undefined,
+			);
+			return Effect.logWarning({
+				event: "generate_pr_content",
+				status: "rate_limit_local_fallback",
 				provider,
 				model,
-				reason: formatError(e),
-			}),
-		),
-		Effect.retry(makeRetrySchedule(retryDelay)),
-		Effect.catchIf(isTransientAiError, () =>
-			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
-				Effect.tap(() =>
-					Effect.logWarning({
-						event: "generate_pr_content",
-						status: "fallback",
-						message: "Using fallback title after 5 invalid attempts",
-					}),
+				fallback_provider: "local",
+				fallback_model: fallbackModel,
+				fallback_url: fallbackUrl,
+			}).pipe(
+				Effect.flatMap(() =>
+					runAttempt("local", fallbackModel).pipe(Effect.provide(localFallbackLayer)),
 				),
-			),
-		),
+				Effect.catchIf(isTransientAiError, () => buildCommitFallbackEffect(filtered)),
+			);
+		}),
 	);
 }
 
@@ -347,6 +433,8 @@ export type GeneratePrContentParams = {
 	routingContext?: string;
 	provider: AiProvider;
 	model: string;
+	/** Optional fetch override for tests (also used by rate-limit local fallback). */
+	fetch?: typeof fetch;
 	retryDelay?: Duration.Duration;
 	/** Current PR title when updating an open PR (multi-commit AI path only). */
 	existingPrTitle?: string;
@@ -406,6 +494,9 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				delay,
 				params.provider,
 				params.model,
+				{
+					...(params.fetch !== undefined ? { fetch: params.fetch } : {}),
+				},
 			);
 			title = result.title;
 			descriptionOverride = result.description;
@@ -629,6 +720,8 @@ export type RunGeneratePrContentWithServicesConfig = {
 	readonly existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
 	readonly retryDelay?: Duration.Duration;
+	/** Optional fetch override for tests (also used by rate-limit local fallback). */
+	readonly fetch?: typeof fetch;
 };
 
 export function runGeneratePrContentWithServices(config: RunGeneratePrContentWithServicesConfig) {
@@ -646,6 +739,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			model,
 			routingContext,
 			retryDelay,
+			fetch,
 			existingPrTitle: configuredExistingPrTitle,
 		} = config;
 		const pathApi = yield* Path.Path;
@@ -680,6 +774,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			...(routingContext !== undefined ? { routingContext } : {}),
 			provider,
 			model,
+			...(fetch !== undefined ? { fetch } : {}),
 			...(retryDelay !== undefined && { retryDelay }),
 			...(existingPrTitle !== undefined && { existingPrTitle }),
 		});

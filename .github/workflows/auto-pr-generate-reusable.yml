@@ -187,6 +187,8 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}
           AUTO_PR_ROUTING_CONTEXT: ${{ steps.ai_routing.outputs.routing_context }}
+          RUNNER_LABEL: ubuntu-24.04
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
           # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
 
