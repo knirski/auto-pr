@@ -1,11 +1,12 @@
 ---
-description: GitHub Actions workflow and composite action conventions - run actionlint before finishing
-globs: [".github/workflows/**/*.yml"]
+description: GitHub Actions workflow and reusable action conventions - run actionlint before finishing
+globs: [".github/workflows/**/*.yml", ".github/actions/**/action.yml"]
 ---
 
-# GitHub Actions (workflows)
+# GitHub Actions
 
 - **Lint:** Run `actionlint` on workflow files before finishing.
 - **Project command:** `bun run lint:workflows` (uses system actionlint or `nix run nixpkgs#actionlint`).
 - **Full check:** `bun run check` (includes actionlint). Use `check:with-links` to add lychee.
 - **Workflow testing:** Prefer `bun run act` (nektos act) for local testing over pushing to CI. When creating a new branch to test workflow changes, update the SHA in `.github/workflows/auto-pr.yml` to the current commit (`git rev-parse HEAD`) so the workflow runs with the branch code.
+- **Reusable actions:** Keep TypeScript/Effect action logic action-local and runnable without Bun, repo `node_modules`, or imports from `src/**` at runtime. Prefer JavaScript actions with `runs.using: node24` and a checked-in generated `.mjs` bundle.

@@ -16,11 +16,11 @@ These rules apply to `.github/**`.
 - `.github/workflows/update-workflow-pins.yml` updates self-referential pins after merge when workflows or actions changed. It does not update third-party actions or Dockerfiles.
 - The local llama image pin lives in `.github/llama-server/Dockerfile`; Dependabot owns routine tag bumps.
 
-## Composite Actions
+## Reusable Actions
 
-- Put new composite actions under `.github/actions/<name>/`.
+- Put repo-owned reusable actions under `.github/actions/<name>/`.
 - Shell entrypoints must follow `scripts/AGENTS.md`: `shellcheck`, `shfmt`, strict quoting, and no secret printing.
 - Use explicit inputs for paths and secrets. Do not rely on hidden repository layout when a caller can pass the value.
-- Reusable-workflow composites run inside adopter repositories. They must not require Bun, this repo's `node_modules`, or runtime imports from `src/**`.
-- If a composite needs TypeScript or Effect logic, keep the source files and generated Node runtime bundle in the same action directory, run the bundle with `node` from `action.yml`, and regenerate it with `bun run build`.
+- Reusable-workflow actions run inside adopter repositories. They must not require Bun, this repo's `node_modules`, or runtime imports from `src/**`.
+- If a reusable action needs TypeScript or Effect logic, prefer a JavaScript action (`runs.using: node24`) with source files and the generated Node runtime bundle in the same action directory. Regenerate bundles with `bun run build`.
 - Commit action-local bundles with their source changes. Do not stage root `dist/` for ordinary PRs; root `dist/` is owned by the dist update workflows.

@@ -36,14 +36,15 @@ function tempRepo(prefix: string): string {
 }
 
 describe("build-model-routing-context", () => {
-	test("action metadata runs the checked-in Node bundle instead of Bun", () => {
+	test("action metadata runs the checked-in Node bundle as a Node 24 JavaScript action", () => {
 		const actionDir = join(process.cwd(), ".github/actions/auto-pr-build-model-routing-context");
 		const action = readFileSync(join(actionDir, "action.yml"), "utf8");
 
-		expect(action).toContain(
-			'run: node "$GITHUB_ACTION_PATH/auto-pr-build-model-routing-context.mjs"',
-		);
+		expect(action).toContain("using: node24");
+		expect(action).toContain("main: auto-pr-build-model-routing-context.mjs");
+		expect(action).not.toContain("using: composite");
 		expect(action).not.toContain("run: bun ");
+		expect(action).not.toContain("run: node ");
 		expect(
 			readFileSync(join(actionDir, "auto-pr-build-model-routing-context.mjs"), "utf8"),
 		).toContain("Generated from auto-pr-build-model-routing-context.ts");
@@ -85,14 +86,14 @@ describe("build-model-routing-context", () => {
 				encoding: "utf8",
 				env: {
 					...process.env,
-					AI_PROVIDER: "local",
-					COMMITS_COUNT: "1",
-					DEFAULT_BRANCH: "main",
 					GITHUB_OUTPUT: githubOutput,
-					INPUT_MODEL: "",
-					REPOSITORY_VISIBILITY: "private",
-					RUNNER_LABEL: "ubuntu-24.04",
-					WORKSPACE: dir,
+					INPUT_AI_PROVIDER: "local",
+					INPUT_COMMITS_COUNT: "1",
+					INPUT_DEFAULT_BRANCH: "main",
+					INPUT_AI_OPENAI_COMPAT_MODEL: "",
+					INPUT_REPOSITORY_VISIBILITY: "private",
+					INPUT_RUNNER_LABEL: "ubuntu-24.04",
+					INPUT_WORKSPACE: dir,
 				},
 			});
 
@@ -297,18 +298,18 @@ describe("build-model-routing-context", () => {
 	test("program reads required env vars and emits routing outputs", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-program-");
 		const originalEnv = {
-			AI_PROVIDER: process.env.AI_PROVIDER,
-			AI_LLAMACPP_MODEL_URL: process.env.AI_LLAMACPP_MODEL_URL,
-			AI_OPENAI_COMPAT_URL: process.env.AI_OPENAI_COMPAT_URL,
-			COMMITS_COUNT: process.env.COMMITS_COUNT,
-			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
 			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
-			INPUT_MODEL: process.env.INPUT_MODEL,
-			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
-			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
-			REPOSITORY_VISIBILITY: process.env.REPOSITORY_VISIBILITY,
-			RUNNER_LABEL: process.env.RUNNER_LABEL,
-			WORKSPACE: process.env.WORKSPACE,
+			INPUT_AI_LLAMACPP_MODEL_URL: process.env.INPUT_AI_LLAMACPP_MODEL_URL,
+			INPUT_AI_OPENAI_COMPAT_MODEL: process.env.INPUT_AI_OPENAI_COMPAT_MODEL,
+			INPUT_AI_OPENAI_COMPAT_URL: process.env.INPUT_AI_OPENAI_COMPAT_URL,
+			INPUT_AI_PROVIDER: process.env.INPUT_AI_PROVIDER,
+			INPUT_COMMITS_COUNT: process.env.INPUT_COMMITS_COUNT,
+			INPUT_DEFAULT_BRANCH: process.env.INPUT_DEFAULT_BRANCH,
+			INPUT_LOCAL_RUNNER_CPUS: process.env.INPUT_LOCAL_RUNNER_CPUS,
+			INPUT_LOCAL_RUNNER_MEMORY_GB: process.env.INPUT_LOCAL_RUNNER_MEMORY_GB,
+			INPUT_REPOSITORY_VISIBILITY: process.env.INPUT_REPOSITORY_VISIBILITY,
+			INPUT_RUNNER_LABEL: process.env.INPUT_RUNNER_LABEL,
+			INPUT_WORKSPACE: process.env.INPUT_WORKSPACE,
 		};
 		try {
 			await Effect.runPromise(
@@ -328,18 +329,18 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["commit", "-m", "feat: update app"]);
 
 					const githubOutput = join(dir, "github_output");
-					process.env.WORKSPACE = dir;
-					process.env.DEFAULT_BRANCH = "main";
-					process.env.AI_PROVIDER = "local";
-					process.env.AI_LLAMACPP_MODEL_URL = "";
-					process.env.AI_OPENAI_COMPAT_URL = "";
-					process.env.INPUT_MODEL = "";
-					process.env.LOCAL_RUNNER_CPUS = "";
-					process.env.LOCAL_RUNNER_MEMORY_GB = "";
-					process.env.REPOSITORY_VISIBILITY = "private";
-					process.env.RUNNER_LABEL = "ubuntu-24.04";
 					process.env.GITHUB_OUTPUT = githubOutput;
-					process.env.COMMITS_COUNT = "1";
+					process.env.INPUT_WORKSPACE = dir;
+					process.env.INPUT_DEFAULT_BRANCH = "main";
+					process.env.INPUT_AI_PROVIDER = "local";
+					process.env.INPUT_AI_LLAMACPP_MODEL_URL = "";
+					process.env.INPUT_AI_OPENAI_COMPAT_URL = "";
+					process.env.INPUT_AI_OPENAI_COMPAT_MODEL = "";
+					process.env.INPUT_LOCAL_RUNNER_CPUS = "";
+					process.env.INPUT_LOCAL_RUNNER_MEMORY_GB = "";
+					process.env.INPUT_REPOSITORY_VISIBILITY = "private";
+					process.env.INPUT_RUNNER_LABEL = "ubuntu-24.04";
+					process.env.INPUT_COMMITS_COUNT = "1";
 
 					yield* program;
 
@@ -352,18 +353,18 @@ describe("build-model-routing-context", () => {
 				}),
 			);
 		} finally {
-			process.env.AI_PROVIDER = originalEnv.AI_PROVIDER;
-			process.env.AI_LLAMACPP_MODEL_URL = originalEnv.AI_LLAMACPP_MODEL_URL;
-			process.env.AI_OPENAI_COMPAT_URL = originalEnv.AI_OPENAI_COMPAT_URL;
-			process.env.COMMITS_COUNT = originalEnv.COMMITS_COUNT;
-			process.env.DEFAULT_BRANCH = originalEnv.DEFAULT_BRANCH;
 			process.env.GITHUB_OUTPUT = originalEnv.GITHUB_OUTPUT;
-			process.env.INPUT_MODEL = originalEnv.INPUT_MODEL;
-			process.env.LOCAL_RUNNER_CPUS = originalEnv.LOCAL_RUNNER_CPUS;
-			process.env.LOCAL_RUNNER_MEMORY_GB = originalEnv.LOCAL_RUNNER_MEMORY_GB;
-			process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
-			process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
-			process.env.WORKSPACE = originalEnv.WORKSPACE;
+			process.env.INPUT_AI_LLAMACPP_MODEL_URL = originalEnv.INPUT_AI_LLAMACPP_MODEL_URL;
+			process.env.INPUT_AI_OPENAI_COMPAT_MODEL = originalEnv.INPUT_AI_OPENAI_COMPAT_MODEL;
+			process.env.INPUT_AI_OPENAI_COMPAT_URL = originalEnv.INPUT_AI_OPENAI_COMPAT_URL;
+			process.env.INPUT_AI_PROVIDER = originalEnv.INPUT_AI_PROVIDER;
+			process.env.INPUT_COMMITS_COUNT = originalEnv.INPUT_COMMITS_COUNT;
+			process.env.INPUT_DEFAULT_BRANCH = originalEnv.INPUT_DEFAULT_BRANCH;
+			process.env.INPUT_LOCAL_RUNNER_CPUS = originalEnv.INPUT_LOCAL_RUNNER_CPUS;
+			process.env.INPUT_LOCAL_RUNNER_MEMORY_GB = originalEnv.INPUT_LOCAL_RUNNER_MEMORY_GB;
+			process.env.INPUT_REPOSITORY_VISIBILITY = originalEnv.INPUT_REPOSITORY_VISIBILITY;
+			process.env.INPUT_RUNNER_LABEL = originalEnv.INPUT_RUNNER_LABEL;
+			process.env.INPUT_WORKSPACE = originalEnv.INPUT_WORKSPACE;
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});

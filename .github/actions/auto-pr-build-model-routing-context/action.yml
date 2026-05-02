@@ -1,4 +1,4 @@
-# Composite: build AI model routing context for auto-pr generate.
+# JavaScript action: build AI model routing context for auto-pr generate.
 name: Build model routing context
 description: >-
   Collects diff signals, resolves a routing band, and emits prompt-ready routing context.
@@ -48,47 +48,23 @@ inputs:
 outputs:
   selected_model:
     description: Final model id to pass to generate-content.
-    value: ${{ steps.build.outputs.selected_model }}
   routing_context:
     description: Trusted routing context string for prompt conditioning.
-    value: ${{ steps.build.outputs.routing_context }}
   band:
     description: Model band selected by the heuristic.
-    value: ${{ steps.build.outputs.band }}
   tool_strategy:
     description: Tool-use strategy for later AI prompt execution.
-    value: ${{ steps.build.outputs.tool_strategy }}
   reasoning_need:
     description: Reasoning level implied by the change signals.
-    value: ${{ steps.build.outputs.reasoning_need }}
   requires_tool_calls:
     description: Whether the selected model should support tool calls.
-    value: ${{ steps.build.outputs.requires_tool_calls }}
   local_runner_resources:
     description: Resolved local-runner resource profile used for local model selection.
-    value: ${{ steps.build.outputs.local_runner_resources }}
   local_model_resource_fit:
     description: Whether the bundled GGUF URL appears to fit the resolved local-runner resources.
-    value: ${{ steps.build.outputs.local_model_resource_fit }}
   local_model_recommendation:
     description: Local model recommendation for the resolved runner profile.
-    value: ${{ steps.build.outputs.local_model_recommendation }}
 
 runs:
-  using: composite
-  steps:
-    - id: build
-      shell: bash
-      run: node "$GITHUB_ACTION_PATH/auto-pr-build-model-routing-context.mjs"
-      env:
-        WORKSPACE: ${{ inputs.workspace }}
-        DEFAULT_BRANCH: ${{ inputs.default_branch }}
-        COMMITS_COUNT: ${{ inputs.commits_count }}
-        AI_PROVIDER: ${{ inputs.ai_provider }}
-        INPUT_MODEL: ${{ inputs.ai_openai_compat_model }}
-        AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
-        AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
-        RUNNER_LABEL: ${{ inputs.runner_label }}
-        REPOSITORY_VISIBILITY: ${{ inputs.repository_visibility }}
-        LOCAL_RUNNER_CPUS: ${{ inputs.local_runner_cpus }}
-        LOCAL_RUNNER_MEMORY_GB: ${{ inputs.local_runner_memory_gb }}
+  using: node24
+  main: auto-pr-build-model-routing-context.mjs

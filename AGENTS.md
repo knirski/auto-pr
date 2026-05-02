@@ -27,7 +27,7 @@ auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, E
 
 Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; keep them aligned when changing agent policy. Prefer nested `AGENTS.md` files for path-scoped Codex rules:
 
-- `.github/AGENTS.md` — workflows, composite actions, pins, workflow tests.
+- `.github/AGENTS.md` — workflows, reusable actions, pins, workflow tests.
 - `src/core/AGENTS.md` — functional core purity.
 - `scripts/AGENTS.md` — shell scripts and local CI harness exception.
 
@@ -68,8 +68,8 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 | AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher: `local` \| `github-models`); new providers in `live/` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
-| Composite action | `.github/actions/<name>/` |
-| TypeScript used by a reusable composite action | `.github/actions/<name>/`; keep source and generated Node bundle together |
+| Reusable action | `.github/actions/<name>/` |
+| TypeScript used by a reusable action | `.github/actions/<name>/`; keep source and generated Node bundle together; prefer `runs.using: node24` for action-local JavaScript bundles |
 | Local llama image pin (CI + init) | `.github/llama-server/Dockerfile` — `FROM` line; tag for Dependabot |
 | Llama in Docker on the runner (CI) | `.github/actions/llama-server-docker-start`, `.github/actions/llama-server-docker-stop` — input `llama_server_root`; cached image at `docker/llama-server-image.tar` |
 | Dockerfile `FROM` parser + shell parity | `test/integration/dockerfile-from-image.ts`; CI: [resolve-llama-server-tag.sh](.github/actions/resolve-llama-server-tag/resolve-llama-server-tag.sh) (`--dockerfile-image`); tests: `test/integration/dockerfile-from-image.test.ts` |
@@ -90,7 +90,7 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
 | Workflow / action pins | Self-refs `knirski/auto-pr/...@` must be **one** full **40-char SHA** (ancestor of branch, every path exists at that commit). Third-party `uses:` = SHA + `# v…` comment; Dependabot updates weekly. Same-repo `uses: ./.github/...` needs no SHA. Llama image: `.github/llama-server/Dockerfile`. Details: [docs/CI.md](docs/CI.md#workflow-pin-automation) |
-| Adopter-safe composite actions | Reusable-workflow composites must not require Bun, repo `node_modules`, or imports from `src/**` at runtime. Use an action-local generated Node bundle when TypeScript/Effect logic is needed. |
+| Adopter-safe reusable actions | Reusable-workflow actions must not require Bun, repo `node_modules`, or imports from `src/**` at runtime. Use an action-local generated Node bundle when TypeScript/Effect logic is needed. |
 | Workflow testing | `bun run act` locally; align self-ref `@SHA` to `git rev-parse HEAD` when exercising workflow edits on a branch |
 | Multi-commit AI | `LanguageModel.generateText` + JSON parse + Schema decode in `auto-pr-generate-content.ts`; not `generateObject` (`json_schema` unsupported on GitHub Models) |
 
@@ -101,7 +101,7 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 **Setup:** `bun install` then `bun x lefthook install`. Local env for workflow CLIs: copy `.env.example` → `.env` (see `src/auto-pr/config.ts`). Optional Nix: `nix develop` or direnv + `.envrc` (see [CONTRIBUTING.md](CONTRIBUTING.md#nix-flake-optional)). Build: `scripts/build.ts` → `dist/`; typecheck: `tsgo --noEmit`.
 
 ```
-.github/actions/   — composite actions. Workflows use full path (knirski/auto-pr/...); TypeScript actions keep generated Node bundles action-local
+.github/actions/   — reusable actions. Workflows use full path (knirski/auto-pr/...); TypeScript actions keep generated Node bundles action-local
 .github/workflows/ — ci, release-please, auto-pr, auto-pr-*-reusable
 src/auto-pr/       — config, core (re-exports), errors (formatError; classes in core/errors), interfaces, live, paths, shell, utils
 src/workflow/      — generate-content, create-or-update-pr, run

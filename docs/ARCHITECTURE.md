@@ -1,11 +1,11 @@
 # Architecture
 
-This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. It also builds the action-local Node bundle for the model routing context composite action. Prompts at `dist/prompts/`. No declaration emit.
+This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Native](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) (`tsgo`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. It also builds the action-local Node bundle for the model routing context JavaScript action. Prompts at `dist/prompts/`. No declaration emit.
 
 ## Repository layout (on disk)
 
 - **`src/`** — TypeScript source. `src/core/` is pure (no Effect I/O); `src/auto-pr/` holds config, errors, live interpreters, and shell; `src/workflow/` and `src/tools/` are CLI entrypoints compiled to `dist/` by `scripts/build.ts`.
-- **`.github/actions/auto-pr-build-model-routing-context/`** — Action-local TypeScript/Effect source and generated Node bundle for reusable-workflow model routing. Kept outside `src/` because remote composite actions execute in adopter repositories.
+- **`.github/actions/auto-pr-build-model-routing-context/`** — Action-local TypeScript/Effect source and generated Node bundle for reusable-workflow model routing. Kept outside `src/` because remote reusable actions execute in adopter repositories.
 - **`scripts/`** — Build and check helpers (`build.ts`, shell wrappers, Nix shims). Not application library code.
 - **`test/`** — Unit tests, mirroring `src/` where applicable.
 
@@ -54,8 +54,8 @@ This project uses [Effect](https://effect.website/) v4 beta and [TypeScript Nati
 - **Entry points:** `src/workflow/auto-pr-generate-content.ts`, `src/workflow/auto-pr-create-or-update-pr.ts`, `src/workflow/auto-pr-run.ts`, `src/tools/auto-pr-fill-pr-template.ts`, `src/tools/auto-pr-init.ts`
 - **Local CI parity (optional):** `scripts/act-local-ci.ts` (`bun run act`) — Docker + nektos act or `gh act`; pure argv/event planning lives in the same file (scoped FC/IS exception). See [CONTRIBUTING.md](../CONTRIBUTING.md#run-ci-locally-check-job).
 - **Core logic:** `src/core/*.ts` (fill-pr-template-core, gh-output, string, etc.)
-- **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateText` and decodes JSON to `TitleDescriptionSchema` (see file header). CI uses composite actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
-- **Model routing context action:** `.github/actions/auto-pr-build-model-routing-context/` owns the reusable-workflow routing policy. Its TypeScript/Effect source is bundled by `scripts/build.ts` to `auto-pr-build-model-routing-context.mjs`; `action.yml` runs that bundle with `node` so adopter repositories do not need Bun or auto-pr source.
+- **AI integration:** `src/auto-pr/live/ai-provider.ts` dispatches to **local** and **github-models** (both via `@effect/ai-openai-compat`); `src/workflow/auto-pr-generate-content.ts` calls `LanguageModel.generateText` and decodes JSON to `TitleDescriptionSchema` (see file header). CI uses reusable actions from `knirski/auto-pr` for the generate job (no vendored `scripts/` in consumer repos).
+- **Model routing context action:** `.github/actions/auto-pr-build-model-routing-context/` owns the reusable-workflow routing policy. Its TypeScript/Effect source is bundled by `scripts/build.ts` to `auto-pr-build-model-routing-context.mjs`; `action.yml` executes it as a JavaScript action with `runs.using: node24` so adopter repositories do not need Bun or auto-pr source.
 - **Config:** `src/auto-pr/config.ts` — env schema and validation
 
 ## Dependency Direction

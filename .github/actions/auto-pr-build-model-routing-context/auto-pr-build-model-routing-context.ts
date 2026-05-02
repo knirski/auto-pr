@@ -74,14 +74,17 @@ function parseProvider(raw: string): Effect.Effect<ModelProvider, Error> {
 	});
 }
 
-function parseOptionalPositiveInteger(raw: string): Effect.Effect<number | undefined, Error> {
+function parseOptionalPositiveInteger(
+	raw: string,
+	name: string,
+): Effect.Effect<number | undefined, Error> {
 	return Effect.try({
 		try: () => {
 			const trimmed = raw.trim();
 			if (trimmed === "") return undefined;
 			const value = Number(trimmed);
 			if (!Number.isInteger(value) || value < 0) {
-				throw new Error(`COMMITS_COUNT must be a non-negative integer, got ${raw}`);
+				throw new Error(`${name} must be a non-negative integer, got ${raw}`);
 			}
 			return value;
 		},
@@ -454,35 +457,39 @@ export function runBuildModelRoutingContext(
 }
 
 export const program = Effect.gen(function* () {
-	const workspace = yield* readRequiredEnv("WORKSPACE");
-	const defaultBranch = yield* readRequiredEnv("DEFAULT_BRANCH");
-	const providerRaw = yield* readRequiredEnv("AI_PROVIDER");
+	const workspace = yield* readRequiredEnv("INPUT_WORKSPACE");
+	const defaultBranch = yield* readRequiredEnv("INPUT_DEFAULT_BRANCH");
+	const providerRaw = yield* readRequiredEnv("INPUT_AI_PROVIDER");
 	const githubOutput = yield* readRequiredEnv("GITHUB_OUTPUT");
-	const explicitModelRaw = yield* Effect.sync(() => process.env.INPUT_MODEL?.trim() ?? "");
+	const explicitModelRaw = yield* Effect.sync(
+		() => process.env.INPUT_AI_OPENAI_COMPAT_MODEL?.trim() ?? "",
+	);
 	const openaiCompatUrlRaw = yield* Effect.sync(
-		() => process.env.AI_OPENAI_COMPAT_URL?.trim() ?? "",
+		() => process.env.INPUT_AI_OPENAI_COMPAT_URL?.trim() ?? "",
 	);
 	const llamacppModelUrlRaw = yield* Effect.sync(
-		() => process.env.AI_LLAMACPP_MODEL_URL?.trim() ?? "",
+		() => process.env.INPUT_AI_LLAMACPP_MODEL_URL?.trim() ?? "",
 	);
-	const runnerLabelRaw = yield* Effect.sync(() => process.env.RUNNER_LABEL?.trim() ?? "");
+	const runnerLabelRaw = yield* Effect.sync(() => process.env.INPUT_RUNNER_LABEL?.trim() ?? "");
 	const repositoryVisibilityRaw = yield* Effect.sync(
-		() => process.env.REPOSITORY_VISIBILITY?.trim() ?? "",
+		() => process.env.INPUT_REPOSITORY_VISIBILITY?.trim() ?? "",
 	);
-	const localRunnerCpusRaw = yield* Effect.sync(() => process.env.LOCAL_RUNNER_CPUS?.trim() ?? "");
+	const localRunnerCpusRaw = yield* Effect.sync(
+		() => process.env.INPUT_LOCAL_RUNNER_CPUS?.trim() ?? "",
+	);
 	const localRunnerMemoryGbRaw = yield* Effect.sync(
-		() => process.env.LOCAL_RUNNER_MEMORY_GB?.trim() ?? "",
+		() => process.env.INPUT_LOCAL_RUNNER_MEMORY_GB?.trim() ?? "",
 	);
-	const commitsCountRaw = yield* Effect.sync(() => process.env.COMMITS_COUNT?.trim() ?? "");
+	const commitsCountRaw = yield* Effect.sync(() => process.env.INPUT_COMMITS_COUNT?.trim() ?? "");
 	const provider = yield* parseProvider(providerRaw);
-	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw);
+	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw, "INPUT_COMMITS_COUNT");
 	const localRunnerCpus = yield* parseOptionalPositiveNumber(
 		localRunnerCpusRaw,
-		"LOCAL_RUNNER_CPUS",
+		"INPUT_LOCAL_RUNNER_CPUS",
 	);
 	const localRunnerMemoryGb = yield* parseOptionalPositiveNumber(
 		localRunnerMemoryGbRaw,
-		"LOCAL_RUNNER_MEMORY_GB",
+		"INPUT_LOCAL_RUNNER_MEMORY_GB",
 	);
 	yield* runBuildModelRoutingContext({
 		workspace,

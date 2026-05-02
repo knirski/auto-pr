@@ -85,11 +85,11 @@ Optional: **`GH_TOKEN`** — only for local CLI use or advanced workflows that i
 
 ## Step 6: Add the workflow file
 
-**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` in one command. The reusable generate job runs shell via **composite actions** pinned in `knirski/auto-pr`; you do not need `scripts/` in your repository.
+**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` in one command. The reusable generate job runs through pinned reusable actions in `knirski/auto-pr`; you do not need `scripts/` in your repository.
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
-**No action copying required.** The reusable workflows fetch those composite actions from `knirski/auto-pr`. A relative `./` path would resolve to your repo; we use full paths so you do not need anything under `.github/actions/` in your project. The model routing context action ships its own Node bundle, so your repository does not need Bun, `node_modules`, or auto-pr source files.
+**No action copying required.** The reusable workflows fetch repo-owned actions from `knirski/auto-pr`. A relative `./` path would resolve to your repo; we use full paths so you do not need anything under `.github/actions/` in your project. The model routing context action ships its own Node 24 JavaScript bundle, so your repository does not need Bun, `node_modules`, or auto-pr source files.
 
 All inputs use sensible defaults for the AI model. The PR template path is always `.github/PULL_REQUEST_TEMPLATE.md` at the repo root. Edit the **How to test** section in that file directly for project-specific steps (for example `npm run check` or `pytest`). Override other options via `with:` when needed.
 

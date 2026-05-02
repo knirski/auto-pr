@@ -44,7 +44,7 @@
 
 **Cause:** The workflow is pinned to an old revision of the model routing context action that still tried to execute Bun inside the adopter repository.
 
-**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh the workflow pin, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch. Current reusable workflows run the routing action through an action-local Node bundle and do not require Bun in adopter repositories.
+**Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh the workflow pin, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch. Current reusable workflows run the routing action as a Node 24 JavaScript action with an action-local bundle and do not require Bun in adopter repositories.
 
 ### "Missing secrets APP_ID or APP_PRIVATE_KEY"
 
