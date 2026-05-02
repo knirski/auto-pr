@@ -94,4 +94,16 @@ describe("model-routing-context-core", () => {
 			kind: "source",
 		});
 	});
+
+	test("buildFileSummary skips malformed numstat rows", () => {
+		const summary = buildFileSummary({
+			files: ["src/app.ts"],
+			numstat: ["12\t3", "not-tab-delimited"],
+			nameStatus: ["M\tsrc/app.ts"],
+		});
+
+		expect(summary.sourceFileCount).toBe(1);
+		expect(summary.rawChurn).toBe(0);
+		expect(summary.sourceChurn).toBe(0);
+	});
 });

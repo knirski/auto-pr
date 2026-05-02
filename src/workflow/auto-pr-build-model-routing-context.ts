@@ -144,20 +144,22 @@ function parseOptionalPositiveNumber(
 			);
 }
 
-function parseEnvInputs(): Effect.Effect<
-	RoutingContextInputs,
-	RoutingContextEnvError | RoutingContextParseError
-> {
+export function toEnvConfigReadError(error: {
+	readonly message: string;
+}): RoutingContextParseError {
+	return new RoutingContextParseError({
+		name: "ENV",
+		requirement: "readable environment variables",
+		value: error.message,
+	});
+}
+
+export function parseEnvInputsFrom(
+	configProvider: ConfigProvider.ConfigProvider,
+): Effect.Effect<RoutingContextInputs, RoutingContextEnvError | RoutingContextParseError> {
 	return Effect.gen(function* () {
-		const raw = yield* RoutingContextEnvConfig.parse(ConfigProvider.fromEnv()).pipe(
-			Effect.mapError(
-				(error) =>
-					new RoutingContextParseError({
-						name: "ENV",
-						requirement: "readable environment variables",
-						value: error.message,
-					}),
-			),
+		const raw = yield* RoutingContextEnvConfig.parse(configProvider).pipe(
+			Effect.mapError(toEnvConfigReadError),
 		);
 		const workspace = yield* requireEnv("GITHUB_WORKSPACE", raw.workspace);
 		const defaultBranch = yield* requireEnv("DEFAULT_BRANCH", raw.defaultBranch);
@@ -196,6 +198,13 @@ function parseEnvInputs(): Effect.Effect<
 			commitsCount,
 		};
 	});
+}
+
+function parseEnvInputs(): Effect.Effect<
+	RoutingContextInputs,
+	RoutingContextEnvError | RoutingContextParseError
+> {
+	return parseEnvInputsFrom(ConfigProvider.fromEnv());
 }
 
 function mapGitError(command: string): (cause: unknown) => RoutingContextGitError {
@@ -416,5 +425,5 @@ export function reportProgramError(error: unknown): void {
 
 /* istanbul ignore next -- CLI main wrapper */
 if (import.meta.main) {
-	Effect.runPromise(program).catch(reportProgramError);
+	Effect.runPromise(program).catch(reportProgramError); // LCOV_EXCL_LINE
 }

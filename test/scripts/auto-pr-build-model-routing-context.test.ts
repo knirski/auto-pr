@@ -3,12 +3,14 @@ import { Effect, Match } from "effect";
 import {
 	RoutingContextEnvError,
 	RoutingContextGitError,
+	RoutingContextOutputError,
 	RoutingContextParseError,
 } from "#core/errors.js";
 import {
 	program,
 	reportProgramError,
 	runBuildModelRoutingContext,
+	toEnvConfigReadError,
 } from "../../src/workflow/auto-pr-build-model-routing-context.js";
 
 type SpawnSyncResult = {
@@ -773,6 +775,41 @@ describe("build-model-routing-context", () => {
 		);
 	});
 
+	test("program rejects invalid provider", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-invalid-provider-");
+		const output = join(dir, "github_output");
+		await withPatchedEnv(
+			{
+				GITHUB_WORKSPACE: dir,
+				DEFAULT_BRANCH: "main",
+				AUTO_PR_AI_PROVIDER: "unknown-provider",
+				GITHUB_OUTPUT: output,
+				COMMITS_COUNT: "1",
+			},
+			async () => {
+				const error = await Effect.runPromise(program.pipe(Effect.flip));
+				expect(error).toBeInstanceOf(RoutingContextParseError);
+				expect(error).toMatchObject({
+					_tag: "RoutingContextParseError",
+					name: "AUTO_PR_AI_PROVIDER",
+					requirement: "local or github-models",
+					value: "unknown-provider",
+				});
+			},
+		);
+	});
+
+	test("toEnvConfigReadError maps env read failure into RoutingContextParseError", () => {
+		const error = toEnvConfigReadError({ message: "env provider unavailable" });
+		expect(error).toBeInstanceOf(RoutingContextParseError);
+		expect(error).toMatchObject({
+			_tag: "RoutingContextParseError",
+			name: "ENV",
+			requirement: "readable environment variables",
+			value: "env provider unavailable",
+		});
+	});
+
 	test("fails when git base ref cannot be resolved", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-git-fail-");
 		try {
@@ -800,6 +837,45 @@ describe("build-model-routing-context", () => {
 						command: "diff --name-only origin/main..HEAD",
 					});
 					expect(error.cause).toContain("unknown revision");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("fails when writing outputs to GITHUB_OUTPUT path", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-output-fail-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "docs: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "README.md"), "change\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "docs: change"]);
+
+					const outputDirectory = join(dir, "output-dir");
+					yield* mkdir(outputDirectory, { recursive: true });
+					const error = yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "github-models",
+						explicitModel: undefined,
+						githubOutput: outputDirectory,
+						commitsCount: 1,
+					}).pipe(Effect.flip);
+					expect(error).toBeInstanceOf(RoutingContextOutputError);
+					expect(error).toMatchObject({
+						_tag: "RoutingContextOutputError",
+						path: outputDirectory,
+					});
 				}),
 			);
 		} finally {
@@ -924,6 +1000,47 @@ describe("build-model-routing-context", () => {
 			reportProgramError("plain failure");
 			expect(chunks.join("")).toContain("boom");
 			expect(chunks.join("")).toContain("plain failure");
+			expect(process.exitCode).toBe(1);
+		} finally {
+			process.stderr.write = originalWrite as typeof process.stderr.write;
+			process.exitCode = originalExitCode ?? 0;
+		}
+	});
+
+	test("reportProgramError formats tagged routing errors", () => {
+		const originalWrite = process.stderr.write.bind(process.stderr);
+		const originalExitCode = process.exitCode;
+		const chunks: string[] = [];
+		process.stderr.write = ((chunk: string | Uint8Array) => {
+			chunks.push(String(chunk));
+			return true;
+		}) as typeof process.stderr.write;
+		try {
+			reportProgramError(new RoutingContextEnvError({ name: "GITHUB_WORKSPACE" }));
+			reportProgramError(
+				new RoutingContextParseError({
+					name: "AUTO_PR_AI_PROVIDER",
+					requirement: "local or github-models",
+					value: "",
+				}),
+			);
+			reportProgramError(
+				new RoutingContextGitError({
+					command: "diff --name-only origin/main..HEAD",
+					cause: "unknown revision",
+				}),
+			);
+			reportProgramError(
+				new RoutingContextOutputError({
+					path: "/tmp/out",
+					cause: "EISDIR",
+				}),
+			);
+			const output = chunks.join("");
+			expect(output).toContain("GITHUB_WORKSPACE is required");
+			expect(output).toContain("AUTO_PR_AI_PROVIDER must be local or github-models, got <empty>");
+			expect(output).toContain("git diff --name-only origin/main..HEAD failed: unknown revision");
+			expect(output).toContain("Failed writing routing outputs to /tmp/out: EISDIR");
 			expect(process.exitCode).toBe(1);
 		} finally {
 			process.stderr.write = originalWrite as typeof process.stderr.write;

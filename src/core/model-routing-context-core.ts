@@ -105,7 +105,7 @@ export function classifyFile(path: string): FileKind {
 	) {
 		return "generated";
 	}
-	if (/^docs\/|\.md$/.test(path)) return "docs";
+	if (path.startsWith("docs/") || path.endsWith(".md")) return "docs";
 	if (/^src\//.test(path)) return "source";
 	if (/(^|\/)(test|tests|spec|specs)(\/|$)/.test(path) || /\.(test|spec)\.[^/]+$/.test(path))
 		return "test";
