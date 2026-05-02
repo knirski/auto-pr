@@ -1,7 +1,11 @@
 # Octokit PR Client Design
 
 **Date:** 2026-05-01  
-**Status:** Proposed
+**Status:** Implemented (see [ADR 0014](../../adr/0014-replace-gh-pr-wrapper-with-octokit.md))
+
+This design is implemented in the live PR client:
+- [`src/auto-pr/live/pull-request-client.ts`](../../../src/auto-pr/live/pull-request-client.ts) (Octokit-backed `PullRequestClient`)
+- [`test/workflow/create-or-update-pr.test.ts`](../../../test/workflow/create-or-update-pr.test.ts) (lookup/create/update and error mapping tests)
 
 ## Problem
 

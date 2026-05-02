@@ -1,10 +1,21 @@
 # Auto-PR AI: Effect repository toolkit and generation
 
 **Date:** 2026-03-29  
-**Status:** Proposed  
+**Status:** Implemented (core) + optional follow-ups open  
 **Companion:** [Inference & routing](2026-03-29-auto-pr-inference-and-routing.md) — providers, env, metrics, pre-generate model id.
 
 **Summary:** Replace static “dump everything in one prompt” with on-demand exploration via Effect `Tool` + `Toolkit` (`effect/unstable/ai`) and `LanguageModel`.
+
+## Current status
+
+Implemented:
+- `GitContext` service and git-read unification (see [ADR 0011](../../adr/0011-gitcontext-and-diff-tool-use.md))
+- `DiffToolkit` (`get_diff`, `get_commit_diff`) wired into `LanguageModel.generateText`
+- `auto-pr-get-commits` file handoff removed; `generate-content` reads git context directly
+
+Still optional / not required by current shipped flow:
+- Two-phase tool exploration followed by a separate structured-output call
+- Additional tool set beyond `get_diff` and `get_commit_diff`
 
 ## Principle
 
