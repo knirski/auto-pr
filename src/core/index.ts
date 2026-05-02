@@ -79,34 +79,10 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
-export type {
-	ModelBand,
-	ModelBandDecision,
-	ModelBandSignals,
-	ModelProvider,
-	ReasoningNeed,
-	ResolveModelBandInput,
-	ToolStrategy,
-} from "#core/model-band.js";
-export {
-	buildRoutingContext,
-	resolveBand,
-	resolveModelBand,
-	resolveReasoningNeed,
-	resolveToolStrategy,
-	selectModel,
-} from "#core/model-band.js";
 export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
 export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 export { buildDescriptionPrompt } from "#core/prompt.js";
-export type {
-	BuildDetailedRoutingContextInput,
-	RoutingContextCommitSummary,
-	RoutingContextFileSummary,
-	RoutingContextHotspot,
-} from "#core/routing-context.js";
-export { buildDetailedRoutingContext } from "#core/routing-context.js";
 export {
 	filterSemanticSubjects,
 	isBlank,

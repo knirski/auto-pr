@@ -68,11 +68,18 @@ describe("build-model-routing-context", () => {
 					});
 
 					const output = yield* read(githubOutput);
-					expect(output).toContain("selected_model=gpt-oss");
+					expect(output).toContain("selected_model=qwen3-1.7b-q4_k_m");
 					expect(output).toContain("band=A");
 					expect(output).toContain("tool_strategy=none");
 					expect(output).toContain("reasoning_need=low");
 					expect(output).toContain("requires_tool_calls=false");
+					expect(output).toContain(
+						"local_runner_resources=github-hosted ubuntu-24.04 private/internal baseline; cpu=2; memory=8GB",
+					);
+					expect(output).toContain("local_model_resource_fit=unknown");
+					expect(output).toContain(
+						"local_model_recommendation=qwen3-1.7b-q4_k_m; recommended GGUF <= 3B Q4-class on this runner",
+					);
 					expect(output).toContain("routing_context<<");
 					expect(output).toContain("decision: band=A; reason=tight / docs-only / generated-heavy");
 					expect(output).toContain("intent: 1 semantic commit; merge=0; breaking=0; types=feat=1");
@@ -84,7 +91,7 @@ describe("build-model-routing-context", () => {
 					expect(output).toContain("review_focus: src/app.ts (+1/-0, source)");
 					expect(output).toContain("tool_guidance: no tools needed");
 					expect(output).toContain(
-						"model_route: band=A; reasoning=low; tool_strategy=none; requires_tool_calls=false; selected_model=gpt-oss",
+						"model_route: band=A; reasoning=low; tool_strategy=none; requires_tool_calls=false; selected_model=qwen3-1.7b-q4_k_m",
 					);
 					expect(output).not.toContain("subjects:");
 					expect(output).not.toContain("compact:");
@@ -178,10 +185,16 @@ describe("build-model-routing-context", () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-program-");
 		const originalEnv = {
 			AI_PROVIDER: process.env.AI_PROVIDER,
+			AI_LLAMACPP_MODEL_URL: process.env.AI_LLAMACPP_MODEL_URL,
+			AI_OPENAI_COMPAT_URL: process.env.AI_OPENAI_COMPAT_URL,
 			COMMITS_COUNT: process.env.COMMITS_COUNT,
 			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
 			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
 			INPUT_MODEL: process.env.INPUT_MODEL,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+			REPOSITORY_VISIBILITY: process.env.REPOSITORY_VISIBILITY,
+			RUNNER_LABEL: process.env.RUNNER_LABEL,
 			WORKSPACE: process.env.WORKSPACE,
 		};
 		try {
@@ -205,14 +218,20 @@ describe("build-model-routing-context", () => {
 					process.env.WORKSPACE = dir;
 					process.env.DEFAULT_BRANCH = "main";
 					process.env.AI_PROVIDER = "local";
+					process.env.AI_LLAMACPP_MODEL_URL = "";
+					process.env.AI_OPENAI_COMPAT_URL = "";
 					process.env.INPUT_MODEL = "";
+					process.env.LOCAL_RUNNER_CPUS = "";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "";
+					process.env.REPOSITORY_VISIBILITY = "private";
+					process.env.RUNNER_LABEL = "ubuntu-24.04";
 					process.env.GITHUB_OUTPUT = githubOutput;
 					process.env.COMMITS_COUNT = "1";
 
 					yield* program;
 
 					const output = yield* read(githubOutput);
-					expect(output).toContain("selected_model=gpt-oss");
+					expect(output).toContain("selected_model=qwen3-1.7b-q4_k_m");
 					expect(output).toContain("band=A");
 					expect(output).toContain("routing_context<<");
 					expect(output).toContain("decision:");
@@ -221,10 +240,16 @@ describe("build-model-routing-context", () => {
 			);
 		} finally {
 			process.env.AI_PROVIDER = originalEnv.AI_PROVIDER;
+			process.env.AI_LLAMACPP_MODEL_URL = originalEnv.AI_LLAMACPP_MODEL_URL;
+			process.env.AI_OPENAI_COMPAT_URL = originalEnv.AI_OPENAI_COMPAT_URL;
 			process.env.COMMITS_COUNT = originalEnv.COMMITS_COUNT;
 			process.env.DEFAULT_BRANCH = originalEnv.DEFAULT_BRANCH;
 			process.env.GITHUB_OUTPUT = originalEnv.GITHUB_OUTPUT;
 			process.env.INPUT_MODEL = originalEnv.INPUT_MODEL;
+			process.env.LOCAL_RUNNER_CPUS = originalEnv.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = originalEnv.LOCAL_RUNNER_MEMORY_GB;
+			process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
+			process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
 			process.env.WORKSPACE = originalEnv.WORKSPACE;
 			rmSync(dir, { recursive: true, force: true });
 		}

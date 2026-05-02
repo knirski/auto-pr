@@ -126,6 +126,10 @@ jobs:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
           ai_openai_compat_model: ${{ inputs.ai_openai_compat_model }}
+          ai_openai_compat_url: ${{ inputs.ai_openai_compat_url }}
+          ai_llamacpp_model_url: ${{ inputs.ai_llamacpp_model_url }}
+          runner_label: ubuntu-24.04
+          repository_visibility: ${{ github.event.repository.visibility }}
 
       - name: Resolve llama Docker image
         id: llama_release
@@ -177,7 +181,7 @@ jobs:
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.ai_routing.outputs.selected_model }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}
           AUTO_PR_ROUTING_CONTEXT: ${{ steps.ai_routing.outputs.routing_context }}
           # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}

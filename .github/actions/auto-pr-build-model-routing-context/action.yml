@@ -20,6 +20,30 @@ inputs:
     description: Explicit model override; when empty, the action selects a provider default.
     required: false
     default: ""
+  ai_openai_compat_url:
+    description: External OpenAI-compatible URL. When set for local provider, GitHub-runner resource sizing is not used for model selection.
+    required: false
+    default: ""
+  ai_llamacpp_model_url:
+    description: HTTPS GGUF URL used by the bundled llama.cpp path, if any.
+    required: false
+    default: ""
+  runner_label:
+    description: GitHub runner label used to infer hosted-runner CPU/RAM when explicit resources are absent.
+    required: false
+    default: "ubuntu-24.04"
+  repository_visibility:
+    description: Repository visibility (public, private, or internal) used for GitHub-hosted runner sizing.
+    required: false
+    default: "private"
+  local_runner_cpus:
+    description: Optional explicit CPU count for local inference model selection.
+    required: false
+    default: ""
+  local_runner_memory_gb:
+    description: Optional explicit RAM in GB for local inference model selection.
+    required: false
+    default: ""
 
 outputs:
   selected_model:
@@ -40,6 +64,15 @@ outputs:
   requires_tool_calls:
     description: Whether the selected model should support tool calls.
     value: ${{ steps.build.outputs.requires_tool_calls }}
+  local_runner_resources:
+    description: Resolved local-runner resource profile used for local model selection.
+    value: ${{ steps.build.outputs.local_runner_resources }}
+  local_model_resource_fit:
+    description: Whether the bundled GGUF URL appears to fit the resolved local-runner resources.
+    value: ${{ steps.build.outputs.local_model_resource_fit }}
+  local_model_recommendation:
+    description: Local model recommendation for the resolved runner profile.
+    value: ${{ steps.build.outputs.local_model_recommendation }}
 
 runs:
   using: composite
@@ -53,3 +86,9 @@ runs:
         COMMITS_COUNT: ${{ inputs.commits_count }}
         AI_PROVIDER: ${{ inputs.ai_provider }}
         INPUT_MODEL: ${{ inputs.ai_openai_compat_model }}
+        AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
+        AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
+        RUNNER_LABEL: ${{ inputs.runner_label }}
+        REPOSITORY_VISIBILITY: ${{ inputs.repository_visibility }}
+        LOCAL_RUNNER_CPUS: ${{ inputs.local_runner_cpus }}
+        LOCAL_RUNNER_MEMORY_GB: ${{ inputs.local_runner_memory_gb }}

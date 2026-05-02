@@ -1,25 +1,33 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFileSync } from "node:fs";
-import { Effect, Option, Result } from "effect";
-import { parseCommits } from "../../../src/core/fill-pr-template-core.js";
+import { Effect } from "effect";
 import {
 	type BuildDetailedRoutingContextInput,
 	buildDetailedRoutingContext,
+	type LocalModelContext,
 	type ModelBandDecision,
 	type ModelBandSignals,
 	type ModelProvider,
+	parseCommitLog,
 	type RoutingContextCommitSummary,
 	type RoutingContextFileSummary,
 	type RoutingContextHotspot,
+	resolveLocalRunnerResources,
 	resolveModelBand,
-} from "../../../src/core/index.js";
+} from "./model-routing.js";
 
 type RoutingContextInputs = {
 	readonly workspace: string;
 	readonly defaultBranch: string;
 	readonly provider: ModelProvider;
 	readonly explicitModel: string | undefined;
+	readonly openaiCompatUrl?: string;
+	readonly llamacppModelUrl?: string;
+	readonly runnerLabel?: string;
+	readonly repositoryVisibility?: string;
+	readonly localRunnerCpus?: number;
+	readonly localRunnerMemoryGb?: number;
 	readonly githubOutput: string;
 	readonly commitsCount: number | undefined;
 };
@@ -74,6 +82,24 @@ function parseOptionalPositiveInteger(raw: string): Effect.Effect<number | undef
 			const value = Number(trimmed);
 			if (!Number.isInteger(value) || value < 0) {
 				throw new Error(`COMMITS_COUNT must be a non-negative integer, got ${raw}`);
+			}
+			return value;
+		},
+		catch: toError,
+	});
+}
+
+function parseOptionalPositiveNumber(
+	raw: string,
+	name: string,
+): Effect.Effect<number | undefined, Error> {
+	return Effect.try({
+		try: () => {
+			const trimmed = raw.trim();
+			if (trimmed === "") return undefined;
+			const value = Number(trimmed);
+			if (!Number.isFinite(value) || value <= 0) {
+				throw new Error(`${name} must be a positive number, got ${raw}`);
 			}
 			return value;
 		},
@@ -288,18 +314,13 @@ function buildRoutingContextInput(
 			.split("\n")
 			.map((line) => line.trim())
 			.filter(Boolean);
-		const parsed = parseCommits(logOutput.stdout);
-		if (Result.isFailure(parsed)) {
-			return yield* Effect.fail(new Error(parsed.failure.message));
-		}
-
-		const commits = parsed.success;
+		const commits = parseCommitLog(logOutput.stdout);
 		const semanticCommits = commits.filter((commit) => !commit.subject.startsWith("Merge "));
 		const mergeCommitCount = commits.length - semanticCommits.length;
 		const commitSummary = buildCommitSummary(
 			semanticCommits.map((commit) => ({
-				type: Option.getOrElse(commit.type, () => undefined),
-				breaking: Option.isSome(commit.breakingNote),
+				type: commit.type,
+				breaking: commit.breaking,
 			})),
 			mergeCommitCount,
 		);
@@ -308,9 +329,7 @@ function buildRoutingContextInput(
 		const signals: ModelBandSignals = {
 			semanticCommitCount,
 			conventionalTypeCount: new Set(
-				semanticCommits
-					.map((commit) => Option.getOrElse(commit.type, () => "").toLowerCase())
-					.filter(Boolean),
+				semanticCommits.map((commit) => commit.type?.toLowerCase() ?? "").filter(Boolean),
 			).size,
 			topLevelSpread: fileSummary.topLevelDirs.length,
 			changedFileCount: files.length,
@@ -323,7 +342,7 @@ function buildRoutingContextInput(
 			rawChurn: fileSummary.rawChurn,
 			sourceChurn: fileSummary.sourceChurn,
 			generatedChurn: fileSummary.generatedChurn,
-			hasBreakingChange: semanticCommits.some((commit) => Option.isSome(commit.breakingNote)),
+			hasBreakingChange: semanticCommits.some((commit) => commit.breaking),
 			hasBinaryFiles: fileSummary.hasBinaryFiles,
 		};
 		return {
@@ -350,6 +369,21 @@ function writeDecisionOutputs(
 				githubOutput,
 				`requires_tool_calls=${decision.requiresToolCalls ? "true" : "false"}\n`,
 			);
+			if (decision.localRunnerResources !== undefined) {
+				appendFileSync(githubOutput, `local_runner_resources=${decision.localRunnerResources}\n`);
+			}
+			if (decision.localModelResourceFit !== undefined) {
+				appendFileSync(
+					githubOutput,
+					`local_model_resource_fit=${decision.localModelResourceFit}\n`,
+				);
+			}
+			if (decision.localModelRecommendation !== undefined) {
+				appendFileSync(
+					githubOutput,
+					`local_model_recommendation=${decision.localModelRecommendation}\n`,
+				);
+			}
 			const delimiter = `__AUTO_PR_ROUTING_CONTEXT_${randomUUID()}__`;
 			appendFileSync(
 				githubOutput,
@@ -366,10 +400,32 @@ export function runBuildModelRoutingContext(
 ): Effect.Effect<void, Error> {
 	return Effect.gen(function* () {
 		const routingInput = yield* buildRoutingContextInput(input);
+		const localModel: LocalModelContext | undefined =
+			input.provider === "local"
+				? {
+						...(input.openaiCompatUrl === undefined
+							? {}
+							: { openaiCompatUrl: input.openaiCompatUrl }),
+						...(input.llamacppModelUrl === undefined
+							? {}
+							: { llamacppModelUrl: input.llamacppModelUrl }),
+						runner: resolveLocalRunnerResources({
+							...(input.runnerLabel === undefined ? {} : { runnerLabel: input.runnerLabel }),
+							...(input.repositoryVisibility === undefined
+								? {}
+								: { repositoryVisibility: input.repositoryVisibility }),
+							...(input.localRunnerCpus === undefined ? {} : { cpuCount: input.localRunnerCpus }),
+							...(input.localRunnerMemoryGb === undefined
+								? {}
+								: { memoryGb: input.localRunnerMemoryGb }),
+						}),
+					}
+				: undefined;
 		const decision = resolveModelBand({
 			provider: input.provider,
 			signals: routingInput.signals,
 			...(input.explicitModel === undefined ? {} : { explicitModel: input.explicitModel }),
+			...(localModel === undefined ? {} : { localModel }),
 		});
 		const routingContext = buildDetailedRoutingContext({
 			band: decision.band,
@@ -380,6 +436,15 @@ export function runBuildModelRoutingContext(
 			signals: routingInput.signals,
 			commits: routingInput.commits,
 			files: routingInput.files,
+			...(decision.localRunnerResources === undefined
+				? {}
+				: { localRunnerResources: decision.localRunnerResources }),
+			...(decision.localModelResourceFit === undefined
+				? {}
+				: { localModelResourceFit: decision.localModelResourceFit }),
+			...(decision.localModelRecommendation === undefined
+				? {}
+				: { localModelRecommendation: decision.localModelRecommendation }),
 		});
 		yield* writeDecisionOutputs(input.githubOutput, {
 			...decision,
@@ -394,14 +459,42 @@ export const program = Effect.gen(function* () {
 	const providerRaw = yield* readRequiredEnv("AI_PROVIDER");
 	const githubOutput = yield* readRequiredEnv("GITHUB_OUTPUT");
 	const explicitModelRaw = yield* Effect.sync(() => process.env.INPUT_MODEL?.trim() ?? "");
+	const openaiCompatUrlRaw = yield* Effect.sync(
+		() => process.env.AI_OPENAI_COMPAT_URL?.trim() ?? "",
+	);
+	const llamacppModelUrlRaw = yield* Effect.sync(
+		() => process.env.AI_LLAMACPP_MODEL_URL?.trim() ?? "",
+	);
+	const runnerLabelRaw = yield* Effect.sync(() => process.env.RUNNER_LABEL?.trim() ?? "");
+	const repositoryVisibilityRaw = yield* Effect.sync(
+		() => process.env.REPOSITORY_VISIBILITY?.trim() ?? "",
+	);
+	const localRunnerCpusRaw = yield* Effect.sync(() => process.env.LOCAL_RUNNER_CPUS?.trim() ?? "");
+	const localRunnerMemoryGbRaw = yield* Effect.sync(
+		() => process.env.LOCAL_RUNNER_MEMORY_GB?.trim() ?? "",
+	);
 	const commitsCountRaw = yield* Effect.sync(() => process.env.COMMITS_COUNT?.trim() ?? "");
 	const provider = yield* parseProvider(providerRaw);
 	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw);
+	const localRunnerCpus = yield* parseOptionalPositiveNumber(
+		localRunnerCpusRaw,
+		"LOCAL_RUNNER_CPUS",
+	);
+	const localRunnerMemoryGb = yield* parseOptionalPositiveNumber(
+		localRunnerMemoryGbRaw,
+		"LOCAL_RUNNER_MEMORY_GB",
+	);
 	yield* runBuildModelRoutingContext({
 		workspace,
 		defaultBranch,
 		provider,
 		explicitModel: explicitModelRaw === "" ? undefined : explicitModelRaw,
+		...(openaiCompatUrlRaw === "" ? {} : { openaiCompatUrl: openaiCompatUrlRaw }),
+		...(llamacppModelUrlRaw === "" ? {} : { llamacppModelUrl: llamacppModelUrlRaw }),
+		...(runnerLabelRaw === "" ? {} : { runnerLabel: runnerLabelRaw }),
+		...(repositoryVisibilityRaw === "" ? {} : { repositoryVisibility: repositoryVisibilityRaw }),
+		...(localRunnerCpus === undefined ? {} : { localRunnerCpus }),
+		...(localRunnerMemoryGb === undefined ? {} : { localRunnerMemoryGb }),
 		githubOutput,
 		commitsCount,
 	});
