@@ -6,7 +6,7 @@
  * This repo: bun run run-auto-pr · installed: npx auto-pr-run
  */
 
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import {
 	AutoPrLoggerLayer,
 	AutoPrPlatformLayer,
@@ -40,9 +40,11 @@ function livePipeline(config: RunAutoPrConfigService): CliMainEffect {
 		const toolkitLayer = makeDiffToolkitLayer(`origin/${config.defaultBranch}`, branch).pipe(
 			Layer.provide(gitLayer),
 		);
-		const prClientLayer = PullRequestClient.Live(config.workspace).pipe(
-			Layer.provide(ChildProcessSpawnerLayer),
-		);
+		const prClientLayer = PullRequestClient.Live(config.workspace, {
+			ghToken: Redacted.value(config.ghToken),
+			...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
+			...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
+		}).pipe(Layer.provide(ChildProcessSpawnerLayer));
 		yield* runAutoPrPipelineWithServices(configWithBranch).pipe(
 			Effect.provide(Layer.mergeAll(baseLayer, aiLayer, toolkitLayer, prClientLayer)),
 		);

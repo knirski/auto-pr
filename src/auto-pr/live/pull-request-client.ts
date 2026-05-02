@@ -53,6 +53,8 @@ export type PullRequestClientLiveDeps = {
 	readonly githubRepository?: string;
 	readonly ghRepo?: string;
 	readonly ghToken?: string;
+	readonly githubApiUrl?: string;
+	readonly ghHost?: string;
 	readonly apiTimeout?: Duration.Duration;
 };
 
@@ -95,9 +97,37 @@ function resolveToken(input: PullRequestClientLiveDeps): Effect.Effect<string, s
 	return Effect.succeed(raw);
 }
 
+function normalizeGithubApiUrl(value: string): Option.Option<string> {
+	const trimmed = value.trim();
+	if (trimmed === "") return Option.none();
+	try {
+		return Option.some(new URL(trimmed).toString().replace(/\/$/, ""));
+	} catch {
+		return Option.none();
+	}
+}
+
+function normalizeGhHostApiUrl(value: string): Option.Option<string> {
+	const host = value.trim();
+	if (host === "") return Option.none();
+	if (host === "github.com") return Option.some("https://api.github.com");
+	return Option.some(`https://${host}/api/v3`);
+}
+
+function resolveOctokitApiUrl(deps: PullRequestClientLiveDeps): Option.Option<string> {
+	const fromExplicit = deps.githubApiUrl;
+	if (fromExplicit !== undefined) return normalizeGithubApiUrl(fromExplicit);
+	const fromHost = deps.ghHost;
+	if (fromHost !== undefined) return normalizeGhHostApiUrl(fromHost);
+	return Option.none();
+}
+
 function makeOctokit(deps: PullRequestClientLiveDeps, token: string): OctokitLike {
 	if (deps.octokitFactory !== undefined) return deps.octokitFactory(token);
-	return new Octokit({ auth: token });
+	return Option.match(resolveOctokitApiUrl(deps), {
+		onNone: () => new Octokit({ auth: token }),
+		onSome: (baseUrl) => new Octokit({ auth: token, baseUrl }),
+	});
 }
 
 export class PullRequestClient extends Context.Service<

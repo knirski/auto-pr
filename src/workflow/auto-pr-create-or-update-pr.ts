@@ -9,7 +9,7 @@
  * This repo: bun run create-or-update-pr · installed: npx auto-pr-create-or-update-pr
  */
 
-import { Duration, Effect, FileSystem, Option, Schedule } from "effect";
+import { Duration, Effect, FileSystem, Option, Redacted, Schedule } from "effect";
 import {
 	AutoPrPlatformLayer,
 	BodyFileNotFoundError,
@@ -154,7 +154,15 @@ export function runCreateOrUpdatePr(params: {
 
 const program = Effect.gen(function* () {
 	const params = yield* CreateOrUpdatePrConfig;
-	yield* runCreateOrUpdatePr(params).pipe(Effect.provide(PullRequestClient.Live(params.workspace)));
+	yield* runCreateOrUpdatePr(params).pipe(
+		Effect.provide(
+			PullRequestClient.Live(params.workspace, {
+				ghToken: Redacted.value(params.ghToken),
+				...(params.githubApiUrl !== undefined ? { githubApiUrl: params.githubApiUrl } : {}),
+				...(params.ghHost !== undefined ? { ghHost: params.ghHost } : {}),
+			}),
+		),
+	);
 }).pipe(
 	Effect.provide(CreateOrUpdatePrConfigLayer),
 	Effect.provide(AutoPrPlatformLayer),

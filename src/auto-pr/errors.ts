@@ -100,7 +100,7 @@ export function formatError(e: unknown): string {
 			),
 			Match.tag(
 				"PullRequestUrlParseError",
-				({ raw, reason }) => `gh PR URL parse failed (${reason}). Raw: ${raw.slice(0, 200)}`,
+				({ raw, reason }) => `PR URL parse failed (${reason}). Raw: ${raw.slice(0, 200)}`,
 			),
 			Match.tag("ParseError", ({ message, cause }) =>
 				cause == null ? message : `${message}: ${cause}`,
