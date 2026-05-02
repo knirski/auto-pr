@@ -1,10 +1,20 @@
 # Auto-PR AI: Inference providers and model routing
 
 **Date:** 2026-03-29  
-**Status:** Proposed  
+**Status:** Partially implemented  
 **Companion:** [Effect toolkit](2026-03-29-auto-pr-effect-toolkit-design.md) — tools, structured output vs loops.
 
 **Summary:** Backend choice (`local` vs `github-models`), `AUTO_PR_AI_*`, pre-generate model id (no router in `generate-content`), metrics → band → allowlisted model, and prompt placeholders. Stack: `LanguageModel` via `@effect/ai-openai-compat`. Ollama removal: [migration](2026-03-29-ollama-to-llamacpp-migration-design.md).
+
+## Current status
+
+Implemented:
+- [`src/auto-pr/config.ts`](../../../src/auto-pr/config.ts) (two-provider runtime and `AUTO_PR_AI_*` config surface; see [ADR 0007](../../adr/0007-ai-abstraction-layer.md), [ADR 0009](../../adr/0009-ollama-to-openai-compat-migration.md))
+- [`src/workflow/auto-pr-generate-content.ts`](../../../src/workflow/auto-pr-generate-content.ts) (`generateText` + JSON parse + schema decode path for multi-commit PR generation)
+
+Not yet implemented:
+- Pre-generate model-selection/routing step based on metrics bands
+- Prompt routing-context placeholders/blocks fed by computed metrics
 
 ## Independence from tools
 

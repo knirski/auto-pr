@@ -1,7 +1,7 @@
 # Auto-PR AI design (index)
 
 **Date:** 2026-03-29  
-**Status:** Proposed  
+**Status:** Partially implemented  
 
 ## Prerequisites
 
@@ -9,6 +9,12 @@
 2. All AI usage via `effect/unstable/ai` only — no parallel vendor SDKs in `src/auto-pr`.
 
 ADR 0007: do not edit [0007](../../adr/0007-ai-abstraction-layer.md) until code matches this set; then add or supersede an ADR.
+
+## Current status
+
+- Migration work is implemented ([2026-03-29-ollama-to-llamacpp-migration-design.md](2026-03-29-ollama-to-llamacpp-migration-design.md), [ADR 0009](../../adr/0009-ollama-to-openai-compat-migration.md)).
+- Toolkit integration is implemented for current flow ([2026-03-29-auto-pr-effect-toolkit-design.md](2026-03-29-auto-pr-effect-toolkit-design.md), [ADR 0011](../../adr/0011-gitcontext-and-diff-tool-use.md)).
+- Inference/routing is only partially implemented; dynamic model-band routing remains open (see [2026-03-29-auto-pr-inference-and-routing.md](2026-03-29-auto-pr-inference-and-routing.md)).
 
 ## Spec split (low coupling)
 
