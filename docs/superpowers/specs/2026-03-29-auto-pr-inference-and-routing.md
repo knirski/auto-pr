@@ -57,7 +57,7 @@ Shipped path: `LanguageModel.generateText` + JSON matching `TitleDescriptionSche
 | Variable | When |
 |----------|------|
 | `AUTO_PR_AI_PROVIDER` | `local` \| `github-models` |
-| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | Model for both providers; `github-models` defaults to `openai/gpt-4.1` when unset |
+| `AUTO_PR_AI_OPENAI_COMPAT_MODEL` | Model for both providers; `github-models` defaults to `microsoft/phi-4-mini-instruct` when unset |
 | `GH_TOKEN` | GitHub Models + existing PR flows |
 | `AUTO_PR_AI_OPENAI_COMPAT_URL` | Optional for `local`; default e.g. llama-server `/v1` |
 | `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` | Optional Bearer for gated local endpoints |

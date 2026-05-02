@@ -1,6 +1,6 @@
 # Effect Idiom & Type-Safety Hardening Implementation Plan
 
-**Implementation status (2026-04-20):** Work was executed in-repo. This plan is preserved as an execution record; checkbox steps remain as-written (`- [ ]`) and should be read as historical plan instructions, not current TODOs.
+**Implementation status (2026-04-20):** Work was executed in-repo. This plan is preserved as an execution record; checkbox states (`- [ ]` and `- [x]`) should be read as historical plan tracking, not current TODOs.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
