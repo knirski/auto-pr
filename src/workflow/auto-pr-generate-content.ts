@@ -267,6 +267,8 @@ export type GeneratePrContentParams = {
 	headRef: string;
 	templateContent: string;
 	descriptionPromptText: string;
+	/** Trusted routing summary computed by workflow/job logic (not model output). */
+	routingContext?: string;
 	provider: AiProvider;
 	model: string;
 	retryDelay?: Duration.Duration;
@@ -319,6 +321,7 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				commitContent,
 				diffStatOutput,
 				params.existingPrTitle,
+				params.routingContext,
 			);
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescriptionWithToolkit(
@@ -420,6 +423,7 @@ type RunGeneratePrContentConfigCommon = {
 	workspace: string;
 	templatePath: string;
 	model: string;
+	routingContext?: string;
 	githubApiUrl?: string;
 	ghHost?: string;
 	/** Current PR title override for prompt continuity. */
@@ -450,6 +454,7 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
+		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
 		...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
@@ -543,6 +548,7 @@ export type RunGeneratePrContentWithServicesConfig = {
 	readonly templatePath: string;
 	readonly provider: AiProvider;
 	readonly model: string;
+	readonly routingContext?: string;
 	/** Current PR title override for prompt continuity. */
 	readonly existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
@@ -562,6 +568,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			templatePath,
 			provider,
 			model,
+			routingContext,
 			retryDelay,
 			existingPrTitle: configuredExistingPrTitle,
 		} = config;
@@ -594,6 +601,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			headRef: branch,
 			templateContent,
 			descriptionPromptText,
+			...(routingContext !== undefined ? { routingContext } : {}),
 			provider,
 			model,
 			...(retryDelay !== undefined && { retryDelay }),
