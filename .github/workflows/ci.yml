@@ -34,7 +34,7 @@ jobs:
       contents: read
       pull-requests: read # dorny/paths-filter reads PR file list via REST
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      code: ${{ steps.code_filter.outputs.code }}
       docs: ${{ steps.filter.outputs.docs }}
       website: ${{ steps.filter.outputs.website }}
       workflows: ${{ steps.filter.outputs.workflows }}
@@ -45,8 +45,8 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: Compute path filters
-        id: filter
+      - name: Compute code path filter
+        id: code_filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         with:
           # `every` is required for the `code` filter because it uses a broad include (`**`)
@@ -59,6 +59,11 @@ jobs:
               - '!*.md'
               - '!.github/**'
               - '!website/**'
+      - name: Compute path filters
+        id: filter
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
             docs:
               - '**/*.md'
             website:
