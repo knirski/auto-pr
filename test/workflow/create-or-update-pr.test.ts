@@ -1,10 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import { Duration, Effect, Exit, type FileSystem, Layer, Option, type Path } from "effect";
+import {
+	Duration,
+	Effect,
+	Exit,
+	type FileSystem,
+	Layer,
+	Option,
+	type Path,
+	Redacted,
+} from "effect";
 import { PullRequestClient, PullRequestFailedError } from "#auto-pr";
 import { PullRequestLookupError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
-import { runCreateOrUpdatePr } from "#workflow/auto-pr-create-or-update-pr.js";
+import {
+	pullRequestClientLiveConfigFromParams,
+	runCreateOrUpdatePr,
+} from "#workflow/auto-pr-create-or-update-pr.js";
 
 type Pull = { number: number; html_url: string; title?: string };
 
@@ -369,6 +381,24 @@ describe("PullRequestClient create/update", () => {
 });
 
 describe("PullRequestClient Octokit host injection", () => {
+	test("uses default Octokit config when neither GITHUB_API_URL nor GH_HOST is set", async () => {
+		const layer = PullRequestClient.Live("/tmp", {
+			githubRepository: "owner/repo",
+			ghToken: "token",
+			apiTimeout: Duration.millis(1),
+		});
+		const exit = await runExit(
+			Effect.gen(function* () {
+				const client = yield* PullRequestClient;
+				return yield* client.findByBranch("ai/default-octokit-no-host");
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
+		}
+	});
+
 	test("uses default Octokit config when GITHUB_API_URL is invalid", async () => {
 		const layer = PullRequestClient.Live("/tmp", {
 			githubRepository: "owner/repo",
@@ -443,6 +473,30 @@ describe("PullRequestClient Octokit host injection", () => {
 		if (Exit.isFailure(exit)) {
 			expect(String(exit.cause).includes("PullRequestLookupError")).toBe(true);
 		}
+	});
+});
+
+describe("pullRequestClientLiveConfigFromParams", () => {
+	test("maps ghToken and optional host fields", () => {
+		const config = pullRequestClientLiveConfigFromParams({
+			ghToken: Redacted.make("ghp_test"),
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
+		});
+		expect(config).toEqual({
+			ghToken: "ghp_test",
+			githubApiUrl: "https://api.github.com",
+			ghHost: "github.com",
+		});
+	});
+
+	test("omits optional host fields when unset", () => {
+		const config = pullRequestClientLiveConfigFromParams({
+			ghToken: Redacted.make("ghp_test"),
+		});
+		expect(config).toEqual({
+			ghToken: "ghp_test",
+		});
 	});
 });
 
