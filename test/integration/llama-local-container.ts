@@ -312,12 +312,26 @@ const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options:
 			),
 		);
 	const http = yield* HttpClient.HttpClient;
-	const okClient = pipe(http, HttpClient.filterStatusOk);
-	const buf = yield* okClient.get(modelUrlParsed).pipe(
-		Effect.flatMap((response) => response.arrayBuffer),
+	const response = yield* http
+		.get(modelUrlParsed)
+		.pipe(
+			Effect.mapError(
+				(cause) =>
+					new LlamaIntegrationHttpError({ operation: "download GGUF model (HTTPS)", cause }),
+			),
+		);
+	if (response.status < 200 || response.status >= 300) {
+		return yield* Effect.fail(
+			new LlamaIntegrationHttpError({
+				operation: `download GGUF model (HTTPS): unexpected HTTP status ${response.status} from ${modelUrlParsed.href}`,
+				cause: response,
+			}),
+		);
+	}
+	const buf = yield* response.arrayBuffer.pipe(
 		Effect.map((ab) => new Uint8Array(ab)),
 		Effect.mapError(
-			(cause) => new LlamaIntegrationHttpError({ operation: "download GGUF model (HTTPS)", cause }),
+			(cause) => new LlamaIntegrationHttpError({ operation: "read GGUF response bytes", cause }),
 		),
 	);
 	yield* fs
@@ -333,9 +347,22 @@ const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options:
 const fetchFirstModelId = Effect.fn("fetchFirstModelId")(function* (openAiCompatBaseUrl: URL) {
 	const modelsUrl = openAiModelsListUrl(openAiCompatBaseUrl);
 	const http = yield* HttpClient.HttpClient;
-	const okClient = pipe(http, HttpClient.filterStatusOk);
-	const json: unknown = yield* okClient.get(modelsUrl).pipe(
-		Effect.flatMap((response) => response.json),
+	const response = yield* http
+		.get(modelsUrl)
+		.pipe(
+			Effect.mapError(
+				(cause) => new LlamaIntegrationHttpError({ operation: "request GET /v1/models", cause }),
+			),
+		);
+	if (response.status < 200 || response.status >= 300) {
+		return yield* Effect.fail(
+			new LlamaIntegrationHttpError({
+				operation: `request GET /v1/models: unexpected HTTP status ${response.status} from ${modelsUrl.href}`,
+				cause: response,
+			}),
+		);
+	}
+	const json: unknown = yield* response.json.pipe(
 		Effect.mapError(
 			(cause) =>
 				new LlamaIntegrationHttpError({ operation: "read JSON from GET /v1/models", cause }),
