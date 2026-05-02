@@ -1,14 +1,114 @@
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { Effect } from "effect";
 import {
 	program,
 	reportProgramError,
 	runBuildModelRoutingContext,
 } from "../../src/workflow/auto-pr-build-model-routing-context.js";
+
+type SpawnSyncResult = {
+	readonly status: number;
+	readonly stdout: string;
+	readonly stderr: string;
+};
+
+const textDecoder = new TextDecoder();
+
+function toError(cause: unknown): Error {
+	return cause instanceof Error ? cause : new Error(String(cause));
+}
+
+function join(...parts: readonly string[]): string {
+	return parts
+		.filter((part) => part.length > 0)
+		.map((part, index) =>
+			index === 0 ? part.replace(/[\\/]+$/g, "") : part.replace(/^[/\\]+|[/\\]+$/g, ""),
+		)
+		.join("/");
+}
+
+function spawnSync(
+	command: string,
+	args: readonly string[],
+	options?: {
+		readonly cwd?: string;
+		readonly encoding?: "utf8";
+		readonly env?: Record<string, string | undefined>;
+	},
+): SpawnSyncResult {
+	const env =
+		options?.env === undefined
+			? undefined
+			: Object.fromEntries(
+					Object.entries(options.env).filter(
+						(entry): entry is [string, string] => entry[1] !== undefined,
+					),
+				);
+	const result = Bun.spawnSync([command, ...args], {
+		...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
+		...(env === undefined ? {} : { env }),
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	return {
+		status: result.exitCode,
+		stdout: textDecoder.decode(result.stdout),
+		stderr: textDecoder.decode(result.stderr),
+	};
+}
+
+function existsSync(path: string): boolean {
+	return spawnSync("test", ["-e", path]).status === 0;
+}
+
+function mkdirSync(path: string, options?: { readonly recursive?: boolean }): void {
+	const args = [options?.recursive === true ? "-p" : "", path].filter((arg) => arg !== "");
+	const result = spawnSync("mkdir", args);
+	if (result.status !== 0) {
+		throw new Error(`mkdir ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
+	}
+}
+
+function rmSync(
+	path: string,
+	options?: {
+		readonly recursive?: boolean;
+		readonly force?: boolean;
+	},
+): void {
+	const args = [
+		options?.recursive === true ? "-r" : "",
+		options?.force === true ? "-f" : "",
+		path,
+	].filter((arg) => arg !== "");
+	const result = spawnSync("rm", args);
+	if (result.status !== 0) {
+		throw new Error(`rm ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
+	}
+}
+
+function tmpdir(): string {
+	return process.env.TMPDIR?.trim() || "/tmp";
+}
+
+function mkdtempSync(prefixPath: string): string {
+	const result = spawnSync("mktemp", ["-d", `${prefixPath}XXXXXX`]);
+	if (result.status !== 0) {
+		throw new Error(`mktemp failed: ${result.stderr || result.stdout}`);
+	}
+	return result.stdout.trim();
+}
+
+function readFileSync(path: string, encoding: "utf8"): string {
+	if (encoding !== "utf8") {
+		throw new Error(`Unsupported encoding: ${encoding}`);
+	}
+	const result = spawnSync("cat", [path]);
+	if (result.status !== 0) {
+		throw new Error(`cat ${path} failed: ${result.stderr || result.stdout}`);
+	}
+	return result.stdout;
+}
 
 function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
 	return Effect.try({
@@ -18,13 +118,14 @@ function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error
 				throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
 			}
 		},
-		catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+		catch: toError,
 	});
 }
 
 function write(path: string, content: string): Effect.Effect<void, Error> {
-	return Effect.sync(() => {
-		writeFileSync(path, content);
+	return Effect.tryPromise({
+		try: () => Bun.write(path, content).then(() => undefined),
+		catch: toError,
 	});
 }
 

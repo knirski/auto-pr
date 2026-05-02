@@ -1,7 +1,9 @@
-import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { appendFileSync } from "node:fs";
-import { Effect } from "effect";
+import * as BunChildProcessSpawner from "@effect/platform-bun/BunChildProcessSpawner";
+import * as BunFileSystem from "@effect/platform-bun/BunFileSystem";
+import * as BunPath from "@effect/platform-bun/BunPath";
+import { Effect, FileSystem, Layer, Stream } from "effect";
+import { ChildProcess } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
 	type BuildDetailedRoutingContextInput,
 	buildDetailedRoutingContext,
@@ -34,7 +36,6 @@ type RoutingContextInputs = {
 
 type GitResult = {
 	readonly stdout: string;
-	readonly stderr: string;
 };
 
 type ParsedCommit = {
@@ -46,6 +47,12 @@ type RoutingContextSignalInput = Pick<
 	BuildDetailedRoutingContextInput,
 	"signals" | "commits" | "files"
 >;
+
+const BunPlatformLayer = Layer.mergeAll(BunFileSystem.layer, BunPath.layer);
+const RuntimeLayer = Layer.mergeAll(
+	BunPlatformLayer,
+	BunChildProcessSpawner.layer.pipe(Layer.provide(BunPlatformLayer)),
+);
 
 function toError(cause: unknown): Error {
 	return cause instanceof Error ? cause : new Error(String(cause));
@@ -110,17 +117,60 @@ function parseOptionalPositiveNumber(
 	});
 }
 
-function runGit(workspace: string, args: readonly string[]): Effect.Effect<GitResult, Error> {
-	return Effect.try({
-		try: () => {
-			const result = spawnSync("git", [...args], { cwd: workspace, encoding: "utf8" });
-			if (result.status !== 0) {
-				throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
+function runGit(
+	workspace: string,
+	args: readonly string[],
+): Effect.Effect<GitResult, Error, ChildProcessSpawner> {
+	return Effect.scoped(
+		Effect.gen(function* () {
+			const spawner = yield* ChildProcessSpawner;
+			const command = ChildProcess.make("git", [...args], { cwd: workspace });
+			const handle = yield* spawner
+				.spawn(command)
+				.pipe(
+					Effect.mapError(
+						(cause) => new Error(`git ${args.join(" ")} failed: ${toError(cause).message}`),
+					),
+				);
+
+			const [stdout, stderr, exitCode] = yield* Effect.all([
+				handle.stdout.pipe(
+					Stream.decodeText(),
+					Stream.runFold(
+						() => "",
+						(acc, chunk) => acc + chunk,
+					),
+					Effect.mapError(
+						(cause) => new Error(`git ${args.join(" ")} failed: ${toError(cause).message}`),
+					),
+				),
+				handle.stderr.pipe(
+					Stream.decodeText(),
+					Stream.runFold(
+						() => "",
+						(acc, chunk) => acc + chunk,
+					),
+					Effect.mapError(
+						(cause) => new Error(`git ${args.join(" ")} failed: ${toError(cause).message}`),
+					),
+				),
+				handle.exitCode.pipe(
+					Effect.mapError(
+						(cause) => new Error(`git ${args.join(" ")} failed: ${toError(cause).message}`),
+					),
+				),
+			]);
+
+			if (Number(exitCode) !== 0) {
+				const output = `${stderr}\n${stdout}`.trim();
+				return yield* Effect.fail(
+					new Error(`git ${args.join(" ")} failed: ${output || "exit code non-zero"}`),
+				);
 			}
-			return { stdout: result.stdout, stderr: result.stderr };
-		},
-		catch: toError,
-	});
+
+			return { stdout };
+		}),
+	);
 }
 
 function classifyFile(
@@ -293,7 +343,7 @@ function buildFileSummary(input: {
 
 function buildRoutingContextInput(
 	input: RoutingContextInputs,
-): Effect.Effect<RoutingContextSignalInput, Error> {
+): Effect.Effect<RoutingContextSignalInput, Error, ChildProcessSpawner> {
 	return Effect.gen(function* () {
 		const range = `origin/${input.defaultBranch}..HEAD`;
 		const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
@@ -362,39 +412,30 @@ function buildRoutingContextInput(
 function writeDecisionOutputs(
 	githubOutput: string,
 	decision: ModelBandDecision,
-): Effect.Effect<void, Error> {
-	return Effect.try({
-		try: () => {
-			appendFileSync(githubOutput, `selected_model=${decision.selectedModel}\n`);
-			appendFileSync(githubOutput, `tool_strategy=${decision.toolStrategy}\n`);
-			appendFileSync(githubOutput, `reasoning_need=${decision.reasoningNeed}\n`);
-			appendFileSync(
-				githubOutput,
-				`requires_tool_calls=${decision.requiresToolCalls ? "true" : "false"}\n`,
-			);
-			if (decision.localRunnerResources !== undefined) {
-				appendFileSync(githubOutput, `local_runner_resources=${decision.localRunnerResources}\n`);
-			}
-			if (decision.localModelResourceFit !== undefined) {
-				appendFileSync(
-					githubOutput,
-					`local_model_resource_fit=${decision.localModelResourceFit}\n`,
-				);
-			}
-			if (decision.localModelRecommendation !== undefined) {
-				appendFileSync(
-					githubOutput,
-					`local_model_recommendation=${decision.localModelRecommendation}\n`,
-				);
-			}
-			const delimiter = `__AUTO_PR_ROUTING_CONTEXT_${randomUUID()}__`;
-			appendFileSync(
-				githubOutput,
-				`routing_context<<${delimiter}\n${decision.routingContext}\n${delimiter}\n`,
-			);
-			appendFileSync(githubOutput, `band=${decision.band}\n`);
-		},
-		catch: toError,
+): Effect.Effect<void, Error, FileSystem.FileSystem> {
+	return Effect.gen(function* () {
+		const fs = yield* FileSystem.FileSystem;
+		const delimiter = `__AUTO_PR_ROUTING_CONTEXT_${globalThis.crypto.randomUUID()}__`;
+		const lines = [
+			`selected_model=${decision.selectedModel}`,
+			`tool_strategy=${decision.toolStrategy}`,
+			`reasoning_need=${decision.reasoningNeed}`,
+			`requires_tool_calls=${decision.requiresToolCalls ? "true" : "false"}`,
+			...(decision.localRunnerResources === undefined
+				? []
+				: [`local_runner_resources=${decision.localRunnerResources}`]),
+			...(decision.localModelResourceFit === undefined
+				? []
+				: [`local_model_resource_fit=${decision.localModelResourceFit}`]),
+			...(decision.localModelRecommendation === undefined
+				? []
+				: [`local_model_recommendation=${decision.localModelRecommendation}`]),
+			`routing_context<<${delimiter}\n${decision.routingContext}\n${delimiter}`,
+			`band=${decision.band}`,
+		];
+		yield* fs
+			.writeFileString(githubOutput, `${lines.join("\n")}\n`, { flag: "a" })
+			.pipe(Effect.mapError(toError));
 	});
 }
 
@@ -453,7 +494,7 @@ export function runBuildModelRoutingContext(
 			...decision,
 			routingContext,
 		});
-	});
+	}).pipe(Effect.provide(RuntimeLayer));
 }
 
 export const program = Effect.gen(function* () {
