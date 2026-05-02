@@ -505,11 +505,14 @@ export const program = Effect.gen(function* () {
 	});
 });
 
+export function reportProgramError(error: unknown): void {
+	process.stderr.write(
+		`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+	);
+	process.exitCode = 1;
+}
+
+/* istanbul ignore next -- CLI main wrapper */
 if (import.meta.main) {
-	Effect.runPromise(program).catch((error) => {
-		process.stderr.write(
-			`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
-		);
-		process.exitCode = 1;
-	});
+	Effect.runPromise(program).catch(reportProgramError);
 }

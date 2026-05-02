@@ -10,7 +10,9 @@ import {
 	Option,
 	Redacted,
 	Result,
+	Stream,
 } from "effect";
+import { Response as AiResponse, LanguageModel } from "effect/unstable/ai";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
@@ -109,6 +111,88 @@ const MockDiffToolkitLayer = DiffToolkit.toLayer(
 		}),
 	),
 );
+
+function makeUsage(inputTokensTotal: number, outputTokensTotal: number): AiResponse.Usage {
+	return new AiResponse.Usage({
+		inputTokens: {
+			uncached: undefined,
+			total: inputTokensTotal,
+			cacheRead: undefined,
+			cacheWrite: undefined,
+		},
+		outputTokens: {
+			total: outputTokensTotal,
+			text: outputTokensTotal,
+			reasoning: undefined,
+		},
+	});
+}
+
+function makeMockLanguageModelForToolOnlyFirstTurn(finalText: string) {
+	const calls: Array<{ prompt: unknown; toolChoice: unknown; toolkitPresent: boolean }> = [];
+	const circularResult: { self?: unknown } = {};
+	circularResult.self = circularResult;
+	const service = LanguageModel.LanguageModel.of({
+		generateText: (options: { prompt: unknown; toolChoice?: unknown; toolkit?: unknown }) => {
+			calls.push({
+				prompt: options.prompt,
+				toolChoice: options.toolChoice,
+				toolkitPresent: options.toolkit !== undefined,
+			});
+			if (options.toolChoice === "none") {
+				return Effect.succeed(
+					new LanguageModel.GenerateTextResponse([
+						AiResponse.makePart("text", { text: finalText }),
+						AiResponse.makePart("finish", {
+							reason: "stop",
+							usage: makeUsage(90, 30),
+							response: undefined,
+						}),
+					]),
+				);
+			}
+			return Effect.succeed(
+				new LanguageModel.GenerateTextResponse([
+					AiResponse.makePart("tool-call", {
+						id: "call_1",
+						name: "get_diff",
+						params: { path: null },
+						providerExecuted: false,
+					}),
+					AiResponse.makePart("tool-result", {
+						id: "call_1",
+						name: "get_diff",
+						isFailure: false,
+						result: "diff --git a/src/a.ts b/src/a.ts\n...",
+						encodedResult: "diff --git a/src/a.ts b/src/a.ts\n...",
+						providerExecuted: false,
+						preliminary: false,
+					}),
+					AiResponse.makePart("tool-result", {
+						id: "call_2",
+						name: "get_commit_diff",
+						isFailure: true,
+						result: circularResult,
+						encodedResult: "[circular]",
+						providerExecuted: false,
+						preliminary: false,
+					}),
+					AiResponse.makePart("finish", {
+						reason: "tool-calls",
+						usage: makeUsage(120, 12),
+						response: undefined,
+					}),
+				]),
+			);
+		},
+		generateObject: () => Effect.die(new Error("generateObject should not be called in this test")),
+		streamText: () => Stream.empty,
+	});
+	return {
+		layer: Layer.succeed(LanguageModel.LanguageModel, service),
+		calls,
+	};
+}
 
 function layerForTest(p: {
 	params: GeneratePrContentParams;
@@ -596,6 +680,38 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("runs no-tool follow-up when first response has only tool calls and empty text", async () => {
+			const p = makeParams(twoCommits, {
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				existingPrTitle: "feat: existing open PR title",
+			});
+			const mockModel = makeMockLanguageModelForToolOnlyFirstTurn(VALID_AI_RESPONSE);
+			const layer = Layer.mergeAll(
+				ValueBasedLayer,
+				Layer.succeed(GitContext, p.gitCtx),
+				MockDiffToolkitLayer,
+				mockModel.layer,
+			);
+			await runEffect(layer)(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mockModel.calls.length).toBe(2);
+					expect(mockModel.calls[0]?.toolkitPresent).toBe(true);
+					expect(mockModel.calls[1]?.toolChoice).toBe("none");
+					expect(String(mockModel.calls[1]?.prompt)).toContain(
+						"Return ONLY one JSON object matching the requested schema. Do not call tools.",
+					);
+					expect(String(mockModel.calls[1]?.prompt)).toContain("Tool result 1 (get_diff, success)");
+					expect(String(mockModel.calls[1]?.prompt)).toContain(
+						"Tool result 2 (get_commit_diff, failure)",
+					);
 				}).pipe(Effect.scoped),
 			);
 		});

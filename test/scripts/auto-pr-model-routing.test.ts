@@ -93,6 +93,32 @@ describe("model band routing command policy", () => {
 		});
 	});
 
+	test("routes non-breaking broad/cross-cutting changes to band C", () => {
+		const signals = {
+			semanticCommitCount: 4,
+			conventionalTypeCount: 2,
+			topLevelSpread: 3,
+			changedFileCount: 10,
+			sourceFileCount: 5,
+			docsFileCount: 2,
+			testFileCount: 1,
+			generatedFileCount: 0,
+			lockfileCount: 1,
+			packageManifestCount: 0,
+			rawChurn: 700,
+			sourceChurn: 500,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveBand(signals)).toBe("C");
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "C",
+			toolStrategy: "full-diff",
+		});
+	});
+
 	test("explicit model override wins over provider defaults", () => {
 		const signals = {
 			semanticCommitCount: 1,
@@ -266,6 +292,113 @@ describe("model band routing command policy", () => {
 			localRunnerResources:
 				"github-hosted ubuntu-24.04 private/internal baseline; cpu=2; memory=8GB",
 		});
+	});
+
+	test("uses commit-diff tool strategy for multi-commit mixed-type medium changes", () => {
+		const signals = {
+			semanticCommitCount: 4,
+			conventionalTypeCount: 2,
+			topLevelSpread: 2,
+			changedFileCount: 6,
+			sourceFileCount: 0,
+			docsFileCount: 2,
+			testFileCount: 0,
+			generatedFileCount: 1,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 200,
+			sourceChurn: 0,
+			generatedChurn: 20,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "B",
+			toolStrategy: "commit-diff",
+			requiresToolCalls: true,
+		});
+	});
+
+	test("uses no tools for medium band changes with no source/test/dependency signals", () => {
+		const signals = {
+			semanticCommitCount: 3,
+			conventionalTypeCount: 1,
+			topLevelSpread: 2,
+			changedFileCount: 6,
+			sourceFileCount: 0,
+			docsFileCount: 2,
+			testFileCount: 0,
+			generatedFileCount: 1,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 400,
+			sourceChurn: 0,
+			generatedChurn: 60,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "B",
+			toolStrategy: "none",
+			requiresToolCalls: false,
+		});
+	});
+
+	test("selects local large model for roomy runners and exposes max-param recommendation tiers", () => {
+		const signals = {
+			semanticCommitCount: 1,
+			conventionalTypeCount: 1,
+			topLevelSpread: 1,
+			changedFileCount: 1,
+			sourceFileCount: 1,
+			docsFileCount: 0,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 10,
+			sourceChurn: 10,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		const runner24 = resolveLocalRunnerResources({
+			runnerLabel: "ubuntu-24.04-8core",
+			repositoryVisibility: "public",
+			cpuCount: 8,
+			memoryGb: 24,
+		});
+		const runner64 = resolveLocalRunnerResources({
+			runnerLabel: "ubuntu-24.04-16core",
+			repositoryVisibility: "public",
+			cpuCount: 16,
+			memoryGb: 64,
+		});
+
+		const fit24 = resolveModelBand({
+			provider: "local",
+			signals,
+			localModel: {
+				runner: runner24,
+				llamacppModelUrl: "https://example.test/models/Qwen3-14B-Q4_K_M.gguf",
+			},
+		});
+		const fit64 = resolveModelBand({
+			provider: "local",
+			signals,
+			localModel: {
+				runner: runner64,
+				llamacppModelUrl: "https://example.test/models/Qwen3-32B-Q4_K_M.gguf",
+			},
+		});
+
+		expect(fit24.selectedModel).toBe("gpt-oss");
+		expect(fit24.localModelRecommendation).toContain("<= 14B");
+		expect(fit64.selectedModel).toBe("gpt-oss");
+		expect(fit64.localModelRecommendation).toContain("<= 32B");
 	});
 
 	test("builds analysis-oriented context without repeating commit subjects", () => {
