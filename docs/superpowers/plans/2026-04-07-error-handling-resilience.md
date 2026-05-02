@@ -1,5 +1,7 @@
 # Error Handling, Observability & Resilience Implementation Plan
 
+**Implementation status (2026-04-20):** Work was executed in-repo. This plan is preserved as an execution record; checkbox steps remain as-written (`- [ ]`) and should be read as historical plan instructions, not current TODOs.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Improve auto-pr's error handling, observability, and resilience across two thematic PRs: PR 1 adds narrowed AI error handling, branch validation, structured tool errors, visible config defaults, tool use logging, and token usage logging; PR 2 adds git command timeouts and diff size limits.
@@ -19,7 +21,7 @@
 - Modify: `src/auto-pr/index.ts` — re-export `isTransientAiError`
 - Modify: `test/auto-pr/errors.test.ts` — add tests for `isTransientAiError`
 
-- [ ] **Step 1: Write failing tests for `isTransientAiError`**
+- [x] **Step 1: Write failing tests for `isTransientAiError`**
 
 Add to the end of `test/auto-pr/errors.test.ts`:
 
@@ -60,7 +62,7 @@ test("isTransientAiError returns true for unknown/generic errors", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/errors.test.ts
@@ -68,7 +70,7 @@ bun test test/auto-pr/errors.test.ts
 
 Expected: `ReferenceError: isTransientAiError is not defined` or similar import error.
 
-- [ ] **Step 3: Implement `isTransientAiError` in `src/auto-pr/errors.ts`**
+- [x] **Step 3: Implement `isTransientAiError` in `src/auto-pr/errors.ts`**
 
 Add at the end of `src/auto-pr/errors.ts` (after the existing `formatError` function):
 
@@ -90,7 +92,7 @@ export function isTransientAiError(e: unknown): boolean {
 }
 ```
 
-- [ ] **Step 4: Re-export from `src/auto-pr/index.ts`**
+- [x] **Step 4: Re-export from `src/auto-pr/index.ts`**
 
 Add `isTransientAiError` to the existing export from `#auto-pr/errors.js` in `src/auto-pr/index.ts`:
 
@@ -114,7 +116,7 @@ export {
 } from "#auto-pr/errors.js";
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/errors.test.ts
@@ -122,7 +124,7 @@ bun test test/auto-pr/errors.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/errors.ts src/auto-pr/index.ts test/auto-pr/errors.test.ts
@@ -137,7 +139,7 @@ git commit -m "feat(errors): add isTransientAiError helper to distinguish config
 - Modify: `src/workflow/auto-pr-generate-content.ts` — replace `Effect.catch` with `Effect.catchIf(isTransientAiError, ...)`, add `AiProviderError` handler in `catchTags`
 - Modify: `test/workflow/generate-pr-content.test.ts` — add test that auth errors propagate (not fall back)
 
-- [ ] **Step 1: Write failing test for auth error propagation**
+- [x] **Step 1: Write failing test for auth error propagation**
 
 In `test/workflow/generate-pr-content.test.ts`, add a new `describe` block after the existing "HTTP 500 from OpenAI-compat endpoint" describe block:
 
@@ -207,7 +209,7 @@ import {
 } from "#auto-pr";
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/workflow/generate-pr-content.test.ts 2>&1 | grep -A3 "HTTP 401"
@@ -215,7 +217,7 @@ bun test test/workflow/generate-pr-content.test.ts 2>&1 | grep -A3 "HTTP 401"
 
 Expected: tests fail because HTTP 401 currently falls back to commit-summary instead of failing.
 
-- [ ] **Step 3: Replace `Effect.catch` with `Effect.catchIf` in `generateTitleAndDescriptionWithToolkit`**
+- [x] **Step 3: Replace `Effect.catch` with `Effect.catchIf` in `generateTitleAndDescriptionWithToolkit`**
 
 In `src/workflow/auto-pr-generate-content.ts`, change the `.pipe` at the end of `generateTitleAndDescriptionWithToolkit` (around line 287–298). Also add `isTransientAiError` to imports from `#auto-pr`.
 
@@ -268,7 +270,7 @@ Replace the `Effect.catch` call with `Effect.catchIf`:
     ),
 ```
 
-- [ ] **Step 4: Add `AiProviderError` handler in `generatePrContent`'s `catchTags`**
+- [x] **Step 4: Add `AiProviderError` handler in `generatePrContent`'s `catchTags`**
 
 In `generatePrContent`, the `.pipe` at the end uses `Effect.catchTags`. Add `AiProviderError` to convert non-transient provider errors to `AutoPrConfigError`. Also import `AiProviderError` from `#auto-pr`.
 
@@ -296,7 +298,7 @@ Change the `Effect.catchTags` call in `generatePrContent` to:
 
 Also update the `GeneratePrContentErrorSchema` to include `AiProviderError` handling (the schema union doesn't need to change since we catch it at `catchTags`; `AutoPrConfigError` is already in `GeneratePrContentError` type).
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 bun test test/workflow/generate-pr-content.test.ts
@@ -304,7 +306,7 @@ bun test test/workflow/generate-pr-content.test.ts
 
 Expected: all tests PASS, including the new 401/403 tests.
 
-- [ ] **Step 6: Run full test suite**
+- [x] **Step 6: Run full test suite**
 
 ```bash
 bun test
@@ -312,7 +314,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/workflow/auto-pr-generate-content.ts test/workflow/generate-pr-content.test.ts
@@ -327,7 +329,7 @@ git commit -m "feat(generate-content): narrow AI fallback to transient errors; p
 - Modify: `src/auto-pr/config.ts` — add guard in `GeneratePrContentConfigLayer` and `RunAutoPrConfigLayer`
 - Modify: `test/auto-pr/config.test.ts` — add tests for `branch === defaultBranch` rejection
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add a new describe block to `test/auto-pr/config.test.ts`:
 
@@ -421,7 +423,7 @@ describe("RunAutoPrConfigLayer rejects branch === defaultBranch when BRANCH is s
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/config.test.ts 2>&1 | grep -A3 "rejects branch"
@@ -429,7 +431,7 @@ bun test test/auto-pr/config.test.ts 2>&1 | grep -A3 "rejects branch"
 
 Expected: the two "fails when BRANCH equals DEFAULT_BRANCH" tests fail because there's no guard yet.
 
-- [ ] **Step 3: Add branch self-reference guard in `GeneratePrContentConfigLayer`**
+- [x] **Step 3: Add branch self-reference guard in `GeneratePrContentConfigLayer`**
 
 In `src/auto-pr/config.ts`, inside `GeneratePrContentConfigLayer`, after `const branch = yield* requireNonEmpty("BRANCH", base.branch);` and `const defaultBranch = yield* requireNonEmpty(...)`, add:
 
@@ -445,7 +447,7 @@ if (branch === defaultBranch) {
 
 Place this right after both `branch` and `defaultBranch` are defined (before `const templatePath = ...`).
 
-- [ ] **Step 4: Add branch self-reference guard in `RunAutoPrConfigLayer`**
+- [x] **Step 4: Add branch self-reference guard in `RunAutoPrConfigLayer`**
 
 In `src/auto-pr/config.ts`, inside `RunAutoPrConfigLayer`, after `const defaultBranch = yield* requireNonEmpty(...)` and `const workspace = yield* requireNonEmpty(...)`. The `branch` in `RunAutoPrConfig` is optional, so we guard only when it's defined.
 
@@ -475,7 +477,7 @@ const shared = {
 };
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/config.test.ts
@@ -483,7 +485,7 @@ bun test test/auto-pr/config.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/config.ts test/auto-pr/config.test.ts
@@ -498,7 +500,7 @@ git commit -m "feat(config): reject branch === defaultBranch to prevent meaningl
 - Modify: `src/auto-pr/diff-toolkit.ts` — update error formatting to use `[TOOL_ERROR]` prefix
 - Modify: `test/auto-pr/diff-toolkit.test.ts` — add tests for error response format
 
-- [ ] **Step 1: Write failing tests for error response format**
+- [x] **Step 1: Write failing tests for error response format**
 
 Add to `test/auto-pr/diff-toolkit.test.ts`:
 
@@ -558,7 +560,7 @@ describe("DiffToolkit error responses", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/diff-toolkit.test.ts 2>&1 | grep -A3 "error responses"
@@ -566,7 +568,7 @@ bun test test/auto-pr/diff-toolkit.test.ts 2>&1 | grep -A3 "error responses"
 
 Expected: tests fail because current code returns `"Error: <message>"` without the `[TOOL_ERROR]` prefix.
 
-- [ ] **Step 3: Update error formatting in `src/auto-pr/diff-toolkit.ts`**
+- [x] **Step 3: Update error formatting in `src/auto-pr/diff-toolkit.ts`**
 
 Replace both error handlers in `makeDiffToolkitLayer`. The current code has:
 ```typescript
@@ -583,7 +585,7 @@ and:
 .pipe(Effect.catch((e) => Effect.succeed(`[TOOL_ERROR] get_commit_diff failed: ${e.message}\nNo diff available for this request.`)))
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/diff-toolkit.test.ts
@@ -591,7 +593,7 @@ bun test test/auto-pr/diff-toolkit.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto-pr/diff-toolkit.ts test/auto-pr/diff-toolkit.test.ts
@@ -606,7 +608,7 @@ git commit -m "fix(diff-toolkit): prefix tool error responses with [TOOL_ERROR] 
 - Modify: `src/auto-pr/config.ts` — add `Effect.logWarning` when URL and model fall back to defaults
 - Modify: `test/auto-pr/config.test.ts` — add tests verifying warnings are emitted
 
-- [ ] **Step 1: Write tests for config default warnings**
+- [x] **Step 1: Write tests for config default warnings**
 
 Config warnings are emitted via `Effect.logWarning`. To capture them, add a log-capturing helper in the test and verify the log output contains the expected warning. Add to `test/auto-pr/config.test.ts`:
 
@@ -685,7 +687,7 @@ import { Cause, ConfigProvider, Effect, Exit, Layer, Logger, Redacted, Result } 
 import { AutoPrPlatformLayer } from "#auto-pr";
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/config.test.ts 2>&1 | grep -A3 "emits warnings"
@@ -693,7 +695,7 @@ bun test test/auto-pr/config.test.ts 2>&1 | grep -A3 "emits warnings"
 
 Expected: tests fail because no warnings are emitted for URL/model defaults.
 
-- [ ] **Step 3: Add URL default warning in `GeneratePrContentConfigLayer` (local provider branch)**
+- [x] **Step 3: Add URL default warning in `GeneratePrContentConfigLayer` (local provider branch)**
 
 In `src/auto-pr/config.ts`, inside `GeneratePrContentConfigLayer`'s `Match.when("local", ...)` block, after the default URL is assigned:
 
@@ -724,7 +726,7 @@ yield* Option.match(base.aiOpenaiCompatModel, {
 const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 ```
 
-- [ ] **Step 4: Add model default warning in `GeneratePrContentConfigLayer` (github-models branch)**
+- [x] **Step 4: Add model default warning in `GeneratePrContentConfigLayer` (github-models branch)**
 
 In `src/auto-pr/config.ts`, inside `GeneratePrContentConfigLayer`'s `Match.when("github-models", ...)` block:
 
@@ -743,11 +745,11 @@ yield* Option.match(base.aiOpenaiCompatModel, {
 const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 ```
 
-- [ ] **Step 5: Add the same warnings in `RunAutoPrConfigLayer`**
+- [x] **Step 5: Add the same warnings in `RunAutoPrConfigLayer`**
 
 Mirror the same `Option.match` warning calls in `RunAutoPrConfigLayer`'s local provider branch (for URL and model) and github-models branch (for model). Follow the exact same pattern as above.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/config.test.ts
@@ -755,7 +757,7 @@ bun test test/auto-pr/config.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 7: Run full suite**
+- [x] **Step 7: Run full suite**
 
 ```bash
 bun test
@@ -763,7 +765,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/auto-pr/config.ts test/auto-pr/config.test.ts
@@ -780,7 +782,7 @@ git commit -m "feat(config): log warning when URL or model falls back to default
 
 This is a pure refactor with no behavior change. No new tests needed (existing tests in `generate-pr-content.test.ts` already cover its usage).
 
-- [ ] **Step 1: Add `truncateForLog` to `src/core/string.ts`**
+- [x] **Step 1: Add `truncateForLog` to `src/core/string.ts`**
 
 Add at the end of `src/core/string.ts`:
 
@@ -798,7 +800,7 @@ export function truncateForLog(s: string, maxChars: number): string {
 }
 ```
 
-- [ ] **Step 2: Update import in `src/workflow/auto-pr-generate-content.ts`**
+- [x] **Step 2: Update import in `src/workflow/auto-pr-generate-content.ts`**
 
 Add `truncateForLog` to the `#core/string.js` or `#core` import path. Looking at the existing imports, `isBlank` comes from `#core/fill-pr-template-core.js`, not `#core/string.js` directly. However, `auto-pr-generate-content.ts` imports from `#auto-pr` which re-exports from `#core/index.js`. Let's import directly:
 
@@ -808,11 +810,11 @@ In `src/workflow/auto-pr-generate-content.ts`, remove the local `truncateForLog`
 import { truncateForLog } from "#core/string.js";
 ```
 
-- [ ] **Step 3: Verify `#core/string.js` alias resolves correctly**
+- [x] **Step 3: Verify `#core/string.js` alias resolves correctly**
 
 Check that `src/core/string.ts` is accessible as `#core/string.js`. Looking at `src/auto-pr/utils.ts` which already imports `import { unknownToMessage as unknownToMessageCore } from "#core/string.js";` — confirmed the alias works.
 
-- [ ] **Step 4: Run tests to verify nothing breaks**
+- [x] **Step 4: Run tests to verify nothing breaks**
 
 ```bash
 bun test
@@ -820,7 +822,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/string.ts src/workflow/auto-pr-generate-content.ts
@@ -835,7 +837,7 @@ git commit -m "refactor(string): move truncateForLog to src/core/string.ts for s
 - Modify: `src/auto-pr/diff-toolkit.ts` — add request/response log entries with `Effect.tap`, use `truncateForLog` from `#core/string.js`
 - Modify: `test/auto-pr/diff-toolkit.test.ts` — verify log entries are emitted
 
-- [ ] **Step 1: Write failing tests for tool use logging**
+- [x] **Step 1: Write failing tests for tool use logging**
 
 Add to `test/auto-pr/diff-toolkit.test.ts`. First add `Logger` to imports:
 ```typescript
@@ -929,7 +931,7 @@ import { DiffToolkit, makeDiffToolkitLayer } from "#auto-pr/diff-toolkit.js";
 import { AutoPrPlatformLayer } from "#auto-pr";
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/diff-toolkit.test.ts 2>&1 | grep -A3 "tool use logging"
@@ -937,7 +939,7 @@ bun test test/auto-pr/diff-toolkit.test.ts 2>&1 | grep -A3 "tool use logging"
 
 Expected: logging tests fail because no logging is currently emitted in handlers.
 
-- [ ] **Step 3: Add logging to `src/auto-pr/diff-toolkit.ts`**
+- [x] **Step 3: Add logging to `src/auto-pr/diff-toolkit.ts`**
 
 Update `makeDiffToolkitLayer` to use `truncateForLog` and emit log entries. Full updated `src/auto-pr/diff-toolkit.ts`:
 
@@ -1058,7 +1060,7 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/diff-toolkit.test.ts
@@ -1066,7 +1068,7 @@ bun test test/auto-pr/diff-toolkit.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 bun test
@@ -1074,7 +1076,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/diff-toolkit.ts test/auto-pr/diff-toolkit.test.ts
@@ -1090,7 +1092,7 @@ git commit -m "feat(diff-toolkit): add request/response logging for AI tool call
 - Modify: `test/workflow/generate-pr-content.test.ts` — verify token usage log is emitted
 - Modify: `test/test-utils.ts` — add `usage` field to mock fetch response (optional, to test non-null case)
 
-- [ ] **Step 1: Write failing test for token usage logging**
+- [x] **Step 1: Write failing test for token usage logging**
 
 Add to `test/workflow/generate-pr-content.test.ts` a new describe block after the existing 2-commit tests. Import `Logger` from effect at the top, and add `AutoPrPlatformLayer` to the imports from `#auto-pr`:
 
@@ -1153,7 +1155,7 @@ describe("token usage logging", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/workflow/generate-pr-content.test.ts 2>&1 | grep -A3 "token usage"
@@ -1161,7 +1163,7 @@ bun test test/workflow/generate-pr-content.test.ts 2>&1 | grep -A3 "token usage"
 
 Expected: test fails because no token_usage event is logged.
 
-- [ ] **Step 3: Add token usage logging in `generateTitleAndDescriptionWithToolkit`**
+- [x] **Step 3: Add token usage logging in `generateTitleAndDescriptionWithToolkit`**
 
 In `src/workflow/auto-pr-generate-content.ts`, in `generateTitleAndDescriptionWithToolkit`, after `const res = yield* LanguageModel.generateText(...)`:
 
@@ -1182,7 +1184,7 @@ yield* Effect.log({
 const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 bun test test/workflow/generate-pr-content.test.ts
@@ -1190,7 +1192,7 @@ bun test test/workflow/generate-pr-content.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 bun test
@@ -1198,7 +1200,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/workflow/auto-pr-generate-content.ts test/workflow/generate-pr-content.test.ts
@@ -1215,7 +1217,7 @@ git commit -m "feat(generate-content): log token usage after AI text generation"
 - Modify: `src/auto-pr/git-context.ts` — add `GIT_COMMAND_TIMEOUT`, apply `Effect.timeout` in `run` helper
 - Modify: `test/auto-pr/git-context.test.ts` — add test for timeout behavior
 
-- [ ] **Step 1: Write failing test for timeout**
+- [x] **Step 1: Write failing test for timeout**
 
 Add to `test/auto-pr/git-context.test.ts`:
 
@@ -1275,7 +1277,7 @@ test("GIT_COMMAND_TIMEOUT is 30 seconds", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/git-context.test.ts 2>&1 | grep -A3 "timeout"
@@ -1283,7 +1285,7 @@ bun test test/auto-pr/git-context.test.ts 2>&1 | grep -A3 "timeout"
 
 Expected: fail because `GIT_COMMAND_TIMEOUT` is not exported and no timeout exists.
 
-- [ ] **Step 3: Add timeout to `src/auto-pr/git-context.ts`**
+- [x] **Step 3: Add timeout to `src/auto-pr/git-context.ts`**
 
 Import `Duration` from effect and update the `run` helper:
 
@@ -1336,7 +1338,7 @@ grep -n "timeout" /home/krzysiek/github/Effect-TS/effect-smol/packages/effect/sr
 
 If the exact API differs, adjust accordingly. The key change is wrapping `runCommand` with a 30s timeout and mapping the timeout error to a clear message.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/git-context.test.ts
@@ -1344,7 +1346,7 @@ bun test test/auto-pr/git-context.test.ts
 
 Expected: all tests PASS including the timeout constant test.
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 bun test
@@ -1352,7 +1354,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/git-context.ts test/auto-pr/git-context.test.ts
@@ -1368,7 +1370,7 @@ git commit -m "feat(git-context): add 30s timeout to all git commands to prevent
 - Create: `test/core/sanitize-diff.test.ts` — unit tests
 - Modify: `src/auto-pr/diff-toolkit.ts` — call `sanitizeDiffForAi` before returning from handlers
 
-- [ ] **Step 1: Write failing tests for `sanitizeDiffForAi`**
+- [x] **Step 1: Write failing tests for `sanitizeDiffForAi`**
 
 Create `test/core/sanitize-diff.test.ts`:
 
@@ -1444,7 +1446,7 @@ describe("sanitizeDiffForAi", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/core/sanitize-diff.test.ts
@@ -1452,7 +1454,7 @@ bun test test/core/sanitize-diff.test.ts
 
 Expected: all tests fail with module not found error.
 
-- [ ] **Step 3: Create `src/core/sanitize-diff.ts`**
+- [x] **Step 3: Create `src/core/sanitize-diff.ts`**
 
 Create the file with the pure implementation:
 
@@ -1546,11 +1548,11 @@ export function sanitizeDiffForAi(raw: string): string {
 }
 ```
 
-- [ ] **Step 4: Add path alias for `#core/sanitize-diff.js`**
+- [x] **Step 4: Add path alias for `#core/sanitize-diff.js`**
 
 Check the `tsconfig.json` or `bunfig.toml` to verify the `#core` alias resolves to `src/core`. Since `#core/string.js` already works (used in `src/auto-pr/utils.ts`), the new file should be accessible as `#core/sanitize-diff.js` automatically.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 bun test test/core/sanitize-diff.test.ts
@@ -1558,7 +1560,7 @@ bun test test/core/sanitize-diff.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/core/sanitize-diff.ts test/core/sanitize-diff.test.ts
@@ -1573,7 +1575,7 @@ git commit -m "feat(sanitize-diff): add pure sanitizeDiffForAi with binary filte
 - Modify: `src/auto-pr/diff-toolkit.ts` — import `sanitizeDiffForAi` and call on git output before returning
 - Modify: `test/auto-pr/diff-toolkit.test.ts` — add test that binary files are replaced in handler output
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Add to `test/auto-pr/diff-toolkit.test.ts`:
 
@@ -1608,7 +1610,7 @@ describe("DiffToolkit diff sanitization", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 bun test test/auto-pr/diff-toolkit.test.ts 2>&1 | grep -A3 "sanitization"
@@ -1616,7 +1618,7 @@ bun test test/auto-pr/diff-toolkit.test.ts 2>&1 | grep -A3 "sanitization"
 
 Expected: test fails because no sanitization happens yet.
 
-- [ ] **Step 3: Add `sanitizeDiffForAi` call in handlers**
+- [x] **Step 3: Add `sanitizeDiffForAi` call in handlers**
 
 In `src/auto-pr/diff-toolkit.ts`, import `sanitizeDiffForAi`:
 
@@ -1640,7 +1642,7 @@ return sanitized;
 
 Do the same for `get_commit_diff`. The response log and return value should use `sanitized` instead of `result`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 bun test test/auto-pr/diff-toolkit.test.ts
@@ -1648,7 +1650,7 @@ bun test test/auto-pr/diff-toolkit.test.ts
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 bun test
@@ -1656,7 +1658,7 @@ bun test
 
 Expected: all tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/diff-toolkit.ts test/auto-pr/diff-toolkit.test.ts

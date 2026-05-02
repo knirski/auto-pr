@@ -1,5 +1,7 @@
 # Effect Idiom & Type-Safety Hardening Implementation Plan
 
+**Implementation status (2026-04-20):** Work was executed in-repo. This plan is preserved as an execution record; checkbox states (`- [ ]` and `- [x]`) should be read as historical plan tracking, not current TODOs.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Tighten type safety and FC/IS rigor across the PR-writing hot path (`src/workflow/auto-pr-create-or-update-pr.ts`), the AI provider layer (`src/auto-pr/live/ai-provider.ts`), `src/core/errors.ts`, and `src/auto-pr/config.ts`, using only the project's existing idioms.
@@ -51,7 +53,7 @@ Two tasks, one PR, two commits.
 - Test: `test/auto-pr/errors.test.ts` (add `formatError` test)
 - Test: `test/workflow/create-or-update-pr.test.ts` (append new test cases)
 
-- [ ] **Step 1: Research `runCommand` error transformation**
+- [x] **Step 1: Research `runCommand` error transformation**
 
 Before writing code, confirm how `runCommand` surfaces spawner errors. Run:
 
@@ -63,7 +65,7 @@ Read the function. Answer: when the spawner fails with a `PlatformError.systemEr
 
 If unclear, consult LLMS.md § on `Effect.catch` / `Effect.catchTag` and the `effect-smol/packages/unstable-process` source.
 
-- [ ] **Step 2: Add `PullRequestLookupError` class**
+- [x] **Step 2: Add `PullRequestLookupError` class**
 
 In `src/core/errors.ts`, add after the `PullRequestFailedError` class (around line 14):
 
@@ -75,7 +77,7 @@ export class PullRequestLookupError extends Schema.TaggedErrorClass<PullRequestL
 ) {}
 ```
 
-- [ ] **Step 3: Add failing constructor test**
+- [x] **Step 3: Add failing constructor test**
 
 Append to `test/core/errors.test.ts`:
 
@@ -98,7 +100,7 @@ bun test test/core/errors.test.ts
 
 Expected: PASS (the class already exists from Step 2).
 
-- [ ] **Step 4: Integrate `PullRequestLookupError` in `formatError` (five-point integration)**
+- [x] **Step 4: Integrate `PullRequestLookupError` in `formatError` (five-point integration)**
 
 In `src/auto-pr/errors.ts`:
 
@@ -128,7 +130,7 @@ Match.tag("PullRequestLookupError", ({ branch, cause }) =>
 ),
 ```
 
-- [ ] **Step 5: Add failing `formatError` test for `PullRequestLookupError`**
+- [x] **Step 5: Add failing `formatError` test for `PullRequestLookupError`**
 
 Append to `test/auto-pr/errors.test.ts`:
 
@@ -150,7 +152,7 @@ bun test test/auto-pr/errors.test.ts
 
 Expected: PASS (integration complete from Step 4).
 
-- [ ] **Step 6: Add failing tests for the new `ghPrViewJson` behaviour**
+- [x] **Step 6: Add failing tests for the new `ghPrViewJson` behaviour**
 
 Append to `test/workflow/create-or-update-pr.test.ts` (the file already exists; use the same imports and `Layer.mock(ChildProcessSpawner)(…)` pattern shown at the top of the file and in `#test/test-utils.js`):
 
@@ -248,7 +250,7 @@ bun test test/workflow/create-or-update-pr.test.ts
 
 Expected: FAIL — either "ghPrViewJson is not exported," the malformed-JSON test returns `Option.none` (old behaviour) instead of failing, or the schema-mismatch test passes as `Option.none` instead of failing.
 
-- [ ] **Step 7: Rewrite `ghPrViewJson`**
+- [x] **Step 7: Rewrite `ghPrViewJson`**
 
 Replace `src/workflow/auto-pr-create-or-update-pr.ts:40-59` with:
 
@@ -296,7 +298,7 @@ import { PullRequestLookupError } from "#core/errors.js";
 
 Remove now-unused imports (e.g., the inline `Effect.try(JSON.parse…)` block's `Effect.try`/etc. is gone; `tsgo` will flag dead imports).
 
-- [ ] **Step 8: Widen `CreateOrUpdatePrError`**
+- [x] **Step 8: Widen `CreateOrUpdatePrError`**
 
 At `src/workflow/auto-pr-create-or-update-pr.ts:133`, change:
 
@@ -314,7 +316,7 @@ type CreateOrUpdatePrError =
 	| PullRequestLookupError;
 ```
 
-- [ ] **Step 9: Verify `bun run check:code` passes**
+- [x] **Step 9: Verify `bun run check:code` passes**
 
 Run:
 
@@ -324,7 +326,7 @@ bun run check:code
 
 Expected: exit code 0. If `tsgo` complains about a missing `Match.tag` branch in `formatError`, that's a genuine miss — add it. If tests fail because a caller changed behaviour, inspect the caller (likely `runCreateOrUpdatePr` near `:154`); the calling code already handles `Option` outputs and any `yield*`-propagated error, so no caller-code change should be needed.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/core/errors.ts src/auto-pr/errors.ts \
@@ -347,7 +349,7 @@ git commit -m "refactor(workflow): typed PullRequestLookupError instead of silen
 - Test: `test/auto-pr/errors.test.ts` (format test)
 - Test: `test/core/errors.test.ts` (constructor test)
 
-- [ ] **Step 1: Research — is there a reusable URL helper?**
+- [x] **Step 1: Research — is there a reusable URL helper?**
 
 Run:
 
@@ -359,7 +361,7 @@ If a project-internal `Url.fromString` exists and accepts arbitrary http(s) URLs
 
 Consult `effect-smol/LLMS.md` for Effect v4's URL parsing primitives if LLMS.md covers them.
 
-- [ ] **Step 2: Add `PullRequestUrlParseError` class**
+- [x] **Step 2: Add `PullRequestUrlParseError` class**
 
 In `src/core/errors.ts`, add after `PullRequestLookupError`:
 
@@ -371,7 +373,7 @@ export class PullRequestUrlParseError extends Schema.TaggedErrorClass<PullReques
 ) {}
 ```
 
-- [ ] **Step 3: Constructor test for `PullRequestUrlParseError`**
+- [x] **Step 3: Constructor test for `PullRequestUrlParseError`**
 
 Append to `test/core/errors.test.ts`:
 
@@ -394,7 +396,7 @@ bun test test/core/errors.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 4: Integrate `PullRequestUrlParseError` in `formatError` (five-point integration)**
+- [x] **Step 4: Integrate `PullRequestUrlParseError` in `formatError` (five-point integration)**
 
 In `src/auto-pr/errors.ts`:
 
@@ -424,7 +426,7 @@ Match.tag("PullRequestUrlParseError", ({ raw, reason }) =>
 ),
 ```
 
-- [ ] **Step 5: `formatError` test for `PullRequestUrlParseError`**
+- [x] **Step 5: `formatError` test for `PullRequestUrlParseError`**
 
 Append to `test/auto-pr/errors.test.ts`:
 
@@ -446,7 +448,7 @@ bun test test/auto-pr/errors.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Failing tests for `parseGhPrCreateOutput`**
+- [x] **Step 6: Failing tests for `parseGhPrCreateOutput`**
 
 Create `test/core/gh-pr-url.test.ts`:
 
@@ -494,7 +496,7 @@ bun test test/core/gh-pr-url.test.ts
 
 Expected: FAIL — module `#core/gh-pr-url.js` does not exist.
 
-- [ ] **Step 7: Create `src/core/gh-pr-url.ts`**
+- [x] **Step 7: Create `src/core/gh-pr-url.ts`**
 
 ```ts
 import { Result } from "effect";
@@ -532,7 +534,7 @@ bun test test/core/gh-pr-url.test.ts
 
 Expected: PASS (all 5 cases).
 
-- [ ] **Step 8: Wire shell to core — delete `extractPrUrl`, call `parseGhPrCreateOutput`**
+- [x] **Step 8: Wire shell to core — delete `extractPrUrl`, call `parseGhPrCreateOutput`**
 
 In `src/workflow/auto-pr-create-or-update-pr.ts`:
 
@@ -567,7 +569,7 @@ type CreateOrUpdatePrError =
 	| PullRequestUrlParseError;
 ```
 
-- [ ] **Step 9: Optionally add to `src/core/index.ts` re-export**
+- [x] **Step 9: Optionally add to `src/core/index.ts` re-export**
 
 If `src/core/index.ts` already re-exports helpers from other core modules (check with `head -40 src/core/index.ts`), add alongside:
 
@@ -577,7 +579,7 @@ export { parseGhPrCreateOutput } from "#core/gh-pr-url.js";
 
 Skip if core modules are imported directly without re-exports in this project.
 
-- [ ] **Step 10: Verify `bun run check:code` passes**
+- [x] **Step 10: Verify `bun run check:code` passes**
 
 ```bash
 bun run check:code
@@ -585,7 +587,7 @@ bun run check:code
 
 Expected: exit code 0.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/core/errors.ts src/core/gh-pr-url.ts \
@@ -622,7 +624,7 @@ One task, one PR, one commit.
 - Modify: `src/auto-pr/live/ai-provider.ts:37-48` (inner cast at `:47`)
 - Modify: `src/auto-pr/live/ai-provider.ts:56-97` (outer cast at `:96`)
 
-- [ ] **Step 1: Research — Effect v4 `OpenAiClient.layer` / `Layer.mergeAll` signatures**
+- [x] **Step 1: Research — Effect v4 `OpenAiClient.layer` / `Layer.mergeAll` signatures**
 
 Consult `effect-smol/LLMS.md` for:
 - Return type of `OpenAiClient.layer(options: OpenAiClient.Options)` at the project's pinned version.
@@ -645,7 +647,7 @@ Record the findings in a brief comment or scratch note so Step 3 knows which out
 
 **No context7, no web.** Effect v4 is beta.
 
-- [ ] **Step 2: Drop the inner cast and explicit return annotation**
+- [x] **Step 2: Drop the inner cast and explicit return annotation**
 
 In `src/auto-pr/live/ai-provider.ts:37-48`, replace:
 
@@ -680,7 +682,7 @@ function openAiLanguageModelStack(
 
 Note: the explicit return annotation AND the trailing `as …` are both deleted. TypeScript infers.
 
-- [ ] **Step 3: Run typecheck and handle the inferred type**
+- [x] **Step 3: Run typecheck and handle the inferred type**
 
 ```bash
 bun run typecheck
@@ -723,7 +725,7 @@ Imports required (at top of file): `AutoPrConfigError` from `#core/errors.js` (a
 
 **Under no circumstance** replace the cast with `as unknown as …`, widen to `Layer.Layer<…, unknown>`, or add `any` anywhere.
 
-- [ ] **Step 4: Drop the outer cast**
+- [x] **Step 4: Drop the outer cast**
 
 In `src/auto-pr/live/ai-provider.ts`, locate the end of `aiProviderLayerFromConfig` (around line 96):
 
@@ -745,7 +747,7 @@ If Step 3 outcome was (c) and a new error class was introduced, widen the outer 
 ): Layer.Layer<LanguageModel.LanguageModel, AutoPrConfigError | AiLayerConstructionError> {
 ```
 
-- [ ] **Step 5: Verify `bun run check:code` passes**
+- [x] **Step 5: Verify `bun run check:code` passes**
 
 ```bash
 bun run check:code
@@ -755,7 +757,7 @@ Expected: exit code 0.
 
 If any existing test was indirectly asserting behaviour that the casts hid, it will fail honestly. Fix the bug revealed, not the cast.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/live/ai-provider.ts
@@ -786,7 +788,7 @@ Three tasks, one PR, three commits.
 - Modify: all callers that pass a non-string `cause` (identified by grep)
 - Test: `test/auto-pr/errors.test.ts` (add contract test)
 
-- [ ] **Step 1: Inventory callers**
+- [x] **Step 1: Inventory callers**
 
 Run:
 
@@ -796,7 +798,7 @@ grep -rn "new ParseError(\|new TemplateRenderError(" src/ test/
 
 Record every match. For each, note whether `cause` is already a string. Callers passing `Error` objects or `unknown` will need Step 4's stringify pass.
 
-- [ ] **Step 2: Change class definitions**
+- [x] **Step 2: Change class definitions**
 
 In `src/core/errors.ts`, change lines 57-60:
 
@@ -816,7 +818,7 @@ export class TemplateRenderError extends Schema.TaggedErrorClass<TemplateRenderE
 ) {}
 ```
 
-- [ ] **Step 3: Add failing contract test for `formatError`**
+- [x] **Step 3: Add failing contract test for `formatError`**
 
 Append to `test/auto-pr/errors.test.ts`:
 
@@ -838,7 +840,7 @@ bun test test/auto-pr/errors.test.ts
 
 Expected: PASS (the behaviour is unchanged for string causes; today's `String(cause)` returns the string unchanged).
 
-- [ ] **Step 4: Fix each caller**
+- [x] **Step 4: Fix each caller**
 
 For every match in Step 1 where `cause` is not already `string`, stringify at the construction site:
 
@@ -851,7 +853,7 @@ new ParseError({ message: "…", cause: err instanceof Error ? err.message : Str
 
 Same pattern for `TemplateRenderError`.
 
-- [ ] **Step 5: Simplify `formatError` branches**
+- [x] **Step 5: Simplify `formatError` branches**
 
 In `src/auto-pr/errors.ts`, find the `ParseError` branch (around line 91-92):
 
@@ -871,7 +873,7 @@ Match.tag("ParseError", ({ message, cause }) =>
 
 Same for `TemplateRenderError` (around line 98-99).
 
-- [ ] **Step 6: Verify `bun run check:code` passes**
+- [x] **Step 6: Verify `bun run check:code` passes**
 
 ```bash
 bun run check:code
@@ -879,7 +881,7 @@ bun run check:code
 
 Expected: exit code 0. If `tsgo` flags any caller passing a non-string `cause`, fix per Step 4 and re-run.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/core/errors.ts src/auto-pr/errors.ts test/auto-pr/errors.test.ts <every-modified-caller-from-Step-1>
@@ -893,7 +895,7 @@ git commit -m "refactor(errors): narrow ParseError/TemplateRenderError cause to 
 **Files:**
 - Modify: `src/auto-pr/config.ts` (add helper near existing private helpers around line 50-95; replace 3-5 call sites)
 
-- [ ] **Step 1: Inventory call sites**
+- [x] **Step 1: Inventory call sites**
 
 Run:
 
@@ -903,7 +905,7 @@ grep -n "Option\.getOrElse\|Option\.isNone\|Effect\.logWarning" src/auto-pr/conf
 
 Record the line ranges of the warn-on-default triples. Per the audit, there are at least three: around `:178-182`, `:196-204`, `:206-214`, plus equivalents in the `github-models` branch near `:364` and `:421`.
 
-- [ ] **Step 2: Add the helper**
+- [x] **Step 2: Add the helper**
 
 In `src/auto-pr/config.ts`, insert near the other private helpers (after `requireRedactedOption` around line 83, or wherever private helpers are grouped):
 
@@ -924,7 +926,7 @@ function getOrDefaultLogged<T>(
 }
 ```
 
-- [ ] **Step 3: Replace the first call site (`:178-182`)**
+- [x] **Step 3: Replace the first call site (`:178-182`)**
 
 Before:
 
@@ -946,7 +948,7 @@ const provider = yield* parseProviderOrDefault(providerRaw);
 
 Note: `parseProviderOrDefault` is kept for now — it handles the case of unknown provider strings. If, after replacing all sites, it's called with a value that's always "local" unless the user explicitly sets it, inline it to `parseProvider`; otherwise leave.
 
-- [ ] **Step 4: Replace the `:196-205` call site**
+- [x] **Step 4: Replace the `:196-205` call site**
 
 Before:
 
@@ -971,7 +973,7 @@ const openaiCompatUrl = yield* getOrDefaultLogged(
 const url = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", openaiCompatUrl);
 ```
 
-- [ ] **Step 5: Replace the `:206-215` call site**
+- [x] **Step 5: Replace the `:206-215` call site**
 
 Before:
 
@@ -996,7 +998,7 @@ const model = yield* getOrDefaultLogged(
 const modelId = yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 ```
 
-- [ ] **Step 6: Replace remaining call sites in the `github-models` branch**
+- [x] **Step 6: Replace remaining call sites in the `github-models` branch**
 
 Apply the same transform to any equivalent triple in the `github-models` branch (around `:364`, `:421`). The shape is identical — `Option.getOrElse` + `Option.isNone` check + `Effect.logWarning` — just with different env var names.
 
@@ -1008,7 +1010,7 @@ grep -n "Option\.isNone.*aiOpenai\|Option\.isNone.*aiProvider" src/auto-pr/confi
 
 Expected output: empty.
 
-- [ ] **Step 7: Verify `bun run check:code` passes**
+- [x] **Step 7: Verify `bun run check:code` passes**
 
 ```bash
 bun run check:code
@@ -1016,7 +1018,7 @@ bun run check:code
 
 Expected: exit code 0. `test/auto-pr/config.test.ts` already covers the warn-on-default behaviour; it should continue to pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/auto-pr/config.ts
@@ -1032,7 +1034,7 @@ git commit -m "refactor(config): unify Option-default-warn pattern via getOrDefa
 - Create: `test/core/openai-compat-url.test.ts`
 - Modify: `src/auto-pr/config.ts` (integrate after `requireNonEmpty` around `:205`)
 
-- [ ] **Step 1: Failing tests for `parseOpenAiCompatUrl`**
+- [x] **Step 1: Failing tests for `parseOpenAiCompatUrl`**
 
 Create `test/core/openai-compat-url.test.ts`:
 
@@ -1080,7 +1082,7 @@ bun test test/core/openai-compat-url.test.ts
 
 Expected: FAIL — module missing.
 
-- [ ] **Step 2: Create the helper**
+- [x] **Step 2: Create the helper**
 
 Create `src/core/openai-compat-url.ts`:
 
@@ -1118,7 +1120,7 @@ bun test test/core/openai-compat-url.test.ts
 
 Expected: PASS (all 7 cases).
 
-- [ ] **Step 3: Wire `parseOpenAiCompatUrl` into config**
+- [x] **Step 3: Wire `parseOpenAiCompatUrl` into config**
 
 In `src/auto-pr/config.ts`, locate the line immediately after the `requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_URL", …)` call (around `:205` after Task 5's edits). The current code has:
 
@@ -1143,7 +1145,7 @@ Add the import near the top of `src/auto-pr/config.ts`:
 import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
 ```
 
-- [ ] **Step 4: Verify `bun run check:code` passes**
+- [x] **Step 4: Verify `bun run check:code` passes**
 
 ```bash
 bun run check:code
@@ -1151,7 +1153,7 @@ bun run check:code
 
 Expected: exit code 0. Config tests continue to pass; valid URLs pass validation; a typo like `localhost:8080` now fails at config load with a precise `AutoPrConfigError` message.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/openai-compat-url.ts test/core/openai-compat-url.test.ts src/auto-pr/config.ts
@@ -1176,7 +1178,7 @@ gh pr create \
 
 After PRs A, B, C are merged (or all local commits applied on a single branch for a combined review):
 
-- [ ] **Step 1: Full gate**
+- [x] **Step 1: Full gate**
 
 ```bash
 bun run check
@@ -1184,7 +1186,7 @@ bun run check
 
 Expected: exit code 0, no failures.
 
-- [ ] **Step 2: Coverage report**
+- [x] **Step 2: Coverage report**
 
 ```bash
 bun test --coverage
@@ -1192,7 +1194,7 @@ bun test --coverage
 
 Read the per-file coverage of `src/workflow/auto-pr-create-or-update-pr.ts`. Should be ≥0.80 after Task 1's tests (previously ~0.68).
 
-- [ ] **Step 3 (optional): Local act smoke**
+- [x] **Step 3 (optional): Local act smoke**
 
 ```bash
 bun run act -- check
@@ -1200,7 +1202,7 @@ bun run act -- check
 
 Useful when landing the combined change — confirms no CI-time regression before hosted run.
 
-- [ ] **Step 4: Per AGENTS.md — do not commit `dist/`**
+- [x] **Step 4: Per AGENTS.md — do not commit `dist/`**
 
 `dist/` is rebuilt by `update-dist.yml` on merge to main. The pre-commit hook (`scripts/check-no-dist-staged.sh`) refuses to stage it.
 

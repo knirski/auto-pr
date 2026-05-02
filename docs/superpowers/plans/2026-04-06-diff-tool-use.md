@@ -1,5 +1,7 @@
 # Diff Tool Use Implementation Plan
 
+**Implementation status (2026-04-20):** Work was executed in-repo. This plan is preserved as an execution record; checkbox steps remain as-written (`- [ ]`) and should be read as historical plan instructions, not current TODOs.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add tool use to AI-generated PR descriptions so the model can selectively fetch diffs, while consolidating all git operations behind a typed `GitContext` service and eliminating `auto-pr-get-commits`.
@@ -52,7 +54,7 @@
 - Create: `src/auto-pr/git-context.ts`
 - Create: `test/auto-pr/git-context.test.ts`
 
-- [ ] **Step 1: Write the failing test for `GitContext.getLog`**
+- [x] **Step 1: Write the failing test for `GitContext.getLog`**
 
 Create `test/auto-pr/git-context.test.ts`:
 
@@ -124,12 +126,12 @@ describe("GitContext", () => {
 
 Note: This test pattern follows `test/workflow/auto-pr-get-commits.test.ts` which uses real git repos.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test test/auto-pr/git-context.test.ts`
 Expected: FAIL — module `#auto-pr/git-context.js` not found
 
-- [ ] **Step 3: Implement `GitContext` service**
+- [x] **Step 3: Implement `GitContext` service**
 
 Create `src/auto-pr/git-context.ts`:
 
@@ -181,7 +183,7 @@ export function GitContextLive(workspace: string): Layer.Layer<GitContext, never
 }
 ```
 
-- [ ] **Step 4: Fix test to use correct patterns, then run**
+- [x] **Step 4: Fix test to use correct patterns, then run**
 
 Rewrite the test to use proper Effect patterns matching the existing test style (use `createTestTempDirEffect`, `FileSystem`):
 
@@ -338,7 +340,7 @@ describe("GitContext", () => {
 Run: `bun test test/auto-pr/git-context.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto-pr/git-context.ts test/auto-pr/git-context.test.ts
@@ -353,7 +355,7 @@ git commit -m "feat: add GitContext service for typed git operations"
 - Modify: `src/core/fill-pr-template-core.ts`
 - Modify: `test/core/fill-pr-template-core.test.ts`
 
-- [ ] **Step 1: Write failing tests for hash extraction**
+- [x] **Step 1: Write failing tests for hash extraction**
 
 Add to `test/core/fill-pr-template-core.test.ts`:
 
@@ -411,12 +413,12 @@ describe("parseCommits (hash extraction)", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test test/core/fill-pr-template-core.test.ts --filter "hash extraction"`
 Expected: FAIL — `hash` property does not exist on `CommitInfo`
 
-- [ ] **Step 3: Add `hash` to `CommitInfo` and update parsing**
+- [x] **Step 3: Add `hash` to `CommitInfo` and update parsing**
 
 In `src/core/fill-pr-template-core.ts`:
 
@@ -489,7 +491,7 @@ function mapParsedToCommitInfo(block: string, parsed: Commit, hash: string): Com
 }
 ```
 
-- [ ] **Step 4: Fix all call sites for `commit()` test helper**
+- [x] **Step 4: Fix all call sites for `commit()` test helper**
 
 Update the `commit()` helper in the test file to include `hash`:
 ```typescript
@@ -508,12 +510,12 @@ const commit = (
 });
 ```
 
-- [ ] **Step 5: Run all tests to verify**
+- [x] **Step 5: Run all tests to verify**
 
 Run: `bun test test/core/fill-pr-template-core.test.ts`
 Expected: PASS (all existing tests + new hash tests)
 
-- [ ] **Step 6: Update `getDescriptionPromptText` to include short hash**
+- [x] **Step 6: Update `getDescriptionPromptText` to include short hash**
 
 In `src/core/fill-pr-template-core.ts`:
 
@@ -529,7 +531,7 @@ export function getDescriptionPromptText(commits: readonly CommitInfo[]): string
 }
 ```
 
-- [ ] **Step 7: Add test for prompt text with hashes**
+- [x] **Step 7: Add test for prompt text with hashes**
 
 ```typescript
 describe("getDescriptionPromptText (with hashes)", () => {
@@ -551,12 +553,12 @@ describe("getDescriptionPromptText (with hashes)", () => {
 });
 ```
 
-- [ ] **Step 8: Run tests**
+- [x] **Step 8: Run tests**
 
 Run: `bun test test/core/fill-pr-template-core.test.ts`
 Expected: PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/core/fill-pr-template-core.ts test/core/fill-pr-template-core.test.ts
@@ -572,7 +574,7 @@ git commit -m "feat: add commit hash to CommitInfo and prompt text"
 - Create: `test/core/prompt.test.ts`
 - Modify: `src/auto-pr/prompts/pr-description.txt`
 
-- [ ] **Step 1: Write failing test for `buildDescriptionPrompt` with diffstat**
+- [x] **Step 1: Write failing test for `buildDescriptionPrompt` with diffstat**
 
 Create `test/core/prompt.test.ts`:
 
@@ -606,12 +608,12 @@ describe("buildDescriptionPrompt", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test test/core/prompt.test.ts`
 Expected: FAIL — function signature mismatch (currently takes 2 args)
 
-- [ ] **Step 3: Update `buildDescriptionPrompt`**
+- [x] **Step 3: Update `buildDescriptionPrompt`**
 
 In `src/core/prompt.ts`:
 
@@ -635,12 +637,12 @@ export function buildDescriptionPrompt(
 }
 ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run: `bun test test/core/prompt.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Fix all call sites of `buildDescriptionPrompt`**
+- [x] **Step 5: Fix all call sites of `buildDescriptionPrompt`**
 
 The function signature changed from `(promptTemplate, commitContent)` to `(promptTemplate, diffStat, commitContent)`. Find and update all call sites:
 
@@ -654,12 +656,12 @@ const prompt = buildDescriptionPrompt(descriptionPromptText, "", commitContent);
 
 Search for other call sites in `src/tools/auto-pr-fill-pr-template.ts` and tests — update them all with empty string for `diffStat`.
 
-- [ ] **Step 6: Run full test suite**
+- [x] **Step 6: Run full test suite**
 
 Run: `bun test`
 Expected: PASS
 
-- [ ] **Step 7: Update system prompt with tool descriptions**
+- [x] **Step 7: Update system prompt with tool descriptions**
 
 Modify `src/auto-pr/prompts/pr-description.txt` — append tool usage instructions:
 
@@ -692,7 +694,7 @@ Example 2:
 {"title":"fix(pr-template): keep type of change aligned with final title","motivation":["PR body showed a different type-of-change label than the generated title when a multi-commit branch was summarized."],"benefits":[],"risks":["Confirm multi-commit PRs still infer the right type when the generated title differs from commits.","Review fallback when AI output is invalid."],"notesForReviewers":"See src/core/fill-pr-template-core.ts and the workflow tests covering generated titles."}
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/core/prompt.ts test/core/prompt.test.ts src/auto-pr/prompts/pr-description.txt
@@ -708,7 +710,7 @@ git commit -m "feat: add diffstat to prompt and tool descriptions to system prom
 - Create: `test/auto-pr/diff-toolkit.test.ts`
 - Modify: `test/test-utils.ts`
 
-- [ ] **Step 1: Add `GitContextTestMock` to test utils**
+- [x] **Step 1: Add `GitContextTestMock` to test utils**
 
 In `test/test-utils.ts`, add:
 
@@ -733,7 +735,7 @@ export const GitContextTestMock = Layer.succeed(
 );
 ```
 
-- [ ] **Step 2: Write failing test for toolkit handler**
+- [x] **Step 2: Write failing test for toolkit handler**
 
 Create `test/auto-pr/diff-toolkit.test.ts`:
 
@@ -807,12 +809,12 @@ describe("DiffToolkit handlers", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `bun test test/auto-pr/diff-toolkit.test.ts`
 Expected: FAIL — module `#auto-pr/diff-toolkit.js` not found
 
-- [ ] **Step 4: Implement `DiffToolkit`**
+- [x] **Step 4: Implement `DiffToolkit`**
 
 Create `src/auto-pr/diff-toolkit.ts`:
 
@@ -874,12 +876,12 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 
 Note: The exact `Toolkit.of` / `DiffToolkit.of` API should be verified against the installed `effect@4.0.0-beta.42`. The handler pattern matches `ai-docs/src/71_ai/20_tools.ts` from effect-smol. If `DiffToolkit.of` is not available, use a plain object: `{ get_diff: ..., get_commit_diff: ... }`.
 
-- [ ] **Step 5: Run test**
+- [x] **Step 5: Run test**
 
 Run: `bun test test/auto-pr/diff-toolkit.test.ts`
 Expected: PASS (or adjust API if Toolkit.of differs — check error message and adapt)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto-pr/diff-toolkit.ts test/auto-pr/diff-toolkit.test.ts test/test-utils.ts
@@ -894,7 +896,7 @@ git commit -m "feat: add DiffToolkit with get_diff and get_commit_diff tools"
 - Modify: `src/auto-pr/config.ts`
 - Modify: `test/auto-pr/config.test.ts`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Add to `test/auto-pr/config.test.ts`:
 
@@ -923,12 +925,12 @@ describe("GeneratePrContentConfig", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test test/auto-pr/config.test.ts --filter "DEFAULT_BRANCH and BRANCH"`
 Expected: FAIL — `defaultBranch` / `branch` not on config type
 
-- [ ] **Step 3: Add fields to config**
+- [x] **Step 3: Add fields to config**
 
 In `src/auto-pr/config.ts`, update `GeneratePrContentConfig`:
 
@@ -970,12 +972,12 @@ const branch = yield* requireNonEmpty("BRANCH", base.branch);
 
 Remove the old `commits` and `files` fields (they no longer come from file paths — `generate-content` gets them via `GitContext`).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `bun test test/auto-pr/config.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto-pr/config.ts test/auto-pr/config.test.ts
@@ -992,7 +994,7 @@ This is the largest task. It rewires `generate-content` from reading file artifa
 - Modify: `src/workflow/auto-pr-generate-content.ts`
 - Modify: `test/workflow/generate-pr-content.test.ts`
 
-- [ ] **Step 1: Update `generatePrContentFromValues` signature and implementation**
+- [x] **Step 1: Update `generatePrContentFromValues` signature and implementation**
 
 The function changes from taking `commitsContent`/`filesContent` strings to taking `baseRef`/`headRef` and requiring `GitContext`. Rename to `generatePrContent` (no longer "from values" — it fetches its own data).
 
@@ -1088,7 +1090,7 @@ export function generatePrContent(
 }
 ```
 
-- [ ] **Step 2: Update `generateTitleAndDescription` to accept toolkit**
+- [x] **Step 2: Update `generateTitleAndDescription` to accept toolkit**
 
 ```typescript
 function generateTitleAndDescription(
@@ -1138,7 +1140,7 @@ function generateTitleAndDescription(
 }
 ```
 
-- [ ] **Step 3: Update `runGeneratePrContent` to build layers with GitContext**
+- [x] **Step 3: Update `runGeneratePrContent` to build layers with GitContext**
 
 ```typescript
 export function runGeneratePrContent(config: {
@@ -1249,7 +1251,7 @@ export function runGeneratePrContent(config: {
 }
 ```
 
-- [ ] **Step 4: Update the entry point program**
+- [x] **Step 4: Update the entry point program**
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -1279,7 +1281,7 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
 ```
 
-- [ ] **Step 5: Update tests**
+- [x] **Step 5: Update tests**
 
 Rewrite `test/workflow/generate-pr-content.test.ts` to use mock `GitContext` instead of passing string content:
 
@@ -1363,17 +1365,17 @@ test("returns title and body for 1 commit (no AI call)", async () => {
 });
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `bun test test/workflow/generate-pr-content.test.ts`
 Expected: PASS
 
-- [ ] **Step 7: Run full test suite**
+- [x] **Step 7: Run full test suite**
 
 Run: `bun test`
 Expected: PASS (some get-commits tests will fail — that's expected, they're deleted in Task 7)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/workflow/auto-pr-generate-content.ts test/workflow/generate-pr-content.test.ts
@@ -1393,7 +1395,7 @@ git commit -m "feat: refactor generate-content to use GitContext and DiffToolkit
 - Modify: `src/core/index.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: Simplify `auto-pr-run.ts`**
+- [x] **Step 1: Simplify `auto-pr-run.ts`**
 
 ```typescript
 /**
@@ -1486,7 +1488,7 @@ if (import.meta.main) {
 }
 ```
 
-- [ ] **Step 2: Delete get-commits files**
+- [x] **Step 2: Delete get-commits files**
 
 ```bash
 rm src/workflow/auto-pr-get-commits.ts
@@ -1494,7 +1496,7 @@ rm test/workflow/auto-pr-get-commits.test.ts
 rm test/workflow/pipeline.test.ts
 ```
 
-- [ ] **Step 3: Update barrel exports in `src/auto-pr/index.ts`**
+- [x] **Step 3: Update barrel exports in `src/auto-pr/index.ts`**
 
 Remove all get-commits related exports:
 - `GetCommitsConfig`, `GetCommitsConfigLayer`
@@ -1506,13 +1508,13 @@ Add new exports:
 - `GitContext`, `GitContextLive` from `#auto-pr/git-context.js`
 - `DiffToolkit`, `makeDiffToolkitLayer` from `#auto-pr/diff-toolkit.js`
 
-- [ ] **Step 4: Update `src/core/index.ts`**
+- [x] **Step 4: Update `src/core/index.ts`**
 
 Remove exports only used by get-commits:
 - `buildGetCommitsGhEntries`, `validateGetCommitsOutput`
 - Keep `formatGhOutput`, `parseGhOutput` etc. if used elsewhere
 
-- [ ] **Step 5: Remove `auto-pr-get-commits` from `package.json` bin**
+- [x] **Step 5: Remove `auto-pr-get-commits` from `package.json` bin**
 
 ```json
 "bin": {
@@ -1526,21 +1528,21 @@ Remove exports only used by get-commits:
 
 Also remove the `get-commits` script from `"scripts"` if it exists.
 
-- [ ] **Step 6: Update `RunAutoPrConfig`**
+- [x] **Step 6: Update `RunAutoPrConfig`**
 
 Check if `RunAutoPrConfig` in `config.ts` still references `GetCommitsConfig` or any of the deleted utilities. Remove any dead references. Ensure `RunAutoPrConfig` includes `defaultBranch` and `branch` (it likely already has them).
 
-- [ ] **Step 7: Run full test suite**
+- [x] **Step 7: Run full test suite**
 
 Run: `bun test`
 Expected: PASS (no get-commits tests remain, all other tests pass)
 
-- [ ] **Step 8: Run lint and typecheck**
+- [x] **Step 8: Run lint and typecheck**
 
 Run: `bun run check:code`
 Expected: PASS (no unused exports, no type errors)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -1556,7 +1558,7 @@ git commit -m "refactor: eliminate get-commits, simplify auto-pr-run pipeline"
 - Modify: `.github/actions/auto-pr-run-command/action.yml`
 - Modify: `.github/actions/auto-pr-run-command/auto-pr-run-command.sh` (if it dispatches get-commits)
 
-- [ ] **Step 1: Add lightweight bash commit count step**
+- [x] **Step 1: Add lightweight bash commit count step**
 
 In `.github/workflows/auto-pr-generate-reusable.yml`, replace the "Get commit log and changed files" step with a lightweight bash count:
 
@@ -1570,7 +1572,7 @@ In `.github/workflows/auto-pr-generate-reusable.yml`, replace the "Get commit lo
           echo "count=$count" >> "$GITHUB_OUTPUT"
 ```
 
-- [ ] **Step 2: Update generate-content step env vars**
+- [x] **Step 2: Update generate-content step env vars**
 
 Add `DEFAULT_BRANCH` and `BRANCH` to the generate-content step:
 
@@ -1593,7 +1595,7 @@ Add `DEFAULT_BRANCH` and `BRANCH` to the generate-content step:
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
 ```
 
-- [ ] **Step 3: Update `auto-pr-run-command` action**
+- [x] **Step 3: Update `auto-pr-run-command` action**
 
 Remove `get-commits` related outputs from `action.yml`:
 
@@ -1605,11 +1607,11 @@ outputs:
 
 Update `auto-pr-run-command.sh` to remove the `get-commits` command handling if it has special logic for it.
 
-- [ ] **Step 4: Verify llama conditionals still work**
+- [x] **Step 4: Verify llama conditionals still work**
 
 The llama conditional steps reference `steps.commits.outputs.count != '1'`. The new bash step still provides this output. Verify all conditional references still match.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/
@@ -1628,7 +1630,7 @@ The following docs reference `get-commits` and need updating to reflect the new 
 - Modify: `docs/WORKFLOW_SECURITY.md`
 - Modify: `docs/INTEGRATION.md`
 
-- [ ] **Step 1: Update `docs/ARCHITECTURE.md`**
+- [x] **Step 1: Update `docs/ARCHITECTURE.md`**
 
 Update these sections:
 - **High-Level Structure diagram**: Remove `auto-pr-get-commits` from CLI entry points box
@@ -1640,21 +1642,21 @@ Update these sections:
 - **Error Handling**: Remove "get-commits only appends to GITHUB_OUTPUT after it succeeds" sentence
 - **Glossary**: Update GITHUB_OUTPUT entry (no longer written by get-commits), remove get-commits references
 
-- [ ] **Step 2: Update `docs/TROUBLESHOOTING.md`**
+- [x] **Step 2: Update `docs/TROUBLESHOOTING.md`**
 
 - Update the `AutoPrConfigError` entry: remove reference to get-commits requiring `GITHUB_OUTPUT`
 - Update the "generate-content" troubleshooting: remove "Ensure the get-commits step ran and wrote commits.txt and files.txt"
 
-- [ ] **Step 3: Update `docs/WORKFLOW_SECURITY.md`**
+- [x] **Step 3: Update `docs/WORKFLOW_SECURITY.md`**
 
 - Update Generate (Unprivileged) section: Change "Runs: `auto-pr-get-commits`, `auto-pr-generate-content` (AI), artifact preparation" to "Runs: `auto-pr-generate-content` (AI), artifact preparation"
 
-- [ ] **Step 4: Update `docs/INTEGRATION.md`**
+- [x] **Step 4: Update `docs/INTEGRATION.md`**
 
 - Remove `auto-pr-get-commits` row from the env var table
 - Update `auto-pr-generate-content` row: add `DEFAULT_BRANCH`, `BRANCH` to required env vars; remove "Reads `{GITHUB_WORKSPACE}/commits.txt` and `files.txt` from `get-commits`"
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/
@@ -1665,7 +1667,7 @@ git commit -m "docs: update architecture and integration docs for get-commits el
 
 ### Task 10: Final Verification
 
-- [ ] **Step 1: Run full check**
+- [x] **Step 1: Run full check**
 
 ```bash
 bun run check
@@ -1673,7 +1675,7 @@ bun run check
 
 Expected: build, audit, tests, lint, typecheck, knip, actionlint, shellcheck, shfmt all PASS.
 
-- [ ] **Step 2: Verify no dead exports with knip**
+- [x] **Step 2: Verify no dead exports with knip**
 
 ```bash
 bun run knip
@@ -1681,7 +1683,7 @@ bun run knip
 
 Expected: No unused exports related to get-commits. If knip flags new unused exports (e.g., `appendGhOutput`, `buildGetCommitsGhEntries`), remove them.
 
-- [ ] **Step 3: Run integration tests (if env is configured)**
+- [x] **Step 3: Run integration tests (if env is configured)**
 
 ```bash
 bun run test:integration
@@ -1689,11 +1691,11 @@ bun run test:integration
 
 Expected: PASS (tests should work with tool-calling-capable models)
 
-- [ ] **Step 4: Verify the design spec is still accurate**
+- [x] **Step 4: Verify the design spec is still accurate**
 
 Read `docs/superpowers/specs/2026-04-06-diff-tool-use-design.md` and confirm it matches what was implemented. Update if any details diverged during implementation.
 
-- [ ] **Step 5: Final commit (if any cleanup needed)**
+- [x] **Step 5: Final commit (if any cleanup needed)**
 
 ```bash
 git add -A
