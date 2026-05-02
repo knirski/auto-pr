@@ -133,17 +133,17 @@
     url = "https://registry.npmjs.org/@conventional-changelog/git-client/-/git-client-2.6.0.tgz";
     hash = "sha512-T+uPDciKf0/ioNNDpMGc8FDsehJClZP0yR3Q5MN6wE/Y/1QZ7F+80OgznnTCOlMEG4AV0LvH2UJi3C/nBnaBUg==";
   };
-  "@effect/ai-openai-compat@4.0.0-beta.57" = fetchurl {
-    url = "https://registry.npmjs.org/@effect/ai-openai-compat/-/ai-openai-compat-4.0.0-beta.57.tgz";
-    hash = "sha512-RYeuikQBlbDbVzPk7YP/3KXswLptGWnzzZAqkUvq/5YoIyKdqxfoP03d6OzALz78fuO7KjL8TDZVKRokO9XHkw==";
+  "@effect/ai-openai-compat@4.0.0-beta.59" = fetchurl {
+    url = "https://registry.npmjs.org/@effect/ai-openai-compat/-/ai-openai-compat-4.0.0-beta.59.tgz";
+    hash = "sha512-eFpQWgzgHh6HtV/6McTtT3Cg26sIvgoBTazOx+Y8MmchAWpXdphO3ZmSDPH7CYQjAHzg3pc/aAESE/tMeuUGaQ==";
   };
-  "@effect/platform-bun@4.0.0-beta.57" = fetchurl {
-    url = "https://registry.npmjs.org/@effect/platform-bun/-/platform-bun-4.0.0-beta.57.tgz";
-    hash = "sha512-Z/nG9KLUAPpd4UZXfjjz2giT0W/9iVItbVRJiQ8WReA6n5CEnBsrrE4ioRYOdamq/vRakxWBgqpG/4Mu6Ac7Hg==";
+  "@effect/platform-bun@4.0.0-beta.59" = fetchurl {
+    url = "https://registry.npmjs.org/@effect/platform-bun/-/platform-bun-4.0.0-beta.59.tgz";
+    hash = "sha512-1jXCIx34X80ojiK9ACO9Q7RST9CXudRmlAbsP4kPqjUo6aqOuGSWXq9ueBO4LbaIZiioRxtTciom35U9ldfTkQ==";
   };
-  "@effect/platform-node-shared@4.0.0-beta.57" = fetchurl {
-    url = "https://registry.npmjs.org/@effect/platform-node-shared/-/platform-node-shared-4.0.0-beta.57.tgz";
-    hash = "sha512-C976X6f+qHUtLSqcqImuCrjhAHnJV17NC2RvvybsAuDfkyIWU4MyiO2XwgiBeijeNupyr1M/KPKnyjtkNxV9Hw==";
+  "@effect/platform-node-shared@4.0.0-beta.59" = fetchurl {
+    url = "https://registry.npmjs.org/@effect/platform-node-shared/-/platform-node-shared-4.0.0-beta.59.tgz";
+    hash = "sha512-fGwFJuG0Te9U/ZeqeDZ2HcSKZBhX5wLjX2/Rxb5+yaOkvvFAN9MvIh05R0QQK5DCcERvnbhHSl1CjSIAN4aEwQ==";
   };
   "@emnapi/core@1.9.0" = fetchurl {
     url = "https://registry.npmjs.org/@emnapi/core/-/core-1.9.0.tgz";
@@ -1013,9 +1013,9 @@
     url = "https://registry.npmjs.org/eastasianwidth/-/eastasianwidth-0.2.0.tgz";
     hash = "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==";
   };
-  "effect@4.0.0-beta.57" = fetchurl {
-    url = "https://registry.npmjs.org/effect/-/effect-4.0.0-beta.57.tgz";
-    hash = "sha512-rg32VgXnLKaPRs9tbRDaZ5jxmzNY7ojXt85gSHGUTwdlbWH5Ik+OCUY2q14TXliygPGoHwCAvNWS4bQJOqf00g==";
+  "effect@4.0.0-beta.59" = fetchurl {
+    url = "https://registry.npmjs.org/effect/-/effect-4.0.0-beta.59.tgz";
+    hash = "sha512-xyUDLeHSe8d6lWGOvR6Fgn2HL6gYeTZ/S4Jzk9uc4ZUxMPPsNZlNXrvk0C7/utQFzeX7uAWcVnG2BjbA0SRoAA==";
   };
   "emoji-regex@10.6.0" = fetchurl {
     url = "https://registry.npmjs.org/emoji-regex/-/emoji-regex-10.6.0.tgz";
