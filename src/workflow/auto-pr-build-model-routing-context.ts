@@ -1,6 +1,5 @@
-import { Config, ConfigProvider, Effect, FileSystem, Layer, Match, Option, Stream } from "effect";
-import { ChildProcess } from "effect/unstable/process";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { Config, ConfigProvider, Effect, FileSystem, Layer, Match, Option } from "effect";
+import { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 import { PlatformLayer as AutoPrPlatformLayer, ChildProcessSpawnerLayer } from "#auto-pr/shell.js";
 import {
 	RoutingContextEnvError,
@@ -36,10 +35,6 @@ type RoutingContextInputs = {
 	readonly commitsCount: number | undefined;
 };
 
-type GitResult = {
-	readonly stdout: string;
-};
-
 type RoutingContextSignalInput = Pick<
 	BuildDetailedRoutingContextInput,
 	"signals" | "commits" | "files"
@@ -50,8 +45,6 @@ type RoutingContextError =
 	| RoutingContextParseError
 	| RoutingContextGitError
 	| RoutingContextOutputError;
-
-const RuntimeLayer = Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer);
 
 const RoutingContextEnvConfig = Config.all({
 	workspace: Config.option(Config.string("GITHUB_WORKSPACE")),
@@ -205,79 +198,45 @@ function parseEnvInputs(): Effect.Effect<
 	});
 }
 
-function gitError(args: readonly string[], cause: string): RoutingContextGitError {
-	return new RoutingContextGitError({ command: args.join(" "), cause });
-}
-
-function runGit(
-	workspace: string,
-	args: readonly string[],
-): Effect.Effect<GitResult, RoutingContextGitError, ChildProcessSpawner> {
-	return Effect.scoped(
-		Effect.gen(function* () {
-			const spawner = yield* ChildProcessSpawner;
-			const command = ChildProcess.make("git", [...args], { cwd: workspace });
-			const handle = yield* spawner
-				.spawn(command)
-				.pipe(Effect.mapError((cause) => gitError(args, toCauseMessage(cause))));
-
-			const [stdout, stderr, exitCode] = yield* Effect.all([
-				handle.stdout.pipe(
-					Stream.decodeText(),
-					Stream.runFold(
-						() => "",
-						(acc, chunk) => acc + chunk,
-					),
-					Effect.mapError((cause) => gitError(args, toCauseMessage(cause))),
-				),
-				handle.stderr.pipe(
-					Stream.decodeText(),
-					Stream.runFold(
-						() => "",
-						(acc, chunk) => acc + chunk,
-					),
-					Effect.mapError((cause) => gitError(args, toCauseMessage(cause))),
-				),
-				handle.exitCode.pipe(Effect.mapError((cause) => gitError(args, toCauseMessage(cause)))),
-			]);
-
-			if (Number(exitCode) !== 0) {
-				const output = `${stderr}\n${stdout}`.trim();
-				return yield* Effect.fail(gitError(args, output || "exit code non-zero"));
-			}
-
-			return { stdout };
-		}),
-	);
+function mapGitError(command: string): (cause: unknown) => RoutingContextGitError {
+	return (cause) => new RoutingContextGitError({ command, cause: toCauseMessage(cause) });
 }
 
 function buildRoutingContextInput(
 	input: RoutingContextInputs,
-): Effect.Effect<RoutingContextSignalInput, RoutingContextGitError, ChildProcessSpawner> {
+): Effect.Effect<RoutingContextSignalInput, RoutingContextGitError, GitContext> {
 	return Effect.gen(function* () {
-		const range = `origin/${input.defaultBranch}..HEAD`;
-		const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
-		const numstatOutput = yield* runGit(input.workspace, ["diff", "--numstat", range]);
-		const nameStatusOutput = yield* runGit(input.workspace, ["diff", "--name-status", range]);
-		const logOutput = yield* runGit(input.workspace, [
-			"log",
-			"--format=%H%n%B%n---COMMIT---",
-			range,
-		]);
+		const git = yield* GitContext;
+		const baseRef = `origin/${input.defaultBranch}`;
+		const headRef = "HEAD";
+		const filesOutput = yield* git
+			.getChangedFiles(baseRef, headRef)
+			.pipe(Effect.mapError(mapGitError(`diff --name-only ${baseRef}..${headRef}`)));
+		const numstatOutput = yield* git
+			.getDiffNumstat(baseRef, headRef)
+			.pipe(Effect.mapError(mapGitError(`diff --numstat ${baseRef}..${headRef}`)));
+		const nameStatusOutput = yield* git
+			.getDiffNameStatus(baseRef, headRef)
+			.pipe(Effect.mapError(mapGitError(`diff --name-status ${baseRef}..${headRef}`)));
+		const logOutput = yield* git
+			.getLog(baseRef, headRef)
+			.pipe(Effect.mapError(mapGitError(`log --format=<default> ${baseRef}..${headRef}`)));
 
-		const files = filesOutput.stdout
+		const files = filesOutput
 			.split("\n")
 			.map((line) => line.trim())
 			.filter(Boolean);
-		const numstat = numstatOutput.stdout
+		const numstat = numstatOutput
 			.split("\n")
 			.map((line) => line.trim())
 			.filter(Boolean);
-		const nameStatus = nameStatusOutput.stdout
+		const nameStatus = nameStatusOutput
 			.split("\n")
 			.map((line) => line.trim())
 			.filter(Boolean);
-		const commits = parseCommitLog(logOutput.stdout);
+		// GitContext log format prefixes each commit block with ---COMMIT---.
+		// parseCommitLog handles separators when they are newline-prefixed.
+		const commits = parseCommitLog(`\n${logOutput}`);
 		const semanticCommits = commits.filter((commit) => !commit.subject.startsWith("Merge "));
 		const mergeCommitCount = commits.length - semanticCommits.length;
 		const commitSummary = buildCommitSummary(
@@ -358,6 +317,8 @@ function writeDecisionOutputs(
 export function runBuildModelRoutingContext(
 	input: RoutingContextInputs,
 ): Effect.Effect<void, RoutingContextGitError | RoutingContextOutputError> {
+	const gitLayer = GitContextLive(input.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
+	const runtimeLayer = Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer, gitLayer);
 	return Effect.gen(function* () {
 		const routingInput = yield* buildRoutingContextInput(input);
 		const localModel: LocalModelContext | undefined = Match.value(input.provider).pipe(
@@ -409,7 +370,7 @@ export function runBuildModelRoutingContext(
 			...decision,
 			routingContext,
 		});
-	}).pipe(Effect.provide(RuntimeLayer));
+	}).pipe(Effect.provide(runtimeLayer));
 }
 
 export const program = Effect.gen(function* () {
