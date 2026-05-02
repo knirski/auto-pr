@@ -170,7 +170,7 @@ export function runCreateOrUpdatePr(params: {
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
-const program = Effect.gen(function* () {
+export const program = Effect.gen(function* () {
 	const params = yield* CreateOrUpdatePrConfig;
 	yield* runCreateOrUpdatePr(params).pipe(
 		Effect.provide(

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	ConfigProvider,
 	Duration,
 	Effect,
 	Exit,
@@ -14,6 +15,7 @@ import { PullRequestLookupError } from "#core/errors.js";
 import { runEffect } from "#test/run-effect.js";
 import { createTestTempDirEffect, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
 import {
+	program,
 	pullRequestClientLiveConfigFromParams,
 	runCreateOrUpdatePr,
 } from "#workflow/auto-pr-create-or-update-pr.js";
@@ -640,5 +642,31 @@ describe("runCreateOrUpdatePr", () => {
 			}).pipe(Effect.scoped),
 		);
 		expect(Exit.isFailure(exit)).toBe(true);
+	});
+
+	test("program wires PullRequestClient layer and fails fast when body file is missing", async () => {
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("program-missing-body-");
+				yield* tmp.writeFile(tmp.join("pr-title.txt"), "feat: missing body\n");
+
+				const providerLayer = ConfigProvider.layer(
+					ConfigProvider.fromUnknown({
+						BRANCH: "ai/test",
+						DEFAULT_BRANCH: "main",
+						GITHUB_WORKSPACE: tmp.path,
+						GH_TOKEN: "ghp_test_token",
+						GITHUB_API_URL: "https://api.github.com",
+						GH_HOST: "github.com",
+					}),
+				);
+
+				const exit = yield* program.pipe(Effect.provide(providerLayer), Effect.exit);
+				expect(Exit.isFailure(exit)).toBe(true);
+				if (Exit.isFailure(exit)) {
+					expect(String(exit.cause).includes("BodyFileNotFoundError")).toBe(true);
+				}
+			}).pipe(Effect.scoped),
+		);
 	});
 });
