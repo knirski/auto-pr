@@ -133,9 +133,9 @@
     url = "https://registry.npmjs.org/@conventional-changelog/git-client/-/git-client-2.6.0.tgz";
     hash = "sha512-T+uPDciKf0/ioNNDpMGc8FDsehJClZP0yR3Q5MN6wE/Y/1QZ7F+80OgznnTCOlMEG4AV0LvH2UJi3C/nBnaBUg==";
   };
-  "@effect/ai-openai-compat@4.0.0-beta.57" = fetchurl {
-    url = "https://registry.npmjs.org/@effect/ai-openai-compat/-/ai-openai-compat-4.0.0-beta.57.tgz";
-    hash = "sha512-RYeuikQBlbDbVzPk7YP/3KXswLptGWnzzZAqkUvq/5YoIyKdqxfoP03d6OzALz78fuO7KjL8TDZVKRokO9XHkw==";
+  "@effect/ai-openai-compat@4.0.0-beta.59" = fetchurl {
+    url = "https://registry.npmjs.org/@effect/ai-openai-compat/-/ai-openai-compat-4.0.0-beta.59.tgz";
+    hash = "sha512-eFpQWgzgHh6HtV/6McTtT3Cg26sIvgoBTazOx+Y8MmchAWpXdphO3ZmSDPH7CYQjAHzg3pc/aAESE/tMeuUGaQ==";
   };
   "@effect/platform-bun@4.0.0-beta.57" = fetchurl {
     url = "https://registry.npmjs.org/@effect/platform-bun/-/platform-bun-4.0.0-beta.57.tgz";
