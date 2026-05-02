@@ -244,7 +244,7 @@ function buildFileSummary(input: {
 		rawChurn += churn;
 		const kind = classifyFile(path);
 		if (kind === "generated") generatedChurn += churn;
-		else sourceChurn += churn;
+		if (kind === "source") sourceChurn += churn;
 
 		const fileEntry: RoutingContextHotspot = {
 			path,

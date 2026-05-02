@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
@@ -36,6 +36,75 @@ function tempRepo(prefix: string): string {
 }
 
 describe("build-model-routing-context", () => {
+	test("action metadata runs the checked-in Node bundle instead of Bun", () => {
+		const actionDir = join(process.cwd(), ".github/actions/auto-pr-build-model-routing-context");
+		const action = readFileSync(join(actionDir, "action.yml"), "utf8");
+
+		expect(action).toContain(
+			'run: node "$GITHUB_ACTION_PATH/auto-pr-build-model-routing-context.mjs"',
+		);
+		expect(action).not.toContain("run: bun ");
+		expect(
+			readFileSync(join(actionDir, "auto-pr-build-model-routing-context.mjs"), "utf8"),
+		).toContain("Generated from auto-pr-build-model-routing-context.ts");
+	});
+
+	test("checked-in Node bundle runs without Bun or action repo node_modules", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-node-");
+		const bundleDir = tempRepo("auto-pr-build-model-routing-context-bundle-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "src", "app.ts"), "export const app = 2;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: update app"]);
+				}),
+			);
+
+			const bundle = join(bundleDir, "auto-pr-build-model-routing-context.mjs");
+			copyFileSync(
+				join(
+					process.cwd(),
+					".github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.mjs",
+				),
+				bundle,
+			);
+			const githubOutput = join(dir, "github_output");
+			const result = spawnSync(process.execPath, [bundle], {
+				cwd: dir,
+				encoding: "utf8",
+				env: {
+					...process.env,
+					AI_PROVIDER: "local",
+					COMMITS_COUNT: "1",
+					DEFAULT_BRANCH: "main",
+					GITHUB_OUTPUT: githubOutput,
+					INPUT_MODEL: "",
+					REPOSITORY_VISIBILITY: "private",
+					RUNNER_LABEL: "ubuntu-24.04",
+					WORKSPACE: dir,
+				},
+			});
+
+			expect(result.status).toBe(0);
+			expect(result.stderr).toBe("");
+			expect(readFileSync(githubOutput, "utf8")).toContain("selected_model=qwen3-1.7b-q4_k_m");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+			rmSync(bundleDir, { recursive: true, force: true });
+		}
+	});
+
 	test("emits a default model and signal summary for single-commit PRs", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-");
 		try {
@@ -95,6 +164,50 @@ describe("build-model-routing-context", () => {
 					);
 					expect(output).not.toContain("subjects:");
 					expect(output).not.toContain("compact:");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("does not count docs-only churn as source churn", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-docs-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "docs: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
+					yield* write(
+						join(dir, "docs", "guide.md"),
+						Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n"),
+					);
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "docs: add guide"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "github-models",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain("file-kinds: source=0; docs=1");
+					expect(output).toContain("churn: raw=40; source=0; generated=0");
+					expect(output).toContain("source-share=0%");
 				}),
 			);
 		} finally {

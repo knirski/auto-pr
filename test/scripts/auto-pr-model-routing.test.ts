@@ -66,6 +66,33 @@ describe("model band routing action policy", () => {
 		});
 	});
 
+	test("routes small breaking changes to band C", () => {
+		const signals = {
+			semanticCommitCount: 1,
+			conventionalTypeCount: 1,
+			topLevelSpread: 1,
+			changedFileCount: 1,
+			sourceFileCount: 1,
+			docsFileCount: 0,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 10,
+			sourceChurn: 10,
+			generatedChurn: 0,
+			hasBreakingChange: true,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveBand(signals)).toBe("C");
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "C",
+			toolStrategy: "full-diff",
+			reasoningNeed: "high",
+		});
+	});
+
 	test("explicit model override wins over provider defaults", () => {
 		const signals = {
 			semanticCommitCount: 1,

@@ -79,7 +79,7 @@ runs:
   steps:
     - id: build
       shell: bash
-      run: bun "$GITHUB_ACTION_PATH/auto-pr-build-model-routing-context.ts"
+      run: node "$GITHUB_ACTION_PATH/auto-pr-build-model-routing-context.mjs"
       env:
         WORKSPACE: ${{ inputs.workspace }}
         DEFAULT_BRANCH: ${{ inputs.default_branch }}

@@ -5,6 +5,7 @@ import { join } from "node:path";
 const root = join(import.meta.dir, "..");
 const src = join(root, "src");
 const dist = join(root, "dist");
+const modelRoutingActionDir = join(root, ".github/actions/auto-pr-build-model-routing-context");
 
 rmSync(dist, { recursive: true, force: true });
 
@@ -34,3 +35,18 @@ if (!result.success) {
 }
 
 cpSync(join(src, "auto-pr/prompts"), join(dist, "prompts"), { recursive: true });
+
+const actionResult = await Bun.build({
+	entrypoints: [join(modelRoutingActionDir, "auto-pr-build-model-routing-context.ts")],
+	outdir: modelRoutingActionDir,
+	format: "esm",
+	target: "node",
+	minify: true,
+	banner: "// Generated from auto-pr-build-model-routing-context.ts. Do not edit directly.\n",
+	naming: { entry: "auto-pr-build-model-routing-context.mjs" },
+});
+
+if (!actionResult.success) {
+	process.stderr.write(`Action build failed:\n${actionResult.logs.map(String).join("\n")}\n`);
+	process.exit(1);
+}

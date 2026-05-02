@@ -203,6 +203,9 @@ function isGeneratedDominant(signals: ModelBandSignals): boolean {
 }
 
 export function resolveBand(signals: ModelBandSignals): ModelBand {
+	if (signals.hasBreakingChange) {
+		return "C";
+	}
 	if (
 		isGeneratedDominant(signals) ||
 		isTinyAndFocused(signals) ||
