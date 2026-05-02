@@ -7,6 +7,9 @@ This design is implemented in the live PR client:
 - [`src/auto-pr/live/pull-request-client.ts`](../../../src/auto-pr/live/pull-request-client.ts) (Octokit-backed `PullRequestClient`)
 - [`test/workflow/create-or-update-pr.test.ts`](../../../test/workflow/create-or-update-pr.test.ts) (lookup/create/update and error mapping tests)
 
+> Note: The sections below preserve the original proposal text for historical context.
+> Current implementation status is defined by ADR 0014 and the code/test links above.
+
 ## Problem
 
 `auto-pr-create-or-update-pr` currently creates and updates pull requests through a live `PullRequestClient` backed by `gh pr ...` subprocess calls. That works, but it makes the PR lifecycle depend on GitHub CLI availability, CLI output shapes, subprocess error text, and `gh` repository inference.

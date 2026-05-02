@@ -9,9 +9,9 @@
 ## Current status
 
 Implemented:
-- `GitContext` service and git-read unification (see [ADR 0011](../../adr/0011-gitcontext-and-diff-tool-use.md))
-- `DiffToolkit` (`get_diff`, `get_commit_diff`) wired into `LanguageModel.generateText`
-- `auto-pr-get-commits` file handoff removed; `generate-content` reads git context directly
+- [`src/auto-pr/git-context.ts`](../../../src/auto-pr/git-context.ts) (GitContext service and git-read unification; see [ADR 0011](../../adr/0011-gitcontext-and-diff-tool-use.md))
+- [`src/auto-pr/diff-toolkit.ts`](../../../src/auto-pr/diff-toolkit.ts) (DiffToolkit wired into `LanguageModel.generateText`)
+- [`src/workflow/auto-pr-generate-content.ts`](../../../src/workflow/auto-pr-generate-content.ts) (`auto-pr-get-commits` file handoff removed; generate-content reads git context directly)
 
 Still optional / not required by current shipped flow:
 - Two-phase tool exploration followed by a separate structured-output call

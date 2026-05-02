@@ -9,8 +9,8 @@
 ## Current status
 
 Implemented:
-- Two-provider runtime (`local` + `github-models`) and config surface via `AUTO_PR_AI_*` (see [ADR 0007](../../adr/0007-ai-abstraction-layer.md), [ADR 0009](../../adr/0009-ollama-to-openai-compat-migration.md))
-- `generateText` + JSON parse + schema decode path for multi-commit PR generation
+- [`src/auto-pr/config.ts`](../../../src/auto-pr/config.ts) (two-provider runtime and `AUTO_PR_AI_*` config surface; see [ADR 0007](../../adr/0007-ai-abstraction-layer.md), [ADR 0009](../../adr/0009-ollama-to-openai-compat-migration.md))
+- [`src/workflow/auto-pr-generate-content.ts`](../../../src/workflow/auto-pr-generate-content.ts) (`generateText` + JSON parse + schema decode path for multi-commit PR generation)
 
 Not yet implemented:
 - Pre-generate model-selection/routing step based on metrics bands
