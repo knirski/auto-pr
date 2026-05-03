@@ -192,7 +192,7 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}
-          AUTO_PR_AI_RATE_LIMIT_FALLBACK_STRATEGY: ${{ inputs.ai_rate_limit_fallback_strategy }}
+          AUTO_PR_AI_FALLBACK_STRATEGY: ${{ inputs.ai_rate_limit_fallback_strategy }}
           AUTO_PR_ROUTING_CONTEXT: ${{ steps.ai_routing.outputs.routing_context }}
           RUNNER_LABEL: ubuntu-24.04
           REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}

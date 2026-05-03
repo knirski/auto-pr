@@ -210,7 +210,7 @@ type ToolResultForFollowup = {
 };
 
 type RateLimitFallbackStrategy = {
-	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	readonly aiFallbackStrategy?: RateLimitFallbackStrategyName;
 };
 
 type ResolvedRateLimitFallbackPlan = {
@@ -272,9 +272,9 @@ function resolveGithubFallbackChain(input: { readonly model: string }): readonly
 
 function resolveRateLimitFallbackPlan(input: {
 	readonly selectedModel: string;
-	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	readonly aiFallbackStrategy?: RateLimitFallbackStrategyName;
 }): ResolvedRateLimitFallbackPlan {
-	const strategy = input.rateLimitFallbackStrategy ?? DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY;
+	const strategy = input.aiFallbackStrategy ?? DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY;
 	const githubModels = resolveGithubFallbackChain({ model: input.selectedModel });
 	const definition = RATE_LIMIT_FALLBACK_STRATEGIES[strategy];
 	return {
@@ -475,8 +475,8 @@ function generateTitleAndDescriptionWithToolkit(
 			}
 			const plan = resolveRateLimitFallbackPlan({
 				selectedModel: model,
-				...(options?.fallbackStrategy?.rateLimitFallbackStrategy !== undefined
-					? { rateLimitFallbackStrategy: options.fallbackStrategy.rateLimitFallbackStrategy }
+				...(options?.fallbackStrategy?.aiFallbackStrategy !== undefined
+					? { aiFallbackStrategy: options.fallbackStrategy.aiFallbackStrategy }
 					: {}),
 			});
 			const nextGithubModels = plan.githubModels.slice(1);
@@ -587,7 +587,7 @@ export type GeneratePrContentParams = {
 	provider: AiProvider;
 	model: string;
 	/** Optional policy for handling GitHub-models rate limits. */
-	rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	aiFallbackStrategy?: RateLimitFallbackStrategyName;
 	/** Optional fetch override for tests (also used by rate-limit local fallback). */
 	fetch?: typeof fetch;
 	retryDelay?: Duration.Duration;
@@ -652,8 +652,8 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				{
 					...(params.fetch !== undefined ? { fetch: params.fetch } : {}),
 					fallbackStrategy: {
-						...(params.rateLimitFallbackStrategy !== undefined
-							? { rateLimitFallbackStrategy: params.rateLimitFallbackStrategy }
+						...(params.aiFallbackStrategy !== undefined
+							? { aiFallbackStrategy: params.aiFallbackStrategy }
 							: {}),
 					},
 				},
@@ -750,7 +750,7 @@ type RunGeneratePrContentConfigCommon = {
 	workspace: string;
 	templatePath: string;
 	model: string;
-	rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	aiFallbackStrategy?: RateLimitFallbackStrategyName;
 	routingContext?: string;
 	githubApiUrl?: string;
 	ghHost?: string;
@@ -782,8 +782,8 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
-		...(config.rateLimitFallbackStrategy !== undefined
-			? { rateLimitFallbackStrategy: config.rateLimitFallbackStrategy }
+		...(config.aiFallbackStrategy !== undefined
+			? { aiFallbackStrategy: config.aiFallbackStrategy }
 			: {}),
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
@@ -879,7 +879,7 @@ export type RunGeneratePrContentWithServicesConfig = {
 	readonly templatePath: string;
 	readonly provider: AiProvider;
 	readonly model: string;
-	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	readonly aiFallbackStrategy?: RateLimitFallbackStrategyName;
 	readonly routingContext?: string;
 	/** Current PR title override for prompt continuity. */
 	readonly existingPrTitle?: string;
@@ -902,7 +902,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			templatePath,
 			provider,
 			model,
-			rateLimitFallbackStrategy,
+			aiFallbackStrategy,
 			routingContext,
 			retryDelay,
 			fetch,
@@ -940,7 +940,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			...(routingContext !== undefined ? { routingContext } : {}),
 			provider,
 			model,
-			...(rateLimitFallbackStrategy !== undefined ? { rateLimitFallbackStrategy } : {}),
+			...(aiFallbackStrategy !== undefined ? { aiFallbackStrategy } : {}),
 			...(fetch !== undefined ? { fetch } : {}),
 			...(retryDelay !== undefined && { retryDelay }),
 			...(existingPrTitle !== undefined && { existingPrTitle }),

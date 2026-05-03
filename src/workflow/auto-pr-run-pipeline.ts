@@ -37,8 +37,8 @@ export function generateContentConfigFromRunAutoPrConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
-		...(config.rateLimitFallbackStrategy !== undefined
-			? { rateLimitFallbackStrategy: config.rateLimitFallbackStrategy }
+		...(config.aiFallbackStrategy !== undefined
+			? { aiFallbackStrategy: config.aiFallbackStrategy }
 			: {}),
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
