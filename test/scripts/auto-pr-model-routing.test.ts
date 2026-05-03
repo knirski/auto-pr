@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	buildDetailedRoutingContext,
+	buildGithubModelFallbackChain,
 	resolveBand,
 	resolveLocalRunnerResources,
 	resolveModelBand,
@@ -170,6 +171,31 @@ describe("model band routing command policy", () => {
 			reasoningNeed: "medium",
 			requiresToolCalls: true,
 		});
+	});
+
+	test("builds github-models fallback chain with selected model first and deduped overrides", () => {
+		expect(
+			buildGithubModelFallbackChain({
+				selectedModel: "openai/gpt-4.1",
+				configuredFallbackModels: [
+					" microsoft/phi-4-mini-instruct ",
+					"openai/gpt-4.1",
+					"microsoft/phi-4-mini-instruct",
+				],
+				requiresToolCalls: true,
+				reasoningNeed: "high",
+			}),
+		).toEqual(["openai/gpt-4.1", "microsoft/phi-4-mini-instruct"]);
+	});
+
+	test("builds github-models fallback chain from routing defaults when no override is provided", () => {
+		expect(
+			buildGithubModelFallbackChain({
+				selectedModel: "microsoft/phi-4-mini-instruct",
+				requiresToolCalls: true,
+				reasoningNeed: "high",
+			}),
+		).toEqual(["microsoft/phi-4-mini-instruct", "openai/gpt-4.1"]);
 	});
 
 	test("selects local defaults from GitHub-hosted runner resources", () => {

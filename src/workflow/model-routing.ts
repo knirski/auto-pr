@@ -363,6 +363,32 @@ export function selectModel(
 	);
 }
 
+function normalizeModelIds(models: readonly string[]): readonly string[] {
+	const unique = new Set<string>();
+	const ordered: string[] = [];
+	for (const model of models) {
+		const normalized = model.trim();
+		if (normalized === "" || unique.has(normalized)) continue;
+		unique.add(normalized);
+		ordered.push(normalized);
+	}
+	return ordered;
+}
+
+export function buildGithubModelFallbackChain(input: {
+	readonly selectedModel: string;
+	readonly configuredFallbackModels?: readonly string[];
+	readonly reasoningNeed?: ReasoningNeed;
+	readonly requiresToolCalls?: boolean;
+}): readonly string[] {
+	const strongFirst =
+		input.requiresToolCalls === true || input.reasoningNeed === "high"
+			? [GITHUB_MODELS_STRONG_MODEL, GITHUB_MODELS_SMALL_MODEL]
+			: [GITHUB_MODELS_SMALL_MODEL, GITHUB_MODELS_STRONG_MODEL];
+	const configured = input.configuredFallbackModels ?? [];
+	return normalizeModelIds([input.selectedModel, ...configured, ...strongFirst]);
+}
+
 export function resolveModelBand(input: ResolveModelBandInput): ModelBandDecision {
 	const band = resolveBand(input.signals);
 	const reasoningNeed = resolveReasoningNeed(input.signals, band);

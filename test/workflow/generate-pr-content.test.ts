@@ -356,6 +356,9 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			defaultBranch: "main",
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
+			githubModelsFallbackModels: ["microsoft/phi-4-mini-instruct"],
+			rateLimitFallbackStrategy: "github-chain-then-local",
+			localRateLimitFallbackModel: "qwen3-4b-q4_k_m",
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
@@ -368,6 +371,9 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			defaultBranch: "main",
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
+			githubModelsFallbackModels: ["microsoft/phi-4-mini-instruct"],
+			rateLimitFallbackStrategy: "github-chain-then-local",
+			localRateLimitFallbackModel: "qwen3-4b-q4_k_m",
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
@@ -692,7 +698,7 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 				RUNNER_LABEL: process.env.RUNNER_LABEL,
 			};
 			const localFetch = createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE);
-			let sawGithubRequest = false;
+			let githubRequestCount = 0;
 			let sawLocalFallbackRequest = false;
 			try {
 				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
@@ -703,7 +709,7 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 						input instanceof URL ? input : input instanceof Request ? input.url : input,
 					);
 					if (url.includes("models.github.ai/inference")) {
-						sawGithubRequest = true;
+						githubRequestCount += 1;
 						return new Response(
 							JSON.stringify({
 								error: { message: "Rate limit exceeded. Retry after 16h 54m 38s" },
@@ -737,13 +743,191 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 						expect(result.body).toContain("### Motivation");
 					}).pipe(Effect.scoped),
 				);
-				expect(sawGithubRequest).toBe(true);
+				expect(githubRequestCount).toBeGreaterThanOrEqual(2);
 				expect(sawLocalFallbackRequest).toBe(true);
 			} finally {
 				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_URL;
 				process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
 				process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
 			}
+		});
+
+		test("uses next github-models fallback candidate before local fallback", async () => {
+			let localFallbackCount = 0;
+			let githubStrongCount = 0;
+			let githubSmallCount = 0;
+			let githubRequestCount = 0;
+			const fallbackFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+				const url = String(
+					input instanceof URL ? input : input instanceof Request ? input.url : input,
+				);
+				if (url.includes("models.github.ai/inference")) {
+					githubRequestCount += 1;
+					const modelInBody =
+						typeof init?.body === "string" ? /"model":"([^"]+)"/.exec(init.body)?.[1] : undefined;
+					if (modelInBody === "openai/gpt-4.1" || githubRequestCount === 1) {
+						githubStrongCount += 1;
+						return new Response(
+							JSON.stringify({
+								error: { message: "Rate limit exceeded. Retry after 15m" },
+							}),
+							{ status: 429, headers: { "Content-Type": "application/json" } },
+						);
+					}
+					if (modelInBody === "microsoft/phi-4-mini-instruct" || githubRequestCount === 2) {
+						githubSmallCount += 1;
+						return new Response(
+							JSON.stringify({
+								id: "chatcmpl-mock",
+								object: "chat.completion",
+								created: 0,
+								model: "mock",
+								choices: [
+									{
+										index: 0,
+										finish_reason: "stop",
+										message: { role: "assistant", content: VALID_AI_RESPONSE },
+									},
+								],
+							}),
+							{ status: 200, headers: { "Content-Type": "application/json" } },
+						);
+					}
+					throw new Error(
+						`Unexpected github-models fallback request #${githubRequestCount}: ${String(modelInBody)}`,
+					);
+				}
+				if (url.includes("127.0.0.1:8080/v1")) {
+					localFallbackCount += 1;
+					return new Response("{}", { status: 500 });
+				}
+				throw new Error(`Unexpected URL in fallback chain fetch: ${url}`);
+			}) as typeof fetch;
+
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				githubModelsFallbackModels: ["microsoft/phi-4-mini-instruct"],
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: fallbackFetch,
+			});
+
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+				}).pipe(Effect.scoped),
+			);
+
+			expect(githubStrongCount).toBeGreaterThan(0);
+			expect(githubSmallCount).toBeGreaterThan(0);
+			expect(localFallbackCount).toBe(0);
+		});
+
+		test("local-only strategy skips github fallback candidates after initial rate limit", async () => {
+			let githubRequestCount = 0;
+			let localFallbackCount = 0;
+			const fallbackFetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
+				const url = String(
+					input instanceof URL ? input : input instanceof Request ? input.url : input,
+				);
+				if (url.includes("models.github.ai/inference")) {
+					githubRequestCount += 1;
+					return new Response(
+						JSON.stringify({
+							error: { message: "Rate limit exceeded. Retry after 15m" },
+						}),
+						{ status: 429, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				if (url.includes("127.0.0.1:8080/v1")) {
+					localFallbackCount += 1;
+					return new Response(
+						JSON.stringify({
+							id: "chatcmpl-mock",
+							object: "chat.completion",
+							created: 0,
+							model: "mock",
+							choices: [
+								{
+									index: 0,
+									finish_reason: "stop",
+									message: { role: "assistant", content: VALID_AI_RESPONSE },
+								},
+							],
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				throw new Error(`Unexpected URL in local-only fallback fetch: ${url}`);
+			}) as typeof fetch;
+
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				rateLimitFallbackStrategy: "local-only",
+				githubModelsFallbackModels: ["microsoft/phi-4-mini-instruct"],
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: fallbackFetch,
+			});
+
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+				}).pipe(Effect.scoped),
+			);
+
+			expect(githubRequestCount).toBe(5);
+			expect(localFallbackCount).toBeGreaterThan(0);
+		});
+
+		test("github-chain-only strategy avoids local fallback after github chain exhaustion", async () => {
+			let githubRequestCount = 0;
+			let localFallbackCount = 0;
+			const fallbackFetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
+				const url = String(
+					input instanceof URL ? input : input instanceof Request ? input.url : input,
+				);
+				if (url.includes("models.github.ai/inference")) {
+					githubRequestCount += 1;
+					return new Response(
+						JSON.stringify({
+							error: { message: "Rate limit exceeded. Retry after 15m" },
+						}),
+						{ status: 429, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				if (url.includes("127.0.0.1:8080/v1")) {
+					localFallbackCount += 1;
+					return new Response("{}", { status: 500 });
+				}
+				throw new Error(`Unexpected URL in github-chain-only fallback fetch: ${url}`);
+			}) as typeof fetch;
+
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				rateLimitFallbackStrategy: "github-chain-only",
+				githubModelsFallbackModels: ["microsoft/phi-4-mini-instruct"],
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: fallbackFetch,
+			});
+
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+
+			expect(githubRequestCount).toBeGreaterThan(5);
+			expect(localFallbackCount).toBe(0);
 		});
 
 		test("runs no-tool follow-up when first response has only tool calls and empty text", async () => {

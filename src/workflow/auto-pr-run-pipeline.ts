@@ -37,6 +37,15 @@ export function generateContentConfigFromRunAutoPrConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
+		...(config.githubModelsFallbackModels !== undefined
+			? { githubModelsFallbackModels: config.githubModelsFallbackModels }
+			: {}),
+		...(config.rateLimitFallbackStrategy !== undefined
+			? { rateLimitFallbackStrategy: config.rateLimitFallbackStrategy }
+			: {}),
+		...(config.localRateLimitFallbackModel !== undefined
+			? { localRateLimitFallbackModel: config.localRateLimitFallbackModel }
+			: {}),
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};

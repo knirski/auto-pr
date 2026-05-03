@@ -38,6 +38,7 @@ import {
 	buildDescriptionPrompt,
 	ChildProcessSpawnerLayer,
 	DEFAULT_OPENAI_COMPAT_URL,
+	DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY,
 	DescriptionParseError,
 	DiffToolkit,
 	formatError,
@@ -52,6 +53,7 @@ import {
 	ParseError,
 	PR_BODY_FILE_NAME,
 	PR_TITLE_FILE_NAME,
+	type RateLimitFallbackStrategy as RateLimitFallbackStrategyName,
 	runMain,
 	TemplateRenderError,
 	UnexpectedError,
@@ -78,7 +80,11 @@ import {
 	parseTitleDescriptionFromAssistantText,
 	type TitleDescription,
 } from "#core/title-description.js";
-import { resolveLocalRunnerResources, selectModel } from "#workflow/model-routing.js";
+import {
+	buildGithubModelFallbackChain,
+	resolveLocalRunnerResources,
+	selectModel,
+} from "#workflow/model-routing.js";
 
 /** Parse assistant reply text through the pure core parser. */
 function decodeTitleDescriptionFromAssistantText(
@@ -203,6 +209,57 @@ type ToolResultForFollowup = {
 	readonly result: unknown;
 };
 
+type RateLimitFallbackStrategy = {
+	readonly githubModelsFallbackModels?: readonly string[];
+	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	readonly localRateLimitFallbackModel?: string;
+};
+
+type ResolvedRateLimitFallbackPlan = {
+	readonly strategy: RateLimitFallbackStrategyName;
+	readonly githubModels: readonly string[];
+	readonly fallbackModel: string;
+};
+
+function resolveLocalRateLimitFallbackModel(overrideModel: string | undefined): string {
+	const normalizedOverride = overrideModel?.trim();
+	if (normalizedOverride !== undefined && normalizedOverride !== "") {
+		return normalizedOverride;
+	}
+	return resolveStrongestLocalFallbackModel();
+}
+
+function resolveGithubFallbackChain(input: {
+	readonly model: string;
+	readonly configuredFallbackModels?: readonly string[];
+}): readonly string[] {
+	return buildGithubModelFallbackChain({
+		selectedModel: input.model,
+		...(input.configuredFallbackModels !== undefined
+			? { configuredFallbackModels: input.configuredFallbackModels }
+			: {}),
+		requiresToolCalls: true,
+		reasoningNeed: "high",
+	});
+}
+
+function resolveRateLimitFallbackPlan(input: {
+	readonly selectedModel: string;
+	readonly configuredFallbackModels?: readonly string[];
+	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	readonly localRateLimitFallbackModel?: string;
+}): ResolvedRateLimitFallbackPlan {
+	const strategy = input.rateLimitFallbackStrategy ?? DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY;
+	const githubModels = resolveGithubFallbackChain({
+		model: input.selectedModel,
+		...(input.configuredFallbackModels !== undefined
+			? { configuredFallbackModels: input.configuredFallbackModels }
+			: {}),
+	});
+	const fallbackModel = resolveLocalRateLimitFallbackModel(input.localRateLimitFallbackModel);
+	return { strategy, githubModels, fallbackModel };
+}
+
 function stringifyToolResultForPrompt(value: unknown): string {
 	if (typeof value === "string") return value;
 	try {
@@ -303,6 +360,7 @@ function generateTitleAndDescriptionWithToolkit(
 	model: string,
 	options?: {
 		readonly fetch?: typeof fetch;
+		readonly fallbackStrategy?: RateLimitFallbackStrategy;
 	},
 ) {
 	const runAttempt = (attemptProvider: AiProvider, attemptModel: string) =>
@@ -383,12 +441,32 @@ function generateTitleAndDescriptionWithToolkit(
 
 	return runAttempt(provider, model).pipe(
 		Effect.catchIf(isTransientAiError, (error) => {
-			const shouldAttemptLocalFallback =
-				provider !== "local" && isRateLimitWithRetryAfterError(error);
-			if (!shouldAttemptLocalFallback) {
+			if (provider !== "github-models" || !isRateLimitWithRetryAfterError(error)) {
 				return buildCommitFallbackEffect(filtered);
 			}
-			const fallbackModel = resolveStrongestLocalFallbackModel();
+			const plan = resolveRateLimitFallbackPlan({
+				selectedModel: model,
+				...(options?.fallbackStrategy?.githubModelsFallbackModels !== undefined
+					? {
+							configuredFallbackModels: options.fallbackStrategy.githubModelsFallbackModels,
+						}
+					: {}),
+				...(options?.fallbackStrategy?.rateLimitFallbackStrategy !== undefined
+					? { rateLimitFallbackStrategy: options.fallbackStrategy.rateLimitFallbackStrategy }
+					: {}),
+				...(options?.fallbackStrategy?.localRateLimitFallbackModel !== undefined
+					? { localRateLimitFallbackModel: options.fallbackStrategy.localRateLimitFallbackModel }
+					: {}),
+			});
+			const nextGithubModels = plan.githubModels.slice(1);
+			const fallbackModel = plan.fallbackModel;
+			const strategy = plan.strategy;
+			const shouldTryGithubChain =
+				strategy === "github-chain-then-local" || strategy === "github-chain-only";
+			const shouldTryLocalFallback =
+				strategy === "github-chain-then-local" || strategy === "local-only";
+			const shouldUseCommitFallbackWhenExhausted =
+				strategy === "commit-fallback" || strategy === "github-chain-only";
 			const fallbackUrl =
 				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim() || DEFAULT_OPENAI_COMPAT_URL;
 			const fallbackApiKey = process.env.AUTO_PR_AI_OPENAI_COMPAT_API_KEY?.trim();
@@ -405,16 +483,76 @@ function generateTitleAndDescriptionWithToolkit(
 			);
 			return Effect.logWarning({
 				event: "generate_pr_content",
-				status: "rate_limit_local_fallback",
+				status: "rate_limit_fallback_strategy_start",
 				provider,
 				model,
+				strategy,
+				github_fallback_chain: plan.githubModels.join(", "),
 				fallback_provider: "local",
 				fallback_model: fallbackModel,
 				fallback_url: fallbackUrl,
 			}).pipe(
-				Effect.flatMap(() =>
-					runAttempt("local", fallbackModel).pipe(Effect.provide(localFallbackLayer)),
-				),
+				Effect.flatMap(() => {
+					const runLocalFallback = () =>
+						Effect.logWarning({
+							event: "generate_pr_content",
+							status: "rate_limit_fallback_local_start",
+							fallback_provider: "local",
+							fallback_model: fallbackModel,
+						}).pipe(
+							Effect.flatMap(() =>
+								runAttempt("local", fallbackModel).pipe(Effect.provide(localFallbackLayer)),
+							),
+						);
+					const runGithubFallbackChain = () =>
+						Effect.gen(function* () {
+							for (const githubFallbackModel of nextGithubModels) {
+								const attempt = yield* runAttempt("github-models", githubFallbackModel).pipe(
+									Effect.map((value) => ({ _tag: "Success" as const, value })),
+									Effect.catch((error) => Effect.succeed({ _tag: "Failure" as const, error })),
+								);
+								if (attempt._tag === "Success") {
+									yield* Effect.log({
+										event: "generate_pr_content",
+										status: "rate_limit_fallback_model_success",
+										provider: "github-models",
+										model: githubFallbackModel,
+									});
+									return Option.some(attempt.value);
+								}
+								const candidateError = attempt.error;
+								if (
+									!isTransientAiError(candidateError) ||
+									!isRateLimitWithRetryAfterError(candidateError)
+								) {
+									return yield* Effect.fail(candidateError);
+								}
+								yield* Effect.logWarning({
+									event: "generate_pr_content",
+									status: "rate_limit_fallback_model_skipped",
+									provider: "github-models",
+									model: githubFallbackModel,
+									reason: formatError(candidateError),
+								});
+							}
+							return Option.none<{ title: string; description: string }>();
+						});
+					return Effect.gen(function* () {
+						if (shouldTryGithubChain) {
+							const githubFallbackResult = yield* runGithubFallbackChain();
+							if (Option.isSome(githubFallbackResult)) {
+								return githubFallbackResult.value;
+							}
+						}
+						if (shouldTryLocalFallback) {
+							return yield* runLocalFallback();
+						}
+						if (shouldUseCommitFallbackWhenExhausted) {
+							return yield* buildCommitFallbackEffect(filtered);
+						}
+						return yield* buildCommitFallbackEffect(filtered);
+					});
+				}),
 				Effect.catchIf(isTransientAiError, () => buildCommitFallbackEffect(filtered)),
 			);
 		}),
@@ -433,6 +571,12 @@ export type GeneratePrContentParams = {
 	routingContext?: string;
 	provider: AiProvider;
 	model: string;
+	/** Optional GitHub-models rate-limit fallback chain (ordered best->weaker). */
+	githubModelsFallbackModels?: readonly string[];
+	/** Optional policy for handling GitHub-models rate limits. */
+	rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	/** Optional local model override used as last resort after GitHub rate-limit exhaustion. */
+	localRateLimitFallbackModel?: string;
 	/** Optional fetch override for tests (also used by rate-limit local fallback). */
 	fetch?: typeof fetch;
 	retryDelay?: Duration.Duration;
@@ -496,6 +640,19 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				params.model,
 				{
 					...(params.fetch !== undefined ? { fetch: params.fetch } : {}),
+					fallbackStrategy: {
+						...(params.githubModelsFallbackModels !== undefined
+							? {
+									githubModelsFallbackModels: params.githubModelsFallbackModels,
+								}
+							: {}),
+						...(params.rateLimitFallbackStrategy !== undefined
+							? { rateLimitFallbackStrategy: params.rateLimitFallbackStrategy }
+							: {}),
+						...(params.localRateLimitFallbackModel !== undefined
+							? { localRateLimitFallbackModel: params.localRateLimitFallbackModel }
+							: {}),
+					},
 				},
 			);
 			title = result.title;
@@ -590,6 +747,9 @@ type RunGeneratePrContentConfigCommon = {
 	workspace: string;
 	templatePath: string;
 	model: string;
+	githubModelsFallbackModels?: readonly string[];
+	rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	localRateLimitFallbackModel?: string;
 	routingContext?: string;
 	githubApiUrl?: string;
 	ghHost?: string;
@@ -621,6 +781,15 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
+		...(config.githubModelsFallbackModels !== undefined
+			? { githubModelsFallbackModels: config.githubModelsFallbackModels }
+			: {}),
+		...(config.rateLimitFallbackStrategy !== undefined
+			? { rateLimitFallbackStrategy: config.rateLimitFallbackStrategy }
+			: {}),
+		...(config.localRateLimitFallbackModel !== undefined
+			? { localRateLimitFallbackModel: config.localRateLimitFallbackModel }
+			: {}),
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
 		...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
@@ -715,6 +884,9 @@ export type RunGeneratePrContentWithServicesConfig = {
 	readonly templatePath: string;
 	readonly provider: AiProvider;
 	readonly model: string;
+	readonly githubModelsFallbackModels?: readonly string[];
+	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategyName;
+	readonly localRateLimitFallbackModel?: string;
 	readonly routingContext?: string;
 	/** Current PR title override for prompt continuity. */
 	readonly existingPrTitle?: string;
@@ -737,6 +909,9 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			templatePath,
 			provider,
 			model,
+			githubModelsFallbackModels,
+			rateLimitFallbackStrategy,
+			localRateLimitFallbackModel,
 			routingContext,
 			retryDelay,
 			fetch,
@@ -774,6 +949,9 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			...(routingContext !== undefined ? { routingContext } : {}),
 			provider,
 			model,
+			...(githubModelsFallbackModels !== undefined ? { githubModelsFallbackModels } : {}),
+			...(rateLimitFallbackStrategy !== undefined ? { rateLimitFallbackStrategy } : {}),
+			...(localRateLimitFallbackModel !== undefined ? { localRateLimitFallbackModel } : {}),
 			...(fetch !== undefined ? { fetch } : {}),
 			...(retryDelay !== undefined && { retryDelay }),
 			...(existingPrTitle !== undefined && { existingPrTitle }),

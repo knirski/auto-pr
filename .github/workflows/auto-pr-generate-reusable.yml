@@ -36,6 +36,24 @@ on:
         type: string
         description: "Model id (publisher/model). For github-models, legal values are catalog entry ids — see docs/INTEGRATION.md#github-models"
         default: ""
+      ai_github_models_fallback_models:
+        required: false
+        type: string
+        description: >-
+          Optional ordered fallback list for github-models (comma/newline separated). Used only on rate-limit errors
+          after the selected model, before local fallback.
+        default: ""
+      ai_rate_limit_fallback_strategy:
+        required: false
+        type: string
+        description: >-
+          Optional rate-limit policy: github-chain-then-local (default), github-chain-only, local-only, or commit-fallback.
+        default: ""
+      ai_local_rate_limit_fallback_model:
+        required: false
+        type: string
+        description: "Optional local model id used as last-resort fallback after all github-models fallback candidates are rate-limited."
+        default: ""
       ai_llamacpp_release_tag:
         required: false
         type: string
@@ -186,6 +204,9 @@ jobs:
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}
+          AUTO_PR_AI_GITHUB_MODELS_FALLBACK_MODELS: ${{ inputs.ai_github_models_fallback_models }}
+          AUTO_PR_AI_RATE_LIMIT_FALLBACK_STRATEGY: ${{ inputs.ai_rate_limit_fallback_strategy }}
+          AUTO_PR_AI_LOCAL_RATE_LIMIT_FALLBACK_MODEL: ${{ inputs.ai_local_rate_limit_fallback_model }}
           AUTO_PR_ROUTING_CONTEXT: ${{ steps.ai_routing.outputs.routing_context }}
           RUNNER_LABEL: ubuntu-24.04
           REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
