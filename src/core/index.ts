@@ -3,6 +3,17 @@
  * Shell (auto-pr) and workflow/tools depend on core.
  */
 
+export type {
+	AiFallbackPlan,
+	AiFallbackPlanStep,
+	AiFallbackPolicy,
+	AiFallbackStrategy,
+	ResolveAiFallbackPlanInput,
+} from "#core/ai-fallback-policy-core.js";
+export {
+	DEFAULT_AI_FALLBACK_STRATEGY,
+	DefaultAiFallbackPolicy,
+} from "#core/ai-fallback-policy-core.js";
 export {
 	collapseProseParagraphs,
 	fallbackWhenParseFails,

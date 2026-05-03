@@ -43,6 +43,10 @@ import {
 	Redacted as RedactedValue,
 } from "effect";
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
+import {
+	type AiFallbackStrategy,
+	DEFAULT_AI_FALLBACK_STRATEGY,
+} from "#core/ai-fallback-policy-core.js";
 import { AutoPrConfigError } from "#core/errors.js";
 import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
 import { nonBlankOption } from "#core/string.js";
@@ -126,11 +130,7 @@ function mapConfigError<A, R>(
 // ─── GeneratePrContentConfig ─────────────────────────────────────────────────
 
 export type AiProvider = "local" | "github-models";
-export type RateLimitFallbackStrategy =
-	| "github-chain-then-local"
-	| "github-chain-only"
-	| "local-only"
-	| "commit-fallback";
+export type RateLimitFallbackStrategy = AiFallbackStrategy;
 
 /** Default OpenAI-compatible base URL (e.g. local llama.cpp `llama-server` `/v1`). */
 export const DEFAULT_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
@@ -144,7 +144,7 @@ export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
  */
 export const DEFAULT_GITHUB_MODELS_MODEL = "microsoft/phi-4-mini-instruct";
 export const DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY: RateLimitFallbackStrategy =
-	"github-chain-then-local";
+	DEFAULT_AI_FALLBACK_STRATEGY;
 
 export type GeneratePrContentConfigCommon = {
 	readonly workspace: string;

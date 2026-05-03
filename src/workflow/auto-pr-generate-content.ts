@@ -38,7 +38,6 @@ import {
 	buildDescriptionPrompt,
 	ChildProcessSpawnerLayer,
 	DEFAULT_OPENAI_COMPAT_URL,
-	DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY,
 	DescriptionParseError,
 	DiffToolkit,
 	formatError,
@@ -60,6 +59,11 @@ import {
 	unknownToMessage,
 } from "#auto-pr";
 import { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
+import {
+	type AiFallbackPlan,
+	type AiFallbackPlanStep,
+	DefaultAiFallbackPolicy,
+} from "#core/ai-fallback-policy-core.js";
 import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
@@ -213,51 +217,6 @@ type RateLimitFallbackStrategy = {
 	readonly aiFallbackStrategy?: RateLimitFallbackStrategyName;
 };
 
-type ResolvedRateLimitFallbackPlan = {
-	readonly strategy: RateLimitFallbackStrategyName;
-	readonly githubModels: readonly string[];
-	readonly fallbackModel?: string;
-	readonly tryGithubChain: boolean;
-	readonly tryLocalFallback: boolean;
-	readonly useCommitFallbackWhenExhausted: boolean;
-};
-
-type RateLimitFallbackStrategyDefinition = {
-	readonly tryGithubChain: boolean;
-	readonly tryLocalFallback: boolean;
-	readonly useCommitFallbackWhenExhausted: boolean;
-	readonly localModelPolicy: "strongest" | "none";
-};
-
-const RATE_LIMIT_FALLBACK_STRATEGIES: Readonly<
-	Record<RateLimitFallbackStrategyName, RateLimitFallbackStrategyDefinition>
-> = {
-	"github-chain-then-local": {
-		tryGithubChain: true,
-		tryLocalFallback: true,
-		useCommitFallbackWhenExhausted: true,
-		localModelPolicy: "strongest",
-	},
-	"github-chain-only": {
-		tryGithubChain: true,
-		tryLocalFallback: false,
-		useCommitFallbackWhenExhausted: true,
-		localModelPolicy: "none",
-	},
-	"local-only": {
-		tryGithubChain: false,
-		tryLocalFallback: true,
-		useCommitFallbackWhenExhausted: true,
-		localModelPolicy: "strongest",
-	},
-	"commit-fallback": {
-		tryGithubChain: false,
-		tryLocalFallback: false,
-		useCommitFallbackWhenExhausted: true,
-		localModelPolicy: "none",
-	},
-};
-
 function resolveLocalRateLimitFallbackModel(): string {
 	return resolveStrongestLocalFallbackModel();
 }
@@ -273,20 +232,103 @@ function resolveGithubFallbackChain(input: { readonly model: string }): readonly
 function resolveRateLimitFallbackPlan(input: {
 	readonly selectedModel: string;
 	readonly aiFallbackStrategy?: RateLimitFallbackStrategyName;
-}): ResolvedRateLimitFallbackPlan {
-	const strategy = input.aiFallbackStrategy ?? DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY;
+}): AiFallbackPlan {
 	const githubModels = resolveGithubFallbackChain({ model: input.selectedModel });
-	const definition = RATE_LIMIT_FALLBACK_STRATEGIES[strategy];
-	return {
-		strategy,
-		githubModels,
-		tryGithubChain: definition.tryGithubChain,
-		tryLocalFallback: definition.tryLocalFallback,
-		useCommitFallbackWhenExhausted: definition.useCommitFallbackWhenExhausted,
-		...(definition.localModelPolicy === "strongest"
-			? { fallbackModel: resolveLocalRateLimitFallbackModel() }
-			: {}),
-	};
+	return DefaultAiFallbackPolicy.resolvePlan({
+		selectedGithubModel: input.selectedModel,
+		githubFallbackChain: githubModels,
+		strongestLocalModel: resolveLocalRateLimitFallbackModel(),
+		...(input.aiFallbackStrategy !== undefined ? { strategy: input.aiFallbackStrategy } : {}),
+	});
+}
+
+type GeneratedTitleAndDescription = {
+	readonly title: string;
+	readonly description: string;
+};
+
+type AttemptRunner<R> = (
+	provider: AiProvider,
+	model: string,
+) => Effect.Effect<GeneratedTitleAndDescription, unknown, R>;
+
+function runGithubFallbackModelAttempts<R>(input: {
+	readonly models: readonly string[];
+	readonly runAttempt: AttemptRunner<R>;
+}): Effect.Effect<Option.Option<GeneratedTitleAndDescription>, unknown, R> {
+	return Effect.gen(function* () {
+		for (const githubFallbackModel of input.models) {
+			const attempt = yield* input.runAttempt("github-models", githubFallbackModel).pipe(
+				Effect.map((value) => ({ _tag: "Success" as const, value })),
+				Effect.catch((error) => Effect.succeed({ _tag: "Failure" as const, error })),
+			);
+			if (attempt._tag === "Success") {
+				yield* Effect.log({
+					event: "generate_pr_content",
+					status: "rate_limit_fallback_model_success",
+					provider: "github-models",
+					model: githubFallbackModel,
+				});
+				return Option.some(attempt.value);
+			}
+			const candidateError = attempt.error;
+			if (!isTransientAiError(candidateError) || !isRateLimitWithRetryAfterError(candidateError)) {
+				return yield* Effect.fail(candidateError);
+			}
+			yield* Effect.logWarning({
+				event: "generate_pr_content",
+				status: "rate_limit_fallback_model_skipped",
+				provider: "github-models",
+				model: githubFallbackModel,
+				reason: formatError(candidateError),
+			});
+		}
+		return Option.none<GeneratedTitleAndDescription>();
+	});
+}
+
+function executeAiFallbackPlan<R>(input: {
+	readonly plan: AiFallbackPlan;
+	readonly runAttempt: AttemptRunner<R>;
+	readonly filtered: readonly CommitInfo[];
+	readonly localFallbackLayerForModel: (
+		model: string,
+	) => Layer.Layer<LanguageModel.LanguageModel, unknown, never>;
+}): Effect.Effect<GeneratedTitleAndDescription, unknown, R> {
+	return Effect.gen(function* () {
+		for (const step of input.plan.steps) {
+			const result = yield* Match.value(step).pipe(
+				Match.tag("github-model", ({ model }) =>
+					runGithubFallbackModelAttempts({ models: [model], runAttempt: input.runAttempt }).pipe(
+						Effect.map(Option.getOrUndefined),
+					),
+				),
+				Match.tag("local-model", ({ model }) =>
+					Effect.logWarning({
+						event: "generate_pr_content",
+						status: "rate_limit_fallback_local_start",
+						fallback_provider: "local",
+						fallback_model: model,
+					}).pipe(
+						Effect.flatMap(() =>
+							input
+								.runAttempt("local", model)
+								.pipe(Effect.provide(input.localFallbackLayerForModel(model))),
+						),
+						Effect.map((value) => value as GeneratedTitleAndDescription | undefined),
+					),
+				),
+				Match.tag("commit-fallback", () =>
+					buildCommitFallbackEffect(input.filtered).pipe(
+						Effect.map((value) => value as GeneratedTitleAndDescription | undefined),
+					),
+				),
+				Match.exhaustive,
+			);
+			if (result !== undefined) return result;
+		}
+		return yield* buildCommitFallbackEffect(input.filtered);
+	});
 }
 
 function stringifyToolResultForPrompt(value: unknown): string {
@@ -479,22 +521,25 @@ function generateTitleAndDescriptionWithToolkit(
 					? { aiFallbackStrategy: options.fallbackStrategy.aiFallbackStrategy }
 					: {}),
 			});
-			const nextGithubModels = plan.githubModels.slice(1);
-			const fallbackModel = plan.fallbackModel ?? resolveStrongestLocalFallbackModel();
 			const strategy = plan.strategy;
 			const fallbackUrl =
 				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim() || DEFAULT_OPENAI_COMPAT_URL;
 			const fallbackApiKey = process.env.AUTO_PR_AI_OPENAI_COMPAT_API_KEY?.trim();
-			const localFallbackLayer = aiProviderLayerFromConfig(
-				{
-					provider: "local",
-					model: fallbackModel,
-					openaiCompatUrl: fallbackUrl,
-					...(fallbackApiKey === undefined || fallbackApiKey === ""
-						? {}
-						: { openaiCompatApiKey: Redacted.make(fallbackApiKey) }),
-				},
-				options?.fetch !== undefined ? { fetch: options.fetch } : undefined,
+			const localFallbackLayerForModel = (fallbackModel: string) =>
+				aiProviderLayerFromConfig(
+					{
+						provider: "local",
+						model: fallbackModel,
+						openaiCompatUrl: fallbackUrl,
+						...(fallbackApiKey === undefined || fallbackApiKey === ""
+							? {}
+							: { openaiCompatApiKey: Redacted.make(fallbackApiKey) }),
+					},
+					options?.fetch !== undefined ? { fetch: options.fetch } : undefined,
+				);
+			const localStep = plan.steps.find(
+				(step): step is Extract<AiFallbackPlanStep, { _tag: "local-model" }> =>
+					step._tag === "local-model",
 			);
 			return Effect.logWarning({
 				event: "generate_pr_content",
@@ -502,72 +547,23 @@ function generateTitleAndDescriptionWithToolkit(
 				provider,
 				model,
 				strategy,
-				github_fallback_chain: plan.githubModels.join(", "),
-				...(plan.tryLocalFallback
-					? { fallback_provider: "local", fallback_model: fallbackModel, fallback_url: fallbackUrl }
+				github_fallback_chain: plan.githubFallbackChain.join(", "),
+				...(localStep !== undefined
+					? {
+							fallback_provider: "local",
+							fallback_model: localStep.model,
+							fallback_url: fallbackUrl,
+						}
 					: {}),
 			}).pipe(
-				Effect.flatMap(() => {
-					const runLocalFallback = () =>
-						Effect.logWarning({
-							event: "generate_pr_content",
-							status: "rate_limit_fallback_local_start",
-							fallback_provider: "local",
-							fallback_model: fallbackModel,
-						}).pipe(
-							Effect.flatMap(() =>
-								runAttempt("local", fallbackModel).pipe(Effect.provide(localFallbackLayer)),
-							),
-						);
-					const runGithubFallbackChain = () =>
-						Effect.gen(function* () {
-							for (const githubFallbackModel of nextGithubModels) {
-								const attempt = yield* runAttempt("github-models", githubFallbackModel).pipe(
-									Effect.map((value) => ({ _tag: "Success" as const, value })),
-									Effect.catch((error) => Effect.succeed({ _tag: "Failure" as const, error })),
-								);
-								if (attempt._tag === "Success") {
-									yield* Effect.log({
-										event: "generate_pr_content",
-										status: "rate_limit_fallback_model_success",
-										provider: "github-models",
-										model: githubFallbackModel,
-									});
-									return Option.some(attempt.value);
-								}
-								const candidateError = attempt.error;
-								if (
-									!isTransientAiError(candidateError) ||
-									!isRateLimitWithRetryAfterError(candidateError)
-								) {
-									return yield* Effect.fail(candidateError);
-								}
-								yield* Effect.logWarning({
-									event: "generate_pr_content",
-									status: "rate_limit_fallback_model_skipped",
-									provider: "github-models",
-									model: githubFallbackModel,
-									reason: formatError(candidateError),
-								});
-							}
-							return Option.none<{ title: string; description: string }>();
-						});
-					return Effect.gen(function* () {
-						if (plan.tryGithubChain) {
-							const githubFallbackResult = yield* runGithubFallbackChain();
-							if (Option.isSome(githubFallbackResult)) {
-								return githubFallbackResult.value;
-							}
-						}
-						if (plan.tryLocalFallback) {
-							return yield* runLocalFallback();
-						}
-						if (plan.useCommitFallbackWhenExhausted) {
-							return yield* buildCommitFallbackEffect(filtered);
-						}
-						return yield* buildCommitFallbackEffect(filtered);
-					});
-				}),
+				Effect.flatMap(() =>
+					executeAiFallbackPlan({
+						plan,
+						runAttempt,
+						filtered,
+						localFallbackLayerForModel,
+					}),
+				),
 				Effect.catchIf(isTransientAiError, () => buildCommitFallbackEffect(filtered)),
 			);
 		}),
