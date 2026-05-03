@@ -155,7 +155,7 @@ const DEFAULT_RETRY_DELAY = Duration.seconds(3);
 const TOOL_RESULT_FOLLOWUP_MAX_ITEMS = 3;
 const TOOL_RESULT_FOLLOWUP_MAX_CHARS_PER_ITEM = 4_000;
 
-function parseOptionalPositiveNumber(raw: string | undefined): number | undefined {
+export function parseOptionalPositiveNumber(raw: string | undefined): number | undefined {
 	if (raw === undefined) return undefined;
 	const trimmed = raw.trim();
 	if (trimmed.length === 0) return undefined;
@@ -252,7 +252,7 @@ type AttemptRunner<R> = (
 	model: string,
 ) => Effect.Effect<GeneratedTitleAndDescription, unknown, R>;
 
-function runGithubFallbackModelAttempts<R>(input: {
+export function runGithubFallbackModelAttempts<R>(input: {
 	readonly models: readonly string[];
 	readonly runAttempt: AttemptRunner<R>;
 }): Effect.Effect<Option.Option<GeneratedTitleAndDescription>, unknown, R> {
@@ -287,7 +287,7 @@ function runGithubFallbackModelAttempts<R>(input: {
 	});
 }
 
-function executeAiFallbackPlan<R>(input: {
+export function executeAiFallbackPlan<R>(input: {
 	readonly plan: AiFallbackPlan;
 	readonly runAttempt: AttemptRunner<R>;
 	readonly filtered: readonly CommitInfo[];
@@ -295,40 +295,43 @@ function executeAiFallbackPlan<R>(input: {
 		model: string,
 	) => Layer.Layer<LanguageModel.LanguageModel, unknown, never>;
 }): Effect.Effect<GeneratedTitleAndDescription, unknown, R> {
-	return Effect.gen(function* () {
-		for (const step of input.plan.steps) {
-			const result = yield* Match.value(step).pipe(
-				Match.tag("github-model", ({ model }) =>
-					runGithubFallbackModelAttempts({ models: [model], runAttempt: input.runAttempt }).pipe(
-						Effect.map(Option.getOrUndefined),
-					),
+	const runStepAt = (index: number): Effect.Effect<GeneratedTitleAndDescription, unknown, R> => {
+		const step = input.plan.steps[index];
+		if (step === undefined) return buildCommitFallbackEffect(input.filtered);
+		return Match.value(step).pipe(
+			Match.tag("github-model", ({ model }) =>
+				runGithubFallbackModelAttempts({ models: [model], runAttempt: input.runAttempt }).pipe(
+					Effect.map(Option.getOrUndefined),
 				),
-				Match.tag("local-model", ({ model }) =>
-					Effect.logWarning({
-						event: "generate_pr_content",
-						status: "rate_limit_fallback_local_start",
-						fallback_provider: "local",
-						fallback_model: model,
-					}).pipe(
-						Effect.flatMap(() =>
-							input
-								.runAttempt("local", model)
-								.pipe(Effect.provide(input.localFallbackLayerForModel(model))),
-						),
-						Effect.map((value) => value as GeneratedTitleAndDescription | undefined),
+			),
+			Match.tag("local-model", ({ model }) =>
+				Effect.logWarning({
+					event: "generate_pr_content",
+					status: "rate_limit_fallback_local_start",
+					fallback_provider: "local",
+					fallback_model: model,
+				}).pipe(
+					Effect.flatMap(() =>
+						input
+							.runAttempt("local", model)
+							.pipe(Effect.provide(input.localFallbackLayerForModel(model))),
 					),
+					Effect.map((value) => value as GeneratedTitleAndDescription | undefined),
 				),
-				Match.tag("commit-fallback", () =>
-					buildCommitFallbackEffect(input.filtered).pipe(
-						Effect.map((value) => value as GeneratedTitleAndDescription | undefined),
-					),
+			),
+			Match.tag("commit-fallback", () =>
+				buildCommitFallbackEffect(input.filtered).pipe(
+					Effect.map((value) => value as GeneratedTitleAndDescription | undefined),
 				),
-				Match.exhaustive,
-			);
-			if (result !== undefined) return result;
-		}
-		return yield* buildCommitFallbackEffect(input.filtered);
-	});
+			),
+			Match.exhaustive,
+			Effect.flatMap((result) =>
+				result !== undefined ? Effect.succeed(result) : runStepAt(index + 1),
+			),
+		);
+	};
+
+	return runStepAt(0);
 }
 
 function stringifyToolResultForPrompt(value: unknown): string {

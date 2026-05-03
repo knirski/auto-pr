@@ -16,6 +16,7 @@ import { Response as AiResponse, LanguageModel } from "effect/unstable/ai";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
+	AiProviderError,
 	AutoPrConfigError,
 	aiProviderLayerFromConfig,
 	ChildProcessSpawnerLayer,
@@ -26,6 +27,7 @@ import {
 	TemplateRenderError,
 } from "#auto-pr";
 import { GitContext } from "#auto-pr/git-context.js";
+import type { AiFallbackPlan, CommitInfo } from "#core";
 import { FillPrTemplateValidationError, PullRequestLookupError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
@@ -39,13 +41,16 @@ import {
 } from "#test/test-utils.js";
 import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content.js";
 import {
+	executeAiFallbackPlan,
 	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
+	parseOptionalPositiveNumber,
 	program,
 	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
 	runGeneratePrContentConfigFromGeneratePrContentConfig,
 	runGeneratePrContentWithServices,
+	runGithubFallbackModelAttempts,
 } from "#workflow/auto-pr-generate-content.js";
 
 function logContent(...blocks: Array<{ hash?: string; subject: string; body: string }>): string {
@@ -418,6 +423,112 @@ const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
+
+function makeCommitInfo(subject: string, body: string, hash = "0".repeat(40)): CommitInfo {
+	const fullMessage = body.trim().length === 0 ? subject : `${subject}\n\n${body}`;
+	return {
+		hash,
+		subject,
+		body,
+		fullMessage,
+		type: Option.none(),
+		references: [],
+		breakingNote: Option.none(),
+	};
+}
+
+describe("generate-content fallback helpers", () => {
+	test("parseOptionalPositiveNumber handles undefined, blank, invalid, and positive values", () => {
+		expect(parseOptionalPositiveNumber(undefined)).toBeUndefined();
+		expect(parseOptionalPositiveNumber("   ")).toBeUndefined();
+		expect(parseOptionalPositiveNumber("abc")).toBeUndefined();
+		expect(parseOptionalPositiveNumber("0")).toBeUndefined();
+		expect(parseOptionalPositiveNumber(" 16 ")).toBe(16);
+	});
+
+	test("runGithubFallbackModelAttempts returns Some on first successful fallback model", async () => {
+		await runEffect(SilentLoggerLayer)(
+			Effect.gen(function* () {
+				const result = yield* runGithubFallbackModelAttempts({
+					models: ["microsoft/phi-4-mini-instruct"],
+					runAttempt: () =>
+						Effect.succeed({
+							title: "feat: fallback title",
+							description: "Fallback description",
+						}),
+				});
+				expect(Option.isSome(result)).toBe(true);
+				if (Option.isSome(result)) {
+					expect(result.value.title).toBe("feat: fallback title");
+					expect(result.value.description).toBe("Fallback description");
+				}
+			}),
+		);
+	});
+
+	test("runGithubFallbackModelAttempts fails fast on non-rate-limit errors", async () => {
+		const exit = await Effect.runPromise(
+			runGithubFallbackModelAttempts({
+				models: ["microsoft/phi-4-mini-instruct"],
+				runAttempt: () => Effect.fail(new AiProviderError({ status: 401, cause: "unauthorized" })),
+			}).pipe(Effect.exit),
+		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (error) => {
+					expect(error).toBeInstanceOf(AiProviderError);
+					expect((error as AiProviderError).status).toBe(401);
+				},
+				onFailure: () => expect().fail("expected AiProviderError"),
+			});
+		}
+	});
+
+	test("executeAiFallbackPlan continues after exhausted github step and returns commit fallback", async () => {
+		const plan: AiFallbackPlan = {
+			strategy: "github-chain-only",
+			githubFallbackChain: ["openai/gpt-4.1", "microsoft/phi-4-mini-instruct"],
+			steps: [
+				{ _tag: "github-model", model: "microsoft/phi-4-mini-instruct" },
+				{ _tag: "commit-fallback" },
+			],
+		};
+		const filtered: readonly CommitInfo[] = [
+			makeCommitInfo("feat: add module A", "Adds A."),
+			makeCommitInfo("fix: fix bug in B", "Fixes B.", "1".repeat(40)),
+		];
+		await runEffect(SilentLoggerLayer)(
+			Effect.gen(function* () {
+				const result = yield* executeAiFallbackPlan({
+					plan,
+					runAttempt: (provider) =>
+						provider === "github-models"
+							? Effect.fail(
+									new AiProviderError({
+										status: 429,
+										cause: "Rate limit exceeded. Retry after 1m",
+									}),
+								)
+							: Effect.fail(new Error("local fallback should not be used in this plan")),
+					filtered,
+					localFallbackLayerForModel: () =>
+						Layer.succeed(
+							LanguageModel.LanguageModel,
+							LanguageModel.LanguageModel.of({
+								generateText: () =>
+									Effect.die(new Error("local fallback model should not be invoked in this test")),
+								generateObject: () =>
+									Effect.die(new Error("generateObject should not be invoked in this test")),
+								streamText: () => Stream.empty,
+							}),
+						),
+				});
+				expect(result.title).toBe("feat: add module A");
+			}),
+		);
+	});
+});
 
 describe("resolveExistingPrTitleForPrompt", () => {
 	const layerWithPrClient = (
