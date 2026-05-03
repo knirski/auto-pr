@@ -173,15 +173,10 @@ describe("model band routing command policy", () => {
 		});
 	});
 
-	test("builds github-models fallback chain with selected model first and deduped overrides", () => {
+	test("builds github-models fallback chain with selected model first", () => {
 		expect(
 			buildGithubModelFallbackChain({
 				selectedModel: "openai/gpt-4.1",
-				configuredFallbackModels: [
-					" microsoft/phi-4-mini-instruct ",
-					"openai/gpt-4.1",
-					"microsoft/phi-4-mini-instruct",
-				],
 				requiresToolCalls: true,
 				reasoningNeed: "high",
 			}),

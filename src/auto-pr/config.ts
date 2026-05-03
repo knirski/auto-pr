@@ -19,9 +19,7 @@
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
  * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to microsoft/phi-4-mini-instruct when unset (lowest GitHub Models billing multipliers; see docs) |
- * | AUTO_PR_AI_GITHUB_MODELS_FALLBACK_MODELS | | GeneratePrContent, RunAutoPr | Optional ordered fallback model ids for github-models (comma/newline separated), attempted on rate-limit before local fallback. |
  * | AUTO_PR_AI_RATE_LIMIT_FALLBACK_STRATEGY | | GeneratePrContent, RunAutoPr | Optional policy for github-models rate limits: `github-chain-then-local` (default), `github-chain-only`, `local-only`, or `commit-fallback`. |
- * | AUTO_PR_AI_LOCAL_RATE_LIMIT_FALLBACK_MODEL | | GeneratePrContent, RunAutoPr | Optional local model id used after all github-models fallback candidates are rate-limited. |
  * | AUTO_PR_ROUTING_CONTEXT | | GeneratePrContent, RunAutoPr | Optional trusted routing context (change analysis, review focus, tool guidance, and model route) injected into the AI prompt. |
  * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
  * | GITHUB_API_URL | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional Octokit REST base URL (advanced; overrides GH_HOST mapping). |
@@ -154,12 +152,8 @@ export type GeneratePrContentConfigCommon = {
 	readonly defaultBranch: string;
 	readonly branch: string;
 	readonly model: string;
-	/** Optional ordered fallback chain for GitHub Models (comma/newline-separated env). */
-	readonly githubModelsFallbackModels?: readonly string[];
 	/** Optional rate-limit fallback policy for github-models provider. */
 	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategy;
-	/** Optional local model override used after GitHub-models rate-limit exhaustion. */
-	readonly localRateLimitFallbackModel?: string;
 	readonly routingContext?: string;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
@@ -196,14 +190,8 @@ const GeneratePrContentConfigDef = Config.all({
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
-	aiGithubModelsFallbackModels: Config.option(
-		Config.string("AUTO_PR_AI_GITHUB_MODELS_FALLBACK_MODELS"),
-	),
 	rateLimitFallbackStrategy: Config.option(
 		Config.string("AUTO_PR_AI_RATE_LIMIT_FALLBACK_STRATEGY"),
-	),
-	localRateLimitFallbackModel: Config.option(
-		Config.string("AUTO_PR_AI_LOCAL_RATE_LIMIT_FALLBACK_MODEL"),
 	),
 	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
 	ghHost: Config.option(Config.string("GH_HOST")),
@@ -243,23 +231,6 @@ function resolveProviderModel(input: {
 		);
 		return yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
 	});
-}
-
-function parseOptionalModelList(value: Option.Option<string>): readonly string[] | undefined {
-	if (Option.isNone(value)) return undefined;
-	const normalized = value.value
-		.split(/[,\n]/)
-		.map((entry) => entry.trim())
-		.filter((entry) => entry !== "");
-	if (normalized.length === 0) return undefined;
-	const seen = new Set<string>();
-	const deduped: string[] = [];
-	for (const model of normalized) {
-		if (seen.has(model)) continue;
-		seen.add(model);
-		deduped.push(model);
-	}
-	return deduped;
 }
 
 function parseRateLimitFallbackStrategy(
@@ -312,11 +283,9 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			const routingContext = optionalTrimmedNonEmpty(base.routingContext);
 			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
 			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
-			const githubModelsFallbackModels = parseOptionalModelList(base.aiGithubModelsFallbackModels);
 			const rateLimitFallbackStrategy = yield* parseRateLimitFallbackStrategy(
 				base.rateLimitFallbackStrategy,
 			);
-			const localRateLimitFallbackModel = optionalTrimmedNonEmpty(base.localRateLimitFallbackModel);
 
 			const shared = {
 				workspace,
@@ -327,9 +296,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 				...(ghHost !== undefined ? { ghHost } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 				...(routingContext !== undefined ? { routingContext } : {}),
-				...(githubModelsFallbackModels !== undefined ? { githubModelsFallbackModels } : {}),
 				...(rateLimitFallbackStrategy !== undefined ? { rateLimitFallbackStrategy } : {}),
-				...(localRateLimitFallbackModel !== undefined ? { localRateLimitFallbackModel } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(
@@ -468,12 +435,8 @@ export type RunAutoPrConfigCommon = {
 	readonly templatePath: string;
 	readonly ghToken: Redacted.Redacted<string>;
 	readonly model: string;
-	/** Optional ordered fallback chain for GitHub Models (comma/newline-separated env). */
-	readonly githubModelsFallbackModels?: readonly string[];
 	/** Optional rate-limit fallback policy for github-models provider. */
 	readonly rateLimitFallbackStrategy?: RateLimitFallbackStrategy;
-	/** Optional local model override used after GitHub-models rate-limit exhaustion. */
-	readonly localRateLimitFallbackModel?: string;
 	readonly routingContext?: string;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
@@ -506,14 +469,8 @@ const RunAutoPrConfigDef = Config.all({
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
 	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
-	aiGithubModelsFallbackModels: Config.option(
-		Config.string("AUTO_PR_AI_GITHUB_MODELS_FALLBACK_MODELS"),
-	),
 	rateLimitFallbackStrategy: Config.option(
 		Config.string("AUTO_PR_AI_RATE_LIMIT_FALLBACK_STRATEGY"),
-	),
-	localRateLimitFallbackModel: Config.option(
-		Config.string("AUTO_PR_AI_LOCAL_RATE_LIMIT_FALLBACK_MODEL"),
 	),
 	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
 	ghHost: Config.option(Config.string("GH_HOST")),
@@ -551,11 +508,9 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const provider = yield* parseProviderOrDefault(providerRaw);
 			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
 			const routingContext = optionalTrimmedNonEmpty(base.routingContext);
-			const githubModelsFallbackModels = parseOptionalModelList(base.aiGithubModelsFallbackModels);
 			const rateLimitFallbackStrategy = yield* parseRateLimitFallbackStrategy(
 				base.rateLimitFallbackStrategy,
 			);
-			const localRateLimitFallbackModel = optionalTrimmedNonEmpty(base.localRateLimitFallbackModel);
 
 			const shared = {
 				defaultBranch,
@@ -567,9 +522,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				...(branch !== undefined ? { branch } : {}),
 				...(existingPrTitle !== undefined ? { existingPrTitle } : {}),
 				...(routingContext !== undefined ? { routingContext } : {}),
-				...(githubModelsFallbackModels !== undefined ? { githubModelsFallbackModels } : {}),
 				...(rateLimitFallbackStrategy !== undefined ? { rateLimitFallbackStrategy } : {}),
-				...(localRateLimitFallbackModel !== undefined ? { localRateLimitFallbackModel } : {}),
 			};
 
 			return yield* Match.value(provider).pipe(

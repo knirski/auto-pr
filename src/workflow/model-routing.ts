@@ -377,7 +377,6 @@ function normalizeModelIds(models: readonly string[]): readonly string[] {
 
 export function buildGithubModelFallbackChain(input: {
 	readonly selectedModel: string;
-	readonly configuredFallbackModels?: readonly string[];
 	readonly reasoningNeed?: ReasoningNeed;
 	readonly requiresToolCalls?: boolean;
 }): readonly string[] {
@@ -385,8 +384,7 @@ export function buildGithubModelFallbackChain(input: {
 		input.requiresToolCalls === true || input.reasoningNeed === "high"
 			? [GITHUB_MODELS_STRONG_MODEL, GITHUB_MODELS_SMALL_MODEL]
 			: [GITHUB_MODELS_SMALL_MODEL, GITHUB_MODELS_STRONG_MODEL];
-	const configured = input.configuredFallbackModels ?? [];
-	return normalizeModelIds([input.selectedModel, ...configured, ...strongFirst]);
+	return normalizeModelIds([input.selectedModel, ...strongFirst]);
 }
 
 export function resolveModelBand(input: ResolveModelBandInput): ModelBandDecision {
