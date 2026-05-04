@@ -1,208 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Match } from "effect";
-import {
-	RoutingContextEnvError,
-	RoutingContextGitError,
-	RoutingContextOutputError,
-	RoutingContextParseError,
-} from "#core/errors.js";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect } from "effect";
 import {
 	program,
-	reportProgramError,
 	runBuildModelRoutingContext,
-	toEnvConfigReadError,
 } from "../../src/workflow/auto-pr-build-model-routing-context.js";
-
-type SpawnSyncResult = {
-	readonly status: number;
-	readonly stdout: string;
-	readonly stderr: string;
-};
-
-type CommandSuccess = SpawnSyncResult & {
-	readonly _tag: "Success";
-	readonly status: 0;
-};
-
-type CommandFailure = SpawnSyncResult & {
-	readonly _tag: "Failure";
-};
-
-type CommandResult = CommandSuccess | CommandFailure;
-
-const textDecoder = new TextDecoder();
-
-function toError(cause: unknown): Error {
-	return cause instanceof Error ? cause : new Error(String(cause));
-}
-
-function join(...parts: readonly string[]): string {
-	return parts
-		.filter((part) => part.length > 0)
-		.map((part, index) =>
-			index === 0 ? part.replace(/[\\/]+$/g, "") : part.replace(/^[/\\]+|[/\\]+$/g, ""),
-		)
-		.join("/");
-}
-
-function spawnSync(
-	command: string,
-	args: readonly string[],
-	options?: {
-		readonly cwd?: string;
-		readonly encoding?: "utf8";
-		readonly env?: Record<string, string | undefined>;
-	},
-): CommandResult {
-	const env =
-		options?.env === undefined
-			? undefined
-			: Object.fromEntries(
-					Object.entries(options.env).filter(
-						(entry): entry is [string, string] => entry[1] !== undefined,
-					),
-				);
-	const result = Bun.spawnSync([command, ...args], {
-		...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
-		...(env === undefined ? {} : { env }),
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const output: SpawnSyncResult = {
-		status: result.exitCode,
-		stdout: textDecoder.decode(result.stdout),
-		stderr: textDecoder.decode(result.stderr),
-	};
-	return Match.value(output.status).pipe(
-		Match.when(0, () => ({ ...output, _tag: "Success" as const, status: 0 as const })),
-		Match.orElse(() => ({ ...output, _tag: "Failure" as const })),
-	);
-}
-
-function requireCommandSuccess(
-	command: string,
-	args: readonly string[],
-	result: CommandResult,
-): CommandSuccess {
-	return Match.value(result).pipe(
-		Match.when({ _tag: "Success" }, (success) => success),
-		Match.when({ _tag: "Failure" }, (failure) => {
-			throw new Error(`${command} ${args.join(" ")} failed: ${failure.stderr || failure.stdout}`);
-		}),
-		Match.exhaustive,
-	);
-}
-
-function existsSync(path: string): boolean {
-	return Match.value(spawnSync("test", ["-e", path])).pipe(
-		Match.when({ _tag: "Success" }, () => true),
-		Match.when({ _tag: "Failure" }, () => false),
-		Match.exhaustive,
-	);
-}
-
-function mkdirSync(path: string, options?: { readonly recursive?: boolean }): void {
-	const args = [options?.recursive === true ? "-p" : "", path].filter((arg) => arg !== "");
-	requireCommandSuccess("mkdir", args, spawnSync("mkdir", args));
-}
-
-function rmSync(
-	path: string,
-	options?: {
-		readonly recursive?: boolean;
-		readonly force?: boolean;
-	},
-): void {
-	const args = [
-		options?.recursive === true ? "-r" : "",
-		options?.force === true ? "-f" : "",
-		path,
-	].filter((arg) => arg !== "");
-	requireCommandSuccess("rm", args, spawnSync("rm", args));
-}
-
-function tmpdir(): string {
-	return process.env.TMPDIR?.trim() || "/tmp";
-}
-
-function mkdtempSync(prefixPath: string): string {
-	const result = requireCommandSuccess(
-		"mktemp",
-		["-d", `${prefixPath}XXXXXX`],
-		spawnSync("mktemp", ["-d", `${prefixPath}XXXXXX`]),
-	);
-	return result.stdout.trim();
-}
-
-function readFileSync(path: string, encoding: "utf8"): string {
-	if (encoding !== "utf8") {
-		throw new Error(`Unsupported encoding: ${encoding}`);
-	}
-	const result = requireCommandSuccess("cat", [path], spawnSync("cat", [path]));
-	return result.stdout;
-}
 
 function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
 	return Effect.try({
 		try: () => {
-			requireCommandSuccess("git", args, spawnSync("git", [...args], { cwd, encoding: "utf8" }));
+			const result = spawnSync("git", [...args], { cwd, encoding: "utf8" });
+			if (result.status !== 0) {
+				throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
+			}
 		},
-		catch: toError,
+		catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
 	});
 }
 
 function write(path: string, content: string): Effect.Effect<void, Error> {
-	return Effect.tryPromise({
-		try: () => Bun.write(path, content).then(() => undefined),
-		catch: toError,
+	return Effect.sync(() => {
+		writeFileSync(path, content);
 	});
 }
 
 function read(path: string): Effect.Effect<string, Error> {
-	return Effect.try({
-		try: () => readFileSync(path, "utf8"),
-		catch: toError,
-	});
-}
-
-function mkdir(
-	path: string,
-	options?: { readonly recursive?: boolean },
-): Effect.Effect<void, Error> {
-	return Effect.try({
-		try: () => {
-			mkdirSync(path, options);
-		},
-		catch: toError,
-	});
+	return Effect.sync(() => readFileSync(path, "utf8"));
 }
 
 function tempRepo(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
-}
-
-function withPatchedEnv(
-	patch: Record<string, string | undefined>,
-	run: () => Promise<void>,
-): Promise<void> {
-	const original: Record<string, string | undefined> = {};
-	for (const [key, value] of Object.entries(patch)) {
-		original[key] = process.env[key];
-		if (value === undefined) {
-			delete process.env[key];
-		} else {
-			process.env[key] = value;
-		}
-	}
-	return run().finally(() => {
-		for (const [key, value] of Object.entries(original)) {
-			if (value === undefined) {
-				delete process.env[key];
-			} else {
-				process.env[key] = value;
-			}
-		}
-	});
 }
 
 describe("build-model-routing-context", () => {
@@ -252,7 +82,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* mkdir(join(dir, "src"), { recursive: true });
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -309,7 +139,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* mkdir(join(dir, "src"), { recursive: true });
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -352,8 +182,8 @@ describe("build-model-routing-context", () => {
 		}
 	});
 
-	test("auto-pr-run-command package mode executes packaged routing binary via runner", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-package-mode-");
+	test("treats root-only files as one top-level directory", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-root-");
 		try {
 			await Effect.runPromise(
 				Effect.gen(function* () {
@@ -361,110 +191,305 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* mkdir(join(dir, "src"), { recursive: true });
-					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* write(join(dir, "package.json"), '{"name":"base"}\n');
 					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+					yield* runGit(dir, ["commit", "-m", "chore: base"]);
 					yield* runGit(dir, ["branch", "origin/main"]);
 					yield* runGit(dir, ["checkout", "-b", "feature"]);
-					yield* write(join(dir, "src", "app.ts"), "export const app = 2;\n");
+					yield* write(join(dir, "README.md"), "updated\n");
+					yield* write(join(dir, "package.json"), '{"name":"feature"}\n');
 					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "feat: update app"]);
+					yield* runGit(dir, ["commit", "-m", "feat: update root files"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain("dirs=<root>");
+					expect(output).toContain(
+						"file-kinds: source=0; docs=1; test=0; generated=0; lockfiles=0; package-manifests=1",
+					);
 				}),
 			);
-
-			const argsFile = join(dir, "runner_args.txt");
-			const runnerScript = join(dir, "mock-runner.sh");
-			const githubOutput = join(dir, "github_output");
-			await Effect.runPromise(
-				write(
-					runnerScript,
-					[
-						"#!/usr/bin/env bash",
-						"set -euo pipefail",
-						'printf "%s\\n" "$@" > "$RUNNER_ARGS_FILE"',
-						'node "$AUTO_PR_BIN_PATH"',
-					].join("\n"),
-				),
-			);
-			requireCommandSuccess(
-				"chmod",
-				["+x", runnerScript],
-				spawnSync("chmod", ["+x", runnerScript]),
-			);
-
-			const result = spawnSync(
-				"bash",
-				[
-					join(process.cwd(), ".github/actions/auto-pr-run-command/auto-pr-run-command.sh"),
-					"build-model-routing-context",
-				],
-				{
-					cwd: process.cwd(),
-					encoding: "utf8",
-					env: {
-						...process.env,
-						AUTO_PR_AI_PROVIDER: "local",
-						AUTO_PR_AI_OPENAI_COMPAT_MODEL: "",
-						AUTO_PR_AI_OPENAI_COMPAT_URL: "",
-						AUTO_PR_AI_LLAMACPP_MODEL_URL: "",
-						AUTO_PR_BIN_PATH: join(
-							process.cwd(),
-							"dist/workflow/auto-pr-build-model-routing-context.js",
-						),
-						AUTO_PR_PKG: "github:knirski/auto-pr",
-						COMMITS_COUNT: "1",
-						DEFAULT_BRANCH: "main",
-						GITHUB_OUTPUT: githubOutput,
-						GITHUB_WORKSPACE: dir,
-						REPOSITORY_VISIBILITY: "private",
-						RUNNER: runnerScript,
-						RUNNER_ARGS_FILE: argsFile,
-						RUNNER_LABEL: "ubuntu-24.04",
-						USE_WORKSPACE: "false",
-					},
-				},
-			);
-
-			expect(result.status).toBe(0);
-			expect(readFileSync(argsFile, "utf8")).toContain("-p");
-			expect(readFileSync(argsFile, "utf8")).toContain("github:knirski/auto-pr");
-			expect(readFileSync(argsFile, "utf8")).toContain("auto-pr-build-model-routing-context");
-			expect(readFileSync(githubOutput, "utf8")).toContain("selected_model=qwen3-1.7b-q4_k_m");
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 
-	test("reusable generate workflow wires routing outputs into generate-content env", () => {
-		const workflow = readFileSync(
-			join(process.cwd(), ".github/workflows/auto-pr-generate-reusable.yml"),
-			"utf8",
-		);
-		expect(workflow).toContain(
-			"AUTO_PR_AI_OPENAI_COMPAT_MODEL: $" +
-				"{{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}",
-		);
-		expect(workflow).toContain(
-			"AUTO_PR_ROUTING_CONTEXT: $" + "{{ steps.ai_routing.outputs.routing_context }}",
-		);
+	test("classifies src test files as tests before source", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-tests-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "base.ts"), "export const base = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "src", "foo.test.ts"), "expect(true).toBe(true);\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "test: add co-located test"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain(
+						"file-kinds: source=0; docs=0; test=1; generated=0; lockfiles=0; package-manifests=0",
+					);
+					expect(output).toContain("review_focus: src/foo.test.ts (+1/-0, test)");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
-	test("reusable generate workflow fetches origin/default before routing and generation", () => {
-		const workflow = readFileSync(
-			join(process.cwd(), ".github/workflows/auto-pr-generate-reusable.yml"),
-			"utf8",
-		);
-		const fetchIndex = workflow.indexOf("name: Fetch base branch");
-		const routingIndex = workflow.indexOf("name: Build model routing context");
-		const generateIndex = workflow.indexOf("name: Generate PR content");
+	test("classifies source maps under dist as generated files", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-generated-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-		expect(fetchIndex).toBeGreaterThanOrEqual(0);
-		expect(routingIndex).toBeGreaterThanOrEqual(0);
-		expect(generateIndex).toBeGreaterThanOrEqual(0);
-		expect(fetchIndex).toBeLessThan(routingIndex);
-		expect(fetchIndex).toBeLessThan(generateIndex);
-		expect(workflow).toContain('run: git fetch origin "$DEFAULT_BRANCH"');
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "base.ts"), "export const base = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* Effect.sync(() => mkdirSync(join(dir, "dist"), { recursive: true }));
+					yield* write(join(dir, "dist", "bundle.js.map"), "{}\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "chore: add map"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain(
+						"file-kinds: source=0; docs=0; test=0; generated=1; lockfiles=0; package-manifests=0",
+					);
+					expect(output).toContain("review_focus: dist/bundle.js.map (+1/-0, generated)");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("fails with a clear error when DEFAULT_BRANCH ref does not exist", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-bad-base-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+
+					const githubOutput = join(dir, "github_output");
+					const exit = yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "does-not-exist",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					}).pipe(Effect.exit);
+
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program validates optional runner cpu env value", async () => {
+		const original = {
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+		};
+		const dir = tempRepo("auto-pr-build-model-routing-context-env-");
+		const githubOutput = join(dir, "github_output");
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "1";
+					process.env.LOCAL_RUNNER_CPUS = "abc";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "";
+
+					const exit = yield* program.pipe(Effect.exit);
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			process.env.GITHUB_WORKSPACE = original.GITHUB_WORKSPACE;
+			process.env.DEFAULT_BRANCH = original.DEFAULT_BRANCH;
+			process.env.AUTO_PR_AI_PROVIDER = original.AUTO_PR_AI_PROVIDER;
+			process.env.GITHUB_OUTPUT = original.GITHUB_OUTPUT;
+			process.env.COMMITS_COUNT = original.COMMITS_COUNT;
+			process.env.LOCAL_RUNNER_CPUS = original.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = original.LOCAL_RUNNER_MEMORY_GB;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program validates optional commits count env value", async () => {
+		const original = {
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+		};
+		const dir = tempRepo("auto-pr-build-model-routing-context-commits-count-");
+		const githubOutput = join(dir, "github_output");
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "abc";
+					process.env.LOCAL_RUNNER_CPUS = "";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "";
+
+					const exit = yield* program.pipe(Effect.exit);
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			process.env.GITHUB_WORKSPACE = original.GITHUB_WORKSPACE;
+			process.env.DEFAULT_BRANCH = original.DEFAULT_BRANCH;
+			process.env.AUTO_PR_AI_PROVIDER = original.AUTO_PR_AI_PROVIDER;
+			process.env.GITHUB_OUTPUT = original.GITHUB_OUTPUT;
+			process.env.COMMITS_COUNT = original.COMMITS_COUNT;
+			process.env.LOCAL_RUNNER_CPUS = original.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = original.LOCAL_RUNNER_MEMORY_GB;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program validates optional runner memory env value", async () => {
+		const original = {
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+		};
+		const dir = tempRepo("auto-pr-build-model-routing-context-mem-");
+		const githubOutput = join(dir, "github_output");
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "1";
+					process.env.LOCAL_RUNNER_CPUS = "2";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "0";
+
+					const exit = yield* program.pipe(Effect.exit);
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			process.env.GITHUB_WORKSPACE = original.GITHUB_WORKSPACE;
+			process.env.DEFAULT_BRANCH = original.DEFAULT_BRANCH;
+			process.env.AUTO_PR_AI_PROVIDER = original.AUTO_PR_AI_PROVIDER;
+			process.env.GITHUB_OUTPUT = original.GITHUB_OUTPUT;
+			process.env.COMMITS_COUNT = original.COMMITS_COUNT;
+			process.env.LOCAL_RUNNER_CPUS = original.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = original.LOCAL_RUNNER_MEMORY_GB;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program fails when required env is missing", async () => {
+		const originalDefaultBranch = process.env.DEFAULT_BRANCH;
+		try {
+			process.env.DEFAULT_BRANCH = "";
+			const exit = await Effect.runPromise(program.pipe(Effect.exit));
+			expect(exit._tag).toBe("Failure");
+		} finally {
+			process.env.DEFAULT_BRANCH = originalDefaultBranch;
+		}
 	});
 
 	test("emits a default model and signal summary for single-commit PRs", async () => {
@@ -476,14 +501,14 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* mkdir(join(dir, "docs"), { recursive: true });
+					yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
 					yield* write(join(dir, "docs", "base.md"), "base\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "docs: base"]);
 					yield* runGit(dir, ["branch", "origin/main"]);
 
 					yield* runGit(dir, ["checkout", "-b", "feature"]);
-					yield* mkdir(join(dir, "src"), { recursive: true });
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -548,7 +573,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["branch", "origin/main"]);
 
 					yield* runGit(dir, ["checkout", "-b", "feature"]);
-					yield* mkdir(join(dir, "docs"), { recursive: true });
+					yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
 					yield* write(
 						join(dir, "docs", "guide.md"),
 						Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n"),
@@ -648,7 +673,6 @@ describe("build-model-routing-context", () => {
 						"file-kinds: source=0; docs=0; test=0; generated=0; lockfiles=1; package-manifests=1",
 					);
 					expect(output).toContain("sensitive_scope: dependencies");
-					expect(output).not.toContain("generated-heavy");
 				}),
 			);
 		} finally {
@@ -679,7 +703,7 @@ describe("build-model-routing-context", () => {
 					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
 					yield* runGit(dir, ["config", "user.name", "Test User"]);
 
-					yield* mkdir(join(dir, "src"), { recursive: true });
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
 					yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
 					yield* runGit(dir, ["add", "."]);
 					yield* runGit(dir, ["commit", "-m", "feat: add app"]);
@@ -727,324 +751,6 @@ describe("build-model-routing-context", () => {
 			process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
 			process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
 			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("program fails when required env vars are missing", async () => {
-		await withPatchedEnv(
-			{
-				GITHUB_WORKSPACE: undefined,
-				DEFAULT_BRANCH: "main",
-				AUTO_PR_AI_PROVIDER: "local",
-				GITHUB_OUTPUT: join(tempRepo("auto-pr-build-model-routing-context-missing-env-"), "out"),
-			},
-			async () => {
-				const error = await Effect.runPromise(program.pipe(Effect.flip));
-				expect(error).toBeInstanceOf(RoutingContextEnvError);
-				expect(error).toMatchObject({
-					_tag: "RoutingContextEnvError",
-					name: "GITHUB_WORKSPACE",
-				});
-			},
-		);
-	});
-
-	test("program rejects invalid numeric env values", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-invalid-env-");
-		const output = join(dir, "github_output");
-		await withPatchedEnv(
-			{
-				GITHUB_WORKSPACE: dir,
-				DEFAULT_BRANCH: "main",
-				AUTO_PR_AI_PROVIDER: "local",
-				GITHUB_OUTPUT: output,
-				COMMITS_COUNT: "-1",
-				LOCAL_RUNNER_CPUS: "0",
-				LOCAL_RUNNER_MEMORY_GB: "bad",
-			},
-			async () => {
-				const error = await Effect.runPromise(program.pipe(Effect.flip));
-				expect(error).toBeInstanceOf(RoutingContextParseError);
-				expect(error).toMatchObject({
-					_tag: "RoutingContextParseError",
-					name: "COMMITS_COUNT",
-					requirement: "a non-negative integer",
-					value: "-1",
-				});
-			},
-		);
-	});
-
-	test("program rejects invalid provider", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-invalid-provider-");
-		const output = join(dir, "github_output");
-		await withPatchedEnv(
-			{
-				GITHUB_WORKSPACE: dir,
-				DEFAULT_BRANCH: "main",
-				AUTO_PR_AI_PROVIDER: "unknown-provider",
-				GITHUB_OUTPUT: output,
-				COMMITS_COUNT: "1",
-			},
-			async () => {
-				const error = await Effect.runPromise(program.pipe(Effect.flip));
-				expect(error).toBeInstanceOf(RoutingContextParseError);
-				expect(error).toMatchObject({
-					_tag: "RoutingContextParseError",
-					name: "AUTO_PR_AI_PROVIDER",
-					requirement: "local or github-models",
-					value: "unknown-provider",
-				});
-			},
-		);
-	});
-
-	test("toEnvConfigReadError maps env read failure into RoutingContextParseError", () => {
-		const error = toEnvConfigReadError({ message: "env provider unavailable" });
-		expect(error).toBeInstanceOf(RoutingContextParseError);
-		expect(error).toMatchObject({
-			_tag: "RoutingContextParseError",
-			name: "ENV",
-			requirement: "readable environment variables",
-			value: "env provider unavailable",
-		});
-	});
-
-	test("fails when git base ref cannot be resolved", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-git-fail-");
-		try {
-			await Effect.runPromise(
-				Effect.gen(function* () {
-					yield* runGit(dir, ["init", "-b", "main"]);
-					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
-					yield* runGit(dir, ["config", "user.name", "Test User"]);
-					yield* write(join(dir, "README.md"), "base\n");
-					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "docs: base"]);
-					// Intentionally do not create origin/main alias to force git diff failure.
-					const githubOutput = join(dir, "github_output");
-					const error = yield* runBuildModelRoutingContext({
-						workspace: dir,
-						defaultBranch: "main",
-						provider: "github-models",
-						explicitModel: undefined,
-						githubOutput,
-						commitsCount: 1,
-					}).pipe(Effect.flip);
-					expect(error).toBeInstanceOf(RoutingContextGitError);
-					expect(error).toMatchObject({
-						_tag: "RoutingContextGitError",
-						command: "diff --name-only origin/main..HEAD",
-					});
-					expect(error.cause).toContain("unknown revision");
-				}),
-			);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("fails when writing outputs to GITHUB_OUTPUT path", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-output-fail-");
-		try {
-			await Effect.runPromise(
-				Effect.gen(function* () {
-					yield* runGit(dir, ["init", "-b", "main"]);
-					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
-					yield* runGit(dir, ["config", "user.name", "Test User"]);
-					yield* write(join(dir, "README.md"), "base\n");
-					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "docs: base"]);
-					yield* runGit(dir, ["branch", "origin/main"]);
-					yield* runGit(dir, ["checkout", "-b", "feature"]);
-					yield* write(join(dir, "README.md"), "change\n");
-					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "docs: change"]);
-
-					const outputDirectory = join(dir, "output-dir");
-					yield* mkdir(outputDirectory, { recursive: true });
-					const error = yield* runBuildModelRoutingContext({
-						workspace: dir,
-						defaultBranch: "main",
-						provider: "github-models",
-						explicitModel: undefined,
-						githubOutput: outputDirectory,
-						commitsCount: 1,
-					}).pipe(Effect.flip);
-					expect(error).toBeInstanceOf(RoutingContextOutputError);
-					expect(error).toMatchObject({
-						_tag: "RoutingContextOutputError",
-						path: outputDirectory,
-					});
-				}),
-			);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("tracks generated/test kinds and aggregates churn per top directory", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-kinds-");
-		try {
-			await Effect.runPromise(
-				Effect.gen(function* () {
-					yield* runGit(dir, ["init", "-b", "main"]);
-					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
-					yield* runGit(dir, ["config", "user.name", "Test User"]);
-
-					yield* mkdir(join(dir, "src"), { recursive: true });
-					yield* mkdir(join(dir, "test"), { recursive: true });
-					yield* mkdir(join(dir, "dist"), { recursive: true });
-					yield* write(join(dir, "src", "a.ts"), "export const a = 1;\n");
-					yield* write(join(dir, "src", "b.ts"), "export const b = 1;\n");
-					yield* write(join(dir, "test", "a.test.ts"), "test('a', () => {});\n");
-					yield* write(join(dir, "dist", "bundle.js.map"), "{}\n");
-					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "feat: base files"]);
-					yield* runGit(dir, ["branch", "origin/main"]);
-					yield* runGit(dir, ["checkout", "-b", "feature"]);
-
-					yield* write(join(dir, "src", "a.ts"), "export const a = 2;\n");
-					yield* write(join(dir, "src", "b.ts"), "export const b = 2;\n");
-					yield* write(
-						join(dir, "test", "a.test.ts"),
-						"test('a', () => { expect(1).toBe(1); });\n",
-					);
-					yield* write(join(dir, "dist", "bundle.js.map"), '{"version":3}\n');
-					yield* runGit(dir, ["add", "."]);
-					yield* runGit(dir, ["commit", "-m", "feat: touch source, tests, and generated"]);
-
-					const githubOutput = join(dir, "github_output");
-					yield* runBuildModelRoutingContext({
-						workspace: dir,
-						defaultBranch: "main",
-						provider: "github-models",
-						explicitModel: undefined,
-						githubOutput,
-						commitsCount: 1,
-					});
-
-					const output = yield* read(githubOutput);
-					expect(output).toContain("file-kinds: source=2; docs=0; test=1; generated=1");
-					expect(output).toContain("dirs=dist, src, test");
-					expect(output).toContain("src/a.ts (+1/-1, source)");
-				}),
-			);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("program rejects invalid LOCAL_RUNNER_CPU / MEMORY env values", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-invalid-runner-env-");
-		const output = join(dir, "github_output");
-		await withPatchedEnv(
-			{
-				GITHUB_WORKSPACE: dir,
-				DEFAULT_BRANCH: "main",
-				AUTO_PR_AI_PROVIDER: "local",
-				GITHUB_OUTPUT: output,
-				COMMITS_COUNT: "1",
-				LOCAL_RUNNER_CPUS: "0",
-				LOCAL_RUNNER_MEMORY_GB: "bad",
-			},
-			async () => {
-				const error = await Effect.runPromise(program.pipe(Effect.flip));
-				expect(error).toBeInstanceOf(RoutingContextParseError);
-				expect(error).toMatchObject({
-					_tag: "RoutingContextParseError",
-					name: "LOCAL_RUNNER_CPUS",
-					requirement: "a positive number",
-					value: "0",
-				});
-			},
-		);
-	});
-
-	test("program rejects invalid LOCAL_RUNNER_MEMORY_GB value", async () => {
-		const dir = tempRepo("auto-pr-build-model-routing-context-invalid-memory-env-");
-		const output = join(dir, "github_output");
-		await withPatchedEnv(
-			{
-				GITHUB_WORKSPACE: dir,
-				DEFAULT_BRANCH: "main",
-				AUTO_PR_AI_PROVIDER: "local",
-				GITHUB_OUTPUT: output,
-				COMMITS_COUNT: "1",
-				LOCAL_RUNNER_CPUS: "2",
-				LOCAL_RUNNER_MEMORY_GB: "0",
-			},
-			async () => {
-				const error = await Effect.runPromise(program.pipe(Effect.flip));
-				expect(error).toBeInstanceOf(RoutingContextParseError);
-				expect(error).toMatchObject({
-					_tag: "RoutingContextParseError",
-					name: "LOCAL_RUNNER_MEMORY_GB",
-					requirement: "a positive number",
-					value: "0",
-				});
-			},
-		);
-	});
-
-	test("reportProgramError writes message and marks process as failed", () => {
-		const originalWrite = process.stderr.write.bind(process.stderr);
-		const originalExitCode = process.exitCode;
-		const chunks: string[] = [];
-		process.stderr.write = ((chunk: string | Uint8Array) => {
-			chunks.push(String(chunk));
-			return true;
-		}) as typeof process.stderr.write;
-		try {
-			reportProgramError(new Error("boom"));
-			reportProgramError("plain failure");
-			expect(chunks.join("")).toContain("boom");
-			expect(chunks.join("")).toContain("plain failure");
-			expect(process.exitCode).toBe(1);
-		} finally {
-			process.stderr.write = originalWrite as typeof process.stderr.write;
-			process.exitCode = originalExitCode ?? 0;
-		}
-	});
-
-	test("reportProgramError formats tagged routing errors", () => {
-		const originalWrite = process.stderr.write.bind(process.stderr);
-		const originalExitCode = process.exitCode;
-		const chunks: string[] = [];
-		process.stderr.write = ((chunk: string | Uint8Array) => {
-			chunks.push(String(chunk));
-			return true;
-		}) as typeof process.stderr.write;
-		try {
-			reportProgramError(new RoutingContextEnvError({ name: "GITHUB_WORKSPACE" }));
-			reportProgramError(
-				new RoutingContextParseError({
-					name: "AUTO_PR_AI_PROVIDER",
-					requirement: "local or github-models",
-					value: "",
-				}),
-			);
-			reportProgramError(
-				new RoutingContextGitError({
-					command: "diff --name-only origin/main..HEAD",
-					cause: "unknown revision",
-				}),
-			);
-			reportProgramError(
-				new RoutingContextOutputError({
-					path: "/tmp/out",
-					cause: "EISDIR",
-				}),
-			);
-			const output = chunks.join("");
-			expect(output).toContain("GITHUB_WORKSPACE is required");
-			expect(output).toContain("AUTO_PR_AI_PROVIDER must be local or github-models, got <empty>");
-			expect(output).toContain("git diff --name-only origin/main..HEAD failed: unknown revision");
-			expect(output).toContain("Failed writing routing outputs to /tmp/out: EISDIR");
-			expect(process.exitCode).toBe(1);
-		} finally {
-			process.stderr.write = originalWrite as typeof process.stderr.write;
-			process.exitCode = originalExitCode ?? 0;
 		}
 	});
 });

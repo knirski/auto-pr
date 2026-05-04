@@ -10,9 +10,7 @@ import {
 	Option,
 	Redacted,
 	Result,
-	Stream,
 } from "effect";
-import { Response as AiResponse, LanguageModel } from "effect/unstable/ai";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
@@ -111,88 +109,6 @@ const MockDiffToolkitLayer = DiffToolkit.toLayer(
 		}),
 	),
 );
-
-function makeUsage(inputTokensTotal: number, outputTokensTotal: number): AiResponse.Usage {
-	return new AiResponse.Usage({
-		inputTokens: {
-			uncached: undefined,
-			total: inputTokensTotal,
-			cacheRead: undefined,
-			cacheWrite: undefined,
-		},
-		outputTokens: {
-			total: outputTokensTotal,
-			text: outputTokensTotal,
-			reasoning: undefined,
-		},
-	});
-}
-
-function makeMockLanguageModelForToolOnlyFirstTurn(finalText: string) {
-	const calls: Array<{ prompt: unknown; toolChoice: unknown; toolkitPresent: boolean }> = [];
-	const circularResult: { self?: unknown } = {};
-	circularResult.self = circularResult;
-	const service = LanguageModel.LanguageModel.of({
-		generateText: (options: { prompt: unknown; toolChoice?: unknown; toolkit?: unknown }) => {
-			calls.push({
-				prompt: options.prompt,
-				toolChoice: options.toolChoice,
-				toolkitPresent: options.toolkit !== undefined,
-			});
-			if (options.toolChoice === "none") {
-				return Effect.succeed(
-					new LanguageModel.GenerateTextResponse([
-						AiResponse.makePart("text", { text: finalText }),
-						AiResponse.makePart("finish", {
-							reason: "stop",
-							usage: makeUsage(90, 30),
-							response: undefined,
-						}),
-					]),
-				);
-			}
-			return Effect.succeed(
-				new LanguageModel.GenerateTextResponse([
-					AiResponse.makePart("tool-call", {
-						id: "call_1",
-						name: "get_diff",
-						params: { path: null },
-						providerExecuted: false,
-					}),
-					AiResponse.makePart("tool-result", {
-						id: "call_1",
-						name: "get_diff",
-						isFailure: false,
-						result: "diff --git a/src/a.ts b/src/a.ts\n...",
-						encodedResult: "diff --git a/src/a.ts b/src/a.ts\n...",
-						providerExecuted: false,
-						preliminary: false,
-					}),
-					AiResponse.makePart("tool-result", {
-						id: "call_2",
-						name: "get_commit_diff",
-						isFailure: true,
-						result: circularResult,
-						encodedResult: "[circular]",
-						providerExecuted: false,
-						preliminary: false,
-					}),
-					AiResponse.makePart("finish", {
-						reason: "tool-calls",
-						usage: makeUsage(120, 12),
-						response: undefined,
-					}),
-				]),
-			);
-		},
-		generateObject: () => Effect.die(new Error("generateObject should not be called in this test")),
-		streamText: () => Stream.empty,
-	});
-	return {
-		layer: Layer.succeed(LanguageModel.LanguageModel, service),
-		calls,
-	};
-}
 
 function layerForTest(p: {
 	params: GeneratePrContentParams;
@@ -409,6 +325,124 @@ function createOpenAiMockFetchExpectingPromptSubstring(
 		expect(bodyStr).toContain(mustContain);
 		return inner(input, init);
 	}) as typeof fetch;
+}
+
+function createOpenAiToolCallsThenJsonMockFetch(
+	toolRounds: number,
+	finalJson: string,
+): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiToolCallsThenJsonMockFetch: unexpected request");
+		}
+		callCount += 1;
+		const toolTurn = callCount <= toolRounds;
+		const message = toolTurn
+			? {
+					role: "assistant",
+					content: null,
+					tool_calls: [
+						{
+							id: `call_get_diff_${callCount}`,
+							type: "function",
+							function: { name: "get_diff", arguments: "{}" },
+						},
+					],
+				}
+			: { role: "assistant", content: finalJson };
+		const body = {
+			id: `chatcmpl-mock-${callCount}`,
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: toolTurn ? "tool_calls" : "stop",
+					message,
+				},
+			],
+			usage: { prompt_tokens: 11, completion_tokens: toolTurn ? 15 : 120, total_tokens: 131 },
+		};
+		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
+type ScriptedAssistantStep =
+	| { readonly type: "tool"; readonly completionTokens?: number }
+	| {
+			readonly type: "text_with_tools";
+			readonly content: string;
+			readonly completionTokens?: number;
+	  }
+	| { readonly type: "text"; readonly content: string; readonly completionTokens?: number };
+
+function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistantStep[]): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiScriptedAssistantMockFetch: unexpected request");
+		}
+		callCount += 1;
+		const step = steps[Math.min(callCount - 1, steps.length - 1)];
+		if (step === undefined) {
+			throw new Error("createOpenAiScriptedAssistantMockFetch: no steps configured");
+		}
+		const withTools = step.type === "tool" || step.type === "text_with_tools";
+		const message = withTools
+			? {
+					role: "assistant",
+					content: step.type === "tool" ? null : step.content,
+					tool_calls: [
+						{
+							id: `call_get_diff_${callCount}`,
+							type: "function",
+							function: { name: "get_diff", arguments: "{}" },
+						},
+					],
+				}
+			: { role: "assistant", content: step.content };
+		const body = {
+			id: `chatcmpl-scripted-${callCount}`,
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: withTools ? "tool_calls" : "stop",
+					message,
+				},
+			],
+			usage: {
+				prompt_tokens: 11,
+				completion_tokens: step.completionTokens ?? (withTools ? 15 : 120),
+				total_tokens: 131,
+			},
+		};
+		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
 }
 
 const twoCommits = [
@@ -684,34 +718,85 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 			);
 		});
 
-		test("runs no-tool follow-up when first response has only tool calls and empty text", async () => {
+		test("runs a follow-up turn when first response is tool-only", async () => {
+			const mock = createOpenAiToolCallsThenJsonMockFetch(1, VALID_AI_RESPONSE);
 			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
 				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				existingPrTitle: "feat: existing open PR title",
+				fetch: mock.fetch,
 			});
-			const mockModel = makeMockLanguageModelForToolOnlyFirstTurn(VALID_AI_RESPONSE);
-			const layer = Layer.mergeAll(
-				ValueBasedLayer,
-				Layer.succeed(GitContext, p.gitCtx),
-				MockDiffToolkitLayer,
-				mockModel.layer,
-			);
-			await runEffect(layer)(
+			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
-					expect(mockModel.calls.length).toBe(2);
-					expect(mockModel.calls[0]?.toolkitPresent).toBe(true);
-					expect(mockModel.calls[1]?.toolChoice).toBe("none");
-					expect(String(mockModel.calls[1]?.prompt)).toContain(
-						"Return ONLY one JSON object matching the requested schema. Do not call tools.",
-					);
-					expect(String(mockModel.calls[1]?.prompt)).toContain("Tool result 1 (get_diff, success)");
-					expect(String(mockModel.calls[1]?.prompt)).toContain(
-						"Tool result 2 (get_commit_diff, failure)",
-					);
+					expect(mock.getCallCount()).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("allows multiple tool rounds before final JSON response", async () => {
+			const mock = createOpenAiToolCallsThenJsonMockFetch(2, VALID_AI_RESPONSE);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(3);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("repairs malformed terminal JSON in-loop without falling back", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "tool" },
+				{ type: "text", content: '{"title":"feat: incomplete"}' },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(3);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("continues when valid JSON is returned together with tool calls, then returns final JSON", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "text_with_tools", content: VALID_AI_RESPONSE },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(2);
 				}).pipe(Effect.scoped),
 			);
 		});
@@ -888,6 +973,27 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					content: VALID_AI_RESPONSE,
 					status: 500,
 				}),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		});
+	});
+
+	describe("token budget guardrail", () => {
+		test("falls back when token budget is exceeded before a valid JSON response", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "tool", completionTokens: 5_000 },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				retryDelay: Duration.zero,
+				aiTokenBudget: 10,
+				fetch: mock.fetch,
 			});
 			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
