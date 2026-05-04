@@ -350,7 +350,7 @@ export function selectModel(
 	},
 ): string {
 	const override = explicitModel?.trim() ?? "";
-	if (!isBlank(override)) return override;
+	if (provider === "local" && !isBlank(override)) return override;
 	if (provider === "github-models") {
 		return band === "C" || routing?.requiresToolCalls === true || routing?.reasoningNeed === "high"
 			? GITHUB_MODELS_STRONG_MODEL

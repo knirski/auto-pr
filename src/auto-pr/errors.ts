@@ -18,6 +18,7 @@ import {
 	BodyFileNotFoundError,
 	DescriptionParseError,
 	FillPrTemplateValidationError,
+	ModelRoutingOutputError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -36,6 +37,7 @@ export {
 	BodyFileNotFoundError,
 	DescriptionParseError,
 	FillPrTemplateValidationError,
+	ModelRoutingOutputError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -57,6 +59,7 @@ export function formatError(e: unknown): string {
 		e instanceof PullRequestFailedError ||
 		e instanceof AiProviderError ||
 		e instanceof AutoPrConfigError ||
+		e instanceof ModelRoutingOutputError ||
 		e instanceof PullRequestTitleBlankError ||
 		e instanceof PullRequestBodyBlankError ||
 		e instanceof BodyFileNotFoundError ||
@@ -80,6 +83,7 @@ export function formatError(e: unknown): string {
 				({ missing }) =>
 					`Missing required env: ${missing.join(", ")}. See https://github.com/knirski/auto-pr#environment-variables`,
 			),
+			Match.tag("ModelRoutingOutputError", ({ message }) => message),
 			Match.tag(
 				"PullRequestTitleBlankError",
 				({ message }) => `${message} See https://www.conventionalcommits.org`,

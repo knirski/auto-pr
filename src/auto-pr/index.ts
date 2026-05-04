@@ -17,7 +17,6 @@ export type {
 export {
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
-	DEFAULT_GITHUB_MODELS_MODEL,
 	DEFAULT_OPENAI_COMPAT_MODEL,
 	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
@@ -36,6 +35,7 @@ export {
 	formatError,
 	isTransientAiError,
 	isTransientPrClientError,
+	ModelRoutingOutputError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -47,6 +47,7 @@ export {
 export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
+export type { GithubModelsCatalogRepositoryService } from "#auto-pr/interfaces/github-models-catalog-repository.js";
 export type {
 	PullRequestClientService,
 	PullRequestInfo,
@@ -56,6 +57,10 @@ export {
 	aiProviderLayerFromConfig,
 } from "#auto-pr/live/ai-provider.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
+export {
+	GithubModelsCatalogRepository,
+	GithubModelsCatalogRepositoryLive,
+} from "#auto-pr/live/github-models-catalog-repository.js";
 export { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
 export {
 	getPrDescriptionPromptPath,

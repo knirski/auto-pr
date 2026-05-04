@@ -58,8 +58,11 @@ import {
 	UnexpectedError,
 	unknownToMessage,
 } from "#auto-pr";
+import {
+	GithubModelsCatalogRepository,
+	makeGithubModelsCatalogRepositoryLive,
+} from "#auto-pr/live/github-models-catalog-repository.js";
 import { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
-import type { CommitInfo } from "#core/fill-pr-template-core.js";
 import {
 	filterMergeCommits,
 	getDescriptionPromptText,
@@ -74,6 +77,13 @@ import {
 	getFallbackTitleAndDescription,
 	validateGeneratedContent,
 } from "#core/generated-content.js";
+import {
+	buildGithubModelAttemptPlan,
+	classifyGithubModelFailure,
+	decideGithubModelFallback,
+	type GithubModelFailureKind,
+} from "#core/github-model-fallback-policy.js";
+import type { RoutingContextArtifact } from "#core/routing-artifacts.js";
 import { resolveAiToolRoundtripDiffCharBudget } from "#core/sanitize-diff.js";
 import { truncateForLog } from "#core/string.js";
 import {
@@ -155,10 +165,28 @@ const CONTINUE_WITH_OPTIONAL_TOOLS_PROMPT =
 const REPAIR_JSON_OUTPUT_PROMPT =
 	'Your previous response did not validate. Return only one JSON object that matches exactly {"title": string, "motivation": string[], "benefits": string[], "risks": string[], "notesForReviewers": string}. No markdown, no prose.';
 
+function renderRoutingContextForPrompt(
+	routingContext: RoutingContextArtifact | undefined,
+): string | undefined {
+	if (routingContext === undefined) return undefined;
+	return JSON.stringify(routingContext, null, 2);
+}
+
 type AiIterationLimits = {
 	readonly toolRoundLimit: number;
 	readonly tokenBudget: number;
 };
+
+function fallbackDelayForFailure(failure: GithubModelFailureKind): Duration.Duration {
+	switch (failure._tag) {
+		case "RateLimited":
+			return Duration.seconds(2);
+		case "Transient":
+			return Duration.millis(500);
+		default:
+			return Duration.zero;
+	}
+}
 
 /** Configured title wins; else best-effort PR lookup (failures -> no title). */
 export function resolveExistingPrTitleForPrompt(input: {
@@ -303,6 +331,7 @@ function generateAssistantTextWithToolkit(
 	provider: AiProvider,
 	model: string,
 	limits: AiIterationLimits,
+	allowToolCalls: boolean,
 ) {
 	return Effect.gen(function* () {
 		const chat = yield* Chat.empty;
@@ -344,6 +373,7 @@ function generateAssistantTextWithToolkit(
 			const res = yield* chat.generateText({
 				prompt: state.prompt,
 				toolkit: DiffToolkit,
+				...(allowToolCalls ? {} : { toolChoice: "none" }),
 			});
 			const promptTokens = normalizeTokenCount(res.usage.inputTokens.total ?? null, state.prompt);
 			const completionTokens = normalizeTokenCount(res.usage.outputTokens.total ?? null, res.text);
@@ -455,11 +485,11 @@ function generateAssistantTextWithToolkit(
 /** Generate title and description via `generateText` + DiffToolkit + JSON parse + schema validation. */
 function generateTitleAndDescriptionWithToolkit(
 	prompt: string,
-	filtered: readonly CommitInfo[],
 	retryDelay: Duration.Duration,
 	provider: AiProvider,
 	model: string,
 	limits: AiIterationLimits,
+	allowToolCalls: boolean,
 ) {
 	return Effect.gen(function* () {
 		yield* Effect.log({
@@ -472,7 +502,7 @@ function generateTitleAndDescriptionWithToolkit(
 			tool_round_limit: limits.toolRoundLimit,
 			token_budget: limits.tokenBudget,
 		});
-		return yield* generateAssistantTextWithToolkit(prompt, provider, model, limits);
+		return yield* generateAssistantTextWithToolkit(prompt, provider, model, limits, allowToolCalls);
 	}).pipe(
 		Effect.tapError((e) =>
 			Effect.logWarning({
@@ -485,17 +515,6 @@ function generateTitleAndDescriptionWithToolkit(
 			}),
 		),
 		Effect.retry(makeRetrySchedule(retryDelay)),
-		Effect.catchIf(isTransientAiError, () =>
-			Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
-				Effect.tap(() =>
-					Effect.logWarning({
-						event: "generate_pr_content",
-						status: "fallback",
-						message: "Using fallback title after 5 invalid attempts",
-					}),
-				),
-			),
-		),
 	);
 }
 
@@ -508,7 +527,7 @@ export type GeneratePrContentParams = {
 	templateContent: string;
 	descriptionPromptText: string;
 	/** Trusted routing context computed by workflow/job logic (signal summary, not model output). */
-	routingContext?: string;
+	routingContext?: RoutingContextArtifact;
 	provider: AiProvider;
 	model: string;
 	retryDelay?: Duration.Duration;
@@ -518,6 +537,12 @@ export type GeneratePrContentParams = {
 	aiTokenBudget?: number;
 	/** Current PR title when updating an open PR (multi-commit AI path only). */
 	existingPrTitle?: string;
+	/** Whether AI attempt should include diff tools. */
+	allowToolCalls?: boolean;
+	/** When true, transient AI failures degrade to commit-derived fallback content. */
+	allowCommitFallbackOnTransient?: boolean;
+	/** When true, skip AI generation and render commit-derived fallback content directly. */
+	forcePrimitiveFallback?: boolean;
 };
 
 export function generatePrContent(params: GeneratePrContentParams) {
@@ -559,13 +584,27 @@ export function generatePrContent(params: GeneratePrContentParams) {
 		let descriptionOverride: string | undefined;
 
 		if (count >= 2) {
+			if (params.forcePrimitiveFallback === true) {
+				const fallback = getFallbackTitleAndDescription(filtered);
+				title = fallback.title;
+				descriptionOverride = fallback.description;
+				const bodyResult = renderBodyCore(
+					filtered,
+					files,
+					templateContent,
+					descriptionOverride,
+					title,
+				);
+				const body = yield* Effect.fromResult(bodyResult);
+				return { title, body, count };
+			}
 			const commitContent = getDescriptionPromptText(filtered);
 			const prompt = buildDescriptionPrompt(
 				descriptionPromptText,
 				commitContent,
 				diffStatOutput,
 				params.existingPrTitle,
-				params.routingContext,
+				renderRoutingContextForPrompt(params.routingContext),
 			);
 			const limits = computeAiIterationLimits({
 				commitCount: count,
@@ -587,18 +626,37 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				prompt_chars: prompt.length,
 				token_budget: limits.tokenBudget,
 				tool_round_limit: limits.toolRoundLimit,
-				token_budget_source: params.aiTokenBudget !== undefined ? "env_override" : "computed",
+				token_budget_source: params.aiTokenBudget !== undefined ? "explicit_override" : "computed",
 				tool_round_limit_source:
-					params.aiToolRoundLimit !== undefined ? "env_override" : "computed",
+					params.aiToolRoundLimit !== undefined ? "explicit_override" : "computed",
 			});
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescriptionWithToolkit(
 				prompt,
-				filtered,
 				delay,
 				params.provider,
 				params.model,
 				limits,
+				params.allowToolCalls ?? true,
+			).pipe(
+				Effect.catchIf(
+					(error) => params.allowCommitFallbackOnTransient !== false && isTransientAiError(error),
+					() =>
+						Effect.succeed(getFallbackTitleAndDescription(filtered)).pipe(
+							Effect.tap((fallback) =>
+								Effect.logWarning({
+									event: "generate_pr_content",
+									status: "fallback",
+									step: "ai_query",
+									message: "Using commit-derived fallback content after retries",
+									provider: params.provider,
+									model: params.model,
+									title_chars: fallback.title.length,
+									description_chars: fallback.description.length,
+								}),
+							),
+						),
+				),
 			);
 			title = result.title;
 			descriptionOverride = result.description;
@@ -628,7 +686,11 @@ export function generatePrContent(params: GeneratePrContentParams) {
 						? Effect.fail(
 								new AutoPrConfigError({
 									missing: [
-										`AI provider authentication/config error [${e.reason._tag}]: ${e.message}. Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.`,
+										`AI provider authentication/config error [${e.reason._tag}]: ${e.message}. ${
+											params.provider === "github-models"
+												? "Check GH_TOKEN and GitHub Models access."
+												: "Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials."
+										}`,
 									],
 								}),
 							)
@@ -692,7 +754,7 @@ type RunGeneratePrContentConfigCommon = {
 	workspace: string;
 	templatePath: string;
 	model: string;
-	routingContext?: string;
+	routingContext?: RoutingContextArtifact;
 	githubApiUrl?: string;
 	ghHost?: string;
 	/** Current PR title override for prompt continuity. */
@@ -712,6 +774,12 @@ export type RunGeneratePrContentConfig =
 	| (RunGeneratePrContentConfigCommon & {
 			provider: "github-models";
 			ghToken: Redacted.Redacted<string>;
+			requiresToolCalls?: boolean;
+			localFallback?: {
+				readonly openaiCompatUrl: string;
+				readonly model: string;
+				readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+			};
 	  });
 
 export function runGeneratePrContentConfigFromGeneratePrContentConfig(
@@ -746,6 +814,12 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 				...common,
 				provider: "github-models",
 				ghToken: githubModels.ghToken,
+				...(githubModels.requiresToolCalls !== undefined
+					? { requiresToolCalls: githubModels.requiresToolCalls }
+					: {}),
+				...(githubModels.localFallback !== undefined
+					? { localFallback: githubModels.localFallback }
+					: {}),
 			}),
 		),
 		Match.exhaustive,
@@ -781,45 +855,319 @@ export function runGeneratePrContent(
 	config: RunGeneratePrContentConfig,
 ): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
 	const baseRef = `origin/${config.defaultBranch}`;
-	const toolResponseCharBudget = resolveAiToolRoundtripDiffCharBudget(
-		config.provider,
-		config.model,
-	);
-	const aiLayer = aiProviderLayerFromConfig(
-		buildAiProviderConfig(config),
-		config.fetch !== undefined ? { fetch: config.fetch } : undefined,
-	);
-
 	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
-	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch, {
-		toolResponseCharBudget,
-	}).pipe(Layer.provide(gitLayer));
 	const prClientLayer = PullRequestClient.Live(config.workspace, {
 		...(config.provider === "github-models" ? { ghToken: Redacted.value(config.ghToken) } : {}),
 		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
 		...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
 	}).pipe(Layer.provide(ChildProcessSpawnerLayer));
-	const liveLayer = Layer.mergeAll(
-		AutoPrPlatformLayer,
-		aiLayer,
-		gitLayer,
-		toolkitLayer,
-		prClientLayer,
-	);
 
-	return runGeneratePrContentWithServices(config).pipe(
-		Effect.tap(() =>
-			Effect.log({
-				event: "generate_pr_content",
-				step: "runtime_budget",
-				status: "tool_budget_resolved",
-				provider: config.provider,
-				model: config.model,
-				tool_response_char_budget: toolResponseCharBudget,
-				tool_response_char_budget_source: "derived_default",
+	type ProviderKind = "github-models" | "local-llm";
+	type AttemptCandidate = {
+		readonly provider: ProviderKind;
+		readonly model: string;
+		readonly allowToolCalls: boolean;
+		readonly selectionMode: string;
+		readonly attemptIndex: number;
+		readonly openaiCompatUrl?: string;
+		readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+	};
+	type ExecutionState =
+		| {
+				readonly _tag: "Running";
+				readonly queue: readonly AttemptCandidate[];
+				readonly lastError?: GeneratePrContentError;
+		  }
+		| { readonly _tag: "PrimitiveFallback"; readonly lastError?: GeneratePrContentError }
+		| { readonly _tag: "Completed" };
+
+	const runAttempt = Effect.fn("runAttempt")(function* (attempt: AttemptCandidate) {
+		const toolResponseCharBudget = resolveAiToolRoundtripDiffCharBudget(
+			attempt.provider === "github-models" ? "github-models" : "local",
+			attempt.model,
+		);
+		const attemptConfig: RunGeneratePrContentConfig =
+			attempt.provider === "github-models"
+				? {
+						...config,
+						provider: "github-models",
+						model: attempt.model,
+						ghToken: config.provider === "github-models" ? config.ghToken : Redacted.make(""),
+						...(config.provider === "github-models" && config.requiresToolCalls !== undefined
+							? { requiresToolCalls: config.requiresToolCalls }
+							: {}),
+						...(config.provider === "github-models" && config.localFallback !== undefined
+							? { localFallback: config.localFallback }
+							: {}),
+					}
+				: {
+						...config,
+						provider: "local",
+						model: attempt.model,
+						...(attempt.openaiCompatUrl !== undefined
+							? { openaiCompatUrl: attempt.openaiCompatUrl }
+							: {}),
+						...(attempt.openaiCompatApiKey !== undefined
+							? { openaiCompatApiKey: attempt.openaiCompatApiKey }
+							: {}),
+					};
+		const aiLayer = aiProviderLayerFromConfig(
+			buildAiProviderConfig(attemptConfig),
+			config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+		);
+		const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch, {
+			toolResponseCharBudget,
+		}).pipe(Layer.provide(gitLayer));
+		const liveLayer = Layer.mergeAll(
+			AutoPrPlatformLayer,
+			aiLayer,
+			gitLayer,
+			toolkitLayer,
+			prClientLayer,
+		);
+		return yield* runGeneratePrContentWithServices({
+			...attemptConfig,
+			allowToolCalls: attempt.allowToolCalls,
+			allowCommitFallbackOnTransient: false,
+		}).pipe(
+			Effect.annotateLogs({
+				attempt_index: String(attempt.attemptIndex),
+				model: attempt.model,
+				selection_mode: attempt.selectionMode,
 			}),
+			Effect.tap(() =>
+				Effect.log({
+					event: "generate_pr_content",
+					step: "attempt",
+					status: "succeeded",
+					attempt_index: attempt.attemptIndex,
+					provider: attempt.provider,
+					model: attempt.model,
+					allows_tool_calls: attempt.allowToolCalls,
+					selection_mode: attempt.selectionMode,
+					tool_response_char_budget: toolResponseCharBudget,
+				}),
+			),
+			Effect.tapError((error) =>
+				Effect.logWarning({
+					event: "generate_pr_content",
+					step: "attempt",
+					status: "failed",
+					attempt_index: attempt.attemptIndex,
+					provider: attempt.provider,
+					model: attempt.model,
+					allows_tool_calls: attempt.allowToolCalls,
+					selection_mode: attempt.selectionMode,
+					error_kind: classifyGithubModelFailure(error),
+					reason: formatError(error),
+				}),
+			),
+			Effect.provide(liveLayer),
+		);
+	});
+
+	return Effect.gen(function* () {
+		const githubModelsCatalogRepository = yield* GithubModelsCatalogRepository;
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "routing",
+			status: "resolved",
+			provider: config.provider,
+			model: config.model,
+			routing_context_chars: renderRoutingContextForPrompt(config.routingContext)?.length ?? 0,
+			routing_context_present: config.routingContext !== undefined,
+		});
+		const initialQueue: AttemptCandidate[] =
+			config.provider === "local"
+				? [
+						{
+							provider: "local-llm",
+							model: config.model,
+							allowToolCalls: true,
+							selectionMode: "preferred",
+							attemptIndex: 1,
+							...(config.openaiCompatUrl !== undefined
+								? { openaiCompatUrl: config.openaiCompatUrl }
+								: {}),
+							...(config.openaiCompatApiKey !== undefined
+								? { openaiCompatApiKey: config.openaiCompatApiKey }
+								: {}),
+						},
+						{
+							provider: "local-llm",
+							model: config.model,
+							allowToolCalls: false,
+							selectionMode: "local-no-tool-fallback",
+							attemptIndex: 2,
+							...(config.openaiCompatUrl !== undefined
+								? { openaiCompatUrl: config.openaiCompatUrl }
+								: {}),
+							...(config.openaiCompatApiKey !== undefined
+								? { openaiCompatApiKey: config.openaiCompatApiKey }
+								: {}),
+						},
+					]
+				: (() => {
+						const requiresToolCalls = config.requiresToolCalls ?? true;
+						const baseAttempts = buildGithubModelAttemptPlan({
+							selectedModel: config.model,
+							requiresToolCalls,
+							entries: [],
+						});
+						return baseAttempts.map((attempt, index) => ({
+							provider: "github-models" as const,
+							model: attempt.model,
+							allowToolCalls: attempt.requiresToolCalls,
+							selectionMode: attempt.selectionMode,
+							attemptIndex: index + 1,
+						}));
+					})();
+
+		const queue =
+			config.provider === "github-models"
+				? yield* Effect.gen(function* () {
+						const catalogEntries = yield* githubModelsCatalogRepository.fetchCatalog(
+							config.ghToken,
+						);
+						const requiresToolCalls = config.requiresToolCalls ?? true;
+						const githubAttempts = buildGithubModelAttemptPlan({
+							selectedModel: config.model,
+							requiresToolCalls,
+							entries: catalogEntries,
+						}).map((attempt, index) => ({
+							provider: "github-models" as const,
+							model: attempt.model,
+							allowToolCalls: attempt.requiresToolCalls,
+							selectionMode: attempt.selectionMode,
+							attemptIndex: index + 1,
+						}));
+						const localFallbackAttempts =
+							config.localFallback === undefined
+								? []
+								: ([
+										{
+											provider: "local-llm" as const,
+											model: config.localFallback.model,
+											allowToolCalls: true,
+											selectionMode: "local-fallback",
+											attemptIndex: githubAttempts.length + 1,
+											openaiCompatUrl: config.localFallback.openaiCompatUrl,
+											...(config.localFallback.openaiCompatApiKey !== undefined
+												? { openaiCompatApiKey: config.localFallback.openaiCompatApiKey }
+												: {}),
+										},
+										{
+											provider: "local-llm" as const,
+											model: config.localFallback.model,
+											allowToolCalls: false,
+											selectionMode: "local-no-tool-fallback",
+											attemptIndex: githubAttempts.length + 2,
+											openaiCompatUrl: config.localFallback.openaiCompatUrl,
+											...(config.localFallback.openaiCompatApiKey !== undefined
+												? { openaiCompatApiKey: config.localFallback.openaiCompatApiKey }
+												: {}),
+										},
+									] as const);
+						return [...githubAttempts, ...localFallbackAttempts];
+					})
+				: initialQueue;
+
+		yield* Effect.log({
+			event: "generate_pr_content",
+			step: "attempt_plan",
+			status: "computed",
+			attempt_count: queue.length,
+			attempts: queue.map((attempt) => ({
+				provider: attempt.provider,
+				model: attempt.model,
+				requires_tool_calls: attempt.allowToolCalls,
+				selection_mode: attempt.selectionMode,
+			})),
+		});
+
+		let state: ExecutionState = { _tag: "Running", queue };
+		while (true) {
+			switch (state._tag) {
+				case "Completed":
+					return;
+				case "PrimitiveFallback": {
+					yield* Effect.logWarning({
+						event: "generate_pr_content",
+						step: "attempt_plan",
+						status: "all_attempts_failed_using_primitive_fallback",
+						...(state.lastError === undefined ? {} : { last_error: formatError(state.lastError) }),
+					});
+					yield* runGeneratePrContentWithServices({
+						...config,
+						model: config.model,
+						allowToolCalls: false,
+						allowCommitFallbackOnTransient: true,
+						forcePrimitiveFallback: true,
+					}).pipe(
+						Effect.provide(
+							Layer.mergeAll(
+								AutoPrPlatformLayer,
+								aiProviderLayerFromConfig(
+									buildAiProviderConfig(config),
+									config.fetch !== undefined ? { fetch: config.fetch } : undefined,
+								),
+								gitLayer,
+								makeDiffToolkitLayer(baseRef, config.branch, {
+									toolResponseCharBudget: resolveAiToolRoundtripDiffCharBudget(
+										config.provider,
+										config.model,
+									),
+								}).pipe(Layer.provide(gitLayer)),
+								prClientLayer,
+							),
+						),
+					);
+					state = { _tag: "Completed" };
+					continue;
+				}
+				case "Running": {
+					const attempt: AttemptCandidate | undefined = state.queue[0];
+					const rest = state.queue.slice(1);
+					if (attempt === undefined) {
+						state = {
+							_tag: "PrimitiveFallback",
+							...(state.lastError === undefined ? {} : { lastError: state.lastError }),
+						};
+						continue;
+					}
+					const result: Exit.Exit<void, GeneratePrContentError> = yield* runAttempt(attempt).pipe(
+						Effect.exit,
+					);
+					if (Exit.isSuccess(result)) {
+						state = { _tag: "Completed" };
+						continue;
+					}
+					const nextError: GeneratePrContentError = Result.match(Cause.findError(result.cause), {
+						onSuccess: (error) => normalizeUnknownToGeneratePrContentError(error),
+						onFailure: () =>
+							new UnexpectedError({
+								cause: "attempt failed without a recoverable typed error",
+							}),
+					});
+					const failure = classifyGithubModelFailure(nextError);
+					const decision = decideGithubModelFallback({
+						failure,
+						hasRemainingAttempts: rest.length > 0,
+					});
+					yield* Effect.sleep(fallbackDelayForFailure(failure));
+					state =
+						decision === "final_fallback"
+							? { _tag: "PrimitiveFallback", lastError: nextError }
+							: { _tag: "Running", queue: rest, lastError: nextError };
+				}
+			}
+		}
+	}).pipe(
+		Effect.provide(
+			makeGithubModelsCatalogRepositoryLive(
+				config.fetch === undefined ? {} : { fetchImpl: config.fetch },
+			),
 		),
-		Effect.provide(liveLayer),
 	);
 }
 
@@ -836,11 +1184,14 @@ export type RunGeneratePrContentWithServicesConfig = {
 	readonly templatePath: string;
 	readonly provider: AiProvider;
 	readonly model: string;
-	readonly routingContext?: string;
+	readonly routingContext?: RoutingContextArtifact;
 	/** Current PR title override for prompt continuity. */
 	readonly existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
 	readonly retryDelay?: Duration.Duration;
+	readonly allowToolCalls?: boolean;
+	readonly allowCommitFallbackOnTransient?: boolean;
+	readonly forcePrimitiveFallback?: boolean;
 };
 
 export function runGeneratePrContentWithServices(config: RunGeneratePrContentWithServicesConfig) {
@@ -859,6 +1210,9 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			routingContext,
 			retryDelay,
 			existingPrTitle: configuredExistingPrTitle,
+			allowToolCalls,
+			allowCommitFallbackOnTransient,
+			forcePrimitiveFallback,
 		} = config;
 		const pathApi = yield* Path.Path;
 		const fs = yield* FileSystem.FileSystem;
@@ -894,6 +1248,9 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			model,
 			...(retryDelay !== undefined && { retryDelay }),
 			...(existingPrTitle !== undefined && { existingPrTitle }),
+			...(allowToolCalls !== undefined ? { allowToolCalls } : {}),
+			...(allowCommitFallbackOnTransient !== undefined ? { allowCommitFallbackOnTransient } : {}),
+			...(forcePrimitiveFallback !== undefined ? { forcePrimitiveFallback } : {}),
 		});
 
 		const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);

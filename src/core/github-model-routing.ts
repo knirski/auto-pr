@@ -42,7 +42,21 @@ export type GithubModelsRequestEnvelope = {
 	readonly toolResponseCharBudget: number;
 	readonly rateLimitTier: GithubModelsRateLimitTier;
 	readonly planClass: GithubModelsPlanClass;
-	readonly source: "catalog-and-plan" | "catalog-only" | "static-fallback" | "explicit-model";
+	readonly source: "catalog-and-plan" | "catalog-only" | "static-fallback";
+};
+
+export type GithubModelCatalogSelection = {
+	readonly model: string;
+	readonly requiresToolCalls: boolean;
+	readonly selectionMode:
+		| "preferred"
+		| "same-tier-tool-fallback"
+		| "cross-tier-tool-fallback"
+		| "same-tier-no-tool-fallback"
+		| "cross-tier-no-tool-fallback"
+		| "catalog-text-fallback"
+		| "static-fallback";
+	readonly catalogEntry?: GithubModelCatalogEntry;
 };
 
 export type GithubModelsFreeLimit = {
@@ -74,75 +88,76 @@ const MIN_TOOL_RESPONSE_CHARS = 1_500;
 
 type TierLimitTable = Record<GithubModelsRateLimitTier, GithubModelsFreeLimit>;
 
-// Mirrors docs categories with conservative values for generation safety.
+// Mirrors current GitHub Models free-tier documentation (2026-05) for
+// relative tier generosity and safe envelope clamping.
 const FREE_LIMITS: TierLimitTable = {
 	low: {
-		requestsPerMinute: 10,
-		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 16_000,
+		requestsPerMinute: 15,
+		requestsPerDay: 150,
+		inputTokensPerRequest: 8_000,
 		outputTokensPerRequest: 4_000,
-		concurrentRequests: 1,
+		concurrentRequests: 5,
 	},
 	high: {
-		requestsPerMinute: 5,
-		requestsPerDay: "not-applicable",
+		requestsPerMinute: 10,
+		requestsPerDay: 50,
 		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
-		concurrentRequests: 1,
+		outputTokensPerRequest: 4_000,
+		concurrentRequests: 2,
 	},
 	embedding: {
-		requestsPerMinute: 10,
+		requestsPerMinute: 15,
+		requestsPerDay: 150,
+		inputTokensPerRequest: 64_000,
+		outputTokensPerRequest: "not-applicable",
+		concurrentRequests: 5,
+	},
+	"azure-openai-o1-preview": {
+		requestsPerMinute: "not-applicable",
 		requestsPerDay: "not-applicable",
 		inputTokensPerRequest: "not-applicable",
 		outputTokensPerRequest: "not-applicable",
 		concurrentRequests: 1,
 	},
-	"azure-openai-o1-preview": {
-		requestsPerMinute: 2,
-		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
-		concurrentRequests: 1,
-	},
 	"azure-openai-o1-o3-gpt5": {
-		requestsPerMinute: 2,
+		requestsPerMinute: "not-applicable",
 		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
+		inputTokensPerRequest: "not-applicable",
+		outputTokensPerRequest: "not-applicable",
 		concurrentRequests: 1,
 	},
 	"azure-openai-mini": {
-		requestsPerMinute: 5,
+		requestsPerMinute: "not-applicable",
 		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
+		inputTokensPerRequest: "not-applicable",
+		outputTokensPerRequest: "not-applicable",
 		concurrentRequests: 1,
 	},
 	"deepseek-r1": {
-		requestsPerMinute: 2,
-		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
+		requestsPerMinute: 1,
+		requestsPerDay: 8,
+		inputTokensPerRequest: 4_000,
+		outputTokensPerRequest: 4_000,
 		concurrentRequests: 1,
 	},
 	"xai-grok-3": {
-		requestsPerMinute: 2,
-		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
+		requestsPerMinute: 1,
+		requestsPerDay: 15,
+		inputTokensPerRequest: 4_000,
+		outputTokensPerRequest: 4_000,
 		concurrentRequests: 1,
 	},
 	"xai-grok-3-mini": {
-		requestsPerMinute: 5,
-		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
-		outputTokensPerRequest: 2_000,
+		requestsPerMinute: 2,
+		requestsPerDay: 30,
+		inputTokensPerRequest: 4_000,
+		outputTokensPerRequest: 8_000,
 		concurrentRequests: 1,
 	},
 	unknown: {
 		requestsPerMinute: 5,
-		requestsPerDay: "not-applicable",
-		inputTokensPerRequest: 8_000,
+		requestsPerDay: 50,
+		inputTokensPerRequest: 4_000,
 		outputTokensPerRequest: 2_000,
 		concurrentRequests: 1,
 	},
@@ -226,9 +241,40 @@ function hasToolCapability(entry: GithubModelCatalogEntry): boolean {
 	return entry.capabilities.some((c) => c.toLowerCase() === "tool-calling");
 }
 
+function numericLimit(value: number | "not-applicable"): number {
+	return value === "not-applicable" ? 0 : value;
+}
+
+function tierGenerosityScore(tier: GithubModelsRateLimitTier): number {
+	const limits = resolveFreeLimit(tier);
+	return (
+		numericLimit(limits.requestsPerMinute) * 1_000 +
+		numericLimit(limits.concurrentRequests) * 500 +
+		numericLimit(limits.inputTokensPerRequest) +
+		numericLimit(limits.outputTokensPerRequest)
+	);
+}
+
+function firstByTierOrder(
+	entries: readonly GithubModelCatalogEntry[],
+	tiers: readonly GithubModelsRateLimitTier[],
+): GithubModelCatalogEntry | undefined {
+	for (const tier of tiers) {
+		const bestInTier = entries
+			.filter((candidate) => candidate.rateLimitTier === tier)
+			.sort(
+				(a, b) =>
+					b.maxInputTokens - a.maxInputTokens ||
+					b.maxOutputTokens - a.maxOutputTokens ||
+					a.id.localeCompare(b.id),
+			)[0];
+		if (bestInTier !== undefined) return bestInTier;
+	}
+	return undefined;
+}
+
 export function buildGithubModelsRequestEnvelope(input: {
 	readonly model: string;
-	readonly explicitModel: boolean;
 	readonly requiresToolCalls: boolean;
 	readonly planClass: GithubModelsPlanClass;
 	readonly requested: RequestedEnvelopeInput;
@@ -238,9 +284,7 @@ export function buildGithubModelsRequestEnvelope(input: {
 	const catalog = input.catalogEntry;
 	const source: GithubModelsRequestEnvelope["source"] =
 		catalog === undefined
-			? input.explicitModel
-				? "explicit-model"
-				: "static-fallback"
+			? "static-fallback"
 			: input.planClass === "unknown"
 				? "catalog-only"
 				: "catalog-and-plan";
@@ -321,16 +365,96 @@ export function pickGithubModelCatalogEntry(input: {
 	readonly selectedModel: string;
 	readonly entries: readonly GithubModelCatalogEntry[];
 	readonly requiresToolCalls: boolean;
-}): GithubModelCatalogEntry | undefined {
+}): GithubModelCatalogSelection {
 	const selected = input.entries.find((entry) => entry.id === input.selectedModel);
+	const textEntries = input.entries.filter(isTextCapable);
 	if (selected !== undefined && isTextCapable(selected)) {
-		if (!input.requiresToolCalls || hasToolCapability(selected)) return selected;
+		if (!input.requiresToolCalls || hasToolCapability(selected)) {
+			return {
+				model: selected.id,
+				requiresToolCalls: input.requiresToolCalls,
+				selectionMode: "preferred",
+				catalogEntry: selected,
+			};
+		}
+		const sameTierTool = textEntries.find(
+			(entry) => entry.rateLimitTier === selected.rateLimitTier && hasToolCapability(entry),
+		);
+		const bestSameTierTool =
+			sameTierTool === undefined
+				? undefined
+				: firstByTierOrder(
+						textEntries.filter(
+							(entry) => entry.rateLimitTier === selected.rateLimitTier && hasToolCapability(entry),
+						),
+						[selected.rateLimitTier],
+					);
+		if (bestSameTierTool !== undefined) {
+			return {
+				model: bestSameTierTool.id,
+				requiresToolCalls: true,
+				selectionMode: "same-tier-tool-fallback",
+				catalogEntry: bestSameTierTool,
+			};
+		}
 	}
-	// Keep selection deterministic; fallback to the first text-capable candidate.
-	return input.entries.find((entry) => {
-		if (!isTextCapable(entry)) return false;
-		return !input.requiresToolCalls || hasToolCapability(entry);
-	});
+
+	const preferredTier = selected?.rateLimitTier ?? "unknown";
+	const preferredScore = tierGenerosityScore(preferredTier);
+	const tiersByGenerosity = [...new Set(textEntries.map((entry) => entry.rateLimitTier))].sort(
+		(a, b) => tierGenerosityScore(b) - tierGenerosityScore(a),
+	);
+	const moreGenerousTiers = tiersByGenerosity.filter(
+		(tier) => tierGenerosityScore(tier) > preferredScore,
+	);
+
+	if (input.requiresToolCalls) {
+		const toolEntries = textEntries.filter(hasToolCapability);
+		const crossTierTool = firstByTierOrder(toolEntries, moreGenerousTiers);
+		if (crossTierTool !== undefined) {
+			return {
+				model: crossTierTool.id,
+				requiresToolCalls: true,
+				selectionMode: "cross-tier-tool-fallback",
+				catalogEntry: crossTierTool,
+			};
+		}
+
+		const sameTierNoTool = firstByTierOrder(textEntries, [preferredTier]);
+		if (sameTierNoTool !== undefined) {
+			return {
+				model: sameTierNoTool.id,
+				requiresToolCalls: false,
+				selectionMode: "same-tier-no-tool-fallback",
+				catalogEntry: sameTierNoTool,
+			};
+		}
+		const crossTierNoTool = firstByTierOrder(textEntries, moreGenerousTiers);
+		if (crossTierNoTool !== undefined) {
+			return {
+				model: crossTierNoTool.id,
+				requiresToolCalls: false,
+				selectionMode: "cross-tier-no-tool-fallback",
+				catalogEntry: crossTierNoTool,
+			};
+		}
+	}
+
+	const catalogFallback = textEntries[0];
+	if (catalogFallback !== undefined) {
+		return {
+			model: catalogFallback.id,
+			requiresToolCalls: false,
+			selectionMode: "catalog-text-fallback",
+			catalogEntry: catalogFallback,
+		};
+	}
+
+	return {
+		model: input.selectedModel,
+		requiresToolCalls: false,
+		selectionMode: "static-fallback",
+	};
 }
 
 export function toModelBandRequestedEnvelopeInput(input: {

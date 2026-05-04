@@ -85,9 +85,7 @@ export function aiProviderLayerFromConfig(
 					LanguageModel.LanguageModel,
 					Effect.fail(
 						new AutoPrConfigError({
-							missing: [
-								"GH_TOKEN and model (AUTO_PR_AI_OPENAI_COMPAT_MODEL) required for github-models",
-							],
+							missing: ["GH_TOKEN and resolved model are required for github-models"],
 						}),
 					),
 				);
