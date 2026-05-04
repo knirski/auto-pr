@@ -381,6 +381,11 @@ function createOpenAiToolCallsThenJsonMockFetch(
 
 type ScriptedAssistantStep =
 	| { readonly type: "tool"; readonly completionTokens?: number }
+	| {
+			readonly type: "text_with_tools";
+			readonly content: string;
+			readonly completionTokens?: number;
+	  }
 	| { readonly type: "text"; readonly content: string; readonly completionTokens?: number };
 
 function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistantStep[]): {
@@ -398,11 +403,12 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
 		if (step === undefined) {
 			throw new Error("createOpenAiScriptedAssistantMockFetch: no steps configured");
 		}
-		const toolTurn = step.type === "tool";
-		const message = toolTurn
+		const _toolTurn = step.type === "tool";
+		const withTools = step.type === "tool" || step.type === "text_with_tools";
+		const message = withTools
 			? {
 					role: "assistant",
-					content: null,
+					content: step.type === "tool" ? null : step.content,
 					tool_calls: [
 						{
 							id: `call_get_diff_${callCount}`,
@@ -420,13 +426,13 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
 			choices: [
 				{
 					index: 0,
-					finish_reason: toolTurn ? "tool_calls" : "stop",
+					finish_reason: withTools ? "tool_calls" : "stop",
 					message,
 				},
 			],
 			usage: {
 				prompt_tokens: 11,
-				completion_tokens: step.completionTokens ?? (toolTurn ? 15 : 120),
+				completion_tokens: step.completionTokens ?? (withTools ? 15 : 120),
 				total_tokens: 131,
 			},
 		};
@@ -774,6 +780,28 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 			);
 		});
 
+		test("continues when valid JSON is returned together with tool calls, then returns final JSON", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "text_with_tools", content: VALID_AI_RESPONSE },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
 		test("accepts long conventional title by shortening subject to max length (no fallback)", async () => {
 			const longTitle = `feat(generate-content): structured AI-driven PR metadata with enhanced CI and validation${"x".repeat(25)}`;
 			expect(longTitle.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
@@ -959,7 +987,7 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 	describe("token budget guardrail", () => {
 		test("falls back when token budget is exceeded before a valid JSON response", async () => {
 			const mock = createOpenAiScriptedAssistantMockFetch([
-				{ type: "tool", completionTokens: 200 },
+				{ type: "tool", completionTokens: 5_000 },
 			]);
 			const p = makeParams(twoCommits, {
 				provider: "github-models",

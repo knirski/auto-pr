@@ -504,6 +504,7 @@ export const program = Effect.gen(function* () {
 	});
 });
 
+/* patch-coverage-ignore-start: CLI entrypoint block is not reachable from bun:test process coverage */
 if (import.meta.main) {
 	Effect.runPromise(program).catch((error) => {
 		process.stderr.write(
@@ -512,3 +513,4 @@ if (import.meta.main) {
 		process.exitCode = 1;
 	});
 }
+/* patch-coverage-ignore-stop */

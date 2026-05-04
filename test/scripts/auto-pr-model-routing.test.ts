@@ -201,6 +201,57 @@ describe("model band routing command policy", () => {
 		});
 	});
 
+	test("uses no tools for small non-code changes even on github-models", () => {
+		const signals = {
+			semanticCommitCount: 1,
+			conventionalTypeCount: 1,
+			topLevelSpread: 2,
+			changedFileCount: 1,
+			sourceFileCount: 0,
+			docsFileCount: 1,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 10,
+			sourceChurn: 0,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "A",
+			toolStrategy: "none",
+			requiresToolCalls: false,
+		});
+	});
+
+	test("uses no tools for bounded band-B changes without source or dependency signals", () => {
+		const signals = {
+			semanticCommitCount: 3,
+			conventionalTypeCount: 1,
+			topLevelSpread: 2,
+			changedFileCount: 4,
+			sourceFileCount: 0,
+			docsFileCount: 0,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 300,
+			sourceChurn: 300,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "B",
+			toolStrategy: "none",
+			requiresToolCalls: false,
+		});
+	});
+
 	test("selects local defaults from GitHub-hosted runner resources", () => {
 		const signals = {
 			semanticCommitCount: 1,

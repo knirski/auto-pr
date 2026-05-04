@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+	filterIgnoredChangedLines,
 	findMissingPatchCoverage,
 	parseAddedLinesFromUnifiedDiff,
+	parseIgnoredPatchCoverageLines,
 	parseLcovInfo,
 } from "../../scripts/check-patch-coverage.js";
 
@@ -83,5 +85,42 @@ describe("check-patch-coverage", () => {
 				coverage,
 			),
 		).toEqual([{ file: "src/a.ts", line: 12, hits: 0 }]);
+	});
+
+	test("parses ignored patch-coverage line blocks", () => {
+		const ignored = parseIgnoredPatchCoverageLines(
+			[
+				"const a = 1;",
+				"/* patch-coverage-ignore-start */",
+				"const b = 2;",
+				"const c = 3;",
+				"/* patch-coverage-ignore-stop */",
+				"const d = 4;",
+			].join("\n"),
+		);
+		expect(Array.from(ignored.values())).toEqual([3, 4]);
+	});
+
+	test("filters changed lines covered by ignore blocks", () => {
+		const changed = [
+			{ file: "src/a.ts", line: 2 },
+			{ file: "src/a.ts", line: 3 },
+			{ file: "src/a.ts", line: 6 },
+		] as const;
+		const filtered = filterIgnoredChangedLines(changed, () =>
+			[
+				"const a = 1;",
+				"/* patch-coverage-ignore-start */",
+				"const b = 2;",
+				"const c = 3;",
+				"/* patch-coverage-ignore-stop */",
+				"const d = 4;",
+			].join("\n"),
+		);
+
+		expect(filtered).toEqual([
+			{ file: "src/a.ts", line: 2 },
+			{ file: "src/a.ts", line: 6 },
+		]);
 	});
 });

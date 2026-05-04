@@ -265,6 +265,233 @@ describe("build-model-routing-context", () => {
 		}
 	});
 
+	test("classifies source maps under dist as generated files", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-generated-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "base.ts"), "export const base = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* Effect.sync(() => mkdirSync(join(dir, "dist"), { recursive: true }));
+					yield* write(join(dir, "dist", "bundle.js.map"), "{}\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "chore: add map"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain(
+						"file-kinds: source=0; docs=0; test=0; generated=1; lockfiles=0; package-manifests=0",
+					);
+					expect(output).toContain("review_focus: dist/bundle.js.map (+1/-0, generated)");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("fails with a clear error when DEFAULT_BRANCH ref does not exist", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-bad-base-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+
+					const githubOutput = join(dir, "github_output");
+					const exit = yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "does-not-exist",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					}).pipe(Effect.exit);
+
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program validates optional runner cpu env value", async () => {
+		const original = {
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+		};
+		const dir = tempRepo("auto-pr-build-model-routing-context-env-");
+		const githubOutput = join(dir, "github_output");
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "1";
+					process.env.LOCAL_RUNNER_CPUS = "abc";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "";
+
+					const exit = yield* program.pipe(Effect.exit);
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			process.env.GITHUB_WORKSPACE = original.GITHUB_WORKSPACE;
+			process.env.DEFAULT_BRANCH = original.DEFAULT_BRANCH;
+			process.env.AUTO_PR_AI_PROVIDER = original.AUTO_PR_AI_PROVIDER;
+			process.env.GITHUB_OUTPUT = original.GITHUB_OUTPUT;
+			process.env.COMMITS_COUNT = original.COMMITS_COUNT;
+			process.env.LOCAL_RUNNER_CPUS = original.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = original.LOCAL_RUNNER_MEMORY_GB;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program validates optional commits count env value", async () => {
+		const original = {
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+		};
+		const dir = tempRepo("auto-pr-build-model-routing-context-commits-count-");
+		const githubOutput = join(dir, "github_output");
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "abc";
+					process.env.LOCAL_RUNNER_CPUS = "";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "";
+
+					const exit = yield* program.pipe(Effect.exit);
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			process.env.GITHUB_WORKSPACE = original.GITHUB_WORKSPACE;
+			process.env.DEFAULT_BRANCH = original.DEFAULT_BRANCH;
+			process.env.AUTO_PR_AI_PROVIDER = original.AUTO_PR_AI_PROVIDER;
+			process.env.GITHUB_OUTPUT = original.GITHUB_OUTPUT;
+			process.env.COMMITS_COUNT = original.COMMITS_COUNT;
+			process.env.LOCAL_RUNNER_CPUS = original.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = original.LOCAL_RUNNER_MEMORY_GB;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program validates optional runner memory env value", async () => {
+		const original = {
+			GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE,
+			DEFAULT_BRANCH: process.env.DEFAULT_BRANCH,
+			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
+			GITHUB_OUTPUT: process.env.GITHUB_OUTPUT,
+			COMMITS_COUNT: process.env.COMMITS_COUNT,
+			LOCAL_RUNNER_CPUS: process.env.LOCAL_RUNNER_CPUS,
+			LOCAL_RUNNER_MEMORY_GB: process.env.LOCAL_RUNNER_MEMORY_GB,
+		};
+		const dir = tempRepo("auto-pr-build-model-routing-context-mem-");
+		const githubOutput = join(dir, "github_output");
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+
+					process.env.GITHUB_WORKSPACE = dir;
+					process.env.DEFAULT_BRANCH = "main";
+					process.env.AUTO_PR_AI_PROVIDER = "local";
+					process.env.GITHUB_OUTPUT = githubOutput;
+					process.env.COMMITS_COUNT = "1";
+					process.env.LOCAL_RUNNER_CPUS = "2";
+					process.env.LOCAL_RUNNER_MEMORY_GB = "0";
+
+					const exit = yield* program.pipe(Effect.exit);
+					expect(exit._tag).toBe("Failure");
+				}),
+			);
+		} finally {
+			process.env.GITHUB_WORKSPACE = original.GITHUB_WORKSPACE;
+			process.env.DEFAULT_BRANCH = original.DEFAULT_BRANCH;
+			process.env.AUTO_PR_AI_PROVIDER = original.AUTO_PR_AI_PROVIDER;
+			process.env.GITHUB_OUTPUT = original.GITHUB_OUTPUT;
+			process.env.COMMITS_COUNT = original.COMMITS_COUNT;
+			process.env.LOCAL_RUNNER_CPUS = original.LOCAL_RUNNER_CPUS;
+			process.env.LOCAL_RUNNER_MEMORY_GB = original.LOCAL_RUNNER_MEMORY_GB;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("program fails when required env is missing", async () => {
+		const originalDefaultBranch = process.env.DEFAULT_BRANCH;
+		try {
+			process.env.DEFAULT_BRANCH = "";
+			const exit = await Effect.runPromise(program.pipe(Effect.exit));
+			expect(exit._tag).toBe("Failure");
+		} finally {
+			process.env.DEFAULT_BRANCH = originalDefaultBranch;
+		}
+	});
+
 	test("emits a default model and signal summary for single-commit PRs", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-");
 		try {
