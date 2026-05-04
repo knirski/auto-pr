@@ -576,6 +576,21 @@ export function generatePrContent(params: GeneratePrContentParams) {
 					: {}),
 				...(params.aiTokenBudget !== undefined ? { aiTokenBudget: params.aiTokenBudget } : {}),
 			});
+			yield* Effect.log({
+				event: "generate_pr_content",
+				step: "limits",
+				status: "computed",
+				provider: params.provider,
+				model: params.model,
+				commit_count: count,
+				changed_file_count: files.length,
+				prompt_chars: prompt.length,
+				token_budget: limits.tokenBudget,
+				tool_round_limit: limits.toolRoundLimit,
+				token_budget_source: params.aiTokenBudget !== undefined ? "env_override" : "computed",
+				tool_round_limit_source:
+					params.aiToolRoundLimit !== undefined ? "env_override" : "computed",
+			});
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescriptionWithToolkit(
 				prompt,
@@ -792,7 +807,20 @@ export function runGeneratePrContent(
 		prClientLayer,
 	);
 
-	return runGeneratePrContentWithServices(config).pipe(Effect.provide(liveLayer));
+	return runGeneratePrContentWithServices(config).pipe(
+		Effect.tap(() =>
+			Effect.log({
+				event: "generate_pr_content",
+				step: "runtime_budget",
+				status: "tool_budget_resolved",
+				provider: config.provider,
+				model: config.model,
+				tool_response_char_budget: toolResponseCharBudget,
+				tool_response_char_budget_source: "derived_default",
+			}),
+		),
+		Effect.provide(liveLayer),
+	);
 }
 
 /**

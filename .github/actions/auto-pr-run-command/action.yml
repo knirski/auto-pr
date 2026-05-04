@@ -44,6 +44,24 @@ outputs:
   local_model_recommendation:
     description: Local model recommendation for the resolved runner profile.
     value: ${{ steps.run.outputs.local_model_recommendation }}
+  token_budget:
+    description: Dynamic AI token budget for generate-content.
+    value: ${{ steps.run.outputs.token_budget }}
+  tool_round_limit:
+    description: Dynamic max tool rounds for generate-content.
+    value: ${{ steps.run.outputs.tool_round_limit }}
+  tool_response_char_budget:
+    description: Dynamic per-tool response char budget for diff payloads.
+    value: ${{ steps.run.outputs.tool_response_char_budget }}
+  github_models_plan_class:
+    description: Detected or overridden GitHub Models plan class.
+    value: ${{ steps.run.outputs.github_models_plan_class }}
+  github_models_rate_limit_tier:
+    description: Selected model rate-limit tier from catalog or fallback.
+    value: ${{ steps.run.outputs.github_models_rate_limit_tier }}
+  github_models_envelope_source:
+    description: Source of derived envelope (catalog-and-plan, catalog-only, static-fallback, explicit-model).
+    value: ${{ steps.run.outputs.github_models_envelope_source }}
 
 runs:
   using: composite

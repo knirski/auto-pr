@@ -293,12 +293,10 @@ Extend `auto-pr-build-model-routing-context` outputs:
 - `github_models_envelope_source`
 - `routing_context`
 
-Pass new env vars into `generate-content`:
-
-- `AUTO_PR_AI_TOKEN_BUDGET`
-- `AUTO_PR_AI_TOOL_ROUND_LIMIT`
-- `AUTO_PR_AI_TOOL_RESPONSE_CHAR_BUDGET`
-- `AUTO_PR_GITHUB_MODELS_PLAN_CLASS`
+Pass routing outputs into `generate-content` as trusted internal workflow context.
+Do not expose token/round/tool-budget values as user-facing override env vars.
+These values are derived automatically from routing signals, catalog metadata, and
+best-effort account-plan detection.
 
 Keep old defaults for local and custom OpenAI-compatible providers.
 

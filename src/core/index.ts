@@ -77,6 +77,7 @@ export {
 	sanitizeForGhOutput,
 	validateGetCommitsOutput,
 } from "#core/gh-output.js";
+export * from "#core/github-model-routing.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
 export * from "#core/model-routing.js";
