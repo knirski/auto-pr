@@ -403,7 +403,6 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
 		if (step === undefined) {
 			throw new Error("createOpenAiScriptedAssistantMockFetch: no steps configured");
 		}
-		const _toolTurn = step.type === "tool";
 		const withTools = step.type === "tool" || step.type === "text_with_tools";
 		const message = withTools
 			? {
