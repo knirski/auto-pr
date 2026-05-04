@@ -11,7 +11,6 @@ import {
 	FillPrTemplateValidationError,
 	formatError,
 	isTransientAiError,
-	isTransientPrClientError,
 	NoSemanticCommitsError,
 	ParseError,
 	PullRequestBodyBlankError,
@@ -23,12 +22,6 @@ import {
 	UnexpectedError,
 } from "#auto-pr/errors.js";
 import { FileSystemError } from "#auto-pr/utils.js";
-import {
-	RoutingContextEnvError,
-	RoutingContextGitError,
-	RoutingContextOutputError,
-	RoutingContextParseError,
-} from "#core/errors.js";
 
 test("formatError formats ActLocalCiError", () => {
 	expect(formatError(new ActLocalCiError({ reason: "no act" }))).toBe("no act");
@@ -69,58 +62,6 @@ test("formatError formats AutoPrConfigError", () => {
 	expect(formatError(new AutoPrConfigError({ missing: ["GH_TOKEN", "BRANCH"] }))).toContain(
 		"Missing required env: GH_TOKEN, BRANCH",
 	);
-});
-
-test("formatError formats RoutingContextEnvError", () => {
-	expect(formatError(new RoutingContextEnvError({ name: "GITHUB_WORKSPACE" }))).toBe(
-		"GITHUB_WORKSPACE is required",
-	);
-});
-
-test("formatError formats RoutingContextParseError", () => {
-	expect(
-		formatError(
-			new RoutingContextParseError({
-				name: "LOCAL_RUNNER_CPUS",
-				requirement: "a positive number",
-				value: "0",
-			}),
-		),
-	).toBe("LOCAL_RUNNER_CPUS must be a positive number, got 0");
-});
-
-test("formatError formats RoutingContextParseError for blank values", () => {
-	expect(
-		formatError(
-			new RoutingContextParseError({
-				name: "COMMITS_COUNT",
-				requirement: "a non-negative integer",
-				value: "",
-			}),
-		),
-	).toBe("COMMITS_COUNT must be a non-negative integer, got <empty>");
-});
-
-test("formatError formats RoutingContextGitError", () => {
-	expect(
-		formatError(
-			new RoutingContextGitError({
-				command: "diff --name-only origin/main..HEAD",
-				cause: "unknown revision",
-			}),
-		),
-	).toBe("git diff --name-only origin/main..HEAD failed: unknown revision");
-});
-
-test("formatError formats RoutingContextOutputError", () => {
-	expect(
-		formatError(
-			new RoutingContextOutputError({
-				path: "/tmp/github_output",
-				cause: "EACCES",
-			}),
-		),
-	).toBe("Failed writing routing outputs to /tmp/github_output: EACCES");
 });
 
 test("formatError formats PullRequestTitleBlankError", () => {
@@ -317,24 +258,4 @@ test("isTransientAiError returns true for non-retryable AiError (InvalidRequestE
 		}),
 	});
 	expect(isTransientAiError(e)).toBe(true);
-});
-
-test("isTransientPrClientError returns false for auth and not-found style failures", () => {
-	expect(
-		isTransientPrClientError(
-			new PullRequestFailedError({ cause: "authentication failed: no token configured" }),
-		),
-	).toBe(false);
-	expect(
-		isTransientPrClientError(
-			new PullRequestLookupError({ branch: "ai/x", cause: "not found: pr" }),
-		),
-	).toBe(false);
-});
-
-test("isTransientPrClientError returns true for retryable pull request failures", () => {
-	expect(isTransientPrClientError(new PullRequestFailedError({ cause: "upstream timeout" }))).toBe(
-		true,
-	);
-	expect(isTransientPrClientError(new Error("not a pr error"))).toBe(false);
 });

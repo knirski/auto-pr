@@ -89,8 +89,6 @@ export function createGitContextMock(overrides?: Partial<GitContext>): GitContex
 		getCurrentBranch: overrides?.getCurrentBranch ?? noOp,
 		getLog: overrides?.getLog ?? noOp,
 		getChangedFiles: overrides?.getChangedFiles ?? noOp,
-		getDiffNumstat: overrides?.getDiffNumstat ?? noOp,
-		getDiffNameStatus: overrides?.getDiffNameStatus ?? noOp,
 		getDiffStat: overrides?.getDiffStat ?? noOp,
 		getDiff: overrides?.getDiff ?? noOp,
 		getCommitDiff: overrides?.getCommitDiff ?? noOp,

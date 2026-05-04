@@ -25,10 +25,6 @@ import {
 	PullRequestLookupError,
 	PullRequestTitleBlankError,
 	PullRequestUrlParseError,
-	RoutingContextEnvError,
-	RoutingContextGitError,
-	RoutingContextOutputError,
-	RoutingContextParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#core/errors.js";
@@ -61,10 +57,6 @@ export function formatError(e: unknown): string {
 		e instanceof PullRequestFailedError ||
 		e instanceof AiProviderError ||
 		e instanceof AutoPrConfigError ||
-		e instanceof RoutingContextEnvError ||
-		e instanceof RoutingContextParseError ||
-		e instanceof RoutingContextGitError ||
-		e instanceof RoutingContextOutputError ||
 		e instanceof PullRequestTitleBlankError ||
 		e instanceof PullRequestBodyBlankError ||
 		e instanceof BodyFileNotFoundError ||
@@ -87,20 +79,6 @@ export function formatError(e: unknown): string {
 				"AutoPrConfigError",
 				({ missing }) =>
 					`Missing required env: ${missing.join(", ")}. See https://github.com/knirski/auto-pr#environment-variables`,
-			),
-			Match.tag("RoutingContextEnvError", ({ name }) => `${name} is required`),
-			Match.tag(
-				"RoutingContextParseError",
-				({ name, requirement, value }) =>
-					`${name} must be ${requirement}, got ${value.length === 0 ? "<empty>" : value}`,
-			),
-			Match.tag(
-				"RoutingContextGitError",
-				({ command, cause }) => `git ${command} failed: ${cause}`,
-			),
-			Match.tag(
-				"RoutingContextOutputError",
-				({ path, cause }) => `Failed writing routing outputs to ${path}: ${cause}`,
 			),
 			Match.tag(
 				"PullRequestTitleBlankError",

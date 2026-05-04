@@ -30,6 +30,7 @@
  * Edit that file for project-specific "how to test" steps (static markdown; not filled from code).
  */
 
+import { join } from "node:path";
 import type { Redacted } from "effect";
 import {
 	Config,
@@ -89,10 +90,6 @@ function requireRedactedOption(
 
 function optionalTrimmedNonEmpty(opt: Option.Option<string>): string | undefined {
 	return Option.getOrUndefined(Option.flatMap(opt, nonBlankOption));
-}
-
-function joinWorkspacePath(workspace: string, fileName: string): string {
-	return `${workspace.replace(/[\\/]+$/, "")}/${fileName}`;
 }
 
 /** Unwrap Option with default; log a warning when the default is used. */
@@ -235,7 +232,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 					}),
 				);
 			}
-			const templatePath = joinWorkspacePath(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
+			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const providerRaw = yield* getOrDefaultLogged(
 				base.aiProvider,
@@ -354,8 +351,8 @@ export const CreateOrUpdatePrConfigLayer = Layer.effect(
 			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
 			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
 			const fs = yield* FileSystem.FileSystem;
-			const titlePath = joinWorkspacePath(workspace, PR_TITLE_FILE_NAME);
-			const bodyFile = joinWorkspacePath(workspace, PR_BODY_FILE_NAME);
+			const titlePath = join(workspace, PR_TITLE_FILE_NAME);
+			const bodyFile = join(workspace, PR_BODY_FILE_NAME);
 			const titleRaw = yield* fs.readFileString(titlePath).pipe(
 				Effect.mapError(
 					() =>
@@ -441,7 +438,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			const base = yield* RunAutoPrConfigDef;
 			const defaultBranch = yield* requireNonEmpty("DEFAULT_BRANCH", base.defaultBranch);
 			const workspace = yield* requireNonEmpty("GITHUB_WORKSPACE", base.workspace);
-			const templatePath = joinWorkspacePath(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
+			const templatePath = join(workspace, ".github/PULL_REQUEST_TEMPLATE.md");
 
 			const branch = optionalTrimmedNonEmpty(base.branch);
 			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);

@@ -4,18 +4,15 @@
  * Workspace (cwd) is baked into the live layer — not a per-method parameter.
  */
 
-import { Cause, Context, Duration, Effect, Layer, Stream } from "effect";
-import { ChildProcess } from "effect/unstable/process";
+import { Cause, Context, Duration, Effect, Layer } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { cleanGitEnv } from "#auto-pr/shell.js";
+import { runCommand } from "#auto-pr/shell.js";
 import { unknownToMessage } from "#core/string.js";
 
 export interface GitContext {
 	readonly getCurrentBranch: () => Effect.Effect<string, Error>;
 	readonly getLog: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
 	readonly getChangedFiles: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
-	readonly getDiffNumstat: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
-	readonly getDiffNameStatus: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
 	readonly getDiffStat: (baseRef: string, headRef: string) => Effect.Effect<string, Error>;
 	readonly getDiff: (
 		baseRef: string,
@@ -42,45 +39,7 @@ export function GitContextLive(
 			const spawner = yield* ChildProcessSpawner;
 
 			const run = (cmd: string, args: string[]) =>
-				Effect.scoped(
-					Effect.gen(function* () {
-						const command = ChildProcess.make(cmd, args, {
-							cwd: workspace,
-							env: cleanGitEnv(),
-							extendEnv: false,
-						});
-						const handle = yield* spawner
-							.spawn(command)
-							.pipe(Effect.mapError((cause) => new Error(unknownToMessage(cause))));
-
-						const [stdout, stderr, exitCode] = yield* Effect.all([
-							handle.stdout.pipe(
-								Stream.decodeText(),
-								Stream.runFold(
-									() => "",
-									(acc, chunk) => acc + chunk,
-								),
-								Effect.mapError((cause) => new Error(unknownToMessage(cause))),
-							),
-							handle.stderr.pipe(
-								Stream.decodeText(),
-								Stream.runFold(
-									() => "",
-									(acc, chunk) => acc + chunk,
-								),
-								Effect.mapError((cause) => new Error(unknownToMessage(cause))),
-							),
-							handle.exitCode.pipe(Effect.mapError((cause) => new Error(unknownToMessage(cause)))),
-						]);
-
-						if (Number(exitCode) !== 0) {
-							const output = `${stderr}\n${stdout}`.trim();
-							return yield* Effect.fail(new Error(output || "git exited with non-zero status"));
-						}
-
-						return stdout;
-					}),
-				).pipe(
+				runCommand(cmd, args, workspace).pipe(
 					Effect.timeout(GIT_COMMAND_TIMEOUT),
 					Effect.mapError((e) => {
 						if (Cause.isTimeoutError(e)) {
@@ -100,20 +59,6 @@ export function GitContextLive(
 				headRef: string,
 			) {
 				return yield* run("git", ["diff", "--name-only", `${baseRef}..${headRef}`]);
-			});
-
-			const getDiffNumstat = Effect.fn("GitContext.getDiffNumstat")(function* (
-				baseRef: string,
-				headRef: string,
-			) {
-				return yield* run("git", ["diff", "--numstat", `${baseRef}..${headRef}`]);
-			});
-
-			const getDiffNameStatus = Effect.fn("GitContext.getDiffNameStatus")(function* (
-				baseRef: string,
-				headRef: string,
-			) {
-				return yield* run("git", ["diff", "--name-status", `${baseRef}..${headRef}`]);
 			});
 
 			const getDiffStat = Effect.fn("GitContext.getDiffStat")(function* (
@@ -143,16 +88,7 @@ export function GitContextLive(
 				return (yield* run("git", ["branch", "--show-current"])).trim();
 			});
 
-			return {
-				getCurrentBranch,
-				getLog,
-				getChangedFiles,
-				getDiffNumstat,
-				getDiffNameStatus,
-				getDiffStat,
-				getDiff,
-				getCommitDiff,
-			};
+			return { getCurrentBranch, getLog, getChangedFiles, getDiffStat, getDiff, getCommitDiff };
 		}),
 	);
 }
