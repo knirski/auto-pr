@@ -15,8 +15,10 @@
  */
 
 import {
+	Cause,
 	Duration,
 	Effect,
+	Exit,
 	FileSystem,
 	Layer,
 	Match,
@@ -28,7 +30,7 @@ import {
 	Schema,
 } from "effect";
 import type { AiError } from "effect/unstable/ai";
-import { LanguageModel } from "effect/unstable/ai";
+import { Chat } from "effect/unstable/ai";
 import {
 	type AiProvider,
 	type AiProviderConfig,
@@ -140,6 +142,22 @@ function logAndValidateTitleDescription(
 
 const MAX_AI_ATTEMPTS = 5;
 const DEFAULT_RETRY_DELAY = Duration.seconds(3);
+const MIN_AI_TOOL_ROUNDS = 2;
+const DEFAULT_MAX_AI_TOOL_ROUNDS = 6;
+const MAX_AI_TOOL_ROUNDS = 12;
+const MIN_AI_TOKEN_BUDGET = 4_000;
+const MAX_AI_TOKEN_BUDGET = 40_000;
+const DEFAULT_AI_TOKEN_BUDGET = 12_000;
+const TOKEN_ESTIMATE_CHARS_PER_TOKEN = 4;
+const CONTINUE_WITH_OPTIONAL_TOOLS_PROMPT =
+	"Continue from prior context and tool results. Decide whether you need more tool calls. When you are ready, return only the final JSON object with keys title, motivation, benefits, risks, and notesForReviewers.";
+const REPAIR_JSON_OUTPUT_PROMPT =
+	'Your previous response did not validate. Return only one JSON object that matches exactly {"title": string, "motivation": string[], "benefits": string[], "risks": string[], "notesForReviewers": string}. No markdown, no prose.';
+
+type AiIterationLimits = {
+	readonly toolRoundLimit: number;
+	readonly tokenBudget: number;
+};
 
 /** Configured title wins; else best-effort PR lookup (failures -> no title). */
 export function resolveExistingPrTitleForPrompt(input: {
@@ -201,6 +219,238 @@ function makeRetrySchedule(delay: Duration.Duration) {
 	);
 }
 
+function logTokenUsage(input: {
+	readonly provider: AiProvider;
+	readonly model: string;
+	readonly round: number;
+	readonly promptTokens: number | null;
+	readonly completionTokens: number | null;
+}) {
+	return Effect.log({
+		event: "generate_pr_content",
+		step: "token_usage",
+		provider: input.provider,
+		model: input.model,
+		round: input.round,
+		prompt_tokens: input.promptTokens,
+		completion_tokens: input.completionTokens,
+		total_tokens:
+			input.promptTokens != null && input.completionTokens != null
+				? input.promptTokens + input.completionTokens
+				: null,
+	});
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function estimateTokensFromText(text: string): number {
+	return Math.max(1, Math.ceil(text.length / TOKEN_ESTIMATE_CHARS_PER_TOKEN));
+}
+
+function normalizeTokenCount(reported: number | null, fallbackText: string): number {
+	return reported ?? estimateTokensFromText(fallbackText);
+}
+
+function computeAiIterationLimits(input: {
+	readonly commitCount: number;
+	readonly changedFileCount: number;
+	readonly promptChars: number;
+	readonly aiToolRoundLimit?: number;
+	readonly aiTokenBudget?: number;
+}): AiIterationLimits {
+	if (input.aiToolRoundLimit !== undefined || input.aiTokenBudget !== undefined) {
+		return {
+			toolRoundLimit: clampNumber(
+				input.aiToolRoundLimit ?? DEFAULT_MAX_AI_TOOL_ROUNDS,
+				MIN_AI_TOOL_ROUNDS,
+				MAX_AI_TOOL_ROUNDS,
+			),
+			tokenBudget: clampNumber(
+				input.aiTokenBudget ?? DEFAULT_AI_TOKEN_BUDGET,
+				MIN_AI_TOKEN_BUDGET,
+				MAX_AI_TOKEN_BUDGET,
+			),
+		};
+	}
+
+	const complexityBoost =
+		Math.floor(input.changedFileCount / 15) +
+		Math.floor(Math.max(0, input.commitCount - 2) / 4) +
+		(input.promptChars >= 12_000 ? 1 : 0);
+	const toolRoundLimit = clampNumber(
+		DEFAULT_MAX_AI_TOOL_ROUNDS + complexityBoost,
+		MIN_AI_TOOL_ROUNDS,
+		MAX_AI_TOOL_ROUNDS,
+	);
+	const tokenBudget = clampNumber(
+		DEFAULT_AI_TOKEN_BUDGET +
+			input.promptChars / TOKEN_ESTIMATE_CHARS_PER_TOKEN +
+			complexityBoost * 1_000,
+		MIN_AI_TOKEN_BUDGET,
+		MAX_AI_TOKEN_BUDGET,
+	);
+	return {
+		toolRoundLimit,
+		tokenBudget: Math.floor(tokenBudget),
+	};
+}
+
+function generateAssistantTextWithToolkit(
+	prompt: string,
+	provider: AiProvider,
+	model: string,
+	limits: AiIterationLimits,
+) {
+	return Effect.gen(function* () {
+		const chat = yield* Chat.empty;
+		type LoopState = {
+			readonly round: number;
+			readonly prompt: string;
+			readonly totalTokensUsed: number;
+			readonly lastParseError: Option.Option<DescriptionParseError>;
+		};
+
+		const toDescriptionParseError = (cause: Cause.Cause<unknown>) =>
+			Result.match(Cause.findError(cause), {
+				onSuccess: (error) =>
+					error instanceof DescriptionParseError
+						? error
+						: new DescriptionParseError({ cause: formatError(error) }),
+				onFailure: () => new DescriptionParseError({ cause: "failed to validate model output" }),
+			});
+
+		const failFromLastParseError = (state: LoopState) =>
+			Effect.fail(
+				Option.getOrElse(
+					state.lastParseError,
+					() =>
+						new DescriptionParseError({
+							cause: `no valid JSON response after ${limits.toolRoundLimit} rounds`,
+						}),
+				),
+			);
+
+		let state: LoopState = {
+			round: 1,
+			prompt,
+			totalTokensUsed: 0,
+			lastParseError: Option.none(),
+		};
+
+		while (state.round <= limits.toolRoundLimit) {
+			const res = yield* chat.generateText({
+				prompt: state.prompt,
+				toolkit: DiffToolkit,
+			});
+			const promptTokens = normalizeTokenCount(res.usage.inputTokens.total ?? null, state.prompt);
+			const completionTokens = normalizeTokenCount(res.usage.outputTokens.total ?? null, res.text);
+			const totalTokensUsed = state.totalTokensUsed + promptTokens + completionTokens;
+			yield* logTokenUsage({
+				provider,
+				model,
+				round: state.round,
+				promptTokens,
+				completionTokens,
+			});
+			const text = res.text.trim();
+			const toolCalls = res.toolCalls.length;
+			yield* Effect.log({
+				event: "generate_pr_content",
+				step: "ai_query",
+				status: "round_complete",
+				provider,
+				model,
+				round: state.round,
+				tool_calls: toolCalls,
+				text_chars: text.length,
+				finish_reason: res.finishReason,
+				total_tokens_used: totalTokensUsed,
+				token_budget: limits.tokenBudget,
+			});
+
+			if (totalTokensUsed > limits.tokenBudget) {
+				return yield* Effect.fail(
+					new DescriptionParseError({
+						cause: `token budget exceeded before valid JSON response (${totalTokensUsed}/${limits.tokenBudget})`,
+					}),
+				);
+			}
+
+			if (text === "") {
+				state = {
+					...state,
+					round: state.round + 1,
+					prompt: CONTINUE_WITH_OPTIONAL_TOOLS_PROMPT,
+					totalTokensUsed,
+				};
+				continue;
+			}
+
+			const validatedExit = yield* decodeTitleDescriptionFromAssistantText(res.text).pipe(
+				Effect.flatMap((raw) => logAndValidateTitleDescription(raw, provider, model)),
+				Effect.exit,
+			);
+			if (Exit.isSuccess(validatedExit)) {
+				if (toolCalls === 0) {
+					yield* Effect.log({
+						event: "generate_pr_content",
+						step: "ai_query",
+						status: "ready_for_final_response",
+						provider,
+						model,
+						round: state.round,
+					});
+					return validatedExit.value;
+				}
+				yield* Effect.logWarning({
+					event: "generate_pr_content",
+					step: "ai_query",
+					status: "validated_text_but_tools_requested",
+					provider,
+					model,
+					round: state.round,
+				});
+				state = {
+					...state,
+					round: state.round + 1,
+					prompt: CONTINUE_WITH_OPTIONAL_TOOLS_PROMPT,
+					totalTokensUsed,
+				};
+				continue;
+			}
+
+			const parseError = toDescriptionParseError(validatedExit.cause);
+			yield* Effect.logWarning({
+				event: "generate_pr_content",
+				step: "validation",
+				status: "failed_round_output",
+				provider,
+				model,
+				round: state.round,
+				reason: formatError(parseError),
+			});
+			state = {
+				round: state.round + 1,
+				prompt: toolCalls === 0 ? REPAIR_JSON_OUTPUT_PROMPT : CONTINUE_WITH_OPTIONAL_TOOLS_PROMPT,
+				totalTokensUsed,
+				lastParseError: Option.some(parseError),
+			};
+		}
+
+		yield* Effect.logWarning({
+			event: "generate_pr_content",
+			step: "ai_query",
+			status: "tool_round_limit_reached",
+			provider,
+			model,
+			round_limit: limits.toolRoundLimit,
+		});
+		return yield* failFromLastParseError(state);
+	});
+}
+
 /** Generate title and description via `generateText` + DiffToolkit + JSON parse + schema validation. */
 function generateTitleAndDescriptionWithToolkit(
 	prompt: string,
@@ -208,6 +458,7 @@ function generateTitleAndDescriptionWithToolkit(
 	retryDelay: Duration.Duration,
 	provider: AiProvider,
 	model: string,
+	limits: AiIterationLimits,
 ) {
 	return Effect.gen(function* () {
 		yield* Effect.log({
@@ -217,22 +468,10 @@ function generateTitleAndDescriptionWithToolkit(
 			provider,
 			model,
 			prompt_chars: prompt.length,
+			tool_round_limit: limits.toolRoundLimit,
+			token_budget: limits.tokenBudget,
 		});
-		const res = yield* LanguageModel.generateText({ prompt, toolkit: DiffToolkit });
-		yield* Effect.log({
-			event: "generate_pr_content",
-			step: "token_usage",
-			provider,
-			model,
-			prompt_tokens: res.usage.inputTokens.total ?? null,
-			completion_tokens: res.usage.outputTokens.total ?? null,
-			total_tokens:
-				res.usage.inputTokens.total != null && res.usage.outputTokens.total != null
-					? res.usage.inputTokens.total + res.usage.outputTokens.total
-					: null,
-		});
-		const raw = yield* decodeTitleDescriptionFromAssistantText(res.text);
-		return yield* logAndValidateTitleDescription(raw, provider, model);
+		return yield* generateAssistantTextWithToolkit(prompt, provider, model, limits);
 	}).pipe(
 		Effect.tapError((e) =>
 			Effect.logWarning({
@@ -272,6 +511,10 @@ export type GeneratePrContentParams = {
 	provider: AiProvider;
 	model: string;
 	retryDelay?: Duration.Duration;
+	/** Optional override for max model/tool interaction rounds in a single AI attempt. */
+	aiToolRoundLimit?: number;
+	/** Optional override for token budget in a single AI attempt. */
+	aiTokenBudget?: number;
 	/** Current PR title when updating an open PR (multi-commit AI path only). */
 	existingPrTitle?: string;
 };
@@ -323,6 +566,15 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				params.existingPrTitle,
 				params.routingContext,
 			);
+			const limits = computeAiIterationLimits({
+				commitCount: count,
+				changedFileCount: files.length,
+				promptChars: prompt.length,
+				...(params.aiToolRoundLimit !== undefined
+					? { aiToolRoundLimit: params.aiToolRoundLimit }
+					: {}),
+				...(params.aiTokenBudget !== undefined ? { aiTokenBudget: params.aiTokenBudget } : {}),
+			});
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescriptionWithToolkit(
 				prompt,
@@ -330,6 +582,7 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				delay,
 				params.provider,
 				params.model,
+				limits,
 			);
 			title = result.title;
 			descriptionOverride = result.description;
