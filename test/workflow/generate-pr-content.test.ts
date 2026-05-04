@@ -1218,7 +1218,7 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 							DEFAULT_BRANCH: "main",
 							BRANCH: "ai/test",
 							AUTO_PR_EXISTING_PR_TITLE: "  feat: existing title  ",
-							AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+							AUTO_PR_LOCAL_MODEL: "gpt-oss",
 						}),
 					);
 
@@ -1258,6 +1258,8 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 							BRANCH: "ai/test",
 							AUTO_PR_AI_PROVIDER: "github-models",
 							GH_TOKEN: "ghp_test_github_models",
+							AUTO_PR_ROUTING_DECISION_JSON:
+								'{"selectedModel":"microsoft/phi-4-mini-instruct","requiresToolCalls":false}',
 						}),
 					);
 

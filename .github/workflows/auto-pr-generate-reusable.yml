@@ -31,11 +31,6 @@ on:
         required: false
         type: string
         default: ""
-      ai_openai_compat_model:
-        required: false
-        type: string
-        description: "Model id (publisher/model). For github-models, legal values are catalog entry ids — see docs/INTEGRATION.md#github-models"
-        default: ""
       ai_llamacpp_release_tag:
         required: false
         type: string
@@ -129,7 +124,6 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           COMMITS_COUNT: ${{ steps.commits.outputs.count }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
           AUTO_PR_AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
           RUNNER_LABEL: ubuntu-24.04
@@ -185,8 +179,9 @@ jobs:
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}
-          AUTO_PR_ROUTING_CONTEXT: ${{ steps.ai_routing.outputs.routing_context }}
+          AUTO_PR_LOCAL_MODEL: ${{ steps.local_llama.outputs.model_id }}
+          AUTO_PR_ROUTING_DECISION_JSON: ${{ steps.ai_routing.outputs.routing_decision_json }}
+          AUTO_PR_ROUTING_CONTEXT_JSON: ${{ steps.ai_routing.outputs.routing_context_json }}
           # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
 

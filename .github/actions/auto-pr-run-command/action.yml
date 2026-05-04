@@ -23,6 +23,12 @@ outputs:
   routing_context:
     description: Trusted routing context string for prompt conditioning.
     value: ${{ steps.run.outputs.routing_context }}
+  routing_context_json:
+    description: Trusted typed routing context JSON for prompt conditioning.
+    value: ${{ steps.run.outputs.routing_context_json }}
+  routing_decision_json:
+    description: Typed routing decision JSON for downstream workflow steps.
+    value: ${{ steps.run.outputs.routing_decision_json }}
   band:
     description: Model band selected by the heuristic.
     value: ${{ steps.run.outputs.band }}
@@ -60,7 +66,7 @@ outputs:
     description: Selected model rate-limit tier from catalog or fallback.
     value: ${{ steps.run.outputs.github_models_rate_limit_tier }}
   github_models_envelope_source:
-    description: Source of derived envelope (catalog-and-plan, catalog-only, static-fallback, explicit-model).
+    description: Source of derived envelope (catalog-and-plan, catalog-only, static-fallback).
     value: ${{ steps.run.outputs.github_models_envelope_source }}
 
 runs:

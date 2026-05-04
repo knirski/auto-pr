@@ -25,6 +25,7 @@ import {
 	resolveLocalRunnerResources,
 	resolveModelBand,
 } from "../core/model-routing.js";
+import type { RoutingContextArtifact } from "../core/routing-artifacts.js";
 
 type RoutingContextInputs = {
 	readonly workspace: string;
@@ -357,19 +358,22 @@ function detectGithubModelsPlanClass(
 function buildEnvelope(
 	decision: ModelBandDecision,
 	signals: ModelBandSignals,
-	explicitModel: string | undefined,
 	planClass: GithubModelsPlanClass,
 	catalogEntries: readonly GithubModelCatalogEntry[],
-): GithubModelsRequestEnvelope {
-	const catalogEntry = pickGithubModelCatalogEntry({
+): {
+	readonly envelope: GithubModelsRequestEnvelope;
+	readonly selectedModel: string;
+	readonly requiresToolCalls: boolean;
+	readonly selectionMode: string;
+} {
+	const catalogSelection = pickGithubModelCatalogEntry({
 		selectedModel: decision.selectedModel,
 		entries: catalogEntries,
 		requiresToolCalls: decision.requiresToolCalls,
 	});
-	return buildGithubModelsRequestEnvelope({
-		model: decision.selectedModel,
-		explicitModel: explicitModel !== undefined && explicitModel.trim() !== "",
-		requiresToolCalls: decision.requiresToolCalls,
+	const envelope = buildGithubModelsRequestEnvelope({
+		model: catalogSelection.model,
+		requiresToolCalls: catalogSelection.requiresToolCalls,
 		planClass,
 		requested: toModelBandRequestedEnvelopeInput({
 			signals,
@@ -377,8 +381,16 @@ function buildEnvelope(
 			toolStrategy: decision.toolStrategy,
 			reasoningNeed: decision.reasoningNeed,
 		}),
-		...(catalogEntry === undefined ? {} : { catalogEntry }),
+		...(catalogSelection.catalogEntry === undefined
+			? {}
+			: { catalogEntry: catalogSelection.catalogEntry }),
 	});
+	return {
+		envelope,
+		selectedModel: catalogSelection.model,
+		requiresToolCalls: catalogSelection.requiresToolCalls,
+		selectionMode: catalogSelection.selectionMode,
+	};
 }
 
 function defaultEnvelopeForLocal(): RoutingEnvelopeOutput {
@@ -629,7 +641,9 @@ function buildRoutingContextInput(
 
 function writeDecisionOutputs(
 	githubOutput: string,
+	provider: ModelProvider,
 	decision: ModelBandDecision,
+	routingContextArtifact: RoutingContextArtifact,
 	envelope: RoutingEnvelopeOutput,
 ): Effect.Effect<void, Error> {
 	const singleLine = (name: string, value: string): string => {
@@ -655,6 +669,21 @@ function writeDecisionOutputs(
 			appendFileSync(
 				githubOutput,
 				`requires_tool_calls=${decision.requiresToolCalls ? "true" : "false"}\n`,
+			);
+			const routingDecisionJson = JSON.stringify({
+				provider,
+				selectedModel: decision.selectedModel,
+				requiresToolCalls: decision.requiresToolCalls,
+				tokenBudget: envelope.tokenBudget,
+				toolRoundLimit: envelope.toolRoundLimit,
+				toolResponseCharBudget: envelope.toolResponseCharBudget,
+				band: decision.band,
+				selectionMode: envelope.githubModelsEnvelopeSource,
+			});
+			appendFileSync(githubOutput, `routing_decision_json=${routingDecisionJson}\n`);
+			appendFileSync(
+				githubOutput,
+				`routing_context_json=${JSON.stringify(routingContextArtifact)}\n`,
 			);
 			if (decision.localRunnerResources !== undefined) {
 				appendFileSync(
@@ -747,7 +776,7 @@ export function runBuildModelRoutingContext(
 						}),
 					}
 				: undefined;
-		const decision = resolveModelBand({
+		let decision = resolveModelBand({
 			provider: input.provider,
 			signals: routingInput.signals,
 			...(input.explicitModel === undefined ? {} : { explicitModel: input.explicitModel }),
@@ -766,7 +795,7 @@ export function runBuildModelRoutingContext(
 			local_model_resource_fit: decision.localModelResourceFit ?? "(n/a)",
 			local_model_recommendation: decision.localModelRecommendation ?? "(n/a)",
 		});
-		const envelope =
+		const envelopeResolved =
 			input.provider === "github-models"
 				? yield* Effect.gen(function* () {
 						const autoPlanClass = yield* detectGithubModelsPlanClass(
@@ -777,17 +806,29 @@ export function runBuildModelRoutingContext(
 						const built = buildEnvelope(
 							decision,
 							routingInput.signals,
-							input.explicitModel,
 							autoPlanClass,
 							catalogEntries,
 						);
+						decision = {
+							...decision,
+							selectedModel: built.selectedModel,
+							requiresToolCalls: built.requiresToolCalls,
+						};
+						yield* Effect.log({
+							event: "build_model_routing_context",
+							step: "model_selection",
+							status: "catalog_fallback_resolved",
+							selected_model: built.selectedModel,
+							requires_tool_calls: built.requiresToolCalls,
+							selection_mode: built.selectionMode,
+						});
 						return {
-							tokenBudget: built.tokenBudget,
-							toolRoundLimit: built.toolRoundLimit,
-							toolResponseCharBudget: built.toolResponseCharBudget,
-							githubModelsPlanClass: built.planClass,
-							githubModelsRateLimitTier: built.rateLimitTier,
-							githubModelsEnvelopeSource: built.source,
+							tokenBudget: built.envelope.tokenBudget,
+							toolRoundLimit: built.envelope.toolRoundLimit,
+							toolResponseCharBudget: built.envelope.toolResponseCharBudget,
+							githubModelsPlanClass: built.envelope.planClass,
+							githubModelsRateLimitTier: built.envelope.rateLimitTier,
+							githubModelsEnvelopeSource: built.envelope.source,
 						} satisfies RoutingEnvelopeOutput;
 					})
 				: defaultEnvelopeForLocal();
@@ -795,12 +836,12 @@ export function runBuildModelRoutingContext(
 			event: "build_model_routing_context",
 			step: "envelope",
 			status: "resolved",
-			token_budget: envelope.tokenBudget,
-			tool_round_limit: envelope.toolRoundLimit,
-			tool_response_char_budget: envelope.toolResponseCharBudget,
-			plan_class: envelope.githubModelsPlanClass,
-			rate_limit_tier: envelope.githubModelsRateLimitTier,
-			envelope_source: envelope.githubModelsEnvelopeSource,
+			token_budget: envelopeResolved.tokenBudget,
+			tool_round_limit: envelopeResolved.toolRoundLimit,
+			tool_response_char_budget: envelopeResolved.toolResponseCharBudget,
+			plan_class: envelopeResolved.githubModelsPlanClass,
+			rate_limit_tier: envelopeResolved.githubModelsRateLimitTier,
+			envelope_source: envelopeResolved.githubModelsEnvelopeSource,
 		});
 		const routingContext = buildDetailedRoutingContext({
 			band: decision.band,
@@ -823,11 +864,26 @@ export function runBuildModelRoutingContext(
 		});
 		yield* writeDecisionOutputs(
 			input.githubOutput,
+			input.provider,
 			{
 				...decision,
 				routingContext,
 			},
-			envelope,
+			{
+				provider: input.provider,
+				band: decision.band,
+				selectedModel: decision.selectedModel,
+				toolStrategy: decision.toolStrategy,
+				reasoningNeed: decision.reasoningNeed,
+				requiresToolCalls: decision.requiresToolCalls,
+				signals: routingInput.signals,
+				commits: routingInput.commits,
+				files: routingInput.files,
+				localRunnerResources: decision.localRunnerResources,
+				localModelResourceFit: decision.localModelResourceFit,
+				localModelRecommendation: decision.localModelRecommendation,
+			},
+			envelopeResolved,
 		);
 		yield* Effect.log({
 			event: "build_model_routing_context",
@@ -837,9 +893,9 @@ export function runBuildModelRoutingContext(
 			selected_model: decision.selectedModel,
 			band: decision.band,
 			tool_strategy: decision.toolStrategy,
-			token_budget: envelope.tokenBudget,
-			tool_round_limit: envelope.toolRoundLimit,
-			tool_response_char_budget: envelope.toolResponseCharBudget,
+			token_budget: envelopeResolved.tokenBudget,
+			tool_round_limit: envelopeResolved.toolRoundLimit,
+			tool_response_char_budget: envelopeResolved.toolResponseCharBudget,
 			routing_context_chars: routingContext.length,
 		});
 	});
@@ -850,9 +906,7 @@ export const program = Effect.gen(function* () {
 	const defaultBranch = yield* readRequiredEnv("DEFAULT_BRANCH");
 	const providerRaw = yield* readRequiredEnv("AUTO_PR_AI_PROVIDER");
 	const githubOutput = yield* readRequiredEnv("GITHUB_OUTPUT");
-	const explicitModelRaw = yield* Effect.sync(
-		() => process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL?.trim() ?? "",
-	);
+	const explicitModelRaw = yield* Effect.sync(() => process.env.AUTO_PR_LOCAL_MODEL?.trim() ?? "");
 	const openaiCompatUrlRaw = yield* Effect.sync(
 		() => process.env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim() ?? "",
 	);
@@ -872,6 +926,7 @@ export const program = Effect.gen(function* () {
 		() => process.env.GH_TOKEN?.trim() ?? process.env.GITHUB_TOKEN?.trim() ?? "",
 	);
 	const provider = yield* parseProvider(providerRaw);
+	const explicitModelRawForProvider = provider === "local" ? explicitModelRaw : "";
 	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw, "COMMITS_COUNT");
 	const localRunnerCpus = yield* parseOptionalPositiveNumber(
 		localRunnerCpusRaw,
@@ -885,7 +940,7 @@ export const program = Effect.gen(function* () {
 		workspace,
 		defaultBranch,
 		provider,
-		explicitModel: explicitModelRaw === "" ? undefined : explicitModelRaw,
+		explicitModel: explicitModelRawForProvider === "" ? undefined : explicitModelRawForProvider,
 		...(openaiCompatUrlRaw === "" ? {} : { openaiCompatUrl: openaiCompatUrlRaw }),
 		...(llamacppModelUrlRaw === "" ? {} : { llamacppModelUrl: llamacppModelUrlRaw }),
 		...(runnerLabelRaw === "" ? {} : { runnerLabel: runnerLabelRaw }),
