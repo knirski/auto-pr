@@ -13,7 +13,7 @@ Auto-create pull requests from conventional commits on `ai/**` branches. Parses 
 
 **Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done — most adopters only use GitHub Actions and do not add this package to `package.json` unless they want the CLIs locally. Defaults work for most projects; override via workflow inputs only when needed.
 
-**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying — workflows fetch everything from knirski/auto-pr.
+**Universal:** Works with any GitHub project — Node, Python, Rust, Go, etc. No `package.json` required when using the [reusable workflows](.github/workflows/auto-pr-generate-reusable.yml) (generate + create). No action copying — workflows fetch everything from knirski/auto-pr, and TypeScript workflow logic runs through packaged auto-pr commands.
 
 **Goal:** Enable AI-assisted development workflows. When an AI agent (or developer) pushes to an `ai/`-prefixed branch, a workflow automatically creates or updates a PR with a title and body derived from conventional commits. For 2+ commits, the AI provider summarizes the changes into a coherent description.
 
@@ -30,13 +30,13 @@ Auto-create pull requests from conventional commits on `ai/**` branches. Parses 
 
 - **Conventional commits** — Parses `feat:`, `fix:`, `docs:`, etc. for PR title and type
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
-- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **local** (OpenAI-compatible HTTP, e.g. llama.cpp) or **github-models**
+- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **local** (OpenAI-compatible HTTP, e.g. llama.cpp) or **github-models**, with routing context built from commit, diff, file-classification, and runner-resource signals
 - **Octokit PR client** — Uses GitHub's official JavaScript SDK for PR lookup/create/update
 - **CI-agnostic** — **generate-content** reads git state in the workspace and writes `pr-title.txt` and `pr-body.md`; **create-or-update-pr** reads those files and calls the GitHub API. Works with GitHub Actions or any orchestrator that sets the same env conventions.
 
 ## How it works
 
-1. **Generate content** — `auto-pr-generate-content` uses git in the workspace (`git log`, diffs as needed), parses commits, and counts semantic (non-merge) commits. For one commit: fills the PR template from the commit body. For two or more: calls the AI provider to summarize, then fills the template. Writes `pr-title.txt` and `pr-body.md` under `{GITHUB_WORKSPACE}`.
+1. **Generate content** — The reusable workflow first builds routing context for model selection and prompt guidance. `auto-pr-generate-content` then uses git in the workspace (`git log`, diffs as needed), parses commits, and counts semantic (non-merge) commits. For one commit: fills the PR template from the commit body. For two or more: calls the AI provider to summarize, then fills the template. Writes `pr-title.txt` and `pr-body.md` under `{GITHUB_WORKSPACE}`.
 2. **Create or update PR** — `auto-pr-create-or-update-pr` reads those files, then looks up an open PR by branch and updates it or creates a new one via Octokit.
 
 For local runs, `auto-pr-run` orchestrates generate → create with the same env contract.

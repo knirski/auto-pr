@@ -30,6 +30,11 @@ inputs:
     required: false
     default: "auto-pr-llama"
 
+outputs:
+  model_id:
+    description: First OpenAI-compatible model id reported by llama-server /v1/models.
+    value: ${{ steps.run.outputs.model_id }}
+
 runs:
   using: composite
   steps:

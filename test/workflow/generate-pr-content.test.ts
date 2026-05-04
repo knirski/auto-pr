@@ -327,6 +327,124 @@ function createOpenAiMockFetchExpectingPromptSubstring(
 	}) as typeof fetch;
 }
 
+function createOpenAiToolCallsThenJsonMockFetch(
+	toolRounds: number,
+	finalJson: string,
+): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiToolCallsThenJsonMockFetch: unexpected request");
+		}
+		callCount += 1;
+		const toolTurn = callCount <= toolRounds;
+		const message = toolTurn
+			? {
+					role: "assistant",
+					content: null,
+					tool_calls: [
+						{
+							id: `call_get_diff_${callCount}`,
+							type: "function",
+							function: { name: "get_diff", arguments: "{}" },
+						},
+					],
+				}
+			: { role: "assistant", content: finalJson };
+		const body = {
+			id: `chatcmpl-mock-${callCount}`,
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: toolTurn ? "tool_calls" : "stop",
+					message,
+				},
+			],
+			usage: { prompt_tokens: 11, completion_tokens: toolTurn ? 15 : 120, total_tokens: 131 },
+		};
+		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
+type ScriptedAssistantStep =
+	| { readonly type: "tool"; readonly completionTokens?: number }
+	| {
+			readonly type: "text_with_tools";
+			readonly content: string;
+			readonly completionTokens?: number;
+	  }
+	| { readonly type: "text"; readonly content: string; readonly completionTokens?: number };
+
+function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistantStep[]): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiScriptedAssistantMockFetch: unexpected request");
+		}
+		callCount += 1;
+		const step = steps[Math.min(callCount - 1, steps.length - 1)];
+		if (step === undefined) {
+			throw new Error("createOpenAiScriptedAssistantMockFetch: no steps configured");
+		}
+		const withTools = step.type === "tool" || step.type === "text_with_tools";
+		const message = withTools
+			? {
+					role: "assistant",
+					content: step.type === "tool" ? null : step.content,
+					tool_calls: [
+						{
+							id: `call_get_diff_${callCount}`,
+							type: "function",
+							function: { name: "get_diff", arguments: "{}" },
+						},
+					],
+				}
+			: { role: "assistant", content: step.content };
+		const body = {
+			id: `chatcmpl-scripted-${callCount}`,
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: withTools ? "tool_calls" : "stop",
+					message,
+				},
+			],
+			usage: {
+				prompt_tokens: 11,
+				completion_tokens: step.completionTokens ?? (withTools ? 15 : 120),
+				total_tokens: 131,
+			},
+		};
+		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
 const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
@@ -600,6 +718,89 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 			);
 		});
 
+		test("runs a follow-up turn when first response is tool-only", async () => {
+			const mock = createOpenAiToolCallsThenJsonMockFetch(1, VALID_AI_RESPONSE);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("allows multiple tool rounds before final JSON response", async () => {
+			const mock = createOpenAiToolCallsThenJsonMockFetch(2, VALID_AI_RESPONSE);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(3);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("repairs malformed terminal JSON in-loop without falling back", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "tool" },
+				{ type: "text", content: '{"title":"feat: incomplete"}' },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(3);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("continues when valid JSON is returned together with tool calls, then returns final JSON", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "text_with_tools", content: VALID_AI_RESPONSE },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(2);
+				}).pipe(Effect.scoped),
+			);
+		});
+
 		test("accepts long conventional title by shortening subject to max length (no fallback)", async () => {
 			const longTitle = `feat(generate-content): structured AI-driven PR metadata with enhanced CI and validation${"x".repeat(25)}`;
 			expect(longTitle.length).toBeGreaterThan(PR_TITLE_LINE_MAX_LENGTH);
@@ -772,6 +973,27 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					content: VALID_AI_RESPONSE,
 					status: 500,
 				}),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		});
+	});
+
+	describe("token budget guardrail", () => {
+		test("falls back when token budget is exceeded before a valid JSON response", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "tool", completionTokens: 5_000 },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				retryDelay: Duration.zero,
+				aiTokenBudget: 10,
+				fetch: mock.fetch,
 			});
 			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {

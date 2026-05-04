@@ -85,11 +85,11 @@ Optional: **`GH_TOKEN`** — only for local CLI use or advanced workflows that i
 
 ## Step 6: Add the workflow file
 
-**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` in one command. The reusable generate job runs shell via **composite actions** pinned in `knirski/auto-pr`; you do not need `scripts/` in your repository.
+**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` in one command. The reusable generate job runs through pinned reusable actions in `knirski/auto-pr`; you do not need `scripts/` in your repository.
 
 **Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
 
-**No action copying required.** The reusable workflows fetch those composite actions from `knirski/auto-pr`. A relative `./` path would resolve to your repo; we use full paths so you do not need anything under `.github/actions/` in your project.
+**No action copying required.** The reusable workflows fetch repo-owned actions from `knirski/auto-pr`. A relative `./` path would resolve to your repo; we use full paths so you do not need anything under `.github/actions/` in your project. The model routing context step runs as a packaged auto-pr command, so your repository does not need Bun, `node_modules`, or auto-pr source files.
 
 All inputs use sensible defaults for the AI model. The PR template path is always `.github/PULL_REQUEST_TEMPLATE.md` at the repo root. Edit the **How to test** section in that file directly for project-specific steps (for example `npm run check` or `pytest`). Override other options via `with:` when needed.
 
@@ -231,6 +231,8 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 
 For branches with **2+ commits**, auto-pr generates the PR description via an AI backend. Choose a provider with `ai_provider` on the generate reusable workflow (maps to `AUTO_PR_AI_PROVIDER`), or set env when running locally.
 
+Before the model call, the reusable workflow builds a routing context from commit metadata, changed-file classes, diff churn, dependency/workflow/generated-file signals, runner resources, and local-model sizing risk. That context selects a model band, sets the local-model fallback when one is not provided, chooses whether the later prompt should rely on diff tools, and is injected into the prompt as structured reviewer context. The prompt still includes commit messages separately; the routing context summarizes signals that commit messages do not reliably encode.
+
 **How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, because GitHub Models does not support that response format and other OpenAI-compatible servers are inconsistent with it. On repeated parse or transient HTTP failures (network, rate limit, 5xx), auto-pr falls back to commit-derived title and description. **Authentication errors (HTTP 401/403) surface directly as a configuration error** rather than silently falling back — check your `GH_TOKEN` or `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` if you see an auth error in the generate step.
 
 ### Provider defaults
@@ -240,7 +242,7 @@ Defaults differ by entry point so local development can run against a local Open
 | Entry point | Provider default | Model default | Notes |
 |-------------|------------------|---------------|-------|
 | Stock [`auto-pr.yml`](../.github/workflows/auto-pr.yml) | `github-models` | `openai/gpt-4.1` | The workflow grants `models: read` and passes `github.token` to the generate reusable workflow. |
-| Generate reusable workflow with `ai_provider: local` and `ai_llamacpp_model_url` | `local` | `gpt-oss` unless `ai_openai_compat_model` is set | Starts `llama-server` in Docker and uses the local OpenAI-compatible endpoint. |
+| Generate reusable workflow with `ai_provider: local` and `ai_llamacpp_model_url` | `local` | llama-server `/v1/models` id after startup; before startup the router falls back to a GitHub-runner-sized local default (`qwen3-1.7b-q4_k_m` for private/internal `ubuntu-24.04`, `qwen3-4b-q4_k_m` for public `ubuntu-24.04`) unless `ai_openai_compat_model` is set | Starts `llama-server` in Docker and uses the local OpenAI-compatible endpoint. The routing context flags GGUF URLs that appear too large for the resolved runner resources. External `ai_openai_compat_url` endpoints keep the normal OpenAI-compatible model default unless a model is set explicitly. |
 | Local CLI / `bun run generate-content` with no AI env | `local` | `gpt-oss` | Targets `http://127.0.0.1:8080/v1`. |
 | Local CLI / custom workflow with `AUTO_PR_AI_PROVIDER=github-models` and no model env | `github-models` | `microsoft/phi-4-mini-instruct` | Export `GH_TOKEN`; override `AUTO_PR_AI_OPENAI_COMPAT_MODEL` when you want another GitHub Models id. |
 
@@ -249,7 +251,7 @@ Defaults differ by entry point so local development can run against a local Open
 Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.) using the same env names as in [`src/auto-pr/config.ts`](../src/auto-pr/config.ts): `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_AI_OPENAI_COMPAT_MODEL`.
 
 - **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, `ai_openai_compat_model`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow uses `.github/llama-server/Dockerfile` for the image pin, caches the GGUF and image tar, and starts `llama-server` in Docker on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
-- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + `Dockerfile` pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly.
+- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + `Dockerfile` pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly. Standard GitHub-hosted runner RAM is limited, so use small Q4-class GGUFs for the bundled path unless you move to a larger/self-hosted runner.
 - **Local dev:** Defaults target `http://127.0.0.1:8080/v1` and model `gpt-oss` (override via env).
 
 ### `github-models`
@@ -292,7 +294,7 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common f
 
 | Command | Required | Optional |
 |---------|----------|----------|
-| **auto-pr-generate-content** | `DEFAULT_BRANCH`, `BRANCH`, `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local`), `AUTO_PR_AI_OPENAI_COMPAT_*` (model for both providers; URL/key for local), `GH_TOKEN` (github-models). Fetches commits, files, and diff stat directly from git via `GitContext`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
+| **auto-pr-generate-content** | `DEFAULT_BRANCH`, `BRANCH`, `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local`), `AUTO_PR_AI_OPENAI_COMPAT_*` (model for both providers; URL/key for local), `AUTO_PR_ROUTING_CONTEXT` (trusted workflow-built signal summary for the AI prompt), `GH_TOKEN` (github-models). Fetches commits, files, and diff stat directly from git via `GitContext`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `GITHUB_WORKSPACE` | — (reads `{GITHUB_WORKSPACE}/pr-title.txt` and `pr-body.md`) |
 
 Override AI-related defaults via workflow `with:` inputs when needed.

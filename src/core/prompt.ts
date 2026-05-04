@@ -2,18 +2,22 @@
  * Prompt building helpers. Pure, no I/O.
  */
 
-/** Build full description prompt from template, commit content, optional diffstat, and optional existing PR title. */
+/** Build full description prompt from template, commit content, optional diffstat, routing context, and optional existing PR title. */
 export function buildDescriptionPrompt(
 	promptTemplate: string,
 	commitContent: string,
 	diffStat?: string,
 	existingPrTitle?: string,
+	routingContext?: string,
 ): string {
 	const sections = [promptTemplate.trim()];
+	sections.push(`Commits:\n${commitContent}`);
 	if (diffStat?.trim()) {
 		sections.push(`Changed files (diff stat):\n${diffStat.trim()}`);
 	}
-	sections.push(`Commits:\n${commitContent}`);
+	if (routingContext?.trim()) {
+		sections.push(`Routing context:\n${routingContext.trim()}`);
+	}
 	const prior = existingPrTitle?.trim();
 	if (prior) {
 		sections.push(

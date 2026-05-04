@@ -35,7 +35,7 @@ on:
         required: false
         type: string
         description: "Model id (publisher/model). For github-models, legal values are catalog entry ids — see docs/INTEGRATION.md#github-models"
-        default: "openai/gpt-4.1"
+        default: ""
       ai_llamacpp_release_tag:
         required: false
         type: string
@@ -91,7 +91,7 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a
+        uses: knirski/auto-pr/.github/actions/setup-runtime@fe59f149f2a966a58e18abc5552201d97095f818
 
       - name: Fetch base branch
         env:
@@ -100,7 +100,7 @@ jobs:
 
       - name: Set auto-pr package ref
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@fe59f149f2a966a58e18abc5552201d97095f818
         with:
           repository: ${{ github.repository }}
           ref_name: ${{ github.ref_name }}
@@ -117,9 +117,27 @@ jobs:
           count=$(git log --format=%s "origin/$DEFAULT_BRANCH..HEAD" | grep -cvE '^Merge ' || true)
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
+      - name: Build model routing context
+        id: ai_routing
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@fe59f149f2a966a58e18abc5552201d97095f818
+        with:
+          command: build-model-routing-context
+          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
+          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
+          runner: ${{ steps.setup.outputs.runner }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          COMMITS_COUNT: ${{ steps.commits.outputs.count }}
+          AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
+          AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
+          AUTO_PR_AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
+          RUNNER_LABEL: ubuntu-24.04
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+
       - name: Resolve llama Docker image
         id: llama_release
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@fe59f149f2a966a58e18abc5552201d97095f818
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -146,7 +164,7 @@ jobs:
       - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@fe59f149f2a966a58e18abc5552201d97095f818
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -155,7 +173,7 @@ jobs:
 
       - name: Generate PR content
         id: generate
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@fe59f149f2a966a58e18abc5552201d97095f818
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -167,13 +185,14 @@ jobs:
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ inputs.ai_openai_compat_model }}
+          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.local_llama.outputs.model_id || steps.ai_routing.outputs.selected_model }}
+          AUTO_PR_ROUTING_CONTEXT: ${{ steps.ai_routing.outputs.routing_context }}
           # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
           GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@fe59f149f2a966a58e18abc5552201d97095f818
 
       - name: Prepare artifact
         env:

@@ -73,7 +73,13 @@ fi
 
 compat="http://127.0.0.1:${LLAMA_PORT}/v1"
 for _ in $(seq 1 90); do
-	if curl -fsS "$compat/models" >/dev/null 2>&1; then
+	if models_json="$(curl -fsS "$compat/models" 2>/dev/null)"; then
+		model_id="$(
+			printf '%s' "$models_json" | python3 -c 'import json, sys; data=json.load(sys.stdin); rows=data.get("data") or []; print((rows[0].get("id") if rows and isinstance(rows[0], dict) else "") or "")'
+		)"
+		if [[ -n "$model_id" && -n "${GITHUB_OUTPUT:-}" ]]; then
+			echo "model_id=$model_id" >>"$GITHUB_OUTPUT"
+		fi
 		echo "llama-server ready at $compat"
 		exit 0
 	fi

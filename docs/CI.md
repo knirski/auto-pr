@@ -67,7 +67,7 @@ The required PR **integration** job runs local llama scenarios only. The real **
 | [act-smoke.yml](../.github/workflows/act-smoke.yml) | push, pull_request → main, workflow_dispatch | `paths: .github/workflows/**`, `scripts/act-local-ci.ts`, `flake.nix` | matrix: `--dry-run check` + `check-workflows` (parallel) via [`gh-act`](https://github.com/nektos/gh-act) (`GH_TOKEN` for `gh`) |
 | [deploy-pages.yml](../.github/workflows/deploy-pages.yml) | push → main | `paths: docs/**`, `website/**` | build (Bun install + build in website/), deploy (GitHub Pages via actions/deploy-pages) |
 
-**auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses composite actions from this repo; adopters do not vendor shell under `scripts/`. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
+**auto-pr.yml** runs on push to `ai/**` branches (including forks). Two reusable workflows: generate (unprivileged checkout + content) and create (trusted checkout + PR). The generate job uses reusable actions from this repo; adopters do not vendor shell under `scripts/`. The model routing context step runs the packaged `auto-pr-build-model-routing-context` command through `auto-pr-run-command`, so non-JavaScript adopter repositories do not need Bun or auto-pr source files. Security model: [docs/WORKFLOW_SECURITY.md](WORKFLOW_SECURITY.md). Forks need `APP_ID` and `APP_PRIVATE_KEY` in their repo secrets to succeed. See [docs/INTEGRATION.md](INTEGRATION.md).
 
 **ci.yml** is the single entry for push/PR to `main`: the `changes` job applies path filters so each downstream job runs only when relevant. The **`gate`** job aggregates outcomes for branch protection as **`CI / gate`**. The **`nix`** job calls [nix.yml](../.github/workflows/nix.yml): upstream Nix ([cachix/install-nix-action](https://github.com/cachix/install-nix-action)), statix/deadnix via `nix flake check`, and auto-updates `bun.nix` for trusted same-repo runs using the same GitHub App as auto-pr when a push is needed (GITHUB_TOKEN pushes do not trigger workflows). The GitHub App token push naturally triggers a new `pull_request` CI run on the generated commit; do not manually dispatch `ci.yml` after the push, because that creates an extra `workflow_dispatch` run that is not part of the PR check rollup. Dependabot PRs are check-only because GitHub does not expose repository secrets to Dependabot-triggered runs.
 
@@ -216,3 +216,12 @@ Prefer **SHA + human-readable comment** (`# vX.Y.Z`) so reviewers see intent. Af
 **Do not remove `-f`** from `git add -f dist/` in the action; without it, ignored files would not be staged.
 
 **Version tags:** [add-dist-to-release-pr.yml](../.github/workflows/add-dist-to-release-pr.yml) adds `dist/` to release-please PRs before merge, so tagged commits (e.g. `npx -p github:knirski/auto-pr#v0.1.2`) include it. **Before merging a release PR**, wait for "Add dist to release PR" to complete so the tagged commit includes `dist/`.
+
+## Packaged workflow commands
+
+`auto-pr-generate-content`, `auto-pr-build-model-routing-context`, and the other package bins are built into root `dist/` by `bun run build`. The reusable generate workflow invokes routing and content generation through [.github/actions/auto-pr-run-command](../.github/actions/auto-pr-run-command/action.yml):
+
+- **Contributor branches in knirski/auto-pr:** `auto-pr-run-command` uses workspace source via `bun run`, after the generate job installs dependencies.
+- **Adopter repositories:** `auto-pr-run-command` uses the package binary via `npx`/`bunx -p github:knirski/auto-pr`.
+
+Do not add generated JavaScript under `.github/actions/**` for auto-pr TypeScript workflow logic. Keep the source in `src/workflow/**` and let root `dist/` be the only package runtime output. If workflow/action wiring changes, workflow self-reference pins still need to point at one commit that contains every referenced workflow and action path.

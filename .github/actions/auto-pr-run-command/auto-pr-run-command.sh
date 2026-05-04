@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Run auto-pr command from workspace or package.
-# Usage: auto-pr-run-command.sh <generate-content>
+# Usage: auto-pr-run-command.sh <build-model-routing-context|generate-content>
 # Requires: USE_WORKSPACE, AUTO_PR_PKG, RUNNER (for package mode)
 
 set -euo pipefail
 
-CMD="${1:?Usage: auto-pr-run-command.sh <generate-content>}"
+CMD="${1:?Usage: auto-pr-run-command.sh <build-model-routing-context|generate-content>}"
 USE_WORKSPACE="${USE_WORKSPACE:?}"
 AUTO_PR_PKG="${AUTO_PR_PKG:?}"
 RUNNER="${RUNNER:?}"
 
 case "$CMD" in
+build-model-routing-context)
+	BIN="auto-pr-build-model-routing-context"
+	SCRIPT="build-model-routing-context"
+	;;
 generate-content)
 	BIN="auto-pr-generate-content"
 	SCRIPT="generate-content"

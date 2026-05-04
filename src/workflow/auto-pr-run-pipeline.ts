@@ -37,6 +37,7 @@ export function generateContentConfigFromRunAutoPrConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
+		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
 	return Match.value(config).pipe(

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 export type ChangedLine = {
@@ -15,6 +15,8 @@ export type MissingPatchCoverage = ChangedLine & {
 export type CoverageByFile = Map<string, Map<number, number>>;
 
 const root = join(import.meta.dir, "..");
+const PATCH_COVERAGE_IGNORE_START = "patch-coverage-ignore-start";
+const PATCH_COVERAGE_IGNORE_STOP = "patch-coverage-ignore-stop";
 
 function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -115,6 +117,43 @@ export function findMissingPatchCoverage(
 	return missing;
 }
 
+export function parseIgnoredPatchCoverageLines(content: string): ReadonlySet<number> {
+	const ignored = new Set<number>();
+	let inIgnoredBlock = false;
+	const lines = content.split(/\r?\n/);
+
+	for (const [index, line] of lines.entries()) {
+		if (line.includes(PATCH_COVERAGE_IGNORE_START)) {
+			inIgnoredBlock = true;
+			continue;
+		}
+		if (line.includes(PATCH_COVERAGE_IGNORE_STOP)) {
+			inIgnoredBlock = false;
+			continue;
+		}
+		if (inIgnoredBlock) {
+			ignored.add(index + 1);
+		}
+	}
+
+	return ignored;
+}
+
+export function filterIgnoredChangedLines(
+	changedLines: ReadonlyArray<ChangedLine>,
+	readFileContent: (path: string) => string,
+): ReadonlyArray<ChangedLine> {
+	const ignoredByFile = new Map<string, ReadonlySet<number>>();
+	return changedLines.filter((changed) => {
+		let ignoredLines = ignoredByFile.get(changed.file);
+		if (ignoredLines === undefined) {
+			ignoredLines = parseIgnoredPatchCoverageLines(readFileContent(changed.file));
+			ignoredByFile.set(changed.file, ignoredLines);
+		}
+		return !ignoredLines.has(changed.line);
+	});
+}
+
 function readGitDiff(baseRef: string): string {
 	return execFileSync("git", ["diff", "--unified=0", `${baseRef}...HEAD`, "--", "src"], {
 		cwd: root,
@@ -138,7 +177,9 @@ async function main() {
 	}
 
 	const diff = readGitDiff(baseRef);
-	const changedLines = parseAddedLinesFromUnifiedDiff(diff);
+	const changedLines = filterIgnoredChangedLines(parseAddedLinesFromUnifiedDiff(diff), (path) =>
+		readFileSync(join(root, path), "utf8"),
+	);
 	const coverage = parseLcovInfo(await Bun.file(resolvedCoveragePath).text());
 	const missing = findMissingPatchCoverage(changedLines, coverage);
 

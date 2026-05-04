@@ -5,6 +5,48 @@
 
 export const MAX_PER_FILE_DIFF_CHARS = 10_000;
 export const MAX_TOTAL_DIFF_CHARS = 50_000;
+export const MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 8_000;
+// Current known request-size ceiling for openai/gpt-4.1 on GitHub Models.
+export const TOKEN_ESTIMATE_CHARS_PER_TOKEN = 4;
+export const GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS = 8_000;
+// Reserve headroom for prompt, accumulated chat/tool envelopes, and final JSON output.
+export const TOOL_ROUNDTRIP_RESERVED_TOKENS = 5_000;
+// Conservative fanout assumption for one round when the model issues multiple tool calls.
+export const TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS = 4;
+// Keep a useful minimum diff payload even under strict request-size budgets.
+export const MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 1_500;
+
+/**
+ * Future hardening options (prefer these over static constants when available):
+ * 1. Fetch `max_input_tokens` dynamically from the GitHub Models catalog per selected model.
+ * 2. Expose reserve/fanout knobs via env (e.g. AUTO_PR_AI_TOOL_*) with safe defaults.
+ * 3. Adapt fanout based on observed tool-call count from previous rounds/retries.
+ * 4. Store model-specific overrides in config data instead of embedding them in code.
+ */
+
+const isGithubModelsGpt41 = (model: string): boolean => {
+	const normalized = model.trim().toLowerCase();
+	return normalized === "openai/gpt-4.1";
+};
+
+function clampNumber(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function deriveToolRoundtripCharBudgetFromRequestTokens(input: {
+	readonly requestTokenLimit: number;
+	readonly reservedTokens: number;
+	readonly assumedMaxParallelToolCalls: number;
+}): number {
+	const availableTokens = Math.max(0, input.requestTokenLimit - input.reservedTokens);
+	const budgetPerToolTokens = Math.floor(availableTokens / input.assumedMaxParallelToolCalls);
+	const estimatedChars = budgetPerToolTokens * TOKEN_ESTIMATE_CHARS_PER_TOKEN;
+	return clampNumber(
+		estimatedChars,
+		MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+	);
+}
 
 /**
  * Split a combined diff string into per-file diff blocks.
@@ -84,4 +126,34 @@ export function sanitizeDiffForAi(raw: string): string {
 	}
 
 	return result;
+}
+
+/**
+ * Cap diff text returned by AI tools so it can safely round-trip into the next
+ * model request, especially for providers with small request-size limits.
+ */
+export function resolveAiToolRoundtripDiffCharBudget(
+	provider: "local" | "github-models",
+	model: string,
+): number {
+	if (provider === "github-models" && isGithubModelsGpt41(model)) {
+		return deriveToolRoundtripCharBudgetFromRequestTokens({
+			requestTokenLimit: GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
+			reservedTokens: TOOL_ROUNDTRIP_RESERVED_TOKENS,
+			assumedMaxParallelToolCalls: TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS,
+		});
+	}
+	return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+}
+
+export function capDiffForAiToolRoundtrip(
+	diff: string,
+	maxChars = MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+): string {
+	if (diff.length <= maxChars) return diff;
+
+	const suffix = `\n[tool output truncated: total size exceeded ${maxChars} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
+	const bodyBudget = Math.max(0, maxChars - suffix.length);
+	const truncated = diff.slice(0, bodyBudget);
+	return `${truncated}${suffix}`;
 }
