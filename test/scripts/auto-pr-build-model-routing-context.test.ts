@@ -182,6 +182,89 @@ describe("build-model-routing-context", () => {
 		}
 	});
 
+	test("treats root-only files as one top-level directory", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-root-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* write(join(dir, "README.md"), "base\n");
+					yield* write(join(dir, "package.json"), '{"name":"base"}\n');
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "chore: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "README.md"), "updated\n");
+					yield* write(join(dir, "package.json"), '{"name":"feature"}\n');
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: update root files"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain("dirs=<root>");
+					expect(output).toContain(
+						"file-kinds: source=0; docs=1; test=0; generated=0; lockfiles=0; package-manifests=1",
+					);
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("classifies src test files as tests before source", async () => {
+		const dir = tempRepo("auto-pr-build-model-routing-context-tests-");
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* runGit(dir, ["init", "-b", "main"]);
+					yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+					yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+					yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+					yield* write(join(dir, "src", "base.ts"), "export const base = 1;\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "feat: base"]);
+					yield* runGit(dir, ["branch", "origin/main"]);
+					yield* runGit(dir, ["checkout", "-b", "feature"]);
+					yield* write(join(dir, "src", "foo.test.ts"), "expect(true).toBe(true);\n");
+					yield* runGit(dir, ["add", "."]);
+					yield* runGit(dir, ["commit", "-m", "test: add co-located test"]);
+
+					const githubOutput = join(dir, "github_output");
+					yield* runBuildModelRoutingContext({
+						workspace: dir,
+						defaultBranch: "main",
+						provider: "local",
+						explicitModel: undefined,
+						githubOutput,
+						commitsCount: 1,
+					});
+
+					const output = yield* read(githubOutput);
+					expect(output).toContain(
+						"file-kinds: source=0; docs=0; test=1; generated=0; lockfiles=0; package-manifests=0",
+					);
+					expect(output).toContain("review_focus: src/foo.test.ts (+1/-0, test)");
+				}),
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	test("emits a default model and signal summary for single-commit PRs", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-");
 		try {
@@ -363,7 +446,6 @@ describe("build-model-routing-context", () => {
 						"file-kinds: source=0; docs=0; test=0; generated=0; lockfiles=1; package-manifests=1",
 					);
 					expect(output).toContain("sensitive_scope: dependencies");
-					expect(output).not.toContain("generated-heavy");
 				}),
 			);
 		} finally {

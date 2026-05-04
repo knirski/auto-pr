@@ -304,7 +304,12 @@ function recommendedMaxParamsB(runner: LocalRunnerResources): number {
 
 function estimateParamsBFromModelUrl(modelUrl: string | undefined): number | undefined {
 	if (isBlank(modelUrl)) return undefined;
-	const decoded = decodeURIComponent(modelUrl ?? "");
+	let decoded = modelUrl ?? "";
+	try {
+		decoded = decodeURIComponent(decoded);
+	} catch {
+		return undefined;
+	}
 	const matches = [...decoded.matchAll(/(?:^|[^0-9])(\d+(?:\.\d+)?)\s*[bB](?:[^a-zA-Z]|$)/g)];
 	if (matches.length === 0) return undefined;
 	const values = matches
@@ -622,7 +627,7 @@ export function buildDetailedRoutingContext(input: BuildDetailedRoutingContextIn
 
 export function parseCommitLog(logOutput: string): readonly ParsedCommit[] {
 	return logOutput
-		.split(/\n---COMMIT---\n?/)
+		.split("\0")
 		.map((block) => block.trim())
 		.filter(Boolean)
 		.map((block) => {

@@ -15,7 +15,7 @@ import {
 	type RoutingContextHotspot,
 	resolveLocalRunnerResources,
 	resolveModelBand,
-} from "./model-routing.js";
+} from "../core/model-routing.js";
 
 type RoutingContextInputs = {
 	readonly workspace: string;
@@ -137,17 +137,20 @@ function classifyFile(
 	if (
 		/(^|\/)(dist|build|out|coverage|vendor|__snapshots__|\.terraform)(\/|$)/.test(path) ||
 		/(^|\/)\.next(\/|$)/.test(path) ||
-		/\.lock$/.test(path) ||
 		/\.min\.js$/.test(path) ||
 		/\.map$/.test(path)
 	) {
 		return "generated";
 	}
-	if (/^docs\/|\.md$/.test(path)) return "docs";
-	if (/^src\//.test(path)) return "source";
 	if (/(^|\/)(test|tests|spec|specs)(\/|$)/.test(path) || /\.(test|spec)\.[^/]+$/.test(path))
 		return "test";
+	if (path.startsWith("docs/") || path.endsWith(".md")) return "docs";
+	if (/^src\//.test(path)) return "source";
 	return "other";
+}
+
+function topLevelBucket(path: string): string {
+	return path.includes("/") ? (path.split("/", 1)[0] ?? "<root>") : "<root>";
 }
 
 function buildCommitSummary(
@@ -203,7 +206,7 @@ function buildFileSummary(input: {
 	let renamedFileCount = 0;
 
 	for (const file of input.files) {
-		const top = file.split("/", 1)[0] ?? "";
+		const top = topLevelBucket(file);
 		topLevelDirs.add(top);
 		switch (classifyFile(file)) {
 			case "source":
@@ -258,7 +261,7 @@ function buildFileSummary(input: {
 		};
 		fileHotspots.set(path, fileEntry);
 
-		const top = path.split("/", 1)[0] ?? path;
+		const top = topLevelBucket(path);
 		const dirEntry = topDirChurn.get(top);
 		if (dirEntry === undefined) {
 			topDirChurn.set(top, { ...fileEntry, path: top });
@@ -299,11 +302,7 @@ function buildRoutingContextInput(
 		const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
 		const numstatOutput = yield* runGit(input.workspace, ["diff", "--numstat", range]);
 		const nameStatusOutput = yield* runGit(input.workspace, ["diff", "--name-status", range]);
-		const logOutput = yield* runGit(input.workspace, [
-			"log",
-			"--format=%H%n%B%n---COMMIT---",
-			range,
-		]);
+		const logOutput = yield* runGit(input.workspace, ["log", "--format=%H%n%B%x00", range]);
 
 		const files = filesOutput.stdout
 			.split("\n")

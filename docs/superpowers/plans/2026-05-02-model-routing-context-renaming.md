@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Rename the routing action to match its prompt-context responsibility
+## Task 1: Rename the routing action to match its prompt-context responsibility
 
 **Files:**
 - Modify: `.github/actions/auto-pr-build-model-routing-context/action.yml`
@@ -51,7 +51,7 @@ git add .github/actions/auto-pr-build-model-routing-context .github/workflows/au
 git commit -m "refactor(workflows): rename model routing context action"
 ```
 
-### Task 2: Refactor the action wrapper and test to Effect style
+## Task 2: Refactor the action wrapper and test to Effect style
 
 **Files:**
 - Modify: `.github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-routing-context.ts`
@@ -105,7 +105,7 @@ git add .github/actions/auto-pr-build-model-routing-context/auto-pr-build-model-
 git commit -m "refactor(workflows): make routing action Effect-based"
 ```
 
-### Task 3: Verify the full branch
+## Task 3: Verify the full branch
 
 **Files:**
 - No new files
