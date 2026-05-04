@@ -6,11 +6,23 @@
 export const MAX_PER_FILE_DIFF_CHARS = 10_000;
 export const MAX_TOTAL_DIFF_CHARS = 50_000;
 export const MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 8_000;
+// Current known request-size ceiling for openai/gpt-4.1 on GitHub Models.
 export const TOKEN_ESTIMATE_CHARS_PER_TOKEN = 4;
 export const GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS = 8_000;
+// Reserve headroom for prompt, accumulated chat/tool envelopes, and final JSON output.
 export const TOOL_ROUNDTRIP_RESERVED_TOKENS = 5_000;
+// Conservative fanout assumption for one round when the model issues multiple tool calls.
 export const TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS = 4;
+// Keep a useful minimum diff payload even under strict request-size budgets.
 export const MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 1_500;
+
+/**
+ * Future hardening options (prefer these over static constants when available):
+ * 1. Fetch `max_input_tokens` dynamically from the GitHub Models catalog per selected model.
+ * 2. Expose reserve/fanout knobs via env (e.g. AUTO_PR_AI_TOOL_*) with safe defaults.
+ * 3. Adapt fanout based on observed tool-call count from previous rounds/retries.
+ * 4. Store model-specific overrides in config data instead of embedding them in code.
+ */
 
 const isGithubModelsGpt41 = (model: string): boolean => {
 	const normalized = model.trim().toLowerCase();
