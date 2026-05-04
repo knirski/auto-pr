@@ -118,7 +118,7 @@
 
 **Cause:** The AI provider returned invalid or empty response. Auto-pr retries up to **five** attempts (see `MAX_AI_ATTEMPTS` in `auto-pr-generate-content.ts`) and then falls back to commit-derived title and description.
 
-**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. For **local**, verify `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and URL. For **github-models**, verify `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. `AUTO_PR_AI_PROVIDER` defaults to `local` when unset (see [config.ts](../src/auto-pr/config.ts)).
+**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. For **local**, verify `AUTO_PR_LOCAL_MODEL` and `AUTO_PR_AI_OPENAI_COMPAT_URL`. For **github-models**, verify `GH_TOKEN` and that catalog fetch is successful in routing logs. `AUTO_PR_AI_PROVIDER` defaults to `local` when unset (see [config.ts](../src/auto-pr/config.ts)).
 
 ### GitHub Models: 401 / invalid token (provider: github-models)
 
@@ -128,15 +128,15 @@
 
 ### GitHub Models: model not found / 404 (provider: github-models)
 
-**Cause:** `AUTO_PR_AI_OPENAI_COMPAT_MODEL` does not match an available GitHub Models id (wrong name, deprecated, or typo).
+**Cause:** The selected model id from routing/catalog fallback is unavailable for the current token/tenant or temporarily unavailable in the catalog.
 
-**Fix:** Set `ai_openai_compat_model` / `AUTO_PR_AI_OPENAI_COMPAT_MODEL` to a valid catalog **`id`** (format `publisher/model`, e.g. `openai/gpt-4.1`). See [INTEGRATION.md — github-models](INTEGRATION.md#github-models) for how to fetch the current list from `https://models.github.ai/catalog/models`.
+**Fix:** Check routing logs for `selected_model`, `selection_mode`, and attempt-plan entries. The workflow already falls back across compatible/same-tier and lower-tier models; if failures persist, verify `GH_TOKEN` scope and catalog availability. See [INTEGRATION.md — github-models](INTEGRATION.md#github-models).
 
 ### OpenAI-compatible: connection error / URL unreachable (provider: `local`)
 
 **Cause:** `AUTO_PR_AI_OPENAI_COMPAT_URL` is wrong, the host is down, TLS/firewall blocked the runner, or the path is not the API base your provider expects.
 
-**Fix:** Verify the URL in a small curl or client test from the same environment (local vs CI). For Azure and similar hosts, use the exact resource base URL and deployment name via `AUTO_PR_AI_OPENAI_COMPAT_MODEL` as required by that provider.
+**Fix:** Verify the URL in a small curl or client test from the same environment (local vs CI). For Azure and similar hosts, use the exact resource base URL and deployment name via `AUTO_PR_LOCAL_MODEL` as required by that provider.
 
 ### OpenAI-compatible: 401 / invalid API key (provider: `local`)
 

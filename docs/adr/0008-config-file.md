@@ -104,7 +104,7 @@ Secrets (`GH_TOKEN`, `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`), pipeline plumbing (`GI
 |--------------------------|-----------------------------------|---------------------------|
 | `ai.provider`            | `AUTO_PR_AI_PROVIDER`             | `local`                   |
 | `ai.openai_compat.url`   | `AUTO_PR_AI_OPENAI_COMPAT_URL`    | `http://127.0.0.1:8080/v1` (local) |
-| `ai.openai_compat.model` | `AUTO_PR_AI_OPENAI_COMPAT_MODEL`  | `gpt-oss` (local) / `openai/gpt-4.1` (github-models) when unset |
+| `ai.openai_compat.model` | `AUTO_PR_LOCAL_MODEL`             | `gpt-oss` (local) |
 
 **Override order (if file exists):** env → file → built-in default.
 
