@@ -10,7 +10,6 @@ export {
 } from "#auto-pr/ai-provider-config.js";
 export type {
 	AiProvider,
-	RateLimitFallbackStrategy,
 	RunAutoPrConfigCommon,
 	RunAutoPrConfigGithubModels,
 	RunAutoPrConfigLocal,
@@ -21,7 +20,6 @@ export {
 	DEFAULT_GITHUB_MODELS_MODEL,
 	DEFAULT_OPENAI_COMPAT_MODEL,
 	DEFAULT_OPENAI_COMPAT_URL,
-	DEFAULT_RATE_LIMIT_FALLBACK_STRATEGY,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
 	RunAutoPrConfig,
