@@ -253,4 +253,32 @@ describe("DiffToolkit diff sanitization", () => {
 			}).pipe(Effect.scoped),
 		);
 	});
+
+	test("respects custom tool response char budget", async () => {
+		const bigDiff = `diff --git a/src/huge.ts b/src/huge.ts\n${"+x\n".repeat(20_000)}`;
+		const mockGitCtx = createGitContextMock({
+			getDiff: () => Effect.succeed(bigDiff),
+		});
+		const customBudget = 2_000;
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature", {
+			toolResponseCharBudget: customBudget,
+		});
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_diff", {});
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = String(handlerResult.result);
+				expect(result.length).toBeLessThanOrEqual(customBudget + 300);
+				expect(result).toContain("[tool output truncated:");
+			}).pipe(Effect.scoped),
+		);
+	});
 });

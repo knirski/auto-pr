@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
 	capDiffForAiToolRoundtrip,
+	LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 	MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 	MAX_PER_FILE_DIFF_CHARS,
 	MAX_TOTAL_DIFF_CHARS,
+	resolveAiToolRoundtripDiffCharBudget,
 	sanitizeDiffForAi,
 } from "#core/sanitize-diff.js";
 
@@ -91,5 +93,20 @@ describe("capDiffForAiToolRoundtrip", () => {
 
 	test("exports MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS as 8000", () => {
 		expect(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS).toBe(8_000);
+	});
+
+	test("uses lower round-trip cap for github-models gpt-4.1", () => {
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1")).toBe(
+			LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		);
+	});
+
+	test("uses default round-trip cap for other models/providers", () => {
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-mini")).toBe(
+			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		);
+		expect(resolveAiToolRoundtripDiffCharBudget("local", "gpt-oss")).toBe(
+			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		);
 	});
 });

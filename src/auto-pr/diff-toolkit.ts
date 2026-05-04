@@ -42,11 +42,20 @@ const GetCommitDiff = Tool.make("get_commit_diff", {
 
 export const DiffToolkit = Toolkit.make(GetDiff, GetCommitDiff);
 
+export type DiffToolkitOptions = {
+	readonly toolResponseCharBudget?: number;
+};
+
 /**
  * Build DiffToolkit handler layer. Captures baseRef and headRef.
  * Requires GitContext in scope.
  */
-export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
+export function makeDiffToolkitLayer(
+	baseRef: string,
+	headRef: string,
+	options?: DiffToolkitOptions,
+) {
+	const toolResponseCharBudget = options?.toolResponseCharBudget;
 	return DiffToolkit.toLayer(
 		Effect.gen(function* () {
 			const git = yield* GitContext;
@@ -74,7 +83,10 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 							),
 						),
 					);
-					const sanitized = capDiffForAiToolRoundtrip(sanitizeDiffForAi(result));
+					const sanitized = capDiffForAiToolRoundtrip(
+						sanitizeDiffForAi(result),
+						toolResponseCharBudget,
+					);
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_diff",
@@ -106,7 +118,10 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 							),
 						),
 					);
-					const sanitized = capDiffForAiToolRoundtrip(sanitizeDiffForAi(result));
+					const sanitized = capDiffForAiToolRoundtrip(
+						sanitizeDiffForAi(result),
+						toolResponseCharBudget,
+					);
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_commit_diff",

@@ -74,6 +74,7 @@ import {
 	getFallbackTitleAndDescription,
 	validateGeneratedContent,
 } from "#core/generated-content.js";
+import { resolveAiToolRoundtripDiffCharBudget } from "#core/sanitize-diff.js";
 import { truncateForLog } from "#core/string.js";
 import {
 	parseTitleDescriptionFromAssistantText,
@@ -765,13 +766,19 @@ export function runGeneratePrContent(
 	config: RunGeneratePrContentConfig,
 ): Effect.Effect<void, GeneratePrContentError, FileSystem.FileSystem | Path.Path> {
 	const baseRef = `origin/${config.defaultBranch}`;
+	const toolResponseCharBudget = resolveAiToolRoundtripDiffCharBudget(
+		config.provider,
+		config.model,
+	);
 	const aiLayer = aiProviderLayerFromConfig(
 		buildAiProviderConfig(config),
 		config.fetch !== undefined ? { fetch: config.fetch } : undefined,
 	);
 
 	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
-	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch).pipe(Layer.provide(gitLayer));
+	const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch, {
+		toolResponseCharBudget,
+	}).pipe(Layer.provide(gitLayer));
 	const prClientLayer = PullRequestClient.Live(config.workspace, {
 		...(config.provider === "github-models" ? { ghToken: Redacted.value(config.ghToken) } : {}),
 		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),

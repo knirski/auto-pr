@@ -6,6 +6,12 @@
 export const MAX_PER_FILE_DIFF_CHARS = 10_000;
 export const MAX_TOTAL_DIFF_CHARS = 50_000;
 export const MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 8_000;
+export const LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 3_000;
+
+const isGithubModelsGpt41 = (model: string): boolean => {
+	const normalized = model.trim().toLowerCase();
+	return normalized === "openai/gpt-4.1";
+};
 
 /**
  * Split a combined diff string into per-file diff blocks.
@@ -91,9 +97,22 @@ export function sanitizeDiffForAi(raw: string): string {
  * Cap diff text returned by AI tools so it can safely round-trip into the next
  * model request, especially for providers with small request-size limits.
  */
-export function capDiffForAiToolRoundtrip(diff: string): string {
-	if (diff.length <= MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS) return diff;
+export function resolveAiToolRoundtripDiffCharBudget(
+	provider: "local" | "github-models",
+	model: string,
+): number {
+	if (provider === "github-models" && isGithubModelsGpt41(model)) {
+		return LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+	}
+	return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+}
 
-	const truncated = diff.slice(0, MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS);
-	return `${truncated}\n[tool output truncated: total size exceeded ${MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
+export function capDiffForAiToolRoundtrip(
+	diff: string,
+	maxChars = MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+): string {
+	if (diff.length <= maxChars) return diff;
+
+	const truncated = diff.slice(0, maxChars);
+	return `${truncated}\n[tool output truncated: total size exceeded ${maxChars} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
 }
