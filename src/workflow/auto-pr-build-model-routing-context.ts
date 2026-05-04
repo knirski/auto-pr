@@ -362,28 +362,46 @@ function writeDecisionOutputs(
 	githubOutput: string,
 	decision: ModelBandDecision,
 ): Effect.Effect<void, Error> {
+	const singleLine = (name: string, value: string): string => {
+		if (/[\r\n]/.test(value)) {
+			throw new Error(`${name} must not contain newlines`);
+		}
+		return value;
+	};
 	return Effect.try({
 		try: () => {
-			appendFileSync(githubOutput, `selected_model=${decision.selectedModel}\n`);
-			appendFileSync(githubOutput, `tool_strategy=${decision.toolStrategy}\n`);
-			appendFileSync(githubOutput, `reasoning_need=${decision.reasoningNeed}\n`);
+			appendFileSync(
+				githubOutput,
+				`selected_model=${singleLine("selected_model", decision.selectedModel)}\n`,
+			);
+			appendFileSync(
+				githubOutput,
+				`tool_strategy=${singleLine("tool_strategy", decision.toolStrategy)}\n`,
+			);
+			appendFileSync(
+				githubOutput,
+				`reasoning_need=${singleLine("reasoning_need", decision.reasoningNeed)}\n`,
+			);
 			appendFileSync(
 				githubOutput,
 				`requires_tool_calls=${decision.requiresToolCalls ? "true" : "false"}\n`,
 			);
 			if (decision.localRunnerResources !== undefined) {
-				appendFileSync(githubOutput, `local_runner_resources=${decision.localRunnerResources}\n`);
+				appendFileSync(
+					githubOutput,
+					`local_runner_resources=${singleLine("local_runner_resources", decision.localRunnerResources)}\n`,
+				);
 			}
 			if (decision.localModelResourceFit !== undefined) {
 				appendFileSync(
 					githubOutput,
-					`local_model_resource_fit=${decision.localModelResourceFit}\n`,
+					`local_model_resource_fit=${singleLine("local_model_resource_fit", decision.localModelResourceFit)}\n`,
 				);
 			}
 			if (decision.localModelRecommendation !== undefined) {
 				appendFileSync(
 					githubOutput,
-					`local_model_recommendation=${decision.localModelRecommendation}\n`,
+					`local_model_recommendation=${singleLine("local_model_recommendation", decision.localModelRecommendation)}\n`,
 				);
 			}
 			const delimiter = `__AUTO_PR_ROUTING_CONTEXT_${randomUUID()}__`;

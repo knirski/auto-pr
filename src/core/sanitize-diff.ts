@@ -152,6 +152,8 @@ export function capDiffForAiToolRoundtrip(
 ): string {
 	if (diff.length <= maxChars) return diff;
 
-	const truncated = diff.slice(0, maxChars);
-	return `${truncated}\n[tool output truncated: total size exceeded ${maxChars} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
+	const suffix = `\n[tool output truncated: total size exceeded ${maxChars} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
+	const bodyBudget = Math.max(0, maxChars - suffix.length);
+	const truncated = diff.slice(0, bodyBudget);
+	return `${truncated}${suffix}`;
 }
