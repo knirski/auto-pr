@@ -5,6 +5,7 @@
 
 export const MAX_PER_FILE_DIFF_CHARS = 10_000;
 export const MAX_TOTAL_DIFF_CHARS = 50_000;
+export const MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 8_000;
 
 /**
  * Split a combined diff string into per-file diff blocks.
@@ -84,4 +85,15 @@ export function sanitizeDiffForAi(raw: string): string {
 	}
 
 	return result;
+}
+
+/**
+ * Cap diff text returned by AI tools so it can safely round-trip into the next
+ * model request, especially for providers with small request-size limits.
+ */
+export function capDiffForAiToolRoundtrip(diff: string): string {
+	if (diff.length <= MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS) return diff;
+
+	const truncated = diff.slice(0, MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS);
+	return `${truncated}\n[tool output truncated: total size exceeded ${MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
 }

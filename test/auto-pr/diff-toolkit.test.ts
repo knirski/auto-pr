@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect, Layer, Option, Stream } from "effect";
 import { DiffToolkit, makeDiffToolkitLayer } from "#auto-pr/diff-toolkit.js";
 import { GitContext } from "#auto-pr/git-context.js";
+import { MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS } from "#core/sanitize-diff.js";
 import { runEffect } from "#test/run-effect.js";
 import { createGitContextMock, SilentLoggerLayer, TestBaseLayer } from "#test/test-utils.js";
 
@@ -224,6 +225,31 @@ describe("DiffToolkit diff sanitization", () => {
 				const result = String(handlerResult.result);
 				expect(result).toContain("[binary file: logo.png]");
 				expect(result).not.toContain("Binary files");
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("get_diff handler caps oversized diff output for AI round-trip safety", async () => {
+		const bigDiff = `diff --git a/src/huge.ts b/src/huge.ts\n${"+x\n".repeat(20_000)}`;
+		const mockGitCtx = createGitContextMock({
+			getDiff: () => Effect.succeed(bigDiff),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_diff", {});
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = String(handlerResult.result);
+				expect(result.length).toBeLessThanOrEqual(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS + 300);
+				expect(result).toContain("[tool output truncated:");
 			}).pipe(Effect.scoped),
 		);
 	});

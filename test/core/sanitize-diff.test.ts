@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+	capDiffForAiToolRoundtrip,
+	MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 	MAX_PER_FILE_DIFF_CHARS,
 	MAX_TOTAL_DIFF_CHARS,
 	sanitizeDiffForAi,
@@ -69,5 +71,25 @@ describe("sanitizeDiffForAi", () => {
 
 	test("exports MAX_TOTAL_DIFF_CHARS as 50000", () => {
 		expect(MAX_TOTAL_DIFF_CHARS).toBe(50_000);
+	});
+});
+
+describe("capDiffForAiToolRoundtrip", () => {
+	test("passes through content under the tool round-trip cap", () => {
+		const input = makeFileDiff("src/foo.ts", "+const x = 1;");
+		expect(capDiffForAiToolRoundtrip(input)).toBe(input);
+	});
+
+	test("truncates content over the tool round-trip cap and adds guidance marker", () => {
+		const input = "x".repeat(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS + 1000);
+		const result = capDiffForAiToolRoundtrip(input);
+		expect(result.length).toBeLessThanOrEqual(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS + 300);
+		expect(result).toContain("[tool output truncated:");
+		expect(result).toContain('get_diff({"path":"..."})');
+		expect(result).toContain('get_commit_diff({"hash":"..."})');
+	});
+
+	test("exports MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS as 8000", () => {
+		expect(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS).toBe(8_000);
 	});
 });
