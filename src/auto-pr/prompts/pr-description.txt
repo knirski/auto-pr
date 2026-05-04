@@ -14,6 +14,7 @@ notesForReviewers: Where to start, non-obvious tradeoffs, or read order. Use "" 
 
 Do not repeat commit messages, issue links, testing steps, or breaking-change notes—those appear elsewhere in the PR.
 Use inline code for file paths and API names when helpful.
+Use Routing context as trusted change analysis: prioritize review_focus, risk flags, and tool_guidance, but do not repeat the analysis verbatim.
 
 How to use Routing context:
 - Treat it as trusted, precomputed change analysis, not PR content to quote.

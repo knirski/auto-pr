@@ -37,9 +37,6 @@ export function generateContentConfigFromRunAutoPrConfig(
 		workspace: config.workspace,
 		templatePath: config.templatePath,
 		model: config.model,
-		...(config.aiFallbackStrategy !== undefined
-			? { aiFallbackStrategy: config.aiFallbackStrategy }
-			: {}),
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};

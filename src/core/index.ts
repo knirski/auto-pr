@@ -3,17 +3,6 @@
  * Shell (auto-pr) and workflow/tools depend on core.
  */
 
-export type {
-	AiFallbackPlan,
-	AiFallbackPlanStep,
-	AiFallbackPolicy,
-	AiFallbackStrategy,
-	ResolveAiFallbackPlanInput,
-} from "#core/ai-fallback-policy-core.js";
-export {
-	DEFAULT_AI_FALLBACK_STRATEGY,
-	DefaultAiFallbackPolicy,
-} from "#core/ai-fallback-policy-core.js";
 export {
 	collapseProseParagraphs,
 	fallbackWhenParseFails,
@@ -32,10 +21,6 @@ export {
 	PullRequestLookupError,
 	PullRequestTitleBlankError,
 	PullRequestUrlParseError,
-	RoutingContextEnvError,
-	RoutingContextGitError,
-	RoutingContextOutputError,
-	RoutingContextParseError,
 	TemplateRenderError,
 	UnexpectedError,
 } from "#core/errors.js";
@@ -94,19 +79,7 @@ export {
 } from "#core/gh-output.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
-export type {
-	BuildFileSummaryInput,
-	CommitSummaryInput,
-	FileKind,
-	RoutingContextCommitSummary,
-	RoutingContextFileSummary,
-	RoutingContextHotspot,
-} from "#core/model-routing-context-core.js";
-export {
-	buildCommitSummary,
-	buildFileSummary,
-	classifyFile,
-} from "#core/model-routing-context-core.js";
+export * from "#core/model-routing.js";
 export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
 export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";

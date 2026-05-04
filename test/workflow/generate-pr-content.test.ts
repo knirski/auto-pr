@@ -10,13 +10,10 @@ import {
 	Option,
 	Redacted,
 	Result,
-	Stream,
 } from "effect";
-import { Response as AiResponse, LanguageModel } from "effect/unstable/ai";
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
-	AiProviderError,
 	AutoPrConfigError,
 	aiProviderLayerFromConfig,
 	ChildProcessSpawnerLayer,
@@ -27,7 +24,6 @@ import {
 	TemplateRenderError,
 } from "#auto-pr";
 import { GitContext } from "#auto-pr/git-context.js";
-import type { AiFallbackPlan, CommitInfo } from "#core";
 import { FillPrTemplateValidationError, PullRequestLookupError } from "#core/errors.js";
 import { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";
 import { runEffect } from "#test/run-effect.js";
@@ -41,16 +37,13 @@ import {
 } from "#test/test-utils.js";
 import type { GeneratePrContentParams } from "#workflow/auto-pr-generate-content.js";
 import {
-	executeAiFallbackPlan,
 	generatePrContent,
 	normalizeUnknownToGeneratePrContentError,
-	parseOptionalPositiveNumber,
 	program,
 	resolveExistingPrTitleForPrompt,
 	runGeneratePrContent,
 	runGeneratePrContentConfigFromGeneratePrContentConfig,
 	runGeneratePrContentWithServices,
-	runGithubFallbackModelAttempts,
 } from "#workflow/auto-pr-generate-content.js";
 
 function logContent(...blocks: Array<{ hash?: string; subject: string; body: string }>): string {
@@ -98,7 +91,6 @@ function makeParams(
 			provider: "local" as const,
 			model: "gpt-oss",
 			retryDelay: Duration.zero,
-			...(overrides?.fetch !== undefined ? { fetch: overrides.fetch } : {}),
 			...overrides,
 		},
 		gitCtx: mockGitContext(commits, overrides?.files, overrides?.diffStat),
@@ -117,88 +109,6 @@ const MockDiffToolkitLayer = DiffToolkit.toLayer(
 		}),
 	),
 );
-
-function makeUsage(inputTokensTotal: number, outputTokensTotal: number): AiResponse.Usage {
-	return new AiResponse.Usage({
-		inputTokens: {
-			uncached: undefined,
-			total: inputTokensTotal,
-			cacheRead: undefined,
-			cacheWrite: undefined,
-		},
-		outputTokens: {
-			total: outputTokensTotal,
-			text: outputTokensTotal,
-			reasoning: undefined,
-		},
-	});
-}
-
-function makeMockLanguageModelForToolOnlyFirstTurn(finalText: string) {
-	const calls: Array<{ prompt: unknown; toolChoice: unknown; toolkitPresent: boolean }> = [];
-	const circularResult: { self?: unknown } = {};
-	circularResult.self = circularResult;
-	const service = LanguageModel.LanguageModel.of({
-		generateText: (options: { prompt: unknown; toolChoice?: unknown; toolkit?: unknown }) => {
-			calls.push({
-				prompt: options.prompt,
-				toolChoice: options.toolChoice,
-				toolkitPresent: options.toolkit !== undefined,
-			});
-			if (options.toolChoice === "none") {
-				return Effect.succeed(
-					new LanguageModel.GenerateTextResponse([
-						AiResponse.makePart("text", { text: finalText }),
-						AiResponse.makePart("finish", {
-							reason: "stop",
-							usage: makeUsage(90, 30),
-							response: undefined,
-						}),
-					]),
-				);
-			}
-			return Effect.succeed(
-				new LanguageModel.GenerateTextResponse([
-					AiResponse.makePart("tool-call", {
-						id: "call_1",
-						name: "get_diff",
-						params: { path: null },
-						providerExecuted: false,
-					}),
-					AiResponse.makePart("tool-result", {
-						id: "call_1",
-						name: "get_diff",
-						isFailure: false,
-						result: "diff --git a/src/a.ts b/src/a.ts\n...",
-						encodedResult: "diff --git a/src/a.ts b/src/a.ts\n...",
-						providerExecuted: false,
-						preliminary: false,
-					}),
-					AiResponse.makePart("tool-result", {
-						id: "call_2",
-						name: "get_commit_diff",
-						isFailure: true,
-						result: circularResult,
-						encodedResult: "[circular]",
-						providerExecuted: false,
-						preliminary: false,
-					}),
-					AiResponse.makePart("finish", {
-						reason: "tool-calls",
-						usage: makeUsage(120, 12),
-						response: undefined,
-					}),
-				]),
-			);
-		},
-		generateObject: () => Effect.die(new Error("generateObject should not be called in this test")),
-		streamText: () => Stream.empty,
-	});
-	return {
-		layer: Layer.succeed(LanguageModel.LanguageModel, service),
-		calls,
-	};
-}
 
 function layerForTest(p: {
 	params: GeneratePrContentParams;
@@ -361,7 +271,6 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			defaultBranch: "main",
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
-			aiFallbackStrategy: "github-chain-then-local",
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
@@ -374,7 +283,6 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			defaultBranch: "main",
 			branch: "ai/example",
 			model: "openai/gpt-4.1",
-			aiFallbackStrategy: "github-chain-then-local",
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
@@ -419,116 +327,128 @@ function createOpenAiMockFetchExpectingPromptSubstring(
 	}) as typeof fetch;
 }
 
+function createOpenAiToolCallsThenJsonMockFetch(
+	toolRounds: number,
+	finalJson: string,
+): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiToolCallsThenJsonMockFetch: unexpected request");
+		}
+		callCount += 1;
+		const toolTurn = callCount <= toolRounds;
+		const message = toolTurn
+			? {
+					role: "assistant",
+					content: null,
+					tool_calls: [
+						{
+							id: `call_get_diff_${callCount}`,
+							type: "function",
+							function: { name: "get_diff", arguments: "{}" },
+						},
+					],
+				}
+			: { role: "assistant", content: finalJson };
+		const body = {
+			id: `chatcmpl-mock-${callCount}`,
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: toolTurn ? "tool_calls" : "stop",
+					message,
+				},
+			],
+			usage: { prompt_tokens: 11, completion_tokens: toolTurn ? 15 : 120, total_tokens: 131 },
+		};
+		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
+type ScriptedAssistantStep =
+	| { readonly type: "tool"; readonly completionTokens?: number }
+	| {
+			readonly type: "text_with_tools";
+			readonly content: string;
+			readonly completionTokens?: number;
+	  }
+	| { readonly type: "text"; readonly content: string; readonly completionTokens?: number };
+
+function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistantStep[]): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createOpenAiScriptedAssistantMockFetch: unexpected request");
+		}
+		callCount += 1;
+		const step = steps[Math.min(callCount - 1, steps.length - 1)];
+		if (step === undefined) {
+			throw new Error("createOpenAiScriptedAssistantMockFetch: no steps configured");
+		}
+		const withTools = step.type === "tool" || step.type === "text_with_tools";
+		const message = withTools
+			? {
+					role: "assistant",
+					content: step.type === "tool" ? null : step.content,
+					tool_calls: [
+						{
+							id: `call_get_diff_${callCount}`,
+							type: "function",
+							function: { name: "get_diff", arguments: "{}" },
+						},
+					],
+				}
+			: { role: "assistant", content: step.content };
+		const body = {
+			id: `chatcmpl-scripted-${callCount}`,
+			object: "chat.completion",
+			created: 0,
+			model: "mock",
+			choices: [
+				{
+					index: 0,
+					finish_reason: withTools ? "tool_calls" : "stop",
+					message,
+				},
+			],
+			usage: {
+				prompt_tokens: 11,
+				completion_tokens: step.completionTokens ?? (withTools ? 15 : 120),
+				total_tokens: 131,
+			},
+		};
+		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
 const twoCommits = [
 	{ subject: "feat: add module A", body: "Adds A." },
 	{ subject: "fix: fix bug in B", body: "Fixes B." },
 ];
-
-function makeCommitInfo(subject: string, body: string, hash = "0".repeat(40)): CommitInfo {
-	const fullMessage = body.trim().length === 0 ? subject : `${subject}\n\n${body}`;
-	return {
-		hash,
-		subject,
-		body,
-		fullMessage,
-		type: Option.none(),
-		references: [],
-		breakingNote: Option.none(),
-	};
-}
-
-describe("generate-content fallback helpers", () => {
-	test("parseOptionalPositiveNumber handles undefined, blank, invalid, and positive values", () => {
-		expect(parseOptionalPositiveNumber(undefined)).toBeUndefined();
-		expect(parseOptionalPositiveNumber("   ")).toBeUndefined();
-		expect(parseOptionalPositiveNumber("abc")).toBeUndefined();
-		expect(parseOptionalPositiveNumber("0")).toBeUndefined();
-		expect(parseOptionalPositiveNumber(" 16 ")).toBe(16);
-	});
-
-	test("runGithubFallbackModelAttempts returns Some on first successful fallback model", async () => {
-		await runEffect(SilentLoggerLayer)(
-			Effect.gen(function* () {
-				const result = yield* runGithubFallbackModelAttempts({
-					models: ["microsoft/phi-4-mini-instruct"],
-					runAttempt: () =>
-						Effect.succeed({
-							title: "feat: fallback title",
-							description: "Fallback description",
-						}),
-				});
-				expect(Option.isSome(result)).toBe(true);
-				if (Option.isSome(result)) {
-					expect(result.value.title).toBe("feat: fallback title");
-					expect(result.value.description).toBe("Fallback description");
-				}
-			}),
-		);
-	});
-
-	test("runGithubFallbackModelAttempts fails fast on non-rate-limit errors", async () => {
-		const exit = await Effect.runPromise(
-			runGithubFallbackModelAttempts({
-				models: ["microsoft/phi-4-mini-instruct"],
-				runAttempt: () => Effect.fail(new AiProviderError({ status: 401, cause: "unauthorized" })),
-			}).pipe(Effect.exit),
-		);
-		expect(Exit.isFailure(exit)).toBe(true);
-		if (Exit.isFailure(exit)) {
-			Result.match(Cause.findError(exit.cause), {
-				onSuccess: (error) => {
-					expect(error).toBeInstanceOf(AiProviderError);
-					expect((error as AiProviderError).status).toBe(401);
-				},
-				onFailure: () => expect().fail("expected AiProviderError"),
-			});
-		}
-	});
-
-	test("executeAiFallbackPlan continues after exhausted github step and returns commit fallback", async () => {
-		const plan: AiFallbackPlan = {
-			strategy: "github-chain-only",
-			githubFallbackChain: ["openai/gpt-4.1", "microsoft/phi-4-mini-instruct"],
-			steps: [
-				{ _tag: "github-model", model: "microsoft/phi-4-mini-instruct" },
-				{ _tag: "commit-fallback" },
-			],
-		};
-		const filtered: readonly CommitInfo[] = [
-			makeCommitInfo("feat: add module A", "Adds A."),
-			makeCommitInfo("fix: fix bug in B", "Fixes B.", "1".repeat(40)),
-		];
-		await runEffect(SilentLoggerLayer)(
-			Effect.gen(function* () {
-				const result = yield* executeAiFallbackPlan({
-					plan,
-					runAttempt: (provider) =>
-						provider === "github-models"
-							? Effect.fail(
-									new AiProviderError({
-										status: 429,
-										cause: "Rate limit exceeded. Retry after 1m",
-									}),
-								)
-							: Effect.fail(new Error("local fallback should not be used in this plan")),
-					filtered,
-					localFallbackLayerForModel: () =>
-						Layer.succeed(
-							LanguageModel.LanguageModel,
-							LanguageModel.LanguageModel.of({
-								generateText: () =>
-									Effect.die(new Error("local fallback model should not be invoked in this test")),
-								generateObject: () =>
-									Effect.die(new Error("generateObject should not be invoked in this test")),
-								streamText: () => Stream.empty,
-							}),
-						),
-				});
-				expect(result.title).toBe("feat: add module A");
-			}),
-		);
-	});
-});
 
 describe("resolveExistingPrTitleForPrompt", () => {
 	const layerWithPrClient = (
@@ -798,270 +718,85 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 			);
 		});
 
-		test("falls back to strongest local model when github-models is rate-limited with retry-after", async () => {
-			const originalEnv = {
-				AUTO_PR_AI_OPENAI_COMPAT_URL: process.env.AUTO_PR_AI_OPENAI_COMPAT_URL,
-				REPOSITORY_VISIBILITY: process.env.REPOSITORY_VISIBILITY,
-				RUNNER_LABEL: process.env.RUNNER_LABEL,
-			};
-			const localFetch = createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE);
-			let githubRequestCount = 0;
-			let sawLocalFallbackRequest = false;
-			try {
-				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
-				process.env.REPOSITORY_VISIBILITY = "private";
-				process.env.RUNNER_LABEL = "ubuntu-24.04";
-				const fallbackFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-					const url = String(
-						input instanceof URL ? input : input instanceof Request ? input.url : input,
-					);
-					if (url.includes("models.github.ai/inference")) {
-						githubRequestCount += 1;
-						return new Response(
-							JSON.stringify({
-								error: { message: "Rate limit exceeded. Retry after 16h 54m 38s" },
-							}),
-							{
-								status: 429,
-								headers: { "Content-Type": "application/json" },
-							},
-						);
-					}
-					if (url.includes("127.0.0.1:8080/v1")) {
-						sawLocalFallbackRequest = true;
-						if (typeof init?.body === "string") {
-							expect(init.body).toContain('"model":"qwen3-1.7b-q4_k_m"');
-						}
-						return localFetch(input, init);
-					}
-					throw new Error(`Unexpected URL in fallback fetch: ${url}`);
-				}) as typeof fetch;
-				const p = makeParams(twoCommits, {
-					provider: "github-models",
-					model: "openai/gpt-4.1",
-					files: "src/a.ts\nsrc/b.ts\n",
-					templateContent: TEMPLATE_WITH_CHANGES,
-					fetch: fallbackFetch,
-				});
-				await runEffect(layerForTest(p))(
-					Effect.gen(function* () {
-						const result = yield* generatePrContent(p.params);
-						expect(result.title).toBe("feat: add X and fix B");
-						expect(result.body).toContain("### Motivation");
-					}).pipe(Effect.scoped),
-				);
-				expect(githubRequestCount).toBeGreaterThanOrEqual(2);
-				expect(sawLocalFallbackRequest).toBe(true);
-			} finally {
-				process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_URL;
-				process.env.REPOSITORY_VISIBILITY = originalEnv.REPOSITORY_VISIBILITY;
-				process.env.RUNNER_LABEL = originalEnv.RUNNER_LABEL;
-			}
-		});
-
-		test("uses next github-models fallback candidate before local fallback", async () => {
-			let localFallbackCount = 0;
-			let githubStrongCount = 0;
-			let githubSmallCount = 0;
-			let githubRequestCount = 0;
-			const fallbackFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-				const url = String(
-					input instanceof URL ? input : input instanceof Request ? input.url : input,
-				);
-				if (url.includes("models.github.ai/inference")) {
-					githubRequestCount += 1;
-					const modelInBody =
-						typeof init?.body === "string" ? /"model":"([^"]+)"/.exec(init.body)?.[1] : undefined;
-					if (modelInBody === "openai/gpt-4.1" || githubRequestCount === 1) {
-						githubStrongCount += 1;
-						return new Response(
-							JSON.stringify({
-								error: { message: "Rate limit exceeded. Retry after 15m" },
-							}),
-							{ status: 429, headers: { "Content-Type": "application/json" } },
-						);
-					}
-					if (modelInBody === "microsoft/phi-4-mini-instruct" || githubRequestCount === 2) {
-						githubSmallCount += 1;
-						return new Response(
-							JSON.stringify({
-								id: "chatcmpl-mock",
-								object: "chat.completion",
-								created: 0,
-								model: "mock",
-								choices: [
-									{
-										index: 0,
-										finish_reason: "stop",
-										message: { role: "assistant", content: VALID_AI_RESPONSE },
-									},
-								],
-							}),
-							{ status: 200, headers: { "Content-Type": "application/json" } },
-						);
-					}
-					throw new Error(
-						`Unexpected github-models fallback request #${githubRequestCount}: ${String(modelInBody)}`,
-					);
-				}
-				if (url.includes("127.0.0.1:8080/v1")) {
-					localFallbackCount += 1;
-					return new Response("{}", { status: 500 });
-				}
-				throw new Error(`Unexpected URL in fallback chain fetch: ${url}`);
-			}) as typeof fetch;
-
+		test("runs a follow-up turn when first response is tool-only", async () => {
+			const mock = createOpenAiToolCallsThenJsonMockFetch(1, VALID_AI_RESPONSE);
 			const p = makeParams(twoCommits, {
 				provider: "github-models",
 				model: "openai/gpt-4.1",
 				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				fetch: fallbackFetch,
+				fetch: mock.fetch,
 			});
-
 			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(2);
 				}).pipe(Effect.scoped),
 			);
-
-			expect(githubStrongCount).toBeGreaterThan(0);
-			expect(githubSmallCount).toBeGreaterThan(0);
-			expect(localFallbackCount).toBe(0);
 		});
 
-		test("local-only strategy skips github fallback candidates after initial rate limit", async () => {
-			let githubRequestCount = 0;
-			let localFallbackCount = 0;
-			const fallbackFetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
-				const url = String(
-					input instanceof URL ? input : input instanceof Request ? input.url : input,
-				);
-				if (url.includes("models.github.ai/inference")) {
-					githubRequestCount += 1;
-					return new Response(
-						JSON.stringify({
-							error: { message: "Rate limit exceeded. Retry after 15m" },
-						}),
-						{ status: 429, headers: { "Content-Type": "application/json" } },
-					);
-				}
-				if (url.includes("127.0.0.1:8080/v1")) {
-					localFallbackCount += 1;
-					return new Response(
-						JSON.stringify({
-							id: "chatcmpl-mock",
-							object: "chat.completion",
-							created: 0,
-							model: "mock",
-							choices: [
-								{
-									index: 0,
-									finish_reason: "stop",
-									message: { role: "assistant", content: VALID_AI_RESPONSE },
-								},
-							],
-						}),
-						{ status: 200, headers: { "Content-Type": "application/json" } },
-					);
-				}
-				throw new Error(`Unexpected URL in local-only fallback fetch: ${url}`);
-			}) as typeof fetch;
-
+		test("allows multiple tool rounds before final JSON response", async () => {
+			const mock = createOpenAiToolCallsThenJsonMockFetch(2, VALID_AI_RESPONSE);
 			const p = makeParams(twoCommits, {
 				provider: "github-models",
 				model: "openai/gpt-4.1",
-				aiFallbackStrategy: "local-only",
 				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				fetch: fallbackFetch,
+				fetch: mock.fetch,
 			});
-
 			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {
 					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(3);
 				}).pipe(Effect.scoped),
 			);
-
-			expect(githubRequestCount).toBe(5);
-			expect(localFallbackCount).toBeGreaterThan(0);
 		});
 
-		test("github-chain-only strategy avoids local fallback after github chain exhaustion", async () => {
-			let githubRequestCount = 0;
-			let localFallbackCount = 0;
-			const fallbackFetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
-				const url = String(
-					input instanceof URL ? input : input instanceof Request ? input.url : input,
-				);
-				if (url.includes("models.github.ai/inference")) {
-					githubRequestCount += 1;
-					return new Response(
-						JSON.stringify({
-							error: { message: "Rate limit exceeded. Retry after 15m" },
-						}),
-						{ status: 429, headers: { "Content-Type": "application/json" } },
-					);
-				}
-				if (url.includes("127.0.0.1:8080/v1")) {
-					localFallbackCount += 1;
-					return new Response("{}", { status: 500 });
-				}
-				throw new Error(`Unexpected URL in github-chain-only fallback fetch: ${url}`);
-			}) as typeof fetch;
-
+		test("repairs malformed terminal JSON in-loop without falling back", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "tool" },
+				{ type: "text", content: '{"title":"feat: incomplete"}' },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
 			const p = makeParams(twoCommits, {
 				provider: "github-models",
 				model: "openai/gpt-4.1",
-				aiFallbackStrategy: "github-chain-only",
 				files: "src/a.ts\nsrc/b.ts\n",
 				templateContent: TEMPLATE_WITH_CHANGES,
-				fetch: fallbackFetch,
+				fetch: mock.fetch,
 			});
-
 			await runEffect(layerForTest(p))(
-				Effect.gen(function* () {
-					const result = yield* generatePrContent(p.params);
-					expect(result.title).toBe("feat: add module A");
-				}).pipe(Effect.scoped),
-			);
-
-			expect(githubRequestCount).toBeGreaterThan(5);
-			expect(localFallbackCount).toBe(0);
-		});
-
-		test("runs no-tool follow-up when first response has only tool calls and empty text", async () => {
-			const p = makeParams(twoCommits, {
-				files: "src/a.ts\nsrc/b.ts\n",
-				templateContent: TEMPLATE_WITH_CHANGES,
-				existingPrTitle: "feat: existing open PR title",
-			});
-			const mockModel = makeMockLanguageModelForToolOnlyFirstTurn(VALID_AI_RESPONSE);
-			const layer = Layer.mergeAll(
-				ValueBasedLayer,
-				Layer.succeed(GitContext, p.gitCtx),
-				MockDiffToolkitLayer,
-				mockModel.layer,
-			);
-			await runEffect(layer)(
 				Effect.gen(function* () {
 					const result = yield* generatePrContent(p.params);
 					expect(result.title).toBe("feat: add X and fix B");
 					expect(result.body).toContain("### Motivation");
-					expect(mockModel.calls.length).toBe(2);
-					expect(mockModel.calls[0]?.toolkitPresent).toBe(true);
-					expect(mockModel.calls[1]?.toolChoice).toBe("none");
-					expect(String(mockModel.calls[1]?.prompt)).toContain(
-						"Return ONLY one JSON object matching the requested schema. Do not call tools.",
-					);
-					expect(String(mockModel.calls[1]?.prompt)).toContain("Tool result 1 (get_diff, success)");
-					expect(String(mockModel.calls[1]?.prompt)).toContain(
-						"Tool result 2 (get_commit_diff, failure)",
-					);
+					expect(mock.getCallCount()).toBe(3);
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("continues when valid JSON is returned together with tool calls, then returns final JSON", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "text_with_tools", content: VALID_AI_RESPONSE },
+				{ type: "text", content: VALID_AI_RESPONSE },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				files: "src/a.ts\nsrc/b.ts\n",
+				templateContent: TEMPLATE_WITH_CHANGES,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add X and fix B");
+					expect(result.body).toContain("### Motivation");
+					expect(mock.getCallCount()).toBe(2);
 				}).pipe(Effect.scoped),
 			);
 		});
@@ -1238,6 +973,27 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 					content: VALID_AI_RESPONSE,
 					status: 500,
 				}),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add module A");
+				}).pipe(Effect.scoped),
+			);
+		});
+	});
+
+	describe("token budget guardrail", () => {
+		test("falls back when token budget is exceeded before a valid JSON response", async () => {
+			const mock = createOpenAiScriptedAssistantMockFetch([
+				{ type: "tool", completionTokens: 5_000 },
+			]);
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				retryDelay: Duration.zero,
+				aiTokenBudget: 10,
+				fetch: mock.fetch,
 			});
 			await runEffect(layerForTest(p))(
 				Effect.gen(function* () {

@@ -13,6 +13,7 @@ notesForReviewers: Where to start, non-obvious tradeoffs, or read order. Use "" 
 
 Do not repeat commit messages, issue links, testing steps, or breaking-change notes—those appear elsewhere in the PR.
 Use inline code for file paths and API names when helpful.
+Use Routing context as trusted change analysis: prioritize review_focus, risk flags, and tool_guidance, but do not repeat the analysis verbatim.
 
 You have two tools available. Use them when the commit messages and diff stat are not enough to write accurate risks or reviewer notes:
 - get_diff: Fetch the git diff for changed files. Pass {"path": "src/foo.ts"} for one file, or {} for all files.

@@ -235,18 +235,6 @@ Before the model call, the reusable workflow builds a routing context from commi
 
 **How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, because GitHub Models does not support that response format and other OpenAI-compatible servers are inconsistent with it. On repeated parse or transient HTTP failures (network, rate limit, 5xx), auto-pr falls back to commit-derived title and description. **Authentication errors (HTTP 401/403) surface directly as a configuration error** rather than silently falling back — check your `GH_TOKEN` or `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` if you see an auth error in the generate step.
 
-**Rate-limit fallback strategy (github-models):** default behavior is `selected model -> next github-models candidates (best to weaker) on rate-limit -> local fallback model -> commit-derived fallback`.
-
-Config knobs:
-- Workflow input: `ai_rate_limit_fallback_strategy`
-- Env (local/scripts): `AUTO_PR_AI_FALLBACK_STRATEGY`
-
-Supported strategy values:
-- `github-chain-then-local` (default): try GitHub fallback chain, then local fallback model.
-- `github-chain-only`: try only GitHub fallback chain, then commit-derived fallback.
-- `local-only`: skip additional GitHub candidates; go directly to local fallback model.
-- `commit-fallback`: skip GitHub/local fallback attempts; use commit-derived fallback after the initial rate limit.
-
 ### Provider defaults
 
 Defaults differ by entry point so local development can run against a local OpenAI-compatible server, while the stock GitHub workflow works without hosting a model yourself.
@@ -272,7 +260,7 @@ Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`
 
 - **Token:** The stock entry workflow passes the default Actions **`github.token`** and grants `models: read`. For local scripts, export `GH_TOKEN`. For custom workflows, pass a separate token only when you accept that the generate job checks out branch code.
 - **Workflow:** Default is `ai_provider: github-models` with `ai_openai_compat_model` (e.g. `openai/gpt-4.1`).
-- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL=...`, `GH_TOKEN=...`, optional `AUTO_PR_AI_FALLBACK_STRATEGY`.
+- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL=...`, `GH_TOKEN=...`.
 - **Legal model ids:** The catalog is published as JSON — see [REST: List all models](https://docs.github.com/en/rest/models/catalog#list-all-models). Fetch and read each entry’s **`id`** (format `publisher/model`):
 
   ```bash
@@ -306,7 +294,7 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common f
 
 | Command | Required | Optional |
 |---------|----------|----------|
-| **auto-pr-generate-content** | `DEFAULT_BRANCH`, `BRANCH`, `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local`), `AUTO_PR_AI_OPENAI_COMPAT_*` (model for both providers; URL/key for local), `AUTO_PR_AI_FALLBACK_STRATEGY` (optional rate-limit policy for github-models), `AUTO_PR_ROUTING_CONTEXT` (trusted workflow-built signal summary for the AI prompt), `GH_TOKEN` (github-models). Fetches commits, files, and diff stat directly from git via `GitContext`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
+| **auto-pr-generate-content** | `DEFAULT_BRANCH`, `BRANCH`, `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local`), `AUTO_PR_AI_OPENAI_COMPAT_*` (model for both providers; URL/key for local), `AUTO_PR_ROUTING_CONTEXT` (trusted workflow-built signal summary for the AI prompt), `GH_TOKEN` (github-models). Fetches commits, files, and diff stat directly from git via `GitContext`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `GITHUB_WORKSPACE` | — (reads `{GITHUB_WORKSPACE}/pr-title.txt` and `pr-body.md`) |
 
 Override AI-related defaults via workflow `with:` inputs when needed.

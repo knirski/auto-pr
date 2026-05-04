@@ -4,18 +4,24 @@
  * Handlers delegate to GitContext.
  */
 
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import { GitContext } from "#auto-pr/git-context.js";
-import { sanitizeDiffForAi } from "#core/sanitize-diff.js";
+import { capDiffForAiToolRoundtrip, sanitizeDiffForAi } from "#core/sanitize-diff.js";
 import { truncateForLog } from "#core/string.js";
 
 const GetDiff = Tool.make("get_diff", {
 	description: "Get the git diff for changed files. Provide path for one file, omit for all.",
 	parameters: Schema.Struct({
 		path: Schema.optionalKey(
-			Schema.Union([Schema.String, Schema.Null]).annotate({
-				description: "File path to diff. Omit or pass null for all changed files.",
+			Schema.String.annotate({ description: "File path to diff. Omit for all changed files." }),
+		).pipe(
+			Schema.catchDecoding((issue) => {
+				const rendered = String(issue);
+				if (rendered.includes("got null")) {
+					return Effect.succeed(Option.none());
+				}
+				return Effect.fail(issue);
 			}),
 		),
 	}),
@@ -36,17 +42,26 @@ const GetCommitDiff = Tool.make("get_commit_diff", {
 
 export const DiffToolkit = Toolkit.make(GetDiff, GetCommitDiff);
 
+export type DiffToolkitOptions = {
+	readonly toolResponseCharBudget?: number;
+};
+
 /**
  * Build DiffToolkit handler layer. Captures baseRef and headRef.
  * Requires GitContext in scope.
  */
-export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
+export function makeDiffToolkitLayer(
+	baseRef: string,
+	headRef: string,
+	options?: DiffToolkitOptions,
+) {
+	const toolResponseCharBudget = options?.toolResponseCharBudget;
 	return DiffToolkit.toLayer(
 		Effect.gen(function* () {
 			const git = yield* GitContext;
 			return DiffToolkit.of({
 				get_diff: Effect.fn("DiffToolkit.get_diff")(function* ({ path }) {
-					const normalizedPath = path ?? undefined;
+					const normalizedPath = typeof path === "string" ? path : undefined;
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_diff",
@@ -68,7 +83,10 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 							),
 						),
 					);
-					const sanitized = sanitizeDiffForAi(result);
+					const sanitized = capDiffForAiToolRoundtrip(
+						sanitizeDiffForAi(result),
+						toolResponseCharBudget,
+					);
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_diff",
@@ -100,7 +118,10 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 							),
 						),
 					);
-					const sanitized = sanitizeDiffForAi(result);
+					const sanitized = capDiffForAiToolRoundtrip(
+						sanitizeDiffForAi(result),
+						toolResponseCharBudget,
+					);
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_commit_diff",

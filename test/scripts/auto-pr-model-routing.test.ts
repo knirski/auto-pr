@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
 	buildDetailedRoutingContext,
-	buildGithubModelFallbackChain,
+	parseCommitLog,
 	resolveBand,
 	resolveLocalRunnerResources,
 	resolveModelBand,
 	selectModel,
-} from "../../src/workflow/model-routing.js";
+} from "../../src/core/model-routing.js";
 
 describe("model band routing command policy", () => {
 	test("routes tiny docs-only changes to band A", () => {
@@ -67,6 +67,33 @@ describe("model band routing command policy", () => {
 		});
 	});
 
+	test("routes cross-cutting source-heavy changes to band C", () => {
+		const signals = {
+			semanticCommitCount: 4,
+			conventionalTypeCount: 2,
+			topLevelSpread: 2,
+			changedFileCount: 6,
+			sourceFileCount: 3,
+			docsFileCount: 2,
+			testFileCount: 1,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 450,
+			sourceChurn: 420,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveBand(signals)).toBe("C");
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "C",
+			toolStrategy: "full-diff",
+			reasoningNeed: "high",
+		});
+	});
+
 	test("routes small breaking changes to band C", () => {
 		const signals = {
 			semanticCommitCount: 1,
@@ -91,32 +118,6 @@ describe("model band routing command policy", () => {
 			band: "C",
 			toolStrategy: "full-diff",
 			reasoningNeed: "high",
-		});
-	});
-
-	test("routes non-breaking broad/cross-cutting changes to band C", () => {
-		const signals = {
-			semanticCommitCount: 4,
-			conventionalTypeCount: 2,
-			topLevelSpread: 3,
-			changedFileCount: 10,
-			sourceFileCount: 5,
-			docsFileCount: 2,
-			testFileCount: 1,
-			generatedFileCount: 0,
-			lockfileCount: 1,
-			packageManifestCount: 0,
-			rawChurn: 700,
-			sourceChurn: 500,
-			generatedChurn: 0,
-			hasBreakingChange: false,
-			hasBinaryFiles: false,
-		} as const;
-
-		expect(resolveBand(signals)).toBe("C");
-		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
-			band: "C",
-			toolStrategy: "full-diff",
 		});
 	});
 
@@ -173,24 +174,82 @@ describe("model band routing command policy", () => {
 		});
 	});
 
-	test("builds github-models fallback chain with selected model first", () => {
-		expect(
-			buildGithubModelFallbackChain({
-				selectedModel: "openai/gpt-4.1",
-				requiresToolCalls: true,
-				reasoningNeed: "high",
-			}),
-		).toEqual(["openai/gpt-4.1", "microsoft/phi-4-mini-instruct"]);
+	test("prefers commit-diff for commit-heavy cross-cutting changes", () => {
+		const signals = {
+			semanticCommitCount: 4,
+			conventionalTypeCount: 2,
+			topLevelSpread: 2,
+			changedFileCount: 4,
+			sourceFileCount: 2,
+			docsFileCount: 1,
+			testFileCount: 1,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 320,
+			sourceChurn: 260,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "B",
+			toolStrategy: "commit-diff",
+			reasoningNeed: "medium",
+			requiresToolCalls: true,
+		});
 	});
 
-	test("builds github-models fallback chain from routing defaults when no override is provided", () => {
-		expect(
-			buildGithubModelFallbackChain({
-				selectedModel: "microsoft/phi-4-mini-instruct",
-				requiresToolCalls: true,
-				reasoningNeed: "high",
-			}),
-		).toEqual(["microsoft/phi-4-mini-instruct", "openai/gpt-4.1"]);
+	test("uses no tools for small non-code changes even on github-models", () => {
+		const signals = {
+			semanticCommitCount: 1,
+			conventionalTypeCount: 1,
+			topLevelSpread: 2,
+			changedFileCount: 1,
+			sourceFileCount: 0,
+			docsFileCount: 1,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 10,
+			sourceChurn: 0,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "A",
+			toolStrategy: "none",
+			requiresToolCalls: false,
+		});
+	});
+
+	test("uses no tools for bounded band-B changes without source or dependency signals", () => {
+		const signals = {
+			semanticCommitCount: 3,
+			conventionalTypeCount: 1,
+			topLevelSpread: 2,
+			changedFileCount: 4,
+			sourceFileCount: 0,
+			docsFileCount: 0,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 300,
+			sourceChurn: 300,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+			band: "B",
+			toolStrategy: "none",
+			requiresToolCalls: false,
+		});
 	});
 
 	test("selects local defaults from GitHub-hosted runner resources", () => {
@@ -233,6 +292,62 @@ describe("model band routing command policy", () => {
 		).toMatchObject({
 			selectedModel: "qwen3-4b-q4_k_m",
 			localModelResourceFit: "unknown",
+		});
+	});
+
+	test("selects the large local model and runner recommendation on bigger runners", () => {
+		const signals = {
+			semanticCommitCount: 1,
+			conventionalTypeCount: 1,
+			topLevelSpread: 1,
+			changedFileCount: 1,
+			sourceFileCount: 1,
+			docsFileCount: 0,
+			testFileCount: 0,
+			generatedFileCount: 0,
+			lockfileCount: 0,
+			packageManifestCount: 0,
+			rawChurn: 10,
+			sourceChurn: 10,
+			generatedChurn: 0,
+			hasBreakingChange: false,
+			hasBinaryFiles: false,
+		} as const;
+
+		expect(
+			resolveModelBand({
+				provider: "local",
+				signals,
+				localModel: {
+					runner: resolveLocalRunnerResources({
+						runnerLabel: "ubuntu-24.04",
+						repositoryVisibility: "public",
+						cpuCount: 8,
+						memoryGb: 24,
+					}),
+				},
+			}),
+		).toMatchObject({
+			selectedModel: "gpt-oss",
+			localModelRecommendation: expect.stringContaining("recommended GGUF <= 14B"),
+		});
+
+		expect(
+			resolveModelBand({
+				provider: "local",
+				signals,
+				localModel: {
+					runner: resolveLocalRunnerResources({
+						runnerLabel: "ubuntu-24.04",
+						repositoryVisibility: "public",
+						cpuCount: 8,
+						memoryGb: 64,
+					}),
+				},
+			}),
+		).toMatchObject({
+			selectedModel: "gpt-oss",
+			localModelRecommendation: expect.stringContaining("recommended GGUF <= 32B"),
 		});
 	});
 
@@ -315,59 +430,7 @@ describe("model band routing command policy", () => {
 		});
 	});
 
-	test("uses commit-diff tool strategy for multi-commit mixed-type medium changes", () => {
-		const signals = {
-			semanticCommitCount: 4,
-			conventionalTypeCount: 2,
-			topLevelSpread: 2,
-			changedFileCount: 6,
-			sourceFileCount: 0,
-			docsFileCount: 2,
-			testFileCount: 0,
-			generatedFileCount: 1,
-			lockfileCount: 0,
-			packageManifestCount: 0,
-			rawChurn: 200,
-			sourceChurn: 0,
-			generatedChurn: 20,
-			hasBreakingChange: false,
-			hasBinaryFiles: false,
-		} as const;
-
-		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
-			band: "B",
-			toolStrategy: "commit-diff",
-			requiresToolCalls: true,
-		});
-	});
-
-	test("uses no tools for medium band changes with no source/test/dependency signals", () => {
-		const signals = {
-			semanticCommitCount: 3,
-			conventionalTypeCount: 1,
-			topLevelSpread: 2,
-			changedFileCount: 6,
-			sourceFileCount: 0,
-			docsFileCount: 2,
-			testFileCount: 0,
-			generatedFileCount: 1,
-			lockfileCount: 0,
-			packageManifestCount: 0,
-			rawChurn: 400,
-			sourceChurn: 0,
-			generatedChurn: 60,
-			hasBreakingChange: false,
-			hasBinaryFiles: false,
-		} as const;
-
-		expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
-			band: "B",
-			toolStrategy: "none",
-			requiresToolCalls: false,
-		});
-	});
-
-	test("selects local large model for roomy runners and exposes max-param recommendation tiers", () => {
+	test("tolerates malformed model URL percent escapes", () => {
 		const signals = {
 			semanticCommitCount: 1,
 			conventionalTypeCount: 1,
@@ -385,41 +448,51 @@ describe("model band routing command policy", () => {
 			hasBreakingChange: false,
 			hasBinaryFiles: false,
 		} as const;
-
-		const runner24 = resolveLocalRunnerResources({
-			runnerLabel: "ubuntu-24.04-8core",
-			repositoryVisibility: "public",
-			cpuCount: 8,
-			memoryGb: 24,
-		});
-		const runner64 = resolveLocalRunnerResources({
-			runnerLabel: "ubuntu-24.04-16core",
-			repositoryVisibility: "public",
-			cpuCount: 16,
-			memoryGb: 64,
+		const runner = resolveLocalRunnerResources({
+			runnerLabel: "ubuntu-24.04",
+			repositoryVisibility: "private",
 		});
 
-		const fit24 = resolveModelBand({
-			provider: "local",
-			signals,
-			localModel: {
-				runner: runner24,
-				llamacppModelUrl: "https://example.test/models/Qwen3-14B-Q4_K_M.gguf",
-			},
+		expect(
+			resolveModelBand({
+				provider: "local",
+				signals,
+				localModel: {
+					runner,
+					llamacppModelUrl: "https://example.test/models/%E0%A4%ZZ",
+				},
+			}),
+		).toMatchObject({
+			localModelResourceFit: "unknown",
 		});
-		const fit64 = resolveModelBand({
-			provider: "local",
-			signals,
-			localModel: {
-				runner: runner64,
-				llamacppModelUrl: "https://example.test/models/Qwen3-32B-Q4_K_M.gguf",
-			},
-		});
+	});
 
-		expect(fit24.selectedModel).toBe("gpt-oss");
-		expect(fit24.localModelRecommendation).toContain("<= 14B");
-		expect(fit64.selectedModel).toBe("gpt-oss");
-		expect(fit64.localModelRecommendation).toContain("<= 32B");
+	test("parses nul-separated commit logs without splitting on commit text", () => {
+		const commits = parseCommitLog(
+			`${[
+				"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				"feat: add routing context",
+				"body line 1",
+				"---COMMIT--- stays inside the body",
+				"",
+			].join("\n")}\0${[
+				"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				"fix: keep parsing intact",
+				"",
+			].join("\n")}\0`,
+		);
+
+		expect(commits).toHaveLength(2);
+		expect(commits[0]).toMatchObject({
+			subject: "feat: add routing context",
+			type: "feat",
+			breaking: false,
+		});
+		expect(commits[1]).toMatchObject({
+			subject: "fix: keep parsing intact",
+			type: "fix",
+			breaking: false,
+		});
 	});
 
 	test("builds analysis-oriented context without repeating commit subjects", () => {
