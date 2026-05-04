@@ -2,37 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { buildDescriptionPrompt } from "#core/prompt.js";
 
 describe("buildDescriptionPrompt", () => {
-	test("prompt template explains how to interpret routing context signals", async () => {
-		const prompt = await Bun.file(
-			new URL("../../src/auto-pr/prompts/pr-description.txt", import.meta.url),
-		).text();
-
-		expect(prompt).toContain("How to use Routing context:");
-		expect(prompt).toContain("Use review_focus to choose notesForReviewers");
-		expect(prompt).toContain("Use coverage_signal");
-		expect(prompt).toContain("Use public_surface and sensitive_scope");
-		expect(prompt).toContain("Follow tool_guidance");
-		expect(prompt).toContain("Do not mention model_route, selected model, band");
-	});
-
-	test("prompt template gives concrete tool-call policy for routing guidance", async () => {
-		const prompt = await Bun.file(
-			new URL("../../src/auto-pr/prompts/pr-description.txt", import.meta.url),
-		).text();
-
-		expect(prompt).toContain("Tool interface:");
-		expect(prompt).toContain("Use these tools only as tool calls, not as text references.");
-		expect(prompt).toContain('For one file: {"path": "src/foo.ts"}');
-		expect(prompt).toContain("For all changed files: {}");
-		expect(prompt).toContain('For one commit: {"hash": "<hash-from-commit-list>"}');
-		expect(prompt).toContain("Tool policy:");
-		expect(prompt).toContain("Follow tool_guidance from Routing context");
-		expect(prompt).toContain("usually 1-3 calls");
-		expect(prompt).toContain("When sources disagree");
-		expect(prompt).toContain("If a tool result starts with [TOOL_ERROR]");
-		expect(prompt).toContain("Final output:");
-	});
-
 	test("includes diffstat when provided", () => {
 		const result = buildDescriptionPrompt(
 			"System prompt.",

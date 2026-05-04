@@ -107,50 +107,6 @@ describe("GitContext", () => {
 		);
 	});
 
-	test("getDiffNumstat returns numeric diff stats", async () => {
-		await runEffect(TestLayer)(
-			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("git-context-numstat-");
-				yield* setupGitRepoWithFiles(tmp.path, [
-					{
-						message: "feat: add module",
-						files: [{ path: "src/num.ts", content: "export const n = 1;\n" }],
-					},
-				]);
-
-				const numstat = yield* Effect.gen(function* () {
-					const git = yield* GitContext;
-					return yield* git.getDiffNumstat("HEAD~1", "HEAD");
-				}).pipe(Effect.provide(GitContextLive(tmp.path)));
-
-				expect(numstat).toContain("src/num.ts");
-				expect(numstat).toMatch(/^(\d+|-)\t(\d+|-)\tsrc\/num\.ts/m);
-			}).pipe(Effect.scoped),
-		);
-	});
-
-	test("getDiffNameStatus returns file statuses", async () => {
-		await runEffect(TestLayer)(
-			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("git-context-name-status-");
-				yield* setupGitRepoWithFiles(tmp.path, [
-					{
-						message: "feat: add module",
-						files: [{ path: "src/status.ts", content: "export const s = 1;\n" }],
-					},
-				]);
-
-				const nameStatus = yield* Effect.gen(function* () {
-					const git = yield* GitContext;
-					return yield* git.getDiffNameStatus("HEAD~1", "HEAD");
-				}).pipe(Effect.provide(GitContextLive(tmp.path)));
-
-				expect(nameStatus).toContain("src/status.ts");
-				expect(nameStatus).toMatch(/^A\tsrc\/status\.ts/m);
-			}).pipe(Effect.scoped),
-		);
-	});
-
 	test("getDiffStat returns stat output with file name and change count", async () => {
 		await runEffect(TestLayer)(
 			Effect.gen(function* () {

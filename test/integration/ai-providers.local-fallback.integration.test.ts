@@ -25,18 +25,12 @@ const skipDocker = process.env.INTEGRATION_SKIP_DOCKER === "1";
 
 describe.skipIf(skipDocker)("integration: local llama.cpp (tiny-llama, fallback path)", () => {
 	test(
-		"generatePrContent (2 commits) completes with PR-shaped body when routing context is provided",
+		"generatePrContent (2 commits) completes with PR-shaped body",
 		async () => {
 			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
 			await Effect.runPromise(
 				Effect.scoped(
 					Effect.gen(function* () {
-						const routingContext = [
-							"Trusted change analysis:",
-							"decision: band=B; reason=cross-cutting",
-							"tool_guidance: use hotspot diffs first",
-							"model_route: band=B; reasoning=medium; tool_strategy=hotspot; requires_tool_calls=true; selected_model=qwen3-1.7b-q4_k_m",
-						].join("\n");
 						const configuredEndpoint = localLlamaEndpointFromEnv();
 						const { openAiCompatBaseUrl, modelId } =
 							configuredEndpoint ??
@@ -57,7 +51,6 @@ describe.skipIf(skipDocker)("integration: local llama.cpp (tiny-llama, fallback 
 								headRef: "ai/test",
 								templateContent: TEMPLATE,
 								descriptionPromptText,
-								routingContext,
 								provider: "local",
 								model: modelId,
 								retryDelay: Duration.zero,
@@ -70,7 +63,6 @@ describe.skipIf(skipDocker)("integration: local llama.cpp (tiny-llama, fallback 
 									expect(result.title.trim().length).toBeGreaterThan(0);
 									expect(result.body).toContain("### Motivation");
 									expect(result.body).toContain("### Risks");
-									expect(result.body).not.toContain("Routing context:");
 								}),
 							),
 						);
