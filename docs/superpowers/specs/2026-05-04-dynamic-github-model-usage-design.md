@@ -17,7 +17,7 @@ Implemented today:
 - `src/core/model-routing.ts` classifies PR complexity into a model band, tool strategy, reasoning need, and static model id.
 - `src/workflow/auto-pr-build-model-routing-context.ts` writes `selected_model`, `tool_strategy`, and `routing_context` to `GITHUB_OUTPUT`.
 - `src/workflow/auto-pr-generate-content.ts` computes `toolRoundLimit` and `tokenBudget` from commit count, changed file count, and prompt size.
-- `src/core/sanitize-diff.ts` hard-caps AI tool response text at `8_000` chars, independent of selected model.
+- `src/core/sanitize-diff.ts` currently caps diff payloads with static limits (`MAX_PER_FILE_DIFF_CHARS = 10_000`, `MAX_TOTAL_DIFF_CHARS = 50_000`) and a separate static tool round-trip cap.
 
 This is deterministic, but it does not use live GitHub Models metadata or account limits.
 
@@ -112,7 +112,12 @@ export type GithubModelsPlanClass =
 	| "paid-usage"
 	| "unknown";
 
-export type GithubModelsRateLimitTier =
+export type GithubModelsCatalogRateLimitTier =
+	| "low"
+	| "high"
+	| "unknown";
+
+export type GithubModelsPolicyTier =
 	| "low"
 	| "high"
 	| "embedding"
@@ -132,7 +137,7 @@ export type GithubModelCatalogEntry = {
 	readonly supportedOutputModalities: readonly string[];
 	readonly maxInputTokens: number;
 	readonly maxOutputTokens: number;
-	readonly rateLimitTier: GithubModelsRateLimitTier;
+	readonly rateLimitTier: GithubModelsCatalogRateLimitTier;
 };
 
 export type GithubModelsRequestEnvelope = {
@@ -144,7 +149,7 @@ export type GithubModelsRequestEnvelope = {
 	readonly tokenBudget: number;
 	readonly toolRoundLimit: number;
 	readonly toolResponseCharBudget: number;
-	readonly rateLimitTier: GithubModelsRateLimitTier;
+	readonly rateLimitTier: GithubModelsPolicyTier;
 	readonly planClass: GithubModelsPlanClass;
 	readonly source: "catalog-and-plan" | "catalog-only" | "static-fallback" | "explicit-model";
 };
@@ -266,7 +271,7 @@ Final envelope:
 
 ### Dynamic Tool Response Payload
 
-Replace `MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 8_000` with an envelope-driven value.
+Replace static diff caps with envelope-driven values, including the tool round-trip cap.
 
 New behavior:
 
@@ -309,7 +314,7 @@ Keep old defaults for local and custom OpenAI-compatible providers.
 | Catalog fetch fails | Use current static model defaults and static conservative envelope. |
 | Catalog schema changes | Decode known fields, ignore extras, fallback on missing required fields. |
 | Org/user plan fetch forbidden | Use `unknown` plan class, treated as `copilot-free`. |
-| Explicit model not in catalog | Keep explicit model, apply conservative high-tier free limits. |
+| Explicit model not in catalog | Reject explicit model when catalog lookup succeeded; allow explicit model only when catalog lookup failed. |
 | Model lacks tool calling | If tools are required, select another model; if explicit model was set, disable tools and log warning. |
 | Request too large still occurs | Retry once with halved tool response budget and reduced tool strategy, then fall back to commit-derived PR content. |
 
