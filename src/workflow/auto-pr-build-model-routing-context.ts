@@ -3,6 +3,15 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { Effect } from "effect";
 import {
+	buildGithubModelsRequestEnvelope,
+	type GithubModelCatalogEntry,
+	type GithubModelsPlanClass,
+	type GithubModelsRequestEnvelope,
+	parseGithubModelsRateLimitTier,
+	pickGithubModelCatalogEntry,
+	toModelBandRequestedEnvelopeInput,
+} from "../core/github-model-routing.js";
+import {
 	type BuildDetailedRoutingContextInput,
 	buildDetailedRoutingContext,
 	type LocalModelContext,
@@ -30,6 +39,7 @@ type RoutingContextInputs = {
 	readonly localRunnerMemoryGb?: number;
 	readonly githubOutput: string;
 	readonly commitsCount: number | undefined;
+	readonly githubToken?: string;
 };
 
 type GitResult = {
@@ -46,6 +56,15 @@ type RoutingContextSignalInput = Pick<
 	BuildDetailedRoutingContextInput,
 	"signals" | "commits" | "files"
 >;
+
+type RoutingEnvelopeOutput = {
+	readonly tokenBudget: number;
+	readonly toolRoundLimit: number;
+	readonly toolResponseCharBudget: number;
+	readonly githubModelsPlanClass: GithubModelsPlanClass;
+	readonly githubModelsRateLimitTier: string;
+	readonly githubModelsEnvelopeSource: string;
+};
 
 function toError(cause: unknown): Error {
 	return cause instanceof Error ? cause : new Error(String(cause));
@@ -121,6 +140,256 @@ function runGit(workspace: string, args: readonly string[]): Effect.Effect<GitRe
 		},
 		catch: toError,
 	});
+}
+
+function estimatePromptChars(signals: ModelBandSignals): number {
+	const base = 7_500;
+	return base + signals.changedFileCount * 120 + signals.semanticCommitCount * 180;
+}
+
+function parseCatalogEntries(raw: unknown): readonly GithubModelCatalogEntry[] {
+	if (!Array.isArray(raw)) return [];
+	const entries: GithubModelCatalogEntry[] = [];
+	for (const item of raw) {
+		if (typeof item !== "object" || item === null) continue;
+		const candidate = item as Record<string, unknown>;
+		const id = typeof candidate.id === "string" ? candidate.id : undefined;
+		if (id === undefined || id.trim() === "") continue;
+		const name = typeof candidate.name === "string" ? candidate.name : id;
+		const capabilities = Array.isArray(candidate.capabilities)
+			? candidate.capabilities.filter((x): x is string => typeof x === "string")
+			: [];
+		const supportedInputModalities = Array.isArray(candidate.supported_input_modalities)
+			? candidate.supported_input_modalities.filter((x): x is string => typeof x === "string")
+			: [];
+		const supportedOutputModalities = Array.isArray(candidate.supported_output_modalities)
+			? candidate.supported_output_modalities.filter((x): x is string => typeof x === "string")
+			: [];
+		const limits =
+			typeof candidate.limits === "object" && candidate.limits !== null
+				? (candidate.limits as Record<string, unknown>)
+				: undefined;
+		const maxInputTokens =
+			typeof limits?.max_input_tokens === "number" && Number.isFinite(limits.max_input_tokens)
+				? limits.max_input_tokens
+				: 8_000;
+		const maxOutputTokens =
+			typeof limits?.max_output_tokens === "number" && Number.isFinite(limits.max_output_tokens)
+				? limits.max_output_tokens
+				: 2_000;
+		const rateLimitTier = parseGithubModelsRateLimitTier(
+			typeof candidate.rate_limit_tier === "string" ? candidate.rate_limit_tier : undefined,
+		);
+		entries.push({
+			id,
+			name,
+			capabilities,
+			supportedInputModalities,
+			supportedOutputModalities,
+			maxInputTokens,
+			maxOutputTokens,
+			rateLimitTier,
+		});
+	}
+	return entries;
+}
+
+function fetchGithubModelsCatalog(
+	token: string | undefined,
+): Effect.Effect<readonly GithubModelCatalogEntry[], never> {
+	return Effect.tryPromise({
+		try: async () => {
+			const headers: Record<string, string> = {
+				accept: "application/json",
+			};
+			if (token !== undefined && token.trim() !== "") {
+				headers.authorization = `Bearer ${token}`;
+			}
+			const response = await fetch("https://models.github.ai/catalog/models", {
+				method: "GET",
+				headers,
+			});
+			if (!response.ok) return [];
+			const json = (await response.json()) as unknown;
+			return parseCatalogEntries(json);
+		},
+		catch: () => [],
+	}).pipe(Effect.catch(() => Effect.succeed([])));
+}
+
+type RepoOwnerInfo = {
+	readonly ownerLogin: string;
+	readonly ownerType: "User" | "Organization" | "Unknown";
+};
+
+function fetchJson(url: string, token: string): Effect.Effect<unknown, never> {
+	return Effect.tryPromise({
+		try: async () => {
+			const response = await fetch(url, {
+				method: "GET",
+				headers: {
+					accept: "application/json",
+					authorization: `Bearer ${token}`,
+					"x-github-api-version": "2022-11-28",
+				},
+			});
+			if (!response.ok) return undefined;
+			return (await response.json()) as unknown;
+		},
+		catch: () => undefined,
+	}).pipe(Effect.catch(() => Effect.succeed(undefined)));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+	return typeof value === "object" && value !== null
+		? (value as Record<string, unknown>)
+		: undefined;
+}
+
+function parseRepoOwnerInfo(json: unknown): RepoOwnerInfo | undefined {
+	const record = asRecord(json);
+	const owner = asRecord(record?.owner);
+	const ownerLogin = typeof owner?.login === "string" ? owner.login.trim() : "";
+	const ownerTypeRaw = typeof owner?.type === "string" ? owner.type : "Unknown";
+	const ownerType: RepoOwnerInfo["ownerType"] =
+		ownerTypeRaw === "Organization" || ownerTypeRaw === "User" ? ownerTypeRaw : "Unknown";
+	return ownerLogin === "" ? undefined : { ownerLogin, ownerType };
+}
+
+function parseCopilotPlanType(json: unknown): string | undefined {
+	const record = asRecord(json);
+	const planType =
+		typeof record?.plan_type === "string" ? record.plan_type.trim().toLowerCase() : "";
+	return planType === "" ? undefined : planType;
+}
+
+function parseUserPlanName(json: unknown): string | undefined {
+	const record = asRecord(json);
+	const plan = asRecord(record?.plan);
+	const name = typeof plan?.name === "string" ? plan.name.trim().toLowerCase() : "";
+	return name === "" ? undefined : name;
+}
+
+function mapPlanSignalsToClass(input: {
+	readonly ownerType: RepoOwnerInfo["ownerType"];
+	readonly copilotPlanType?: string;
+	readonly userPlanName?: string;
+}): GithubModelsPlanClass {
+	if (input.copilotPlanType === "business") return "copilot-business";
+	if (input.copilotPlanType === "enterprise") return "copilot-enterprise";
+	if (input.copilotPlanType === "pro") return "copilot-pro";
+	if (input.copilotPlanType === "free") return "copilot-free";
+	if (input.ownerType === "Organization") {
+		if (input.userPlanName === "enterprise") return "copilot-enterprise";
+		if (input.userPlanName === "team") return "copilot-business";
+		return "unknown";
+	}
+	if (input.userPlanName === "pro") return "copilot-pro";
+	if (input.userPlanName === "free") return "copilot-free";
+	return "unknown";
+}
+
+function detectGithubModelsPlanClass(
+	workspace: string,
+	token: string | undefined,
+): Effect.Effect<GithubModelsPlanClass, never> {
+	if (token === undefined || token.trim() === "")
+		return Effect.succeed<GithubModelsPlanClass>("unknown");
+	return Effect.gen(function* () {
+		const remote = yield* runGit(workspace, ["remote", "get-url", "origin"]).pipe(
+			Effect.map((result) => result.stdout.trim()),
+			Effect.catch(() => Effect.succeed("")),
+		);
+		const match = remote.match(/github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/);
+		if (match == null) {
+			yield* Effect.logWarning({
+				event: "build_model_routing_context",
+				step: "plan_detection",
+				status: "remote_parse_failed",
+				remote,
+			});
+			return "unknown" as const;
+		}
+		const owner = match[1];
+		const repo = match[2];
+		const repoJson = yield* fetchJson(`https://api.github.com/repos/${owner}/${repo}`, token);
+		const ownerInfo = parseRepoOwnerInfo(repoJson);
+		if (ownerInfo === undefined) {
+			yield* Effect.logWarning({
+				event: "build_model_routing_context",
+				step: "plan_detection",
+				status: "owner_info_unavailable",
+				owner,
+				repo,
+			});
+			return "unknown" as const;
+		}
+		const userJson = yield* fetchJson("https://api.github.com/user", token);
+		const userPlanName = parseUserPlanName(userJson);
+		const copilotPlanType =
+			ownerInfo.ownerType === "Organization"
+				? parseCopilotPlanType(
+						yield* fetchJson(
+							`https://api.github.com/orgs/${ownerInfo.ownerLogin}/copilot/billing`,
+							token,
+						),
+					)
+				: undefined;
+		const resolvedPlanClass = mapPlanSignalsToClass({
+			ownerType: ownerInfo.ownerType,
+			...(copilotPlanType === undefined ? {} : { copilotPlanType }),
+			...(userPlanName === undefined ? {} : { userPlanName }),
+		});
+		yield* Effect.log({
+			event: "build_model_routing_context",
+			step: "plan_detection",
+			status: "resolved",
+			owner: ownerInfo.ownerLogin,
+			owner_type: ownerInfo.ownerType,
+			copilot_plan_type: copilotPlanType ?? "unknown",
+			user_plan_name: userPlanName ?? "unknown",
+			plan_class: resolvedPlanClass,
+		});
+		return resolvedPlanClass;
+	}).pipe(Effect.catch(() => Effect.succeed<GithubModelsPlanClass>("unknown")));
+}
+
+function buildEnvelope(
+	decision: ModelBandDecision,
+	signals: ModelBandSignals,
+	explicitModel: string | undefined,
+	planClass: GithubModelsPlanClass,
+	catalogEntries: readonly GithubModelCatalogEntry[],
+): GithubModelsRequestEnvelope {
+	const catalogEntry = pickGithubModelCatalogEntry({
+		selectedModel: decision.selectedModel,
+		entries: catalogEntries,
+		requiresToolCalls: decision.requiresToolCalls,
+	});
+	return buildGithubModelsRequestEnvelope({
+		model: decision.selectedModel,
+		explicitModel: explicitModel !== undefined && explicitModel.trim() !== "",
+		requiresToolCalls: decision.requiresToolCalls,
+		planClass,
+		requested: toModelBandRequestedEnvelopeInput({
+			signals,
+			promptCharsEstimate: estimatePromptChars(signals),
+			toolStrategy: decision.toolStrategy,
+			reasoningNeed: decision.reasoningNeed,
+		}),
+		...(catalogEntry === undefined ? {} : { catalogEntry }),
+	});
+}
+
+function defaultEnvelopeForLocal(): RoutingEnvelopeOutput {
+	return {
+		tokenBudget: 12_000,
+		toolRoundLimit: 6,
+		toolResponseCharBudget: 8_000,
+		githubModelsPlanClass: "unknown",
+		githubModelsRateLimitTier: "unknown",
+		githubModelsEnvelopeSource: "static-fallback",
+	};
 }
 
 function classifyFile(
@@ -361,6 +630,7 @@ function buildRoutingContextInput(
 function writeDecisionOutputs(
 	githubOutput: string,
 	decision: ModelBandDecision,
+	envelope: RoutingEnvelopeOutput,
 ): Effect.Effect<void, Error> {
 	const singleLine = (name: string, value: string): string => {
 		if (/[\r\n]/.test(value)) {
@@ -410,6 +680,24 @@ function writeDecisionOutputs(
 				`routing_context<<${delimiter}\n${decision.routingContext}\n${delimiter}\n`,
 			);
 			appendFileSync(githubOutput, `band=${decision.band}\n`);
+			appendFileSync(githubOutput, `token_budget=${envelope.tokenBudget}\n`);
+			appendFileSync(githubOutput, `tool_round_limit=${envelope.toolRoundLimit}\n`);
+			appendFileSync(
+				githubOutput,
+				`tool_response_char_budget=${envelope.toolResponseCharBudget}\n`,
+			);
+			appendFileSync(
+				githubOutput,
+				`github_models_plan_class=${singleLine("github_models_plan_class", envelope.githubModelsPlanClass)}\n`,
+			);
+			appendFileSync(
+				githubOutput,
+				`github_models_rate_limit_tier=${singleLine("github_models_rate_limit_tier", envelope.githubModelsRateLimitTier)}\n`,
+			);
+			appendFileSync(
+				githubOutput,
+				`github_models_envelope_source=${singleLine("github_models_envelope_source", envelope.githubModelsEnvelopeSource)}\n`,
+			);
 		},
 		catch: toError,
 	});
@@ -419,7 +707,25 @@ export function runBuildModelRoutingContext(
 	input: RoutingContextInputs,
 ): Effect.Effect<void, Error> {
 	return Effect.gen(function* () {
+		yield* Effect.log({
+			event: "build_model_routing_context",
+			step: "start",
+			workspace: input.workspace,
+			default_branch: input.defaultBranch,
+			provider: input.provider,
+			explicit_model: input.explicitModel ?? "(none)",
+		});
 		const routingInput = yield* buildRoutingContextInput(input);
+		yield* Effect.log({
+			event: "build_model_routing_context",
+			step: "signals",
+			status: "computed",
+			signals: routingInput.signals,
+			semantic_commits: routingInput.commits.semanticCommitCount,
+			changed_files: routingInput.files.changedFiles.length,
+			raw_churn: routingInput.files.rawChurn,
+			source_churn: routingInput.files.sourceChurn,
+		});
 		const localModel: LocalModelContext | undefined =
 			input.provider === "local"
 				? {
@@ -447,6 +753,55 @@ export function runBuildModelRoutingContext(
 			...(input.explicitModel === undefined ? {} : { explicitModel: input.explicitModel }),
 			...(localModel === undefined ? {} : { localModel }),
 		});
+		yield* Effect.log({
+			event: "build_model_routing_context",
+			step: "model_selection",
+			status: "resolved",
+			band: decision.band,
+			selected_model: decision.selectedModel,
+			tool_strategy: decision.toolStrategy,
+			reasoning_need: decision.reasoningNeed,
+			requires_tool_calls: decision.requiresToolCalls,
+			local_runner_resources: decision.localRunnerResources ?? "(n/a)",
+			local_model_resource_fit: decision.localModelResourceFit ?? "(n/a)",
+			local_model_recommendation: decision.localModelRecommendation ?? "(n/a)",
+		});
+		const envelope =
+			input.provider === "github-models"
+				? yield* Effect.gen(function* () {
+						const autoPlanClass = yield* detectGithubModelsPlanClass(
+							input.workspace,
+							input.githubToken,
+						);
+						const catalogEntries = yield* fetchGithubModelsCatalog(input.githubToken);
+						const built = buildEnvelope(
+							decision,
+							routingInput.signals,
+							input.explicitModel,
+							autoPlanClass,
+							catalogEntries,
+						);
+						return {
+							tokenBudget: built.tokenBudget,
+							toolRoundLimit: built.toolRoundLimit,
+							toolResponseCharBudget: built.toolResponseCharBudget,
+							githubModelsPlanClass: built.planClass,
+							githubModelsRateLimitTier: built.rateLimitTier,
+							githubModelsEnvelopeSource: built.source,
+						} satisfies RoutingEnvelopeOutput;
+					})
+				: defaultEnvelopeForLocal();
+		yield* Effect.log({
+			event: "build_model_routing_context",
+			step: "envelope",
+			status: "resolved",
+			token_budget: envelope.tokenBudget,
+			tool_round_limit: envelope.toolRoundLimit,
+			tool_response_char_budget: envelope.toolResponseCharBudget,
+			plan_class: envelope.githubModelsPlanClass,
+			rate_limit_tier: envelope.githubModelsRateLimitTier,
+			envelope_source: envelope.githubModelsEnvelopeSource,
+		});
 		const routingContext = buildDetailedRoutingContext({
 			band: decision.band,
 			selectedModel: decision.selectedModel,
@@ -466,9 +821,26 @@ export function runBuildModelRoutingContext(
 				? {}
 				: { localModelRecommendation: decision.localModelRecommendation }),
 		});
-		yield* writeDecisionOutputs(input.githubOutput, {
-			...decision,
-			routingContext,
+		yield* writeDecisionOutputs(
+			input.githubOutput,
+			{
+				...decision,
+				routingContext,
+			},
+			envelope,
+		);
+		yield* Effect.log({
+			event: "build_model_routing_context",
+			step: "outputs",
+			status: "written",
+			github_output: input.githubOutput,
+			selected_model: decision.selectedModel,
+			band: decision.band,
+			tool_strategy: decision.toolStrategy,
+			token_budget: envelope.tokenBudget,
+			tool_round_limit: envelope.toolRoundLimit,
+			tool_response_char_budget: envelope.toolResponseCharBudget,
+			routing_context_chars: routingContext.length,
 		});
 	});
 }
@@ -496,6 +868,9 @@ export const program = Effect.gen(function* () {
 		() => process.env.LOCAL_RUNNER_MEMORY_GB?.trim() ?? "",
 	);
 	const commitsCountRaw = yield* Effect.sync(() => process.env.COMMITS_COUNT?.trim() ?? "");
+	const githubTokenRaw = yield* Effect.sync(
+		() => process.env.GH_TOKEN?.trim() ?? process.env.GITHUB_TOKEN?.trim() ?? "",
+	);
 	const provider = yield* parseProvider(providerRaw);
 	const commitsCount = yield* parseOptionalPositiveInteger(commitsCountRaw, "COMMITS_COUNT");
 	const localRunnerCpus = yield* parseOptionalPositiveNumber(
@@ -519,6 +894,7 @@ export const program = Effect.gen(function* () {
 		...(localRunnerMemoryGb === undefined ? {} : { localRunnerMemoryGb }),
 		githubOutput,
 		commitsCount,
+		...(githubTokenRaw === "" ? {} : { githubToken: githubTokenRaw }),
 	});
 });
 
