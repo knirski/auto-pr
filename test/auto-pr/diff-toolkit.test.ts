@@ -35,6 +35,55 @@ describe("DiffToolkit handlers", () => {
 		);
 	});
 
+	test("get_diff handler treats null path like an omitted path", async () => {
+		let capturedArgs: { baseRef: string; headRef: string; path: string | undefined } | undefined;
+		const mockGitCtx = createGitContextMock({
+			getDiff: (baseRef, headRef, path?) => {
+				capturedArgs = { baseRef, headRef, path };
+				return Effect.succeed("diff --git a/foo.ts b/foo.ts\n+const x = 1;");
+			},
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const stream = yield* toolkit.handle("get_diff", { path: null as never });
+				const last = yield* Stream.runLast(stream);
+				const handlerResult = Option.getOrThrow(last);
+				const result = handlerResult.result;
+				expect(String(result)).toContain("+const x = 1;");
+				expect(capturedArgs?.baseRef).toBe("origin/main");
+				expect(capturedArgs?.path).toBeUndefined();
+			}).pipe(Effect.scoped),
+		);
+	});
+
+	test("get_diff handler keeps non-null invalid path as a schema error", async () => {
+		const mockGitCtx = createGitContextMock({
+			getDiff: () => Effect.succeed("diff --git a/foo.ts b/foo.ts\n+const x = 1;"),
+		});
+		const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+		const gitLayer = Layer.succeed(GitContext, mockGitCtx);
+		const TestLayer = Layer.mergeAll(
+			TestBaseLayer,
+			SilentLoggerLayer,
+			toolkitLayer.pipe(Layer.provide(gitLayer)),
+		);
+		await runEffect(TestLayer)(
+			Effect.gen(function* () {
+				const toolkit = yield* DiffToolkit;
+				const exit = yield* toolkit.handle("get_diff", { path: 123 as never }).pipe(Effect.exit);
+				expect(exit._tag).toBe("Failure");
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("get_commit_diff handler calls GitContext.getCommitDiff", async () => {
 		let capturedHash: string | undefined;
 		const mockGitCtx = createGitContextMock({

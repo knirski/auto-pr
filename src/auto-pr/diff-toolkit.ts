@@ -4,7 +4,7 @@
  * Handlers delegate to GitContext.
  */
 
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import { GitContext } from "#auto-pr/git-context.js";
 import { sanitizeDiffForAi } from "#core/sanitize-diff.js";
@@ -15,6 +15,14 @@ const GetDiff = Tool.make("get_diff", {
 	parameters: Schema.Struct({
 		path: Schema.optionalKey(
 			Schema.String.annotate({ description: "File path to diff. Omit for all changed files." }),
+		).pipe(
+			Schema.catchDecoding((issue) => {
+				const rendered = String(issue);
+				if (rendered.includes("got null")) {
+					return Effect.succeed(Option.none());
+				}
+				return Effect.fail(issue);
+			}),
 		),
 	}),
 	success: Schema.String,
@@ -44,13 +52,14 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 			const git = yield* GitContext;
 			return DiffToolkit.of({
 				get_diff: Effect.fn("DiffToolkit.get_diff")(function* ({ path }) {
+					const normalizedPath = typeof path === "string" ? path : undefined;
 					yield* Effect.log({
 						event: "diff_toolkit",
 						tool: "get_diff",
 						status: "request",
-						path: path ?? "(all)",
+						path: normalizedPath ?? "(all)",
 					});
-					const result = yield* git.getDiff(baseRef, headRef, path).pipe(
+					const result = yield* git.getDiff(baseRef, headRef, normalizedPath).pipe(
 						Effect.tapError((e) =>
 							Effect.log({
 								event: "diff_toolkit",
