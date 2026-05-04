@@ -629,37 +629,37 @@
     url = "https://registry.npmjs.org/@types/ws/-/ws-8.18.1.tgz";
     hash = "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==";
   };
-  "@typescript/native-preview-darwin-arm64@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-darwin-arm64/-/native-preview-darwin-arm64-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-BmJGDWC0bSQ2w5O/E+Mw9eTv9RklJ3vjshu7UdD92bUMxc4V4dkBhYj5r0qxbl4f+VFNX7fXvcDDI+9o+Kb6yw==";
+  "@typescript/native-preview-darwin-arm64@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-darwin-arm64/-/native-preview-darwin-arm64-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-fHv1r3ZmVo6zxuAIFmuX3w9QxbcauoG0SsWhmDwm6VmRubLlOJIcmTtlmV3JAb9oOnq8LuzZljzT7Q39fSMQDw==";
   };
-  "@typescript/native-preview-darwin-x64@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-darwin-x64/-/native-preview-darwin-x64-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-osc0XQn+AV4X/Vz4hehMm9YtwjZU8VN57FBx4/bsoZ2Z3H1KCA2vbrPQx1hxobrA/+LxkTEk/i6L+z1XwI3RTw==";
+  "@typescript/native-preview-darwin-x64@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-darwin-x64/-/native-preview-darwin-x64-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-KWTR6xbW9t+JS7D5DQIzo75pqVXVWUxF9PMv/+S6xsnOjCVd6g0ixHcFpFMJMKSUQpGPr8Z5f7b8ks6LHW01jg==";
   };
-  "@typescript/native-preview-linux-arm64@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-linux-arm64/-/native-preview-linux-arm64-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-UdPWbxynH/yu54Bx9SSmUsdBQVcKeB8hVLXWiF6qKGDQxwUmqo04xa+PUdxryUXxYzjedbqKMhDLL/W0AlbUMQ==";
+  "@typescript/native-preview-linux-arm64@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-linux-arm64/-/native-preview-linux-arm64-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-VLMEuml3BhUb+jaL0TXQ4xvVODxJF+RhkI+tBWvlynsJI4khTXEiwWh+wPOJrsfBRYFRMXEu28Odl/HXkYze8w==";
   };
-  "@typescript/native-preview-linux-arm@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-linux-arm/-/native-preview-linux-arm-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-869rJ0Clw7aQTApV1dts2bKV+V6E0qNFJae3SNRo+4TPmrwlmYct3ouGrsQsDCat6XIaCdul8YOBzmj4QUzuMw==";
+  "@typescript/native-preview-linux-arm@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-linux-arm/-/native-preview-linux-arm-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-BWLQO3nemLDSV5PoE5GPHe1dU9Dth77Kv8/cle9Ujcp4LhPo0KincdPqFH/qKeU/xvW25mgFueflZ1nc4rKuww==";
   };
-  "@typescript/native-preview-linux-x64@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-linux-x64/-/native-preview-linux-x64-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-0ZPwzToIRV4r2L/wZUwTD9DvZsVnezrc7x5xwZedGvuRifUKMAAwI+rGaKHqHq5nE5Y1gQA/wwMPPJ4xq6hzVw==";
+  "@typescript/native-preview-linux-x64@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-linux-x64/-/native-preview-linux-x64-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-qUrJWTB5/wv4wnRG0TRXElAxc2kykNiRNyEIEqBbLmzDlrcvAW7RRy8MXoY1ZyTiKGMu14itZ3x9oW6+blFpRw==";
   };
-  "@typescript/native-preview-win32-arm64@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-win32-arm64/-/native-preview-win32-arm64-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-iCgWfPDIbs0xB+zkVu5IFfcco3II3b7DhatIa1hQiTFH4vGs0A4/LskLbSYyWOId4j5WEkCKK5T0KNnEYfbg1g==";
+  "@typescript/native-preview-win32-arm64@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-win32-arm64/-/native-preview-win32-arm64-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-Rc6NsWlZmCs5YUKVzKgwoBOoRUGsPzct4BDMRX0csD1devLBBc4AbUXWKsJRbpwIAnqMO1ld4sNHEb+wXgfNHQ==";
   };
-  "@typescript/native-preview-win32-x64@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview-win32-x64/-/native-preview-win32-x64-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-k1/yoqrELzkm6eOFaYm9x+M7mDOlArO1P0YvEgEmcdnL6Igm+0ZmGy6eDmhk9pshPb0GfL1knN6c+5sJA7YReA==";
+  "@typescript/native-preview-win32-x64@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview-win32-x64/-/native-preview-win32-x64-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-GQv1+dya1t6EqF2Cpsb+xoozovdX10JUSf6Kl/8xNkTapzmlHd+uMr+8ku3jIASTxoRGn0Mklgjj3MDKrOTuLg==";
   };
-  "@typescript/native-preview@7.0.0-dev.20260328.1" = fetchurl {
-    url = "https://registry.npmjs.org/@typescript/native-preview/-/native-preview-7.0.0-dev.20260328.1.tgz";
-    hash = "sha512-e2f1LaETJ1wFIZSZAJwsAumWixGaRslUjESf0nSrZGUensq3ZwXddoDJPPoDLkSAr/Fa3v5aff+dJ39UbNfbNQ==";
+  "@typescript/native-preview@7.0.0-dev.20260421.2" = fetchurl {
+    url = "https://registry.npmjs.org/@typescript/native-preview/-/native-preview-7.0.0-dev.20260421.2.tgz";
+    hash = "sha512-CmajHI25HpVWE9R1XFoxr+cphJPxoYD3eFioQtAvXYkMFKnLdICMS9pXre9Pybizb75ejRxjKD5/CVG055rEIg==";
   };
   "abort-controller@3.0.0" = fetchurl {
     url = "https://registry.npmjs.org/abort-controller/-/abort-controller-3.0.0.tgz";
