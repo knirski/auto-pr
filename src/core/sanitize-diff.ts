@@ -6,12 +6,35 @@
 export const MAX_PER_FILE_DIFF_CHARS = 10_000;
 export const MAX_TOTAL_DIFF_CHARS = 50_000;
 export const MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 8_000;
-export const LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 3_000;
+export const TOKEN_ESTIMATE_CHARS_PER_TOKEN = 4;
+export const GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS = 8_000;
+export const TOOL_ROUNDTRIP_RESERVED_TOKENS = 5_000;
+export const TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS = 4;
+export const MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 1_500;
 
 const isGithubModelsGpt41 = (model: string): boolean => {
 	const normalized = model.trim().toLowerCase();
 	return normalized === "openai/gpt-4.1";
 };
+
+function clampNumber(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function deriveToolRoundtripCharBudgetFromRequestTokens(input: {
+	readonly requestTokenLimit: number;
+	readonly reservedTokens: number;
+	readonly assumedMaxParallelToolCalls: number;
+}): number {
+	const availableTokens = Math.max(0, input.requestTokenLimit - input.reservedTokens);
+	const budgetPerToolTokens = Math.floor(availableTokens / input.assumedMaxParallelToolCalls);
+	const estimatedChars = budgetPerToolTokens * TOKEN_ESTIMATE_CHARS_PER_TOKEN;
+	return clampNumber(
+		estimatedChars,
+		MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+	);
+}
 
 /**
  * Split a combined diff string into per-file diff blocks.
@@ -102,7 +125,11 @@ export function resolveAiToolRoundtripDiffCharBudget(
 	model: string,
 ): number {
 	if (provider === "github-models" && isGithubModelsGpt41(model)) {
-		return LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+		return deriveToolRoundtripCharBudgetFromRequestTokens({
+			requestTokenLimit: GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
+			reservedTokens: TOOL_ROUNDTRIP_RESERVED_TOKENS,
+			assumedMaxParallelToolCalls: TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS,
+		});
 	}
 	return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
 }

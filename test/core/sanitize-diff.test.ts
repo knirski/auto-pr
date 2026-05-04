@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
 	capDiffForAiToolRoundtrip,
-	LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+	GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
 	MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 	MAX_PER_FILE_DIFF_CHARS,
 	MAX_TOTAL_DIFF_CHARS,
+	MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 	resolveAiToolRoundtripDiffCharBudget,
 	sanitizeDiffForAi,
+	TOKEN_ESTIMATE_CHARS_PER_TOKEN,
+	TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS,
+	TOOL_ROUNDTRIP_RESERVED_TOKENS,
 } from "#core/sanitize-diff.js";
 
 const makeBinaryFileDiff = (path: string) =>
@@ -96,9 +100,16 @@ describe("capDiffForAiToolRoundtrip", () => {
 	});
 
 	test("uses lower round-trip cap for github-models gpt-4.1", () => {
-		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1")).toBe(
-			LOW_REQUEST_MODEL_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		const availableTokens = GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS - TOOL_ROUNDTRIP_RESERVED_TOKENS;
+		const expected = Math.min(
+			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+			Math.max(
+				MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+				Math.floor(availableTokens / TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS) *
+					TOKEN_ESTIMATE_CHARS_PER_TOKEN,
+			),
 		);
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1")).toBe(expected);
 	});
 
 	test("uses default round-trip cap for other models/providers", () => {
