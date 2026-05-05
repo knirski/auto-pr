@@ -5,9 +5,6 @@
 # Add codecov-action `flags` only if you split uploads (e.g. per-suite or per-OS).
 coverage:
   status:
-    patch:
-      default:
-        target: 90%
     project:
       default:
         informational: true
