@@ -14,7 +14,7 @@ bun run build
 bun x lefthook install
 ```
 
-The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.12 for local parity with CI.
+The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.13 for local parity with CI.
 
 **Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/**` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
