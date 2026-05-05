@@ -77,6 +77,9 @@ export function classifyGithubModelFailure(error: unknown): GithubModelFailureKi
 		if (tag === "NetworkError" || tag === "InternalProviderError") return TransientFailure;
 		if (tag === "InvalidRequestError") {
 			const message = `${aiError.message}`.toLowerCase();
+			if (includesAny(message, REQUEST_SIZE_NEEDLES)) {
+				return CapabilityMismatchFailure;
+			}
 			if (includesAny(message, ["tool", "tools", "function call", "function_call"])) {
 				return CapabilityMismatchFailure;
 			}

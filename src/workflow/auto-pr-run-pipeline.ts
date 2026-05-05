@@ -38,6 +38,16 @@ export function generateContentConfigFromRunAutoPrConfig(
 		templatePath: config.templatePath,
 		model: config.model,
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
+		...(config.aiToolRoundLimit !== undefined ? { aiToolRoundLimit: config.aiToolRoundLimit } : {}),
+		...(config.aiTokenBudget !== undefined ? { aiTokenBudget: config.aiTokenBudget } : {}),
+		...(config.aiToolResponseCharBudget !== undefined
+			? { aiToolResponseCharBudget: config.aiToolResponseCharBudget }
+			: {}),
+		...(config.aiTokenBudget !== undefined ||
+		config.aiToolRoundLimit !== undefined ||
+		config.aiToolResponseCharBudget !== undefined
+			? { aiLimitsSource: "routing_decision" as const }
+			: {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
 	};
 	return Match.value(config).pipe(

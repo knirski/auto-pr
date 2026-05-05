@@ -64,6 +64,9 @@ describe("runAutoPrPipelineWithServices", () => {
 				templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
 				model: "openai/gpt-4.1",
 				ghToken,
+				aiTokenBudget: 9000,
+				aiToolRoundLimit: 4,
+				aiToolResponseCharBudget: 1500,
 			},
 			"ai/example",
 		);
@@ -75,6 +78,10 @@ describe("runAutoPrPipelineWithServices", () => {
 			workspace: "/workspace",
 			templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
 			model: "openai/gpt-4.1",
+			aiTokenBudget: 9000,
+			aiToolRoundLimit: 4,
+			aiToolResponseCharBudget: 1500,
+			aiLimitsSource: "routing_decision",
 		});
 	});
 

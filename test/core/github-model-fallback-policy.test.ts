@@ -80,6 +80,12 @@ describe("github-model-fallback-policy", () => {
 				message: "tools are not supported",
 			}),
 		).toEqual({ _tag: "CapabilityMismatch" });
+		expect(
+			classifyGithubModelFailure({
+				reason: { _tag: "InvalidRequestError" },
+				message: "Request body too large for gpt-4.1 model. Max size: 8000 tokens.",
+			}),
+		).toEqual({ _tag: "CapabilityMismatch" });
 	});
 
 	test("classifies plain error messages", () => {

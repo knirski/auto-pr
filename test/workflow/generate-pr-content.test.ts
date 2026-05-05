@@ -274,6 +274,9 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
+			aiTokenBudget: 9000,
+			aiToolRoundLimit: 4,
+			aiToolResponseCharBudget: 1500,
 		});
 
 		expect(config).toEqual({
@@ -286,6 +289,10 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
+			aiTokenBudget: 9000,
+			aiToolRoundLimit: 4,
+			aiToolResponseCharBudget: 1500,
+			aiLimitsSource: "routing_decision",
 		});
 	});
 });
@@ -436,6 +443,35 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
 			},
 		};
 		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
+function createGithubModelsRequestTooLargeMockFetch(): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createGithubModelsRequestTooLargeMockFetch: unexpected request");
+		}
+		callCount += 1;
+		return new Response(
+			JSON.stringify({
+				error: {
+					message: "Request body too large for gpt-4.1 model. Max size: 8000 tokens.",
+					type: "invalid_request_error",
+				},
+			}),
+			{ status: 400 },
+		);
 	}) as typeof fetch;
 	return {
 		fetch: Object.assign(impl, {
@@ -1084,6 +1120,23 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
 						});
 					}
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("does not retry the same github-models request-size failure", async () => {
+			const mock = createGithubModelsRequestTooLargeMockFetch();
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				retryDelay: Duration.zero,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add module A");
+					expect(mock.getCallCount()).toBe(1);
 				}).pipe(Effect.scoped),
 			);
 		});

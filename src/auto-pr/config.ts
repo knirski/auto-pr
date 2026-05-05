@@ -149,6 +149,9 @@ export type GeneratePrContentConfigCommon = {
 	readonly branch: string;
 	readonly model: string;
 	readonly routingContext?: RoutingContextArtifact;
+	readonly aiToolRoundLimit?: number;
+	readonly aiTokenBudget?: number;
+	readonly aiToolResponseCharBudget?: number;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
 	readonly existingPrTitle?: string;
@@ -429,6 +432,15 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							model: routingDecision.selectedModel,
 							ghToken,
 							requiresToolCalls: routingDecision.requiresToolCalls,
+							...(routingDecision.toolRoundLimit !== undefined
+								? { aiToolRoundLimit: routingDecision.toolRoundLimit }
+								: {}),
+							...(routingDecision.tokenBudget !== undefined
+								? { aiTokenBudget: routingDecision.tokenBudget }
+								: {}),
+							...(routingDecision.toolResponseCharBudget !== undefined
+								? { aiToolResponseCharBudget: routingDecision.toolResponseCharBudget }
+								: {}),
 							...(localFallback !== undefined ? { localFallback } : {}),
 						};
 						return generatePrContentGithub;
@@ -518,6 +530,9 @@ export type RunAutoPrConfigCommon = {
 	readonly ghToken: Redacted.Redacted<string>;
 	readonly model: string;
 	readonly routingContext?: RoutingContextArtifact;
+	readonly aiToolRoundLimit?: number;
+	readonly aiTokenBudget?: number;
+	readonly aiToolResponseCharBudget?: number;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
 	/** When set from `BRANCH`; omit to resolve the head branch via `git branch --show-current` at run time. */
@@ -648,6 +663,15 @@ export const RunAutoPrConfigLayer = Layer.effect(
 							...shared,
 							provider: "github-models",
 							model: routingDecision.selectedModel,
+							...(routingDecision.toolRoundLimit !== undefined
+								? { aiToolRoundLimit: routingDecision.toolRoundLimit }
+								: {}),
+							...(routingDecision.tokenBudget !== undefined
+								? { aiTokenBudget: routingDecision.tokenBudget }
+								: {}),
+							...(routingDecision.toolResponseCharBudget !== undefined
+								? { aiToolResponseCharBudget: routingDecision.toolResponseCharBudget }
+								: {}),
 							...(localFallback !== undefined ? { localFallback } : {}),
 						};
 						return runAutoPrGithub;

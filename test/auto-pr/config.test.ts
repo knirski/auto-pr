@@ -164,7 +164,7 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
 				GH_TOKEN: "ghp_test_github_models",
 				AUTO_PR_LOCAL_MODEL: "openai/gpt-4.1",
 				AUTO_PR_ROUTING_DECISION_JSON:
-					'{"selectedModel":"anthropic/claude-sonnet-4","requiresToolCalls":true}',
+					'{"selectedModel":"anthropic/claude-sonnet-4","requiresToolCalls":true,"tokenBudget":9000,"toolRoundLimit":4,"toolResponseCharBudget":1500}',
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -179,6 +179,9 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
 				if (config.provider !== "github-models") return expect().fail("expected github-models");
 				expect(config.ghToken).toBeDefined();
 				expect(Redacted.isRedacted(config.ghToken)).toBe(true);
+				expect(config.aiTokenBudget).toBe(9000);
+				expect(config.aiToolRoundLimit).toBe(4);
+				expect(config.aiToolResponseCharBudget).toBe(1500);
 			}),
 		);
 	});

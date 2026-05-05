@@ -177,6 +177,8 @@ type AiIterationLimits = {
 	readonly tokenBudget: number;
 };
 
+type AiLimitSource = "explicit_override" | "routing_decision";
+
 function fallbackDelayForFailure(failure: GithubModelFailureKind): Duration.Duration {
 	switch (failure._tag) {
 		case "RateLimited":
@@ -186,6 +188,15 @@ function fallbackDelayForFailure(failure: GithubModelFailureKind): Duration.Dura
 		default:
 			return Duration.zero;
 	}
+}
+
+function shouldRetryAttemptError(provider: AiProvider, error: unknown): boolean {
+	if (error instanceof DescriptionParseError) return true;
+	if (provider === "github-models") {
+		const failure = classifyGithubModelFailure(error);
+		return failure._tag !== "AuthOrConfig" && failure._tag !== "CapabilityMismatch";
+	}
+	return isTransientAiError(error);
 }
 
 /** Configured title wins; else best-effort PR lookup (failures -> no title). */
@@ -514,7 +525,10 @@ function generateTitleAndDescriptionWithToolkit(
 				reason: formatError(e),
 			}),
 		),
-		Effect.retry(makeRetrySchedule(retryDelay)),
+		Effect.retry({
+			schedule: makeRetrySchedule(retryDelay),
+			while: (error) => shouldRetryAttemptError(provider, error),
+		}),
 	);
 }
 
@@ -535,6 +549,10 @@ export type GeneratePrContentParams = {
 	aiToolRoundLimit?: number;
 	/** Optional override for token budget in a single AI attempt. */
 	aiTokenBudget?: number;
+	/** Optional override for per-tool diff roundtrip char budget in a single AI attempt. */
+	aiToolResponseCharBudget?: number;
+	/** Source label for routed AI limits vs ad hoc overrides. */
+	aiLimitsSource?: AiLimitSource;
 	/** Current PR title when updating an open PR (multi-commit AI path only). */
 	existingPrTitle?: string;
 	/** Whether AI attempt should include diff tools. */
@@ -626,9 +644,14 @@ export function generatePrContent(params: GeneratePrContentParams) {
 				prompt_chars: prompt.length,
 				token_budget: limits.tokenBudget,
 				tool_round_limit: limits.toolRoundLimit,
-				token_budget_source: params.aiTokenBudget !== undefined ? "explicit_override" : "computed",
+				token_budget_source:
+					params.aiTokenBudget !== undefined
+						? (params.aiLimitsSource ?? "explicit_override")
+						: "computed",
 				tool_round_limit_source:
-					params.aiToolRoundLimit !== undefined ? "explicit_override" : "computed",
+					params.aiToolRoundLimit !== undefined
+						? (params.aiLimitsSource ?? "explicit_override")
+						: "computed",
 			});
 			const delay = retryDelay ?? DEFAULT_RETRY_DELAY;
 			const result = yield* generateTitleAndDescriptionWithToolkit(
@@ -755,6 +778,10 @@ type RunGeneratePrContentConfigCommon = {
 	templatePath: string;
 	model: string;
 	routingContext?: RoutingContextArtifact;
+	aiToolRoundLimit?: number;
+	aiTokenBudget?: number;
+	aiToolResponseCharBudget?: number;
+	aiLimitsSource?: AiLimitSource;
 	githubApiUrl?: string;
 	ghHost?: string;
 	/** Current PR title override for prompt continuity. */
@@ -792,6 +819,16 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 		templatePath: config.templatePath,
 		model: config.model,
 		...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
+		...(config.aiToolRoundLimit !== undefined ? { aiToolRoundLimit: config.aiToolRoundLimit } : {}),
+		...(config.aiTokenBudget !== undefined ? { aiTokenBudget: config.aiTokenBudget } : {}),
+		...(config.aiToolResponseCharBudget !== undefined
+			? { aiToolResponseCharBudget: config.aiToolResponseCharBudget }
+			: {}),
+		...(config.aiTokenBudget !== undefined ||
+		config.aiToolRoundLimit !== undefined ||
+		config.aiToolResponseCharBudget !== undefined
+			? { aiLimitsSource: "routing_decision" as const }
+			: {}),
 		...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
 		...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
 		...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
@@ -816,6 +853,15 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
 				ghToken: githubModels.ghToken,
 				...(githubModels.requiresToolCalls !== undefined
 					? { requiresToolCalls: githubModels.requiresToolCalls }
+					: {}),
+				...(githubModels.aiToolRoundLimit !== undefined
+					? { aiToolRoundLimit: githubModels.aiToolRoundLimit }
+					: {}),
+				...(githubModels.aiTokenBudget !== undefined
+					? { aiTokenBudget: githubModels.aiTokenBudget }
+					: {}),
+				...(githubModels.aiToolResponseCharBudget !== undefined
+					? { aiToolResponseCharBudget: githubModels.aiToolResponseCharBudget }
 					: {}),
 				...(githubModels.localFallback !== undefined
 					? { localFallback: githubModels.localFallback }
@@ -881,29 +927,76 @@ export function runGeneratePrContent(
 		| { readonly _tag: "PrimitiveFallback"; readonly lastError?: GeneratePrContentError }
 		| { readonly _tag: "Completed" };
 
-	const runAttempt = Effect.fn("runAttempt")(function* (attempt: AttemptCandidate) {
-		const toolResponseCharBudget = resolveAiToolRoundtripDiffCharBudget(
+	const resolveAttemptToolResponseCharBudget = (attempt: AttemptCandidate): number | undefined => {
+		const derivedBudget = resolveAiToolRoundtripDiffCharBudget(
 			attempt.provider === "github-models" ? "github-models" : "local",
 			attempt.model,
 		);
+		if (attempt.provider !== "github-models") return derivedBudget;
+		if (config.aiToolResponseCharBudget === undefined) return derivedBudget;
+		if (attempt.model === config.model) return config.aiToolResponseCharBudget;
+		return Math.min(config.aiToolResponseCharBudget, derivedBudget);
+	};
+
+	const runAttempt = Effect.fn("runAttempt")(function* (attempt: AttemptCandidate) {
+		const toolResponseCharBudget = resolveAttemptToolResponseCharBudget(attempt);
+		const sharedAttemptConfig = {
+			defaultBranch: config.defaultBranch,
+			branch: config.branch,
+			workspace: config.workspace,
+			templatePath: config.templatePath,
+			model: attempt.model,
+			...(config.routingContext !== undefined ? { routingContext: config.routingContext } : {}),
+			...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
+			...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
+			...(config.existingPrTitle !== undefined ? { existingPrTitle: config.existingPrTitle } : {}),
+			...(config.retryDelay !== undefined ? { retryDelay: config.retryDelay } : {}),
+			...(config.fetch !== undefined ? { fetch: config.fetch } : {}),
+		};
 		const attemptConfig: RunGeneratePrContentConfig =
 			attempt.provider === "github-models"
 				? {
-						...config,
+						...sharedAttemptConfig,
 						provider: "github-models",
-						model: attempt.model,
 						ghToken: config.provider === "github-models" ? config.ghToken : Redacted.make(""),
 						...(config.provider === "github-models" && config.requiresToolCalls !== undefined
 							? { requiresToolCalls: config.requiresToolCalls }
+							: {}),
+						...(config.provider === "github-models" && config.aiToolRoundLimit !== undefined
+							? { aiToolRoundLimit: config.aiToolRoundLimit }
+							: {}),
+						...(config.provider === "github-models" && config.aiTokenBudget !== undefined
+							? { aiTokenBudget: config.aiTokenBudget }
+							: {}),
+						...(toolResponseCharBudget !== undefined
+							? { aiToolResponseCharBudget: toolResponseCharBudget }
+							: {}),
+						...(config.provider === "github-models" && config.aiLimitsSource !== undefined
+							? { aiLimitsSource: config.aiLimitsSource }
 							: {}),
 						...(config.provider === "github-models" && config.localFallback !== undefined
 							? { localFallback: config.localFallback }
 							: {}),
 					}
 				: {
-						...config,
+						...sharedAttemptConfig,
 						provider: "local",
-						model: attempt.model,
+						...(config.provider === "local"
+							? {
+									...(config.aiToolRoundLimit !== undefined
+										? { aiToolRoundLimit: config.aiToolRoundLimit }
+										: {}),
+									...(config.aiTokenBudget !== undefined
+										? { aiTokenBudget: config.aiTokenBudget }
+										: {}),
+									...(config.aiToolResponseCharBudget !== undefined
+										? { aiToolResponseCharBudget: config.aiToolResponseCharBudget }
+										: {}),
+									...(config.aiLimitsSource !== undefined
+										? { aiLimitsSource: config.aiLimitsSource }
+										: {}),
+								}
+							: {}),
 						...(attempt.openaiCompatUrl !== undefined
 							? { openaiCompatUrl: attempt.openaiCompatUrl }
 							: {}),
@@ -915,9 +1008,11 @@ export function runGeneratePrContent(
 			buildAiProviderConfig(attemptConfig),
 			config.fetch !== undefined ? { fetch: config.fetch } : undefined,
 		);
-		const toolkitLayer = makeDiffToolkitLayer(baseRef, config.branch, {
-			toolResponseCharBudget,
-		}).pipe(Layer.provide(gitLayer));
+		const toolkitLayer = makeDiffToolkitLayer(
+			baseRef,
+			config.branch,
+			toolResponseCharBudget !== undefined ? { toolResponseCharBudget } : undefined,
+		).pipe(Layer.provide(gitLayer));
 		const liveLayer = Layer.mergeAll(
 			AutoPrPlatformLayer,
 			aiLayer,
@@ -1188,6 +1283,10 @@ export type RunGeneratePrContentWithServicesConfig = {
 	readonly provider: AiProvider;
 	readonly model: string;
 	readonly routingContext?: RoutingContextArtifact;
+	readonly aiToolRoundLimit?: number;
+	readonly aiTokenBudget?: number;
+	readonly aiToolResponseCharBudget?: number;
+	readonly aiLimitsSource?: AiLimitSource;
 	/** Current PR title override for prompt continuity. */
 	readonly existingPrTitle?: string;
 	/** Delay between AI retry attempts. Use `Duration.zero` in tests. Default 3s. */
@@ -1211,6 +1310,10 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			provider,
 			model,
 			routingContext,
+			aiToolRoundLimit,
+			aiTokenBudget,
+			aiToolResponseCharBudget,
+			aiLimitsSource,
 			retryDelay,
 			existingPrTitle: configuredExistingPrTitle,
 			allowToolCalls,
@@ -1249,6 +1352,10 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 			...(routingContext !== undefined ? { routingContext } : {}),
 			provider,
 			model,
+			...(aiToolRoundLimit !== undefined ? { aiToolRoundLimit } : {}),
+			...(aiTokenBudget !== undefined ? { aiTokenBudget } : {}),
+			...(aiToolResponseCharBudget !== undefined ? { aiToolResponseCharBudget } : {}),
+			...(aiLimitsSource !== undefined ? { aiLimitsSource } : {}),
 			...(retryDelay !== undefined && { retryDelay }),
 			...(existingPrTitle !== undefined && { existingPrTitle }),
 			...(allowToolCalls !== undefined ? { allowToolCalls } : {}),
