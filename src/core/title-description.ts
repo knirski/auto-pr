@@ -12,32 +12,32 @@ import { parseFirstJsonObject } from "#core/parse-model-json.js";
 
 /** Schema for structured AI output: PR title plus structured review sections. */
 export const TitleDescriptionSchema = Schema.Struct({
-	title: Schema.String,
-	motivation: Schema.Array(Schema.String),
-	benefits: Schema.Array(Schema.String),
-	risks: Schema.Array(Schema.String),
-	notesForReviewers: Schema.String,
+  title: Schema.String,
+  motivation: Schema.Array(Schema.String),
+  benefits: Schema.Array(Schema.String),
+  risks: Schema.Array(Schema.String),
+  notesForReviewers: Schema.String,
 });
 
 export type TitleDescription = Schema.Schema.Type<typeof TitleDescriptionSchema>;
 
 /** Parse assistant reply -> JSON object -> {@link TitleDescriptionSchema}. */
 export function parseTitleDescriptionFromAssistantText(
-	text: string,
+  text: string,
 ): Result.Result<TitleDescription, DescriptionParseError> {
-	return pipe(
-		parseFirstJsonObject(text),
-		Result.mapError((e) => new DescriptionParseError({ cause: e.message })),
-		Result.flatMap((parsed) =>
-			pipe(
-				Schema.decodeUnknownResult(TitleDescriptionSchema)(parsed),
-				Result.mapError(
-					(e) =>
-						new DescriptionParseError({
-							cause: String(e),
-						}),
-				),
-			),
-		),
-	);
+  return pipe(
+    parseFirstJsonObject(text),
+    Result.mapError((e) => new DescriptionParseError({ cause: e.message })),
+    Result.flatMap((parsed) =>
+      pipe(
+        Schema.decodeUnknownResult(TitleDescriptionSchema)(parsed),
+        Result.mapError(
+          (e) =>
+            new DescriptionParseError({
+              cause: String(e),
+            }),
+        ),
+      ),
+    ),
+  );
 }

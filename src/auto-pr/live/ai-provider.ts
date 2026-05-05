@@ -22,36 +22,36 @@ import { AutoPrConfigError } from "#core/errors.js";
 const GITHUB_MODELS_INFERENCE_URL = "https://models.github.ai/inference";
 
 export type AiProviderConfigLocal = {
-	readonly provider: "local";
-	readonly model: string;
-	/** Base URL for OpenAI-compatible `/v1/...`; defaults when omitted for direct tests. */
-	readonly openaiCompatUrl?: string;
-	readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+  readonly provider: "local";
+  readonly model: string;
+  /** Base URL for OpenAI-compatible `/v1/...`; defaults when omitted for direct tests. */
+  readonly openaiCompatUrl?: string;
+  readonly openaiCompatApiKey?: Redacted.Redacted<string>;
 };
 
 export type AiProviderConfigGithubModels = {
-	readonly provider: "github-models";
-	readonly model: string;
-	readonly ghToken: Redacted.Redacted<string>;
+  readonly provider: "github-models";
+  readonly model: string;
+  readonly ghToken: Redacted.Redacted<string>;
 };
 
 /** Config for AI provider layer (provider, model, and provider-specific fields). */
 export type AiProviderConfig = AiProviderConfigLocal | AiProviderConfigGithubModels;
 
 function openAiLanguageModelStack(
-	clientOptions: OpenAiClient.Options,
-	modelId: string,
-	fetchOverrideLayer: Layer.Layer<never>,
+  clientOptions: OpenAiClient.Options,
+  modelId: string,
+  fetchOverrideLayer: Layer.Layer<never>,
 ) {
-	const clientLayer = OpenAiClient.layer(clientOptions).pipe(Layer.provide(FetchHttpClient.layer));
-	const modelLayer = OpenAiLanguageModel.model(modelId);
-	return Layer.mergeAll(fetchOverrideLayer, modelLayer.pipe(Layer.provide(clientLayer)));
+  const clientLayer = OpenAiClient.layer(clientOptions).pipe(Layer.provide(FetchHttpClient.layer));
+  const modelLayer = OpenAiLanguageModel.model(modelId);
+  return Layer.mergeAll(fetchOverrideLayer, modelLayer.pipe(Layer.provide(clientLayer)));
 }
 
 function redactedHasText(
-	value: Redacted.Redacted<string> | undefined,
+  value: Redacted.Redacted<string> | undefined,
 ): value is Redacted.Redacted<string> {
-	return value !== undefined && RedactedValue.value(value).trim() !== "";
+  return value !== undefined && RedactedValue.value(value).trim() !== "";
 }
 
 /**
@@ -61,44 +61,44 @@ function redactedHasText(
  * Pass `options.fetch` in tests to mock `POST …/chat/completions` (OpenAI-compatible JSON).
  */
 export function aiProviderLayerFromConfig(
-	config: AiProviderConfig,
-	options?: { fetch?: typeof fetch },
+  config: AiProviderConfig,
+  options?: { fetch?: typeof fetch },
 ): Layer.Layer<LanguageModel.LanguageModel, AutoPrConfigError> {
-	const fetchOverrideLayer =
-		options?.fetch !== undefined
-			? Layer.succeed(FetchHttpClient.Fetch, options.fetch)
-			: Layer.empty;
+  const fetchOverrideLayer =
+    options?.fetch !== undefined
+      ? Layer.succeed(FetchHttpClient.Fetch, options.fetch)
+      : Layer.empty;
 
-	return Match.value(config).pipe(
-		Match.when({ provider: "local" }, (local) => {
-			const apiUrl = local.openaiCompatUrl ?? DEFAULT_OPENAI_COMPAT_URL;
-			const apiKey = local.openaiCompatApiKey;
-			const clientOptions: OpenAiClient.Options = {
-				apiUrl,
-				...(redactedHasText(apiKey) ? { apiKey } : {}),
-			};
-			return openAiLanguageModelStack(clientOptions, local.model, fetchOverrideLayer);
-		}),
-		Match.when({ provider: "github-models" }, (githubModels) => {
-			if (!redactedHasText(githubModels.ghToken) || githubModels.model.trim() === "") {
-				return Layer.effect(
-					LanguageModel.LanguageModel,
-					Effect.fail(
-						new AutoPrConfigError({
-							missing: ["GH_TOKEN and resolved model are required for github-models"],
-						}),
-					),
-				);
-			}
-			return openAiLanguageModelStack(
-				{
-					apiUrl: GITHUB_MODELS_INFERENCE_URL,
-					apiKey: githubModels.ghToken,
-				},
-				githubModels.model,
-				fetchOverrideLayer,
-			);
-		}),
-		Match.exhaustive,
-	);
+  return Match.value(config).pipe(
+    Match.when({ provider: "local" }, (local) => {
+      const apiUrl = local.openaiCompatUrl ?? DEFAULT_OPENAI_COMPAT_URL;
+      const apiKey = local.openaiCompatApiKey;
+      const clientOptions: OpenAiClient.Options = {
+        apiUrl,
+        ...(redactedHasText(apiKey) ? { apiKey } : {}),
+      };
+      return openAiLanguageModelStack(clientOptions, local.model, fetchOverrideLayer);
+    }),
+    Match.when({ provider: "github-models" }, (githubModels) => {
+      if (!redactedHasText(githubModels.ghToken) || githubModels.model.trim() === "") {
+        return Layer.effect(
+          LanguageModel.LanguageModel,
+          Effect.fail(
+            new AutoPrConfigError({
+              missing: ["GH_TOKEN and resolved model are required for github-models"],
+            }),
+          ),
+        );
+      }
+      return openAiLanguageModelStack(
+        {
+          apiUrl: GITHUB_MODELS_INFERENCE_URL,
+          apiKey: githubModels.ghToken,
+        },
+        githubModels.model,
+        fetchOverrideLayer,
+      );
+    }),
+    Match.exhaustive,
+  );
 }

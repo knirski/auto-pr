@@ -7,7 +7,7 @@
 import { Effect, type Layer } from "effect";
 
 export function runEffect<R, EL>(
-	layer: Layer.Layer<R, EL>,
+  layer: Layer.Layer<R, EL>,
 ): <A, E>(effect: Effect.Effect<A, E, R>) => Promise<A> {
-	return (effect) => Effect.runPromise(Effect.provide(effect.pipe(Effect.scoped), layer));
+  return (effect) => Effect.runPromise(Effect.provide(effect.pipe(Effect.scoped), layer));
 }

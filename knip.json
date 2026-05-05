@@ -1,7 +1,7 @@
 {
-	"$schema": "https://unpkg.com/knip@5/schema.json",
-	"entry": ["src/auto-pr/index.ts", "src/core/index.ts"],
-	"project": ["src/**/*.ts", "test/**/*.ts"],
-	"ignoreExportsUsedInFile": { "interface": true, "type": true },
-	"ignoreBinaries": ["scripts/nix-run-if-missing.sh"]
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/auto-pr/index.ts", "src/core/index.ts"],
+  "project": ["src/**/*.ts", "test/**/*.ts"],
+  "ignoreExportsUsedInFile": { "interface": true, "type": true },
+  "ignoreBinaries": ["scripts/nix-run-if-missing.sh"]
 }

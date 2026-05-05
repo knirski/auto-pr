@@ -12,20 +12,20 @@ const GH_PR_URL = /^https?:\/\/[^/?#\s]+\/[^/\s]+\/[^/\s]+\/pull\/\d+$/u;
 
 /** Pure: extract the PR URL from `gh pr create` stdout. Validates shape. */
 export function parseGhPrCreateOutput(
-	stdout: string,
+  stdout: string,
 ): Result.Result<string, PullRequestUrlParseError> {
-	const lines = stdout
-		.split("\n")
-		.map((l) => l.trim())
-		.filter((l) => l !== "");
-	const last = lines.at(-1);
-	if (last === undefined) {
-		return Result.fail(new PullRequestUrlParseError({ raw: stdout, reason: "empty output" }));
-	}
-	if (!GH_PR_URL.test(last)) {
-		return Result.fail(
-			new PullRequestUrlParseError({ raw: stdout, reason: `last line is not a PR URL: ${last}` }),
-		);
-	}
-	return Result.succeed(last);
+  const lines = stdout
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "");
+  const last = lines.at(-1);
+  if (last === undefined) {
+    return Result.fail(new PullRequestUrlParseError({ raw: stdout, reason: "empty output" }));
+  }
+  if (!GH_PR_URL.test(last)) {
+    return Result.fail(
+      new PullRequestUrlParseError({ raw: stdout, reason: `last line is not a PR URL: ${last}` }),
+    );
+  }
+  return Result.succeed(last);
 }

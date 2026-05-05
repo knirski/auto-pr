@@ -10,35 +10,35 @@ import { isBlank } from "#core/string.js";
 
 /** Fallback when remark parsing fails: collapse newlines within paragraphs. Exported for tests. */
 export function fallbackWhenParseFails(text: string): string {
-	return text
-		.split(/\n\n+/)
-		.map((p) => p.replace(/\n/g, " ").replace(/\s+/g, " ").trim())
-		.filter(Boolean)
-		.join("\n\n");
+  return text
+    .split(/\n\n+/)
+    .map((p) => p.replace(/\n/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** Pure: map phrasing content, collapsing breaks and normalizing text. */
 function collapsePhrasingContent(child: PhrasingContent): PhrasingContent {
-	if (child.type === "break") {
-		return { type: "text", value: " " } satisfies Text;
-	}
-	if (child.type === "text") {
-		return { ...child, value: child.value.replace(/\n/g, " ") };
-	}
-	return child;
+  if (child.type === "break") {
+    return { type: "text", value: " " } satisfies Text;
+  }
+  if (child.type === "text") {
+    return { ...child, value: child.value.replace(/\n/g, " ") };
+  }
+  return child;
 }
 
 /** Pure: transform paragraph children (breaks → space, text newlines → space). */
 function collapseParagraphChildren(children: PhrasingContent[]): PhrasingContent[] {
-	return children.map(collapsePhrasingContent);
+  return children.map(collapsePhrasingContent);
 }
 
 function collapseParagraphBreaks() {
-	return (tree: Root) => {
-		visit(tree, "paragraph", (node) => {
-			node.children = collapseParagraphChildren(node.children);
-		});
-	};
+  return (tree: Root) => {
+    visit(tree, "paragraph", (node) => {
+      node.children = collapseParagraphChildren(node.children);
+    });
+  };
 }
 
 const processor = remark().use(collapseParagraphBreaks);
@@ -48,11 +48,11 @@ const processor = remark().use(collapseParagraphBreaks);
  * Falls back to heuristic on parse error.
  */
 export function collapseProseParagraphs(text: string): string {
-	if (isBlank(text)) return text;
-	try {
-		const result = processor.processSync(text);
-		return String(result).trim();
-	} catch {
-		return fallbackWhenParseFails(text);
-	}
+  if (isBlank(text)) return text;
+  try {
+    const result = processor.processSync(text);
+    return String(result).trim();
+  } catch {
+    return fallbackWhenParseFails(text);
+  }
 }

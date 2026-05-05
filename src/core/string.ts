@@ -6,51 +6,51 @@ import { Option, pipe } from "effect";
 
 /** Check if string is empty or whitespace-only. */
 export function isBlank(s: string): boolean {
-	return s.trim().length === 0;
+  return s.trim().length === 0;
 }
 
 /** Convert nullish or blank strings to None, otherwise return the trimmed value. */
 export function nonBlankOption(value: string | null | undefined): Option.Option<string> {
-	return pipe(
-		Option.fromNullishOr(value),
-		Option.map((s) => s.trim()),
-		Option.filter((s) => s !== ""),
-	);
+  return pipe(
+    Option.fromNullishOr(value),
+    Option.map((s) => s.trim()),
+    Option.filter((s) => s !== ""),
+  );
 }
 
 /** Merge commits (e.g. "Merge branch 'x' into y") add no semantic value. */
 export function isMergeCommitSubject(subject: string): boolean {
-	return /^Merge /i.test(subject.trim());
+  return /^Merge /i.test(subject.trim());
 }
 
 /** Parse newline-separated subjects from file content. */
 export function parseSubjects(content: string): string[] {
-	return content
-		.split("\n")
-		.map((s) => s.trim())
-		.filter(Boolean);
+  return content
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /** Convert unknown to a short message for display. */
 export function unknownToMessage(e: unknown): string {
-	return e instanceof Error ? e.message : String(e);
+  return e instanceof Error ? e.message : String(e);
 }
 
 /** Ensure unknown is an Error (pass through or wrap). Use for cause fields. */
 export function toError(e: unknown): Error {
-	return e instanceof Error ? e : new Error(String(e));
+  return e instanceof Error ? e : new Error(String(e));
 }
 
 /** Filter out merge commits and blank lines from subject list. */
 export function filterSemanticSubjects(subjects: string[]): string[] {
-	return subjects
-		.map((s) => s.trim())
-		.filter((line) => !isBlank(line) && !isMergeCommitSubject(line));
+  return subjects
+    .map((s) => s.trim())
+    .filter((line) => !isBlank(line) && !isMergeCommitSubject(line));
 }
 
 /** Check if HTTP status indicates error (4xx or 5xx). */
 export function isHttpError(status: number): boolean {
-	return status >= 400;
+  return status >= 400;
 }
 
 /**
@@ -58,9 +58,9 @@ export function isHttpError(status: number): boolean {
  * otherwise truncates and appends an indicator with the full length.
  */
 export function truncateForLog(s: string, maxChars: number): string {
-	const t = s.trim();
-	if (t.length <= maxChars) {
-		return t;
-	}
-	return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
+  const t = s.trim();
+  if (t.length <= maxChars) {
+    return t;
+  }
+  return `${t.slice(0, maxChars)}… (${t.length} chars total)`;
 }

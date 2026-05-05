@@ -25,29 +25,29 @@ export const MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 1_500;
  */
 
 const isGithubModelsGpt41Family = (model: string): boolean => {
-	const normalized = model.trim().toLowerCase();
-	const prefix = "openai/gpt-4.1";
-	const next = normalized[prefix.length];
-	return normalized.startsWith(prefix) && (next === undefined || !/[0-9]/.test(next));
+  const normalized = model.trim().toLowerCase();
+  const prefix = "openai/gpt-4.1";
+  const next = normalized[prefix.length];
+  return normalized.startsWith(prefix) && (next === undefined || !/[0-9]/.test(next));
 };
 
 function clampNumber(value: number, min: number, max: number): number {
-	return Math.min(max, Math.max(min, value));
+  return Math.min(max, Math.max(min, value));
 }
 
 function deriveToolRoundtripCharBudgetFromRequestTokens(input: {
-	readonly requestTokenLimit: number;
-	readonly reservedTokens: number;
-	readonly assumedMaxParallelToolCalls: number;
+  readonly requestTokenLimit: number;
+  readonly reservedTokens: number;
+  readonly assumedMaxParallelToolCalls: number;
 }): number {
-	const availableTokens = Math.max(0, input.requestTokenLimit - input.reservedTokens);
-	const budgetPerToolTokens = Math.floor(availableTokens / input.assumedMaxParallelToolCalls);
-	const estimatedChars = budgetPerToolTokens * TOKEN_ESTIMATE_CHARS_PER_TOKEN;
-	return clampNumber(
-		estimatedChars,
-		MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-		MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-	);
+  const availableTokens = Math.max(0, input.requestTokenLimit - input.reservedTokens);
+  const budgetPerToolTokens = Math.floor(availableTokens / input.assumedMaxParallelToolCalls);
+  const estimatedChars = budgetPerToolTokens * TOKEN_ESTIMATE_CHARS_PER_TOKEN;
+  return clampNumber(
+    estimatedChars,
+    MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+    MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+  );
 }
 
 /**
@@ -55,22 +55,22 @@ function deriveToolRoundtripCharBudgetFromRequestTokens(input: {
  * Each block starts with "diff --git".
  */
 function splitIntoDiffBlocks(raw: string): string[] {
-	const blocks: string[] = [];
-	const lines = raw.split("\n");
-	let current: string[] = [];
+  const blocks: string[] = [];
+  const lines = raw.split("\n");
+  let current: string[] = [];
 
-	for (const line of lines) {
-		if (line.startsWith("diff --git ") && current.length > 0) {
-			blocks.push(current.join("\n"));
-			current = [line];
-		} else {
-			current.push(line);
-		}
-	}
-	if (current.length > 0) {
-		blocks.push(current.join("\n"));
-	}
-	return blocks.filter((b) => b.trim().length > 0);
+  for (const line of lines) {
+    if (line.startsWith("diff --git ") && current.length > 0) {
+      blocks.push(current.join("\n"));
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  if (current.length > 0) {
+    blocks.push(current.join("\n"));
+  }
+  return blocks.filter((b) => b.trim().length > 0);
 }
 
 /**
@@ -78,33 +78,33 @@ function splitIntoDiffBlocks(raw: string): string[] {
  * Returns the path from the b/ side.
  */
 function extractFilePath(block: string): string {
-	const match = block.match(/^diff --git a\/.+ b\/(.+)$/m);
-	return match?.[1] ?? "unknown";
+  const match = block.match(/^diff --git a\/.+ b\/(.+)$/m);
+  return match?.[1] ?? "unknown";
 }
 
 /**
  * Check if a diff block is for a binary file.
  */
 function isBinaryBlock(block: string): boolean {
-	return /^Binary files .+ and .+ differ$/m.test(block);
+  return /^Binary files .+ and .+ differ$/m.test(block);
 }
 
 /**
  * Sanitize a single diff block: replace binary with marker, truncate if oversized.
  */
 function sanitizeBlock(block: string): string {
-	const filePath = extractFilePath(block);
+  const filePath = extractFilePath(block);
 
-	if (isBinaryBlock(block)) {
-		return `[binary file: ${filePath}]`;
-	}
+  if (isBinaryBlock(block)) {
+    return `[binary file: ${filePath}]`;
+  }
 
-	if (block.length > MAX_PER_FILE_DIFF_CHARS) {
-		const truncated = block.slice(0, MAX_PER_FILE_DIFF_CHARS);
-		return `${truncated}\n[truncated: ${block.length} chars total, showing first ${MAX_PER_FILE_DIFF_CHARS}]`;
-	}
+  if (block.length > MAX_PER_FILE_DIFF_CHARS) {
+    const truncated = block.slice(0, MAX_PER_FILE_DIFF_CHARS);
+    return `${truncated}\n[truncated: ${block.length} chars total, showing first ${MAX_PER_FILE_DIFF_CHARS}]`;
+  }
 
-	return block;
+  return block;
 }
 
 /**
@@ -114,20 +114,20 @@ function sanitizeBlock(block: string): string {
  * - Truncates the total diff if it exceeds {@link MAX_TOTAL_DIFF_CHARS} after per-file processing.
  */
 export function sanitizeDiffForAi(raw: string): string {
-	if (raw.length === 0) return raw;
+  if (raw.length === 0) return raw;
 
-	const blocks = splitIntoDiffBlocks(raw);
-	if (blocks.length === 0) return raw;
+  const blocks = splitIntoDiffBlocks(raw);
+  if (blocks.length === 0) return raw;
 
-	const sanitized = blocks.map(sanitizeBlock);
+  const sanitized = blocks.map(sanitizeBlock);
 
-	let result = sanitized.join("\n");
+  let result = sanitized.join("\n");
 
-	if (result.length > MAX_TOTAL_DIFF_CHARS) {
-		result = `${result.slice(0, MAX_TOTAL_DIFF_CHARS)}\n[diff truncated: total size exceeded ${MAX_TOTAL_DIFF_CHARS} chars]`;
-	}
+  if (result.length > MAX_TOTAL_DIFF_CHARS) {
+    result = `${result.slice(0, MAX_TOTAL_DIFF_CHARS)}\n[diff truncated: total size exceeded ${MAX_TOTAL_DIFF_CHARS} chars]`;
+  }
 
-	return result;
+  return result;
 }
 
 /**
@@ -135,27 +135,27 @@ export function sanitizeDiffForAi(raw: string): string {
  * model request, especially for providers with small request-size limits.
  */
 export function resolveAiToolRoundtripDiffCharBudget(
-	provider: "local" | "github-models",
-	model: string,
+  provider: "local" | "github-models",
+  model: string,
 ): number {
-	if (provider === "github-models" && isGithubModelsGpt41Family(model)) {
-		return deriveToolRoundtripCharBudgetFromRequestTokens({
-			requestTokenLimit: GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
-			reservedTokens: TOOL_ROUNDTRIP_RESERVED_TOKENS,
-			assumedMaxParallelToolCalls: TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS,
-		});
-	}
-	return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+  if (provider === "github-models" && isGithubModelsGpt41Family(model)) {
+    return deriveToolRoundtripCharBudgetFromRequestTokens({
+      requestTokenLimit: GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
+      reservedTokens: TOOL_ROUNDTRIP_RESERVED_TOKENS,
+      assumedMaxParallelToolCalls: TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS,
+    });
+  }
+  return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
 }
 
 export function capDiffForAiToolRoundtrip(
-	diff: string,
-	maxChars = MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+  diff: string,
+  maxChars = MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 ): string {
-	if (diff.length <= maxChars) return diff;
+  if (diff.length <= maxChars) return diff;
 
-	const suffix = `\n[tool output truncated: total size exceeded ${maxChars} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
-	const bodyBudget = Math.max(0, maxChars - suffix.length);
-	const truncated = diff.slice(0, bodyBudget);
-	return `${truncated}${suffix}`;
+  const suffix = `\n[tool output truncated: total size exceeded ${maxChars} chars; request a narrower diff via get_diff({"path":"..."}) or get_commit_diff({"hash":"..."})]`;
+  const bodyBudget = Math.max(0, maxChars - suffix.length);
+  const truncated = diff.slice(0, bodyBudget);
+  return `${truncated}${suffix}`;
 }

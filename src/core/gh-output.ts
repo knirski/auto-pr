@@ -8,16 +8,16 @@ import { isBlank, unknownToMessage } from "#core/string.js";
 
 /** Branded type for sanitized GITHUB_OUTPUT values (see {@link PR_TITLE_LINE_MAX_LENGTH}; percent/CR/newline escaped). */
 const GhOutputValueSchema = Schema.String.pipe(
-	Schema.check(Schema.isMaxLength(PR_TITLE_LINE_MAX_LENGTH)),
-	Schema.brand("GhOutputValue"),
+  Schema.check(Schema.isMaxLength(PR_TITLE_LINE_MAX_LENGTH)),
+  Schema.brand("GhOutputValue"),
 );
 export type GhOutputValue = Schema.Schema.Type<typeof GhOutputValueSchema>;
 
 /** Format GITHUB_OUTPUT entries as key=value lines. */
 export function formatGhOutput(
-	entries: ReadonlyArray<{ key: string; value: string | GhOutputValue }>,
+  entries: ReadonlyArray<{ key: string; value: string | GhOutputValue }>,
 ): string {
-	return `${entries.map((e) => `${e.key}=${e.value}`).join("\n")}\n`;
+  return `${entries.map((e) => `${e.key}=${e.value}`).join("\n")}\n`;
 }
 
 /**
@@ -27,41 +27,41 @@ export function formatGhOutput(
  * Use {@link decodeGhOutputTitle} when reading the title back from parsed GITHUB_OUTPUT.
  */
 export function sanitizeForGhOutput(s: string): Result.Result<GhOutputValue, Error> {
-	const trimmed = s.trim().slice(0, PR_TITLE_LINE_MAX_LENGTH);
-	const escaped = trimmed.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
-	return Result.try({
-		try: () => Schema.decodeSync(GhOutputValueSchema)(escaped),
-		catch: (e) =>
-			new Error(
-				`GITHUB_OUTPUT value exceeds ${PR_TITLE_LINE_MAX_LENGTH} chars after escaping: ${unknownToMessage(e)}`,
-			),
-	});
+  const trimmed = s.trim().slice(0, PR_TITLE_LINE_MAX_LENGTH);
+  const escaped = trimmed.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  return Result.try({
+    try: () => Schema.decodeSync(GhOutputValueSchema)(escaped),
+    catch: (e) =>
+      new Error(
+        `GITHUB_OUTPUT value exceeds ${PR_TITLE_LINE_MAX_LENGTH} chars after escaping: ${unknownToMessage(e)}`,
+      ),
+  });
 }
 
 /** Parse key=value lines from GITHUB_OUTPUT content into a record. */
 export function parseGhOutput(content: string): Record<string, string> {
-	const result: Record<string, string> = {};
-	for (const line of content.split("\n")) {
-		const eq = line.indexOf("=");
-		if (eq > 0) {
-			const key = line.slice(0, eq);
-			const value = line.slice(eq + 1);
-			result[key] = value;
-		}
-	}
-	return result;
+  const result: Record<string, string> = {};
+  for (const line of content.split("\n")) {
+    const eq = line.indexOf("=");
+    if (eq > 0) {
+      const key = line.slice(0, eq);
+      const value = line.slice(eq + 1);
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 /** Get value from parsed GITHUB_OUTPUT. Fails when key is absent. */
 export function getGhOutputValue(
-	parsed: Record<string, string>,
-	key: string,
+  parsed: Record<string, string>,
+  key: string,
 ): Result.Result<string, Error> {
-	const value = parsed[key];
-	if (value === undefined) {
-		return Result.fail(new Error(`GITHUB_OUTPUT missing key: ${key}`));
-	}
-	return Result.succeed(value);
+  const value = parsed[key];
+  if (value === undefined) {
+    return Result.fail(new Error(`GITHUB_OUTPUT missing key: ${key}`));
+  }
+  return Result.succeed(value);
 }
 
 /**
@@ -73,44 +73,44 @@ export function getGhOutputValue(
  * Fails when raw is absent (undefined or blank).
  */
 export function decodeGhOutputTitle(raw: string): Result.Result<string, Error> {
-	if (raw.trim() === "") {
-		return Result.fail(new Error("GITHUB_OUTPUT title is absent"));
-	}
-	try {
-		return Result.succeed(decodeURIComponent(raw));
-	} catch (e) {
-		return Result.fail(new Error(`Failed to decode GITHUB_OUTPUT title: ${unknownToMessage(e)}`));
-	}
+  if (raw.trim() === "") {
+    return Result.fail(new Error("GITHUB_OUTPUT title is absent"));
+  }
+  try {
+    return Result.succeed(decodeURIComponent(raw));
+  } catch (e) {
+    return Result.fail(new Error(`Failed to decode GITHUB_OUTPUT title: ${unknownToMessage(e)}`));
+  }
 }
 
 /** Validate GITHUB_OUTPUT containing `commits` and `files` paths (legacy shape; not produced by a separate step since ADR 0011). */
 export function validateGetCommitsOutput(
-	parsed: Record<string, string>,
+  parsed: Record<string, string>,
 ): Result.Result<{ commits: string; files: string }, Error> {
-	return pipe(
-		getGhOutputValue(parsed, "commits"),
-		Result.flatMap((commits) =>
-			pipe(
-				getGhOutputValue(parsed, "files"),
-				Result.flatMap((files) =>
-					isBlank(commits) || isBlank(files)
-						? Result.fail(new Error("Get commits did not output commits and files"))
-						: Result.succeed({ commits, files }),
-				),
-			),
-		),
-	);
+  return pipe(
+    getGhOutputValue(parsed, "commits"),
+    Result.flatMap((commits) =>
+      pipe(
+        getGhOutputValue(parsed, "files"),
+        Result.flatMap((files) =>
+          isBlank(commits) || isBlank(files)
+            ? Result.fail(new Error("Get commits did not output commits and files"))
+            : Result.succeed({ commits, files }),
+        ),
+      ),
+    ),
+  );
 }
 
 /** Build GITHUB_OUTPUT entries for `commits`, `files`, and semantic `count` (same keys as the former get-commits step). */
 export function buildGetCommitsGhEntries(
-	commitsPath: string,
-	filesPath: string,
-	semanticCount: number,
+  commitsPath: string,
+  filesPath: string,
+  semanticCount: number,
 ): ReadonlyArray<{ key: string; value: string }> {
-	return [
-		{ key: "commits", value: commitsPath },
-		{ key: "files", value: filesPath },
-		{ key: "count", value: String(semanticCount) },
-	];
+  return [
+    { key: "commits", value: commitsPath },
+    { key: "files", value: filesPath },
+    { key: "count", value: String(semanticCount) },
+  ];
 }
