@@ -57,6 +57,14 @@ function includesAny(haystack: string, needles: readonly string[]): boolean {
 	return needles.some((needle) => haystack.includes(needle));
 }
 
+const REQUEST_SIZE_NEEDLES = [
+	"request body too large",
+	"max size",
+	"context length",
+	"input too large",
+	"maximum context length",
+];
+
 export const CapabilityMismatchFailure: GithubModelFailureKind = { _tag: "CapabilityMismatch" };
 export const TransientFailure: GithubModelFailureKind = { _tag: "Transient" };
 
@@ -77,6 +85,9 @@ export function classifyGithubModelFailure(error: unknown): GithubModelFailureKi
 	}
 	if (error instanceof Error) {
 		const message = error.message.toLowerCase();
+		if (includesAny(message, REQUEST_SIZE_NEEDLES)) {
+			return CapabilityMismatchFailure;
+		}
 		if (includesAny(message, ["401", "403", "unauthorized", "forbidden", "authentication"])) {
 			return { _tag: "AuthOrConfig" };
 		}

@@ -92,6 +92,13 @@ describe("github-model-fallback-policy", () => {
 		expect(classifyGithubModelFailure(new Error("function_call is not supported"))).toBe(
 			CapabilityMismatchFailure,
 		);
+		expect(
+			classifyGithubModelFailure(
+				new Error(
+					"OpenAiClient.createResponse: Request body too large for gpt-4.1 model. Max size: 8000 tokens.",
+				),
+			),
+		).toBe(CapabilityMismatchFailure);
 		expect(classifyGithubModelFailure(new Error("request timeout"))).toEqual({ _tag: "Transient" });
 		expect(classifyGithubModelFailure(new Error("other"))).toEqual({ _tag: "Unknown" });
 	});
