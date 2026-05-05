@@ -18,8 +18,9 @@
  * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | local \| github-models (default: local) |
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
- * | AUTO_PR_AI_OPENAI_COMPAT_MODEL | | GeneratePrContent, RunAutoPr | Model id: `local` defaults to gpt-oss when unset; `github-models` defaults to microsoft/phi-4-mini-instruct when unset (lowest GitHub Models billing multipliers; see docs) |
- * | AUTO_PR_ROUTING_CONTEXT | | GeneratePrContent, RunAutoPr | Optional trusted routing context (change analysis, review focus, tool guidance, and model route) injected into the AI prompt. |
+ * | AUTO_PR_LOCAL_MODEL | | GeneratePrContent, RunAutoPr | Model id for `local` only (defaults to gpt-oss when unset). |
+ * | AUTO_PR_ROUTING_CONTEXT_JSON | | GeneratePrContent, RunAutoPr | Optional trusted typed routing context JSON (change analysis and review focus) injected into the AI prompt. |
+ * | AUTO_PR_ROUTING_DECISION_JSON | ✓* | GeneratePrContent, RunAutoPr | Typed routing decision JSON from routing step outputs (*required for github-models). |
  * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
  * | GITHUB_API_URL | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional Octokit REST base URL (advanced; overrides GH_HOST mapping). |
  * | GH_HOST | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional GitHub host. `github.com` maps to api.github.com; other hosts map to `https://<host>/api/v3`. |
@@ -41,10 +42,18 @@ import {
 	Match,
 	Option,
 	Redacted as RedactedValue,
+	Result,
+	Schema,
 } from "effect";
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
-import { AutoPrConfigError } from "#core/errors.js";
+import { AutoPrConfigError, ModelRoutingOutputError } from "#core/errors.js";
 import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
+import {
+	type RoutingContextArtifact,
+	RoutingContextSchema,
+	type RoutingDecision,
+	RoutingDecisionSchema,
+} from "#core/routing-artifacts.js";
 import { nonBlankOption } from "#core/string.js";
 
 /** Type guard for cause with message property. */
@@ -112,10 +121,14 @@ function configErrorToAutoPrConfig(e: Config.ConfigError): AutoPrConfigError {
 }
 
 function mapConfigError<A, R>(
-	effect: Effect.Effect<A, Config.ConfigError | AutoPrConfigError, R>,
-): Effect.Effect<A, AutoPrConfigError, R> {
+	effect: Effect.Effect<A, Config.ConfigError | AutoPrConfigError | ModelRoutingOutputError, R>,
+): Effect.Effect<A, AutoPrConfigError | ModelRoutingOutputError, R> {
 	return effect.pipe(
-		Effect.mapError((e) => (e instanceof AutoPrConfigError ? e : configErrorToAutoPrConfig(e))),
+		Effect.mapError((e) =>
+			e instanceof AutoPrConfigError || e instanceof ModelRoutingOutputError
+				? e
+				: configErrorToAutoPrConfig(e),
+		),
 	);
 }
 
@@ -126,14 +139,8 @@ export type AiProvider = "local" | "github-models";
 /** Default OpenAI-compatible base URL (e.g. local llama.cpp `llama-server` `/v1`). */
 export const DEFAULT_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
 
-/** Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `local`. */
+/** Default model id when `AUTO_PR_LOCAL_MODEL` is unset and provider is `local`. */
 export const DEFAULT_OPENAI_COMPAT_MODEL = "gpt-oss";
-
-/**
- * Default model id when `AUTO_PR_AI_OPENAI_COMPAT_MODEL` is unset and provider is `github-models`.
- * Picks a catalog model with the lowest billing multipliers (GitHub: "Costs and multipliers for using GitHub Models directly").
- */
-export const DEFAULT_GITHUB_MODELS_MODEL = "microsoft/phi-4-mini-instruct";
 
 export type GeneratePrContentConfigCommon = {
 	readonly workspace: string;
@@ -141,7 +148,10 @@ export type GeneratePrContentConfigCommon = {
 	readonly defaultBranch: string;
 	readonly branch: string;
 	readonly model: string;
-	readonly routingContext?: string;
+	readonly routingContext?: RoutingContextArtifact;
+	readonly aiToolRoundLimit?: number;
+	readonly aiTokenBudget?: number;
+	readonly aiToolResponseCharBudget?: number;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
 	readonly existingPrTitle?: string;
@@ -157,6 +167,12 @@ export type GeneratePrContentConfigLocal = GeneratePrContentConfigCommon & {
 export type GeneratePrContentConfigGithubModels = GeneratePrContentConfigCommon & {
 	readonly provider: "github-models";
 	readonly ghToken: Redacted.Redacted<string>;
+	readonly requiresToolCalls?: boolean;
+	readonly localFallback?: {
+		readonly openaiCompatUrl: string;
+		readonly model: string;
+		readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+	};
 };
 
 export type GeneratePrContentConfig =
@@ -176,11 +192,12 @@ const GeneratePrContentConfigDef = Config.all({
 	ghToken: Config.option(Config.redacted("GH_TOKEN")),
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
-	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
+	localModel: Config.option(Config.string("AUTO_PR_LOCAL_MODEL")),
+	routingDecisionJson: Config.option(Config.string("AUTO_PR_ROUTING_DECISION_JSON")),
 	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
 	ghHost: Config.option(Config.string("GH_HOST")),
 	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
-	routingContext: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT")),
+	routingContextJson: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT_JSON")),
 });
 
 function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
@@ -201,19 +218,127 @@ function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError
 const parseProviderOrDefault = (raw: string) =>
 	raw === "" ? Effect.succeed(DEFAULT_AI_PROVIDER) : parseProvider(raw);
 
-function resolveProviderModel(input: {
-	readonly provider: AiProvider;
-	readonly aiOpenaiCompatModel: Option.Option<string>;
+function resolveLocalProviderModel(input: {
+	readonly localModel: Option.Option<string>;
 }): Effect.Effect<string, AutoPrConfigError, never> {
-	const defaultModel =
-		input.provider === "github-models" ? DEFAULT_GITHUB_MODELS_MODEL : DEFAULT_OPENAI_COMPAT_MODEL;
 	return Effect.gen(function* () {
 		const model = yield* getOrDefaultLogged(
-			input.aiOpenaiCompatModel,
-			"AUTO_PR_AI_OPENAI_COMPAT_MODEL",
-			defaultModel,
+			input.localModel,
+			"AUTO_PR_LOCAL_MODEL",
+			DEFAULT_OPENAI_COMPAT_MODEL,
 		);
-		return yield* requireNonEmpty("AUTO_PR_AI_OPENAI_COMPAT_MODEL", model);
+		return yield* requireNonEmpty("AUTO_PR_LOCAL_MODEL", model);
+	});
+}
+
+function resolveOptionalLocalFallback(input: {
+	readonly localModel: Option.Option<string>;
+	readonly aiOpenaiCompatUrl: Option.Option<string>;
+	readonly aiOpenaiCompatApiKey: Option.Option<Redacted.Redacted<string>>;
+}): Effect.Effect<
+	| {
+			readonly openaiCompatUrl: string;
+			readonly model: string;
+			readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+	  }
+	| undefined,
+	AutoPrConfigError,
+	never
+> {
+	return Effect.gen(function* () {
+		const localModelRaw = optionalTrimmedNonEmpty(input.localModel);
+		const urlRaw = optionalTrimmedNonEmpty(input.aiOpenaiCompatUrl);
+		if (localModelRaw === undefined || urlRaw === undefined) return undefined;
+		const openaiCompatUrl = yield* Effect.fromResult(parseOpenAiCompatUrl(urlRaw)).pipe(
+			Effect.mapError(
+				(e) =>
+					new AutoPrConfigError({
+						missing: [`AUTO_PR_AI_OPENAI_COMPAT_URL: ${e.reason}`],
+					}),
+			),
+		);
+		const model = yield* requireNonEmpty("AUTO_PR_LOCAL_MODEL", localModelRaw);
+		return {
+			openaiCompatUrl,
+			model,
+			...(Option.isSome(input.aiOpenaiCompatApiKey)
+				? { openaiCompatApiKey: input.aiOpenaiCompatApiKey.value }
+				: {}),
+		};
+	});
+}
+
+function parseRoutingDecisionJson(
+	routingDecisionJson: Option.Option<string>,
+): Effect.Effect<RoutingDecision, ModelRoutingOutputError, never> {
+	return Effect.gen(function* () {
+		const raw = yield* Option.match(routingDecisionJson, {
+			onNone: () =>
+				Effect.fail(
+					new ModelRoutingOutputError({
+						message:
+							"Missing routing output: AUTO_PR_ROUTING_DECISION_JSON is required for github-models.",
+					}),
+				),
+			onSome: (jsonText) => Effect.succeed(jsonText),
+		});
+		const parsed = yield* Effect.try({
+			try: () => JSON.parse(raw) as unknown,
+			catch: () =>
+				new ModelRoutingOutputError({
+					message: "Invalid AUTO_PR_ROUTING_DECISION_JSON: not valid JSON.",
+				}),
+		});
+		const decoded = Schema.decodeUnknownResult(RoutingDecisionSchema)(parsed);
+		if (Result.isFailure(decoded)) {
+			return yield* Effect.fail(
+				new ModelRoutingOutputError({
+					message: "Invalid AUTO_PR_ROUTING_DECISION_JSON: schema decode failed.",
+				}),
+			);
+		}
+		return {
+			provider: decoded.success.provider,
+			selectedModel: decoded.success.selectedModel.trim(),
+			requiresToolCalls: decoded.success.requiresToolCalls,
+			tokenBudget: decoded.success.tokenBudget,
+			toolRoundLimit: decoded.success.toolRoundLimit,
+			toolResponseCharBudget: decoded.success.toolResponseCharBudget,
+			band: decoded.success.band,
+			selectionMode: decoded.success.selectionMode,
+		};
+	});
+}
+
+function parseRoutingContextJson(
+	routingContextJson: Option.Option<string>,
+): Effect.Effect<RoutingContextArtifact | undefined, ModelRoutingOutputError, never> {
+	return Option.match(routingContextJson, {
+		onNone: () => Effect.succeed(undefined),
+		onSome: (raw) =>
+			Effect.gen(function* () {
+				const parsed = yield* Effect.try({
+					try: () => JSON.parse(raw) as unknown,
+					catch: () =>
+						new ModelRoutingOutputError({
+							message: "Invalid AUTO_PR_ROUTING_CONTEXT_JSON: not valid JSON.",
+						}),
+				});
+				const decoded = Schema.decodeUnknownResult(RoutingContextSchema)(parsed);
+				if (Result.isFailure(decoded)) {
+					return yield* Effect.fail(
+						new ModelRoutingOutputError({
+							message: "Invalid AUTO_PR_ROUTING_CONTEXT_JSON: schema decode failed.",
+						}),
+					);
+				}
+				return {
+					...decoded.success,
+					localRunnerResources: decoded.success.localRunnerResources,
+					localModelResourceFit: decoded.success.localModelResourceFit,
+					localModelRecommendation: decoded.success.localModelRecommendation,
+				};
+			}),
 	});
 }
 
@@ -241,7 +366,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
-			const routingContext = optionalTrimmedNonEmpty(base.routingContext);
+			const routingContext = yield* parseRoutingContextJson(base.routingContextJson);
 			const githubApiUrl = optionalTrimmedNonEmpty(base.githubApiUrl);
 			const ghHost = optionalTrimmedNonEmpty(base.ghHost);
 
@@ -273,9 +398,8 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 									}),
 							),
 						);
-						const modelId = yield* resolveProviderModel({
-							provider,
-							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						const modelId = yield* resolveLocalProviderModel({
+							localModel: base.localModel,
 						});
 						const generatePrContentLocal: GeneratePrContentConfigLocal = {
 							...shared,
@@ -296,15 +420,28 @@ export const GeneratePrContentConfigLayer = Layer.effect(
 							base.ghToken,
 							"GH_TOKEN required for github-models",
 						);
-						const modelId = yield* resolveProviderModel({
-							provider,
-							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						const routingDecision = yield* parseRoutingDecisionJson(base.routingDecisionJson);
+						const localFallback = yield* resolveOptionalLocalFallback({
+							localModel: base.localModel,
+							aiOpenaiCompatUrl: base.aiOpenaiCompatUrl,
+							aiOpenaiCompatApiKey: base.aiOpenaiCompatApiKey,
 						});
 						const generatePrContentGithub: GeneratePrContentConfigGithubModels = {
 							...shared,
 							provider: "github-models",
-							model: modelId,
+							model: routingDecision.selectedModel,
 							ghToken,
+							requiresToolCalls: routingDecision.requiresToolCalls,
+							...(routingDecision.toolRoundLimit !== undefined
+								? { aiToolRoundLimit: routingDecision.toolRoundLimit }
+								: {}),
+							...(routingDecision.tokenBudget !== undefined
+								? { aiTokenBudget: routingDecision.tokenBudget }
+								: {}),
+							...(routingDecision.toolResponseCharBudget !== undefined
+								? { aiToolResponseCharBudget: routingDecision.toolResponseCharBudget }
+								: {}),
+							...(localFallback !== undefined ? { localFallback } : {}),
 						};
 						return generatePrContentGithub;
 					}),
@@ -392,7 +529,10 @@ export type RunAutoPrConfigCommon = {
 	readonly templatePath: string;
 	readonly ghToken: Redacted.Redacted<string>;
 	readonly model: string;
-	readonly routingContext?: string;
+	readonly routingContext?: RoutingContextArtifact;
+	readonly aiToolRoundLimit?: number;
+	readonly aiTokenBudget?: number;
+	readonly aiToolResponseCharBudget?: number;
 	readonly githubApiUrl?: string;
 	readonly ghHost?: string;
 	/** When set from `BRANCH`; omit to resolve the head branch via `git branch --show-current` at run time. */
@@ -409,6 +549,11 @@ export type RunAutoPrConfigLocal = RunAutoPrConfigCommon & {
 
 export type RunAutoPrConfigGithubModels = RunAutoPrConfigCommon & {
 	readonly provider: "github-models";
+	readonly localFallback?: {
+		readonly openaiCompatUrl: string;
+		readonly model: string;
+		readonly openaiCompatApiKey?: Redacted.Redacted<string>;
+	};
 };
 
 /** `run-auto-pr` config: OpenAI-compat fields exist only when `provider` is `local`. */
@@ -423,12 +568,13 @@ const RunAutoPrConfigDef = Config.all({
 	aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
 	aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
 	aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
-	aiOpenaiCompatModel: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_MODEL")),
+	localModel: Config.option(Config.string("AUTO_PR_LOCAL_MODEL")),
+	routingDecisionJson: Config.option(Config.string("AUTO_PR_ROUTING_DECISION_JSON")),
 	githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
 	ghHost: Config.option(Config.string("GH_HOST")),
 	branch: Config.option(Config.string("BRANCH")),
 	existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
-	routingContext: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT")),
+	routingContextJson: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT_JSON")),
 });
 
 export const RunAutoPrConfigLayer = Layer.effect(
@@ -459,7 +605,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
 			);
 			const provider = yield* parseProviderOrDefault(providerRaw);
 			const existingPrTitle = optionalTrimmedNonEmpty(base.existingPrTitle);
-			const routingContext = optionalTrimmedNonEmpty(base.routingContext);
+			const routingContext = yield* parseRoutingContextJson(base.routingContextJson);
 
 			const shared = {
 				defaultBranch,
@@ -490,9 +636,8 @@ export const RunAutoPrConfigLayer = Layer.effect(
 									}),
 							),
 						);
-						const modelId = yield* resolveProviderModel({
-							provider,
-							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						const modelId = yield* resolveLocalProviderModel({
+							localModel: base.localModel,
 						});
 						const runAutoPrLocal: RunAutoPrConfigLocal = {
 							...shared,
@@ -508,14 +653,26 @@ export const RunAutoPrConfigLayer = Layer.effect(
 				),
 				Match.when("github-models", () =>
 					Effect.gen(function* () {
-						const modelId = yield* resolveProviderModel({
-							provider,
-							aiOpenaiCompatModel: base.aiOpenaiCompatModel,
+						const routingDecision = yield* parseRoutingDecisionJson(base.routingDecisionJson);
+						const localFallback = yield* resolveOptionalLocalFallback({
+							localModel: base.localModel,
+							aiOpenaiCompatUrl: base.aiOpenaiCompatUrl,
+							aiOpenaiCompatApiKey: base.aiOpenaiCompatApiKey,
 						});
 						const runAutoPrGithub: RunAutoPrConfigGithubModels = {
 							...shared,
 							provider: "github-models",
-							model: modelId,
+							model: routingDecision.selectedModel,
+							...(routingDecision.toolRoundLimit !== undefined
+								? { aiToolRoundLimit: routingDecision.toolRoundLimit }
+								: {}),
+							...(routingDecision.tokenBudget !== undefined
+								? { aiTokenBudget: routingDecision.tokenBudget }
+								: {}),
+							...(routingDecision.toolResponseCharBudget !== undefined
+								? { aiToolResponseCharBudget: routingDecision.toolResponseCharBudget }
+								: {}),
+							...(localFallback !== undefined ? { localFallback } : {}),
 						};
 						return runAutoPrGithub;
 					}),

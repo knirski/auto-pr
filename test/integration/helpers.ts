@@ -37,7 +37,7 @@ export function localLlamaEndpointFromEnv(
 	env: NodeJS.ProcessEnv = process.env,
 ): LocalLlamaEndpoint | undefined {
 	const baseUrlRaw = env.AUTO_PR_AI_OPENAI_COMPAT_URL?.trim();
-	const modelId = env.AUTO_PR_AI_OPENAI_COMPAT_MODEL?.trim();
+	const modelId = env.AUTO_PR_LOCAL_MODEL?.trim();
 	if (
 		baseUrlRaw === undefined ||
 		baseUrlRaw.length === 0 ||

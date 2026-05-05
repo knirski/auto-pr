@@ -99,7 +99,7 @@ describe("capDiffForAiToolRoundtrip", () => {
 		expect(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS).toBe(8_000);
 	});
 
-	test("uses lower round-trip cap for github-models gpt-4.1", () => {
+	test("uses lower round-trip cap for github-models gpt-4.1 family", () => {
 		const availableTokens = GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS - TOOL_ROUNDTRIP_RESERVED_TOKENS;
 		const expected = Math.min(
 			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
@@ -110,10 +110,22 @@ describe("capDiffForAiToolRoundtrip", () => {
 			),
 		);
 		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1")).toBe(expected);
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-mini")).toBe(
+			expected,
+		);
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-nano")).toBe(
+			expected,
+		);
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1/preview")).toBe(
+			expected,
+		);
 	});
 
 	test("uses default round-trip cap for other models/providers", () => {
-		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-mini")).toBe(
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.10")).toBe(
+			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		);
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4o-mini")).toBe(
 			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 		);
 		expect(resolveAiToolRoundtripDiffCharBudget("local", "gpt-oss")).toBe(

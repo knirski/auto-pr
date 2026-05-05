@@ -350,7 +350,7 @@ export function selectModel(
 	},
 ): string {
 	const override = explicitModel?.trim() ?? "";
-	if (!isBlank(override)) return override;
+	if (provider === "local" && !isBlank(override)) return override;
 	if (provider === "github-models") {
 		return band === "C" || routing?.requiresToolCalls === true || routing?.reasoningNeed === "high"
 			? GITHUB_MODELS_STRONG_MODEL
@@ -381,7 +381,7 @@ export function resolveModelBand(input: ResolveModelBandInput): ModelBandDecisio
 	const localModelRecommendation =
 		input.provider === "local" && input.localModel !== undefined
 			? externalOpenAiCompat
-				? `external OpenAI-compatible endpoint; default model=${LOCAL_LARGE_MODEL}; set ai_openai_compat_model if the endpoint requires another id`
+				? `external OpenAI-compatible endpoint; default model=${LOCAL_LARGE_MODEL}; set AUTO_PR_LOCAL_MODEL if the endpoint requires another id`
 				: `${selectLocalModelForRunner(input.localModel.runner)}; recommended GGUF <= ${recommendedMaxParamsB(input.localModel.runner)}B Q4-class on this runner`
 			: undefined;
 	const localModelResourceFit =

@@ -95,7 +95,7 @@ jobs:
 
       - name: Run integration tests (local llama fallback path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model_stub.outputs.id }}
+          AUTO_PR_LOCAL_MODEL: ${{ steps.openai_model_stub.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-fallback.integration.test.ts
 
       - name: Stop local llama-server (Docker)
@@ -208,7 +208,7 @@ jobs:
 
       - name: Run integration tests (local llama happy path)
         env:
-          AUTO_PR_AI_OPENAI_COMPAT_MODEL: ${{ steps.openai_model.outputs.id }}
+          AUTO_PR_LOCAL_MODEL: ${{ steps.openai_model.outputs.id }}
         run: bun --config=bunfig.integration.toml test test/integration/ai-providers.local-happy.integration.test.ts
 
       - name: Stop local llama-server (Docker)

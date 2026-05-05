@@ -22,7 +22,7 @@ Chosen option: **config-driven provider abstraction** with **two** product provi
 * **Good:** Workflow inputs (`ai_provider`, model and OpenAI-compat fields) map cleanly to env.
 * **Neutral:** Adopters who relied on Ollama-specific workflow steps or `AUTO_PR_AI_OLLAMA_MODEL` must migrate to `local` / `AUTO_PR_AI_OPENAI_COMPAT_*` or `github-models`.
 
-**Implementation:** `github-models` uses the fixed GitHub Models inference URL and `GH_TOKEN`. **`local`** uses `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_AI_OPENAI_COMPAT_MODEL`. Model id for both providers is **`AUTO_PR_AI_OPENAI_COMPAT_MODEL`** (provider-specific defaults when unset).
+**Implementation:** `github-models` uses the fixed GitHub Models inference URL and `GH_TOKEN` plus routing output (`AUTO_PR_ROUTING_DECISION_JSON`) for selected model/tool requirement. **`local`** uses `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_LOCAL_MODEL`.
 
 ## References
 

@@ -24,9 +24,11 @@ export const MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 1_500;
  * 4. Store model-specific overrides in config data instead of embedding them in code.
  */
 
-const isGithubModelsGpt41 = (model: string): boolean => {
+const isGithubModelsGpt41Family = (model: string): boolean => {
 	const normalized = model.trim().toLowerCase();
-	return normalized === "openai/gpt-4.1";
+	const prefix = "openai/gpt-4.1";
+	const next = normalized[prefix.length];
+	return normalized.startsWith(prefix) && (next === undefined || !/[0-9]/.test(next));
 };
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -136,7 +138,7 @@ export function resolveAiToolRoundtripDiffCharBudget(
 	provider: "local" | "github-models",
 	model: string,
 ): number {
-	if (provider === "github-models" && isGithubModelsGpt41(model)) {
+	if (provider === "github-models" && isGithubModelsGpt41Family(model)) {
 		return deriveToolRoundtripCharBudgetFromRequestTokens({
 			requestTokenLimit: GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
 			reservedTokens: TOOL_ROUNDTRIP_RESERVED_TOKENS,

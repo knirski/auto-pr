@@ -18,8 +18,8 @@ Chosen option: **unify on `@effect/ai-openai-compat` only**. Remove the `ollama`
 
 | Provider        | Role |
 | --------------- | ---- |
-| `github-models` | GitHub Models inference URL; `GH_TOKEN`; model via `AUTO_PR_AI_OPENAI_COMPAT_MODEL` (default e.g. `openai/gpt-4.1` when unset). |
-| `local`         | `AUTO_PR_AI_OPENAI_COMPAT_URL` (default `http://127.0.0.1:8080/v1`); optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`; same model var. |
+| `github-models` | GitHub Models inference URL; `GH_TOKEN`; model id supplied by routing via `AUTO_PR_ROUTING_DECISION_JSON.selectedModel`. |
+| `local`         | `AUTO_PR_AI_OPENAI_COMPAT_URL` (default `http://127.0.0.1:8080/v1`); optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`; `AUTO_PR_LOCAL_MODEL`. |
 
 Remote gateways (OpenRouter, Azure, etc.) use **`local`** with the appropriate URL, model id, and key.
 

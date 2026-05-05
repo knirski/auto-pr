@@ -37,6 +37,12 @@ export class AutoPrConfigError extends Schema.TaggedErrorClass<AutoPrConfigError
 	{ missing: Schema.Array(Schema.String) },
 ) {}
 
+/** Routing output contract is invalid or missing required values. */
+export class ModelRoutingOutputError extends Schema.TaggedErrorClass<ModelRoutingOutputError>()(
+	"ModelRoutingOutputError",
+	{ message: Schema.String },
+) {}
+
 /** Pull request title is empty. Add at least one non-merge commit with non-empty subject. */
 export class PullRequestTitleBlankError extends Schema.TaggedErrorClass<PullRequestTitleBlankError>()(
 	"PullRequestTitleBlankError",

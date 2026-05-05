@@ -50,6 +50,10 @@ describe("build-model-routing-context", () => {
 			join(process.cwd(), ".github/actions/auto-pr-run-command/auto-pr-run-command.sh"),
 			"utf8",
 		);
+		const generateReusableWorkflow = readFileSync(
+			join(process.cwd(), ".github/workflows/auto-pr-generate-reusable.yml"),
+			"utf8",
+		);
 
 		expect(pkg.bin["auto-pr-build-model-routing-context"]).toBe(
 			"./dist/workflow/auto-pr-build-model-routing-context.js",
@@ -71,6 +75,12 @@ describe("build-model-routing-context", () => {
 		expect(runCommandScript).toContain("build-model-routing-context)");
 		expect(runCommandScript).toContain('BIN="auto-pr-build-model-routing-context"');
 		expect(runCommandScript).toContain('SCRIPT="build-model-routing-context"');
+		expect(generateReusableWorkflow).toContain(
+			"AUTO_PR_ROUTING_DECISION_JSON: $" + "{{ steps.ai_routing.outputs.routing_decision_json }}",
+		);
+		expect(generateReusableWorkflow).toContain(
+			"AUTO_PR_ROUTING_CONTEXT_JSON: $" + "{{ steps.ai_routing.outputs.routing_context_json }}",
+		);
 	});
 
 	test("auto-pr-run-command invokes build-model-routing-context from workspace source", async () => {
@@ -107,7 +117,7 @@ describe("build-model-routing-context", () => {
 					env: {
 						...process.env,
 						AUTO_PR_AI_PROVIDER: "local",
-						AUTO_PR_AI_OPENAI_COMPAT_MODEL: "",
+						AUTO_PR_LOCAL_MODEL: "",
 						AUTO_PR_AI_OPENAI_COMPAT_URL: "",
 						AUTO_PR_AI_LLAMACPP_MODEL_URL: "",
 						AUTO_PR_PKG: "github:knirski/auto-pr",
@@ -161,7 +171,7 @@ describe("build-model-routing-context", () => {
 					env: {
 						...process.env,
 						AUTO_PR_AI_PROVIDER: "local",
-						AUTO_PR_AI_OPENAI_COMPAT_MODEL: "",
+						AUTO_PR_LOCAL_MODEL: "",
 						AUTO_PR_AI_OPENAI_COMPAT_URL: "",
 						AUTO_PR_AI_LLAMACPP_MODEL_URL: "",
 						COMMITS_COUNT: "1",
@@ -602,7 +612,7 @@ describe("build-model-routing-context", () => {
 		}
 	});
 
-	test("respects an explicit model override", async () => {
+	test("ignores explicit model override for github-models", async () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-override-");
 		try {
 			await Effect.runPromise(
@@ -631,7 +641,7 @@ describe("build-model-routing-context", () => {
 					});
 
 					const output = yield* read(githubOutput);
-					expect(output).toContain("selected_model=openai/gpt-4.1");
+					expect(output).toContain("selected_model=microsoft/phi-4-mini-instruct");
 				}),
 			);
 		} finally {
@@ -684,7 +694,7 @@ describe("build-model-routing-context", () => {
 		const dir = tempRepo("auto-pr-build-model-routing-context-program-");
 		const originalEnv = {
 			AUTO_PR_AI_LLAMACPP_MODEL_URL: process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL,
-			AUTO_PR_AI_OPENAI_COMPAT_MODEL: process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL,
+			AUTO_PR_LOCAL_MODEL: process.env.AUTO_PR_LOCAL_MODEL,
 			AUTO_PR_AI_OPENAI_COMPAT_URL: process.env.AUTO_PR_AI_OPENAI_COMPAT_URL,
 			AUTO_PR_AI_PROVIDER: process.env.AUTO_PR_AI_PROVIDER,
 			COMMITS_COUNT: process.env.COMMITS_COUNT,
@@ -720,7 +730,7 @@ describe("build-model-routing-context", () => {
 					process.env.AUTO_PR_AI_PROVIDER = "local";
 					process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL = "";
 					process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = "";
-					process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL = "";
+					process.env.AUTO_PR_LOCAL_MODEL = "";
 					process.env.LOCAL_RUNNER_CPUS = "";
 					process.env.LOCAL_RUNNER_MEMORY_GB = "";
 					process.env.REPOSITORY_VISIBILITY = "private";
@@ -739,7 +749,7 @@ describe("build-model-routing-context", () => {
 			);
 		} finally {
 			process.env.AUTO_PR_AI_LLAMACPP_MODEL_URL = originalEnv.AUTO_PR_AI_LLAMACPP_MODEL_URL;
-			process.env.AUTO_PR_AI_OPENAI_COMPAT_MODEL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_MODEL;
+			process.env.AUTO_PR_LOCAL_MODEL = originalEnv.AUTO_PR_LOCAL_MODEL;
 			process.env.AUTO_PR_AI_OPENAI_COMPAT_URL = originalEnv.AUTO_PR_AI_OPENAI_COMPAT_URL;
 			process.env.AUTO_PR_AI_PROVIDER = originalEnv.AUTO_PR_AI_PROVIDER;
 			process.env.COMMITS_COUNT = originalEnv.COMMITS_COUNT;

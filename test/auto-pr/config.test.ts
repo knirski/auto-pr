@@ -5,11 +5,11 @@ import {
 	AutoPrConfigError,
 	CreateOrUpdatePrConfig,
 	CreateOrUpdatePrConfigLayer,
-	DEFAULT_GITHUB_MODELS_MODEL,
 	DEFAULT_OPENAI_COMPAT_MODEL,
 	DEFAULT_OPENAI_COMPAT_URL,
 	GeneratePrContentConfig,
 	GeneratePrContentConfigLayer,
+	ModelRoutingOutputError,
 	RunAutoPrConfig,
 	RunAutoPrConfigLayer,
 } from "#auto-pr";
@@ -33,7 +33,7 @@ const GeneratePrContentConfigProviderLayer = ConfigProvider.layer(
 		GITHUB_WORKSPACE: "/workspace",
 		DEFAULT_BRANCH: "main",
 		BRANCH: "ai/feature",
-		AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+		AUTO_PR_LOCAL_MODEL: "llama3.1:8b",
 	}),
 );
 
@@ -61,7 +61,7 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 				GITHUB_WORKSPACE: " /workspace ",
 				DEFAULT_BRANCH: " main ",
 				BRANCH: " ai/feature ",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: " llama3.1:8b ",
+				AUTO_PR_LOCAL_MODEL: " llama3.1:8b ",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -86,7 +86,7 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 				GITHUB_WORKSPACE: "/workspace",
 				DEFAULT_BRANCH: "main",
 				BRANCH: "ai/feature",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+				AUTO_PR_LOCAL_MODEL: "llama3.1:8b",
 				AUTO_PR_EXISTING_PR_TITLE: "  feat: existing title  ",
 			}),
 		);
@@ -108,7 +108,7 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 				GITHUB_WORKSPACE: "/workspace",
 				DEFAULT_BRANCH: "main",
 				BRANCH: "ai/feature",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+				AUTO_PR_LOCAL_MODEL: "llama3.1:8b",
 				AUTO_PR_EXISTING_PR_TITLE: " \t ",
 			}),
 		);
@@ -130,7 +130,7 @@ describe("GeneratePrContentConfigLayer succeeds when all vars present", () => {
 				GITHUB_WORKSPACE: "/workspace",
 				DEFAULT_BRANCH: "main",
 				BRANCH: "ai/feature",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "llama3.1:8b",
+				AUTO_PR_LOCAL_MODEL: "llama3.1:8b",
 				GITHUB_API_URL: " https://api.github.com/ ",
 				GH_HOST: " github.com ",
 			}),
@@ -156,13 +156,15 @@ const generatePrContentBaseEnv = {
 };
 
 describe("GeneratePrContentConfigLayer for github-models", () => {
-	test("succeeds with GH_TOKEN and AUTO_PR_AI_OPENAI_COMPAT_MODEL", async () => {
+	test("uses AUTO_PR_ROUTING_DECISION_JSON and ignores AUTO_PR_LOCAL_MODEL", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "github-models",
 				GH_TOKEN: "ghp_test_github_models",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "openai/gpt-4.1",
+				AUTO_PR_LOCAL_MODEL: "openai/gpt-4.1",
+				AUTO_PR_ROUTING_DECISION_JSON:
+					'{"selectedModel":"anthropic/claude-sonnet-4","requiresToolCalls":true,"tokenBudget":9000,"toolRoundLimit":4,"toolResponseCharBudget":1500}',
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -173,15 +175,18 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
 			Effect.gen(function* () {
 				const config = yield* GeneratePrContentConfig;
 				expect(config.provider).toBe("github-models");
-				expect(config.model).toBe("openai/gpt-4.1");
+				expect(config.model).toBe("anthropic/claude-sonnet-4");
 				if (config.provider !== "github-models") return expect().fail("expected github-models");
 				expect(config.ghToken).toBeDefined();
 				expect(Redacted.isRedacted(config.ghToken)).toBe(true);
+				expect(config.aiTokenBudget).toBe(9000);
+				expect(config.aiToolRoundLimit).toBe(4);
+				expect(config.aiToolResponseCharBudget).toBe(1500);
 			}),
 		);
 	});
 
-	test("uses default model when AUTO_PR_AI_OPENAI_COMPAT_MODEL omitted", async () => {
+	test("fails when AUTO_PR_ROUTING_DECISION_JSON is missing", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...generatePrContentBaseEnv,
@@ -193,13 +198,25 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
 			TestBaseLayer,
 			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
 		);
-		await runEffect(layer)(
+		const exit = await Effect.runPromise(
 			Effect.gen(function* () {
-				const config = yield* GeneratePrContentConfig;
-				expect(config.provider).toBe("github-models");
-				expect(config.model).toBe(DEFAULT_GITHUB_MODELS_MODEL);
-			}),
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
 		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(ModelRoutingOutputError);
+					expect((err as ModelRoutingOutputError).message).toContain(
+						"AUTO_PR_ROUTING_DECISION_JSON",
+					);
+				},
+				onFailure: () => expect().fail("expected ModelRoutingOutputError in cause"),
+			});
+		}
 	});
 
 	test("fails when GH_TOKEN missing", async () => {
@@ -207,7 +224,6 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
 			ConfigProvider.fromUnknown({
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "github-models",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "openai/gpt-4.1",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -242,7 +258,7 @@ describe("GeneratePrContentConfigLayer for local", () => {
 				AUTO_PR_AI_PROVIDER: "local",
 				AUTO_PR_AI_OPENAI_COMPAT_URL: "https://api.openrouter.ai/v1",
 				AUTO_PR_AI_OPENAI_COMPAT_API_KEY: "sk-or-test",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "meta-llama/llama-3.1-8b-instruct",
+				AUTO_PR_LOCAL_MODEL: "meta-llama/llama-3.1-8b-instruct",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -267,7 +283,7 @@ describe("GeneratePrContentConfigLayer for local", () => {
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "local",
 				AUTO_PR_AI_OPENAI_COMPAT_API_KEY: "sk-test",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-4",
+				AUTO_PR_LOCAL_MODEL: "gpt-4",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -424,7 +440,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -449,7 +465,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 				AUTO_PR_EXISTING_PR_TITLE: "  feat: run existing  ",
 			}),
 		);
@@ -469,7 +485,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 				GITHUB_API_URL: " https://api.github.com/ ",
 				GH_HOST: " ghe.example.com ",
 			}),
@@ -492,7 +508,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
 				BRANCH: "  ai/feature  ",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -512,7 +528,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
 				BRANCH: " \t ",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -527,11 +543,13 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 		);
 	});
 
-	test("with github-models provider and default model", async () => {
+	test("with github-models provider and selected model", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
 				AUTO_PR_AI_PROVIDER: "github-models",
+				AUTO_PR_ROUTING_DECISION_JSON:
+					'{"selectedModel":"microsoft/phi-4-mini-instruct","requiresToolCalls":false}',
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -542,7 +560,7 @@ describe("RunAutoPrConfigLayer succeeds", () => {
 			Effect.gen(function* () {
 				const config = yield* RunAutoPrConfig;
 				expect(config.provider).toBe("github-models");
-				expect(config.model).toBe(DEFAULT_GITHUB_MODELS_MODEL);
+				expect(config.model).toBe("microsoft/phi-4-mini-instruct");
 				expect("openaiCompatUrl" in config).toBe(false);
 			}),
 		);
@@ -556,7 +574,7 @@ describe("RunAutoPrConfigLayer rejects invalid AUTO_PR_AI_OPENAI_COMPAT_URL", ()
 				...runAutoPrBaseEnv,
 				AUTO_PR_AI_PROVIDER: "local",
 				AUTO_PR_AI_OPENAI_COMPAT_URL: "localhost:8080/v1",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -591,7 +609,7 @@ describe("GeneratePrContentConfig reads DEFAULT_BRANCH and BRANCH", () => {
 			ConfigProvider.fromUnknown({
 				GITHUB_WORKSPACE: "/tmp/ws",
 				AUTO_PR_AI_PROVIDER: "local",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 				DEFAULT_BRANCH: "main",
 				BRANCH: "ai/test-branch",
 			}),
@@ -618,7 +636,7 @@ describe("GeneratePrContentConfigLayer rejects invalid provider", () => {
 				DEFAULT_BRANCH: "main",
 				BRANCH: "ai/feature",
 				AUTO_PR_AI_PROVIDER: "ollama",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "m",
+				AUTO_PR_LOCAL_MODEL: "m",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -654,7 +672,7 @@ describe("GeneratePrContentConfigLayer rejects branch === defaultBranch", () => 
 				GITHUB_WORKSPACE: "/workspace",
 				DEFAULT_BRANCH: "main",
 				BRANCH: "main",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -687,7 +705,7 @@ describe("GeneratePrContentConfigLayer rejects branch === defaultBranch", () => 
 				GITHUB_WORKSPACE: "/workspace",
 				DEFAULT_BRANCH: " main ",
 				BRANCH: " main ",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -721,7 +739,7 @@ describe("RunAutoPrConfigLayer rejects branch === defaultBranch when BRANCH is s
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
 				BRANCH: "main",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -751,7 +769,7 @@ describe("RunAutoPrConfigLayer rejects branch === defaultBranch when BRANCH is s
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...runAutoPrBaseEnv,
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 				// No BRANCH set
 			}),
 		);
@@ -775,7 +793,7 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "local",
 				AUTO_PR_AI_OPENAI_COMPAT_URL: "localhost:8080/v1",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -806,7 +824,7 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
 			ConfigProvider.fromUnknown({
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "local",
-				AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+				AUTO_PR_LOCAL_MODEL: "gpt-oss",
 				// No AUTO_PR_AI_OPENAI_COMPAT_URL
 			}),
 		);
@@ -825,13 +843,13 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
 		);
 	});
 
-	test("uses default AUTO_PR_AI_OPENAI_COMPAT_MODEL when not set (local provider)", async () => {
+	test("uses default AUTO_PR_LOCAL_MODEL when not set (local provider)", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "local",
 				AUTO_PR_AI_OPENAI_COMPAT_URL: "http://localhost:8080/v1",
-				// No AUTO_PR_AI_OPENAI_COMPAT_MODEL
+				// No AUTO_PR_LOCAL_MODEL
 			}),
 		);
 		const layer = Layer.mergeAll(
@@ -849,25 +867,37 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
 		);
 	});
 
-	test("uses default AUTO_PR_AI_OPENAI_COMPAT_MODEL when not set (github-models provider)", async () => {
+	test("fails when github-models and AUTO_PR_ROUTING_DECISION_JSON is not set", async () => {
 		const providerLayer = ConfigProvider.layer(
 			ConfigProvider.fromUnknown({
 				...generatePrContentBaseEnv,
 				AUTO_PR_AI_PROVIDER: "github-models",
 				GH_TOKEN: "ghp_test",
-				// No AUTO_PR_AI_OPENAI_COMPAT_MODEL
+				// No AUTO_PR_ROUTING_DECISION_JSON
 			}),
 		);
 		const layer = Layer.mergeAll(
 			TestBaseLayer,
 			GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
 		);
-		await runEffect(layer)(
+		const exit = await Effect.runPromise(
 			Effect.gen(function* () {
-				const config = yield* GeneratePrContentConfig;
-				expect(config.model).toBe(DEFAULT_GITHUB_MODELS_MODEL);
-				expect(config.provider).toBe("github-models");
-			}),
+				return yield* GeneratePrContentConfig;
+			})
+				.pipe(Effect.provide(layer))
+				.pipe(Effect.exit),
 		);
+		expect(Exit.isFailure(exit)).toBe(true);
+		if (Exit.isFailure(exit)) {
+			Result.match(Cause.findError(exit.cause), {
+				onSuccess: (err) => {
+					expect(err).toBeInstanceOf(ModelRoutingOutputError);
+					expect((err as ModelRoutingOutputError).message).toContain(
+						"AUTO_PR_ROUTING_DECISION_JSON",
+					);
+				},
+				onFailure: () => expect().fail("expected ModelRoutingOutputError in cause"),
+			});
+		}
 	});
 });

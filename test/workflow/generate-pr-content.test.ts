@@ -274,6 +274,9 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
+			aiTokenBudget: 9000,
+			aiToolRoundLimit: 4,
+			aiToolResponseCharBudget: 1500,
 		});
 
 		expect(config).toEqual({
@@ -286,6 +289,10 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
 			ghToken,
 			githubApiUrl: "https://api.github.com",
 			ghHost: "github.com",
+			aiTokenBudget: 9000,
+			aiToolRoundLimit: 4,
+			aiToolResponseCharBudget: 1500,
+			aiLimitsSource: "routing_decision",
 		});
 	});
 });
@@ -436,6 +443,35 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
 			},
 		};
 		return new Response(JSON.stringify(body), { status: 200 });
+	}) as typeof fetch;
+	return {
+		fetch: Object.assign(impl, {
+			preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+		}),
+		getCallCount: () => callCount,
+	};
+}
+
+function createGithubModelsRequestTooLargeMockFetch(): {
+	readonly fetch: typeof fetch;
+	readonly getCallCount: () => number;
+} {
+	let callCount = 0;
+	const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+			throw new Error("createGithubModelsRequestTooLargeMockFetch: unexpected request");
+		}
+		callCount += 1;
+		return new Response(
+			JSON.stringify({
+				error: {
+					message: "Request body too large for gpt-4.1 model. Max size: 8000 tokens.",
+					type: "invalid_request_error",
+				},
+			}),
+			{ status: 400 },
+		);
 	}) as typeof fetch;
 	return {
 		fetch: Object.assign(impl, {
@@ -1005,6 +1041,35 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 	});
 
 	describe("HTTP 401/403 from OpenAI-compat endpoint (auth failure)", () => {
+		test("propagates github-models auth failure instead of primitive fallback", async () => {
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				retryDelay: Duration.zero,
+				fetch: createOpenAiChatCompletionsMockFetch({
+					content: VALID_AI_RESPONSE,
+					status: 401,
+				}),
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const exit = yield* generatePrContent(p.params).pipe(Effect.exit, Effect.scoped);
+					expect(Exit.isFailure(exit)).toBe(true);
+					if (Exit.isFailure(exit)) {
+						Result.match(Cause.findError(exit.cause), {
+							onSuccess: (err) => {
+								expect(err).toBeInstanceOf(AutoPrConfigError);
+								expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+									"AuthenticationError",
+								);
+							},
+							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+						});
+					}
+				}).pipe(Effect.scoped),
+			);
+		});
+
 		test("propagates as AutoPrConfigError when local endpoint returns HTTP 401", async () => {
 			const p = makeParams(twoCommits, {
 				retryDelay: Duration.zero,
@@ -1055,6 +1120,23 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
 							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
 						});
 					}
+				}).pipe(Effect.scoped),
+			);
+		});
+
+		test("does not retry the same github-models request-size failure", async () => {
+			const mock = createGithubModelsRequestTooLargeMockFetch();
+			const p = makeParams(twoCommits, {
+				provider: "github-models",
+				model: "openai/gpt-4.1",
+				retryDelay: Duration.zero,
+				fetch: mock.fetch,
+			});
+			await runEffect(layerForTest(p))(
+				Effect.gen(function* () {
+					const result = yield* generatePrContent(p.params);
+					expect(result.title).toBe("feat: add module A");
+					expect(mock.getCallCount()).toBe(1);
 				}).pipe(Effect.scoped),
 			);
 		});
@@ -1197,6 +1279,76 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 		);
 	});
 
+	test("runGeneratePrContentWithServices propagates github-models auth failure", async () => {
+		const gitCtx = mockGitContext([
+			{ subject: "feat: add module A", body: "" },
+			{ subject: "fix: fix bug in B", body: "" },
+		]);
+		const prClient = {
+			findByBranch: () => Effect.succeed(Option.none()),
+			update: () => Effect.void,
+			create: () => Effect.succeed("https://github.com/knirski/auto-pr/pull/123"),
+		};
+
+		await runEffect(
+			Layer.mergeAll(
+				ValueBasedLayer,
+				Layer.succeed(GitContext, gitCtx),
+				Layer.succeed(PullRequestClient, prClient),
+				MockDiffToolkitLayer,
+				aiProviderLayerFromConfig(
+					{
+						provider: "github-models",
+						model: "openai/gpt-4.1",
+						ghToken: Redacted.make("mock-github-token"),
+					},
+					{
+						fetch: createOpenAiChatCompletionsMockFetch({
+							content: VALID_AI_RESPONSE,
+							status: 401,
+						}),
+					},
+				),
+			),
+		)(
+			Effect.gen(function* () {
+				const tmp = yield* createTestTempDirEffect("run-generate-github-auth-");
+				try {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+					yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+					const exit = yield* runGeneratePrContentWithServices({
+						defaultBranch: "main",
+						branch: "ai/test",
+						workspace: tmp.path,
+						templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+						provider: "github-models",
+						model: "openai/gpt-4.1",
+						allowToolCalls: true,
+						retryDelay: Duration.zero,
+					}).pipe(Effect.exit);
+
+					expect(Exit.isFailure(exit)).toBe(true);
+					if (Exit.isFailure(exit)) {
+						Result.match(Cause.findError(exit.cause), {
+							onSuccess: (err) => {
+								expect(err).toBeInstanceOf(AutoPrConfigError);
+								expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+									"AuthenticationError",
+								);
+							},
+							onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+						});
+					}
+				} finally {
+					const fs = yield* FileSystem.FileSystem;
+					yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+				}
+			}).pipe(Effect.scoped),
+		);
+	});
+
 	test("program passes configured existing PR title into runGeneratePrContent", async () => {
 		await runEffect(IntegrationTestLayer)(
 			Effect.gen(function* () {
@@ -1218,7 +1370,7 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 							DEFAULT_BRANCH: "main",
 							BRANCH: "ai/test",
 							AUTO_PR_EXISTING_PR_TITLE: "  feat: existing title  ",
-							AUTO_PR_AI_OPENAI_COMPAT_MODEL: "gpt-oss",
+							AUTO_PR_LOCAL_MODEL: "gpt-oss",
 						}),
 					);
 
@@ -1258,6 +1410,8 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 							BRANCH: "ai/test",
 							AUTO_PR_AI_PROVIDER: "github-models",
 							GH_TOKEN: "ghp_test_github_models",
+							AUTO_PR_ROUTING_DECISION_JSON:
+								'{"selectedModel":"microsoft/phi-4-mini-instruct","requiresToolCalls":false}',
 						}),
 					);
 

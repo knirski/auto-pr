@@ -121,7 +121,7 @@ describe("model band routing command policy", () => {
 		});
 	});
 
-	test("explicit model override wins over provider defaults", () => {
+	test("github-models ignores explicit override and stays on policy route", () => {
 		const signals = {
 			semanticCommitCount: 1,
 			conventionalTypeCount: 1,
@@ -143,7 +143,7 @@ describe("model band routing command policy", () => {
 		expect(
 			resolveModelBand({ provider: "github-models", explicitModel: "openai/gpt-4.1", signals })
 				.selectedModel,
-		).toBe("openai/gpt-4.1");
+		).toBe("microsoft/phi-4-mini-instruct");
 	});
 
 	test("routes bounded source changes to a tool-capable GitHub model", () => {
@@ -387,7 +387,7 @@ describe("model band routing command policy", () => {
 			selectedModel: "gpt-oss",
 			localModelResourceFit: "not-applicable",
 			localModelRecommendation:
-				"external OpenAI-compatible endpoint; default model=gpt-oss; set ai_openai_compat_model if the endpoint requires another id",
+				"external OpenAI-compatible endpoint; default model=gpt-oss; set AUTO_PR_LOCAL_MODEL if the endpoint requires another id",
 		});
 	});
 
