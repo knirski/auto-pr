@@ -1154,6 +1154,9 @@ export function runGeneratePrContent(
 						failure,
 						hasRemainingAttempts: rest.length > 0,
 					});
+					if (failure._tag === "AuthOrConfig") {
+						return yield* Effect.fail(nextError);
+					}
 					yield* Effect.sleep(fallbackDelayForFailure(failure));
 					state =
 						decision === "final_fallback"

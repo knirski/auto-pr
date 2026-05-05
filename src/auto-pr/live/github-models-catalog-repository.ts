@@ -5,6 +5,8 @@ import {
 	parseGithubModelsRateLimitTier,
 } from "#core/github-model-routing.js";
 
+const GITHUB_MODELS_CATALOG_FETCH_TIMEOUT = "5 seconds";
+
 function parseGithubCatalogEntries(raw: unknown): readonly GithubModelCatalogEntry[] {
 	if (!Array.isArray(raw)) return [];
 	const entries: GithubModelCatalogEntry[] = [];
@@ -64,11 +66,12 @@ export const makeGithubModelsCatalogRepositoryLive = (
 	Layer.succeed(GithubModelsCatalogRepository, {
 		fetchCatalog: (token) =>
 			Effect.tryPromise({
-				try: async () => {
+				try: async (signal) => {
 					const response = await (options.fetchImpl ?? fetch)(
 						"https://models.github.ai/catalog/models",
 						{
 							method: "GET",
+							signal,
 							headers: {
 								accept: "application/json",
 								authorization: `Bearer ${Redacted.value(token)}`,
@@ -79,7 +82,10 @@ export const makeGithubModelsCatalogRepositoryLive = (
 					return parseGithubCatalogEntries((await response.json()) as unknown);
 				},
 				catch: () => [],
-			}).pipe(Effect.catch(() => Effect.succeed([]))),
+			}).pipe(
+				Effect.timeout(GITHUB_MODELS_CATALOG_FETCH_TIMEOUT),
+				Effect.catch(() => Effect.succeed([])),
+			),
 	});
 
 export const GithubModelsCatalogRepositoryLive = makeGithubModelsCatalogRepositoryLive();

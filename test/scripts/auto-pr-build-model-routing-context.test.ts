@@ -50,6 +50,10 @@ describe("build-model-routing-context", () => {
 			join(process.cwd(), ".github/actions/auto-pr-run-command/auto-pr-run-command.sh"),
 			"utf8",
 		);
+		const generateReusableWorkflow = readFileSync(
+			join(process.cwd(), ".github/workflows/auto-pr-generate-reusable.yml"),
+			"utf8",
+		);
 
 		expect(pkg.bin["auto-pr-build-model-routing-context"]).toBe(
 			"./dist/workflow/auto-pr-build-model-routing-context.js",
@@ -71,6 +75,12 @@ describe("build-model-routing-context", () => {
 		expect(runCommandScript).toContain("build-model-routing-context)");
 		expect(runCommandScript).toContain('BIN="auto-pr-build-model-routing-context"');
 		expect(runCommandScript).toContain('SCRIPT="build-model-routing-context"');
+		expect(generateReusableWorkflow).toContain(
+			"AUTO_PR_ROUTING_DECISION_JSON: $" + "{{ steps.ai_routing.outputs.routing_decision_json }}",
+		);
+		expect(generateReusableWorkflow).toContain(
+			"AUTO_PR_ROUTING_CONTEXT_JSON: $" + "{{ steps.ai_routing.outputs.routing_context_json }}",
+		);
 	});
 
 	test("auto-pr-run-command invokes build-model-routing-context from workspace source", async () => {

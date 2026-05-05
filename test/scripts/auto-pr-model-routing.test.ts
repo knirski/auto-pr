@@ -387,7 +387,7 @@ describe("model band routing command policy", () => {
 			selectedModel: "gpt-oss",
 			localModelResourceFit: "not-applicable",
 			localModelRecommendation:
-				"external OpenAI-compatible endpoint; default model=gpt-oss; set ai_openai_compat_model if the endpoint requires another id",
+				"external OpenAI-compatible endpoint; default model=gpt-oss; set AUTO_PR_LOCAL_MODEL if the endpoint requires another id",
 		});
 	});
 

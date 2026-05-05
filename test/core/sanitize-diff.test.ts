@@ -116,9 +116,15 @@ describe("capDiffForAiToolRoundtrip", () => {
 		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-nano")).toBe(
 			expected,
 		);
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1/preview")).toBe(
+			expected,
+		);
 	});
 
 	test("uses default round-trip cap for other models/providers", () => {
+		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.10")).toBe(
+			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
+		);
 		expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4o-mini")).toBe(
 			MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
 		);

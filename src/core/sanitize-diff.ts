@@ -26,7 +26,9 @@ export const MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS = 1_500;
 
 const isGithubModelsGpt41Family = (model: string): boolean => {
 	const normalized = model.trim().toLowerCase();
-	return normalized.startsWith("openai/gpt-4.1");
+	const prefix = "openai/gpt-4.1";
+	const next = normalized[prefix.length];
+	return normalized.startsWith(prefix) && (next === undefined || !/[0-9]/.test(next));
 };
 
 function clampNumber(value: number, min: number, max: number): number {

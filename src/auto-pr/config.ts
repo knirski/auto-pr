@@ -20,7 +20,7 @@
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
  * | AUTO_PR_LOCAL_MODEL | | GeneratePrContent, RunAutoPr | Model id for `local` only (defaults to gpt-oss when unset). |
  * | AUTO_PR_ROUTING_CONTEXT_JSON | | GeneratePrContent, RunAutoPr | Optional trusted typed routing context JSON (change analysis and review focus) injected into the AI prompt. |
- * | AUTO_PR_ROUTING_DECISION_JSON | | GeneratePrContent, RunAutoPr | Required for `github-models`. Typed routing decision JSON from routing step outputs. |
+ * | AUTO_PR_ROUTING_DECISION_JSON | ✓* | GeneratePrContent, RunAutoPr | Typed routing decision JSON from routing step outputs (*required for github-models). |
  * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
  * | GITHUB_API_URL | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional Octokit REST base URL (advanced; overrides GH_HOST mapping). |
  * | GH_HOST | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional GitHub host. `github.com` maps to api.github.com; other hosts map to `https://<host>/api/v3`. |
