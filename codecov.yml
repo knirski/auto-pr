@@ -3,3 +3,8 @@
 #
 # Coverage and JUnit uploads come from the check reusable workflow (.github/workflows/check.yml).
 # Add codecov-action `flags` only if you split uploads (e.g. per-suite or per-OS).
+coverage:
+  status:
+    patch:
+      default:
+        target: 90%
