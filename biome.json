@@ -1,62 +1,72 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
-	"vcs": {
-		"enabled": true,
-		"clientKind": "git",
-		"useIgnoreFile": true
-	},
-	"files": {
-		"includes": ["**/*.ts", "**/*.tsx", "!!**/node_modules", "!!**/coverage", "!!**/dist"]
-	},
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "tab",
-		"indentWidth": 2,
-		"lineWidth": 100,
-		"lineEnding": "lf"
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "double",
-			"semicolons": "always",
-			"trailingCommas": "all"
-		}
-	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": true,
-			"suspicious": {
-				"noConsole": "error",
-				"noExplicitAny": "error",
-				"noVar": "error"
-			},
-			"style": {
-				"noEnum": "error",
-				"noParameterAssign": "error",
-				"noNonNullAssertion": "error",
-				"useConst": "error",
-				"useNumberNamespace": "error",
-				"useTemplate": "error",
-				"useImportType": "error"
-			},
-			"complexity": {
-				"noForEach": "error",
-				"useOptionalChain": "error",
-				"useFlatMap": "error"
-			},
-			"correctness": {
-				"noUnusedVariables": "error",
-				"useHookAtTopLevel": "off"
-			}
-		}
-	},
-	"assist": {
-		"enabled": true,
-		"actions": {
-			"source": {
-				"organizeImports": "on"
-			}
-		}
-	}
+  "$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.json",
+      "**/*.yml",
+      "**/*.toml",
+      "!!**/node_modules",
+      "!!**/coverage",
+      "!!**/dist"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noConsole": "error",
+        "noExplicitAny": "error",
+        "noVar": "error"
+      },
+      "style": {
+        "noEnum": "error",
+        "noParameterAssign": "error",
+        "noNonNullAssertion": "error",
+        "useConst": "error",
+        "useNumberNamespace": "error",
+        "useTemplate": "error",
+        "useImportType": "error"
+      },
+      "complexity": {
+        "noForEach": "error",
+        "useOptionalChain": "error",
+        "useFlatMap": "error"
+      },
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "useHookAtTopLevel": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
 }

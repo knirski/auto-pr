@@ -5,54 +5,54 @@ import { createTestTempDirEffect, TestBaseLayer } from "#test/test-utils.js";
 import { runInit } from "#tools/auto-pr-init.js";
 
 describe("runInit", () => {
-	test("creates workflow, PR template, .nvmrc, and llama-server Dockerfile in target directory", async () => {
-		await runEffect(TestBaseLayer)(
-			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("auto-pr-init-");
+  test("creates workflow, PR template, .nvmrc, and llama-server Dockerfile in target directory", async () => {
+    await runEffect(TestBaseLayer)(
+      Effect.gen(function* () {
+        const tmp = yield* createTestTempDirEffect("auto-pr-init-");
 
-				yield* runInit(tmp.path);
+        yield* runInit(tmp.path);
 
-				const fs = yield* FileSystem.FileSystem;
-				const [workflowExists, templateExists, nvmrcExists, llamaServerDockerfileExists] =
-					yield* Effect.all([
-						fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
-						fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
-						fs.exists(tmp.join(".nvmrc")),
-						fs.exists(tmp.join(".github", "llama-server", "Dockerfile")),
-					]);
+        const fs = yield* FileSystem.FileSystem;
+        const [workflowExists, templateExists, nvmrcExists, llamaServerDockerfileExists] =
+          yield* Effect.all([
+            fs.exists(tmp.join(".github", "workflows", "auto-pr.yml")),
+            fs.exists(tmp.join(".github", "PULL_REQUEST_TEMPLATE.md")),
+            fs.exists(tmp.join(".nvmrc")),
+            fs.exists(tmp.join(".github", "llama-server", "Dockerfile")),
+          ]);
 
-				expect(workflowExists).toBe(true);
-				expect(templateExists).toBe(true);
-				expect(nvmrcExists).toBe(true);
-				expect(llamaServerDockerfileExists).toBe(true);
+        expect(workflowExists).toBe(true);
+        expect(templateExists).toBe(true);
+        expect(nvmrcExists).toBe(true);
+        expect(llamaServerDockerfileExists).toBe(true);
 
-				const workflowContent = yield* fs.readFileString(
-					tmp.join(".github", "workflows", "auto-pr.yml"),
-				);
-				expect(workflowContent).toContain("jobs:");
-				expect(workflowContent).toContain("on:");
+        const workflowContent = yield* fs.readFileString(
+          tmp.join(".github", "workflows", "auto-pr.yml"),
+        );
+        expect(workflowContent).toContain("jobs:");
+        expect(workflowContent).toContain("on:");
 
-				const nvmrcContent = yield* fs.readFileString(tmp.join(".nvmrc"));
-				expect(nvmrcContent.trim()).toMatch(/^\d+$/);
-			}).pipe(Effect.scoped),
-		);
-	});
+        const nvmrcContent = yield* fs.readFileString(tmp.join(".nvmrc"));
+        expect(nvmrcContent.trim()).toMatch(/^\d+$/);
+      }).pipe(Effect.scoped),
+    );
+  });
 
-	test("skips existing files on second run", async () => {
-		await runEffect(TestBaseLayer)(
-			Effect.gen(function* () {
-				const tmp = yield* createTestTempDirEffect("auto-pr-init-skip-");
+  test("skips existing files on second run", async () => {
+    await runEffect(TestBaseLayer)(
+      Effect.gen(function* () {
+        const tmp = yield* createTestTempDirEffect("auto-pr-init-skip-");
 
-				yield* runInit(tmp.path);
-				const workflowPath = tmp.join(".github", "workflows", "auto-pr.yml");
-				const fs = yield* FileSystem.FileSystem;
-				const contentAfterFirst = yield* fs.readFileString(workflowPath);
+        yield* runInit(tmp.path);
+        const workflowPath = tmp.join(".github", "workflows", "auto-pr.yml");
+        const fs = yield* FileSystem.FileSystem;
+        const contentAfterFirst = yield* fs.readFileString(workflowPath);
 
-				yield* runInit(tmp.path);
-				const contentAfterSecond = yield* fs.readFileString(workflowPath);
+        yield* runInit(tmp.path);
+        const contentAfterSecond = yield* fs.readFileString(workflowPath);
 
-				expect(contentAfterSecond).toBe(contentAfterFirst);
-			}).pipe(Effect.scoped),
-		);
-	});
+        expect(contentAfterSecond).toBe(contentAfterFirst);
+      }).pipe(Effect.scoped),
+    );
+  });
 });

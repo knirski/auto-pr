@@ -8,60 +8,60 @@
 
 import { Effect, Layer, Redacted } from "effect";
 import {
-	AutoPrLoggerLayer,
-	AutoPrPlatformLayer,
-	aiProviderConfigFromRunAutoPrConfig,
-	aiProviderLayerFromConfig,
-	ChildProcessSpawnerLayer,
-	type CliMainEffect,
-	GitContextLive,
-	makeDiffToolkitLayer,
-	PullRequestClient,
-	RunAutoPrConfig,
-	RunAutoPrConfigLayer,
-	type RunAutoPrConfig as RunAutoPrConfigService,
-	runMain,
+  AutoPrLoggerLayer,
+  AutoPrPlatformLayer,
+  aiProviderConfigFromRunAutoPrConfig,
+  aiProviderLayerFromConfig,
+  ChildProcessSpawnerLayer,
+  type CliMainEffect,
+  GitContextLive,
+  makeDiffToolkitLayer,
+  PullRequestClient,
+  RunAutoPrConfig,
+  RunAutoPrConfigLayer,
+  type RunAutoPrConfig as RunAutoPrConfigService,
+  runMain,
 } from "#auto-pr";
 import {
-	resolveRunAutoPrBranch,
-	runAutoPrPipelineWithServices,
+  resolveRunAutoPrBranch,
+  runAutoPrPipelineWithServices,
 } from "#workflow/auto-pr-run-pipeline.js";
 
 // ─── Pipeline ────────────────────────────────────────────────────────────────
 
 function livePipeline(config: RunAutoPrConfigService): CliMainEffect {
-	const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
-	const baseLayer = Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer, gitLayer);
+  const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
+  const baseLayer = Layer.mergeAll(AutoPrPlatformLayer, ChildProcessSpawnerLayer, gitLayer);
 
-	return Effect.gen(function* () {
-		const branch = yield* resolveRunAutoPrBranch(config);
-		const configWithBranch = { ...config, branch };
-		const aiLayer = aiProviderLayerFromConfig(aiProviderConfigFromRunAutoPrConfig(config));
-		const toolkitLayer = makeDiffToolkitLayer(`origin/${config.defaultBranch}`, branch).pipe(
-			Layer.provide(gitLayer),
-		);
-		const prClientLayer = PullRequestClient.Live(config.workspace, {
-			ghToken: Redacted.value(config.ghToken),
-			...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
-			...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
-		}).pipe(Layer.provide(ChildProcessSpawnerLayer));
-		yield* runAutoPrPipelineWithServices(configWithBranch).pipe(
-			Effect.provide(Layer.mergeAll(baseLayer, aiLayer, toolkitLayer, prClientLayer)),
-		);
-	}).pipe(Effect.provide(baseLayer));
+  return Effect.gen(function* () {
+    const branch = yield* resolveRunAutoPrBranch(config);
+    const configWithBranch = { ...config, branch };
+    const aiLayer = aiProviderLayerFromConfig(aiProviderConfigFromRunAutoPrConfig(config));
+    const toolkitLayer = makeDiffToolkitLayer(`origin/${config.defaultBranch}`, branch).pipe(
+      Layer.provide(gitLayer),
+    );
+    const prClientLayer = PullRequestClient.Live(config.workspace, {
+      ghToken: Redacted.value(config.ghToken),
+      ...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
+      ...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
+    }).pipe(Layer.provide(ChildProcessSpawnerLayer));
+    yield* runAutoPrPipelineWithServices(configWithBranch).pipe(
+      Effect.provide(Layer.mergeAll(baseLayer, aiLayer, toolkitLayer, prClientLayer)),
+    );
+  }).pipe(Effect.provide(baseLayer));
 }
 
 /* c8 ignore next 6 */
 function runPipeline(): CliMainEffect {
-	return Effect.gen(function* () {
-		const config = yield* RunAutoPrConfig;
-		yield* livePipeline(config);
-	}).pipe(Effect.provide(RunAutoPrConfigLayer), Effect.provide(AutoPrLoggerLayer));
+  return Effect.gen(function* () {
+    const config = yield* RunAutoPrConfig;
+    yield* livePipeline(config);
+  }).pipe(Effect.provide(RunAutoPrConfigLayer), Effect.provide(AutoPrLoggerLayer));
 }
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
 /* c8 ignore next 3 */
 if (import.meta.main) {
-	runMain(runPipeline(), "run_auto_pr_failed");
+  runMain(runPipeline(), "run_auto_pr_failed");
 }

@@ -4,5 +4,5 @@
  */
 // Ensure test environment
 if (process.env.NODE_ENV === undefined) {
-	process.env.NODE_ENV = "test";
+  process.env.NODE_ENV = "test";
 }

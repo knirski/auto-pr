@@ -16,23 +16,23 @@ import * as BunServices from "@effect/platform-bun/BunServices";
 import { Console, Effect, FileSystem, Layer, Logger, Option, type Path } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import {
-	AutoPrLoggerLayer,
-	type FileSystemError,
-	FillPrTemplate,
-	type FillPrTemplateParams,
-	formatError,
-	mapFsError,
-	type ParseError,
-	type PullRequestBodyBlankError,
-	type PullRequestTitleBlankError,
-	type TemplateRenderError,
+  AutoPrLoggerLayer,
+  type FileSystemError,
+  FillPrTemplate,
+  type FillPrTemplateParams,
+  formatError,
+  mapFsError,
+  type ParseError,
+  type PullRequestBodyBlankError,
+  type PullRequestTitleBlankError,
+  type TemplateRenderError,
 } from "#auto-pr";
 import {
-	filterMergeCommits,
-	formatTitleBody,
-	getDescriptionPromptText,
-	isValidConventionalTitle,
-	parseCommits,
+  filterMergeCommits,
+  formatTitleBody,
+  getDescriptionPromptText,
+  isValidConventionalTitle,
+  parseCommits,
 } from "#core/fill-pr-template-core.js";
 import { nonBlankOption } from "#core/string.js";
 import pkg from "../../package.json" with { type: "json" };
@@ -42,237 +42,237 @@ import pkg from "../../package.json" with { type: "json" };
 type OutputFormat = "body" | "title-body";
 
 function isOutputFormat(s: string): s is OutputFormat {
-	return s === "body" || s === "title-body";
+  return s === "body" || s === "title-body";
 }
 
 /** Optional inputs for {@link runFillBody} (AI description path and PR title for template inference). */
 export type RunFillBodyOptions = {
-	readonly descriptionFilePath?: string;
-	readonly prTitleForTypeOfChange?: string;
+  readonly descriptionFilePath?: string;
+  readonly prTitleForTypeOfChange?: string;
 };
 
 /** Run fill using FillPrTemplate service. */
 export function runFillBody(
-	logFilePath: string,
-	filesFilePath: string,
-	templatePath: string,
-	format: OutputFormat,
-	options?: RunFillBodyOptions,
+  logFilePath: string,
+  filesFilePath: string,
+  templatePath: string,
+  format: OutputFormat,
+  options?: RunFillBodyOptions,
 ): Effect.Effect<
-	string,
-	| Error
-	| FileSystemError
-	| ParseError
-	| PullRequestBodyBlankError
-	| PullRequestTitleBlankError
-	| TemplateRenderError,
-	FileSystem.FileSystem | FillPrTemplate | Path.Path
+  string,
+  | Error
+  | FileSystemError
+  | ParseError
+  | PullRequestBodyBlankError
+  | PullRequestTitleBlankError
+  | TemplateRenderError,
+  FileSystem.FileSystem | FillPrTemplate | Path.Path
 > {
-	const prTitle = nonBlankOption(options?.prTitleForTypeOfChange);
-	const params = {
-		logFilePath,
-		filesFilePath,
-		templatePath,
-		...(options?.descriptionFilePath !== undefined && {
-			descriptionFilePath: options.descriptionFilePath,
-		}),
-		...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
-	} satisfies FillPrTemplateParams;
-	return Effect.gen(function* () {
-		const fillPr = yield* FillPrTemplate;
-		if (format === "body") {
-			return yield* fillPr.getBody(params);
-		}
-		const titleLine = Option.isSome(prTitle) ? prTitle.value : yield* fillPr.getTitle(params);
-		const body = yield* fillPr.getBody(params);
-		return formatTitleBody(titleLine, body);
-	});
+  const prTitle = nonBlankOption(options?.prTitleForTypeOfChange);
+  const params = {
+    logFilePath,
+    filesFilePath,
+    templatePath,
+    ...(options?.descriptionFilePath !== undefined && {
+      descriptionFilePath: options.descriptionFilePath,
+    }),
+    ...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
+  } satisfies FillPrTemplateParams;
+  return Effect.gen(function* () {
+    const fillPr = yield* FillPrTemplate;
+    if (format === "body") {
+      return yield* fillPr.getBody(params);
+    }
+    const titleLine = Option.isSome(prTitle) ? prTitle.value : yield* fillPr.getTitle(params);
+    const body = yield* fillPr.getBody(params);
+    return formatTitleBody(titleLine, body);
+  });
 }
 
 // ─── CLI ───────────────────────────────────────────────────────────────────
 
 const logFileFlag = Flag.string("log-file").pipe(
-	Flag.optional,
-	Flag.withDescription("Path to file containing commit log (---COMMIT--- separated blocks)."),
+  Flag.optional,
+  Flag.withDescription("Path to file containing commit log (---COMMIT--- separated blocks)."),
 );
 
 const filesFileFlag = Flag.string("files-file").pipe(
-	Flag.optional,
-	Flag.withDescription("Path to file containing newline-separated changed file names."),
+  Flag.optional,
+  Flag.withDescription("Path to file containing newline-separated changed file names."),
 );
 
 const templateFlag = Flag.string("template").pipe(
-	Flag.optional,
-	Flag.withDescription("Path to template file (e.g. .github/PULL_REQUEST_TEMPLATE.md). Required."),
+  Flag.optional,
+  Flag.withDescription("Path to template file (e.g. .github/PULL_REQUEST_TEMPLATE.md). Required."),
 );
 
 const formatFlag = Flag.string("format").pipe(
-	Flag.optional,
-	Flag.withDescription("Output format: 'body' or 'title-body' (first line = PR title). Required."),
+  Flag.optional,
+  Flag.withDescription("Output format: 'body' or 'title-body' (first line = PR title). Required."),
 );
 
 const quietFlag = Flag.boolean("quiet").pipe(
-	Flag.optional,
-	Flag.withDescription("Suppress logs (for CI when capturing stdout)."),
+  Flag.optional,
+  Flag.withDescription("Suppress logs (for CI when capturing stdout)."),
 );
 
 const validateTitleFlag = Flag.string("validate-title").pipe(
-	Flag.optional,
-	Flag.withDescription(
-		"Validate conventional commit title; exit 0 if valid, 1 otherwise. Skips fill when used.",
-	),
+  Flag.optional,
+  Flag.withDescription(
+    "Validate conventional commit title; exit 0 if valid, 1 otherwise. Skips fill when used.",
+  ),
 );
 
 const outputDescriptionPromptFlag = Flag.boolean("output-description-prompt").pipe(
-	Flag.optional,
-	Flag.withDescription(
-		"Output commit content for an AI model to summarize into PR description. Requires --log-file only. Exits after output.",
-	),
+  Flag.optional,
+  Flag.withDescription(
+    "Output commit content for an AI model to summarize into PR description. Requires --log-file only. Exits after output.",
+  ),
 );
 
 const descriptionFileFlag = Flag.string("description-file").pipe(
-	Flag.optional,
-	Flag.withDescription(
-		"Path to file containing an AI-generated description. Overrides computed description.",
-	),
+  Flag.optional,
+  Flag.withDescription(
+    "Path to file containing an AI-generated description. Overrides computed description.",
+  ),
 );
 
 const prTitleFlag = Flag.string("pr-title").pipe(
-	Flag.optional,
-	Flag.withDescription(
-		"Optional conventional PR title. Drives {{typeOfChange}} and {{breakingChanges}} like the workflow’s generated title. With --format title-body, used as the first output line instead of the first commit subject.",
-	),
+  Flag.optional,
+  Flag.withDescription(
+    "Optional conventional PR title. Drives {{typeOfChange}} and {{breakingChanges}} like the workflow’s generated title. With --format title-body, used as the first output line instead of the first commit subject.",
+  ),
 );
 
 /** Validate conventional commit title. Exported for testing. */
 export function handleValidateTitle(title: string): Effect.Effect<void, Error> {
-	return Effect.gen(function* () {
-		const valid = isValidConventionalTitle(title);
-		if (!valid) yield* Effect.fail(new Error("Invalid conventional commit title"));
-	});
+  return Effect.gen(function* () {
+    const valid = isValidConventionalTitle(title);
+    if (!valid) yield* Effect.fail(new Error("Invalid conventional commit title"));
+  });
 }
 
 /** Output description prompt from log file. Exported for testing. */
 export function handleOutputDescriptionPrompt(
-	logPath: string,
-	quiet: boolean,
+  logPath: string,
+  quiet: boolean,
 ): Effect.Effect<void, Error, FileSystem.FileSystem> {
-	return Effect.gen(function* () {
-		const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
-		const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
-		const output = yield* Effect.gen(function* () {
-			const fs = yield* FileSystem.FileSystem.asEffect();
-			const logContent = yield* fs
-				.readFileString(logPath)
-				.pipe(mapFsError(logPath, "readFileString"));
-			const parseResult = parseCommits(logContent);
-			const rawCommits = yield* Effect.fromResult(parseResult);
-			const commits = filterMergeCommits(rawCommits);
-			return getDescriptionPromptText(commits);
-		}).pipe(Effect.provide(layer));
-		yield* Console.log(output);
-	});
+  return Effect.gen(function* () {
+    const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
+    const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
+    const output = yield* Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem.asEffect();
+      const logContent = yield* fs
+        .readFileString(logPath)
+        .pipe(mapFsError(logPath, "readFileString"));
+      const parseResult = parseCommits(logContent);
+      const rawCommits = yield* Effect.fromResult(parseResult);
+      const commits = filterMergeCommits(rawCommits);
+      return getDescriptionPromptText(commits);
+    }).pipe(Effect.provide(layer));
+    yield* Console.log(output);
+  });
 }
 
 function handleFill(
-	logPath: string,
-	filesPath: string,
-	templatePath: string,
-	format: OutputFormat,
-	quiet: boolean,
-	descriptionFile: Option.Option<string>,
-	prTitle: Option.Option<string>,
+  logPath: string,
+  filesPath: string,
+  templatePath: string,
+  format: OutputFormat,
+  quiet: boolean,
+  descriptionFile: Option.Option<string>,
+  prTitle: Option.Option<string>,
 ) {
-	return Effect.gen(function* () {
-		const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
-		const layer = Layer.mergeAll(BunServices.layer, loggerLayer, FillPrTemplate.Live);
-		const output = yield* runFillBody(logPath, filesPath, templatePath, format, {
-			...(Option.isSome(descriptionFile) && { descriptionFilePath: descriptionFile.value }),
-			...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
-		}).pipe(Effect.provide(layer));
-		yield* Console.log(output);
-	});
+  return Effect.gen(function* () {
+    const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
+    const layer = Layer.mergeAll(BunServices.layer, loggerLayer, FillPrTemplate.Live);
+    const output = yield* runFillBody(logPath, filesPath, templatePath, format, {
+      ...(Option.isSome(descriptionFile) && { descriptionFilePath: descriptionFile.value }),
+      ...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
+    }).pipe(Effect.provide(layer));
+    yield* Console.log(output);
+  });
 }
 
 /** Fill command for CLI. Exported for testing. */
 export const fillCommand = Command.make(
-	"fill-pr-template",
-	{
-		logFile: logFileFlag,
-		filesFile: filesFileFlag,
-		template: templateFlag,
-		format: formatFlag,
-		quiet: quietFlag,
-		validateTitle: validateTitleFlag,
-		outputDescriptionPrompt: outputDescriptionPromptFlag,
-		descriptionFile: descriptionFileFlag,
-		prTitle: prTitleFlag,
-	},
-	Effect.fn("fill-pr-template.handler")(function* ({
-		logFile,
-		filesFile,
-		template,
-		format,
-		quiet,
-		validateTitle,
-		outputDescriptionPrompt,
-		descriptionFile,
-		prTitle,
-	}) {
-		const titleToValidate = Option.getOrUndefined(validateTitle);
-		if (titleToValidate !== undefined) {
-			yield* handleValidateTitle(titleToValidate);
-			return;
-		}
-		const logFilePath = Option.getOrUndefined(logFile);
-		const filesFilePath = Option.getOrUndefined(filesFile);
-		const quietVal = Option.getOrElse(quiet, () => false);
-		const outputDescriptionPromptVal = Option.getOrElse(outputDescriptionPrompt, () => false);
+  "fill-pr-template",
+  {
+    logFile: logFileFlag,
+    filesFile: filesFileFlag,
+    template: templateFlag,
+    format: formatFlag,
+    quiet: quietFlag,
+    validateTitle: validateTitleFlag,
+    outputDescriptionPrompt: outputDescriptionPromptFlag,
+    descriptionFile: descriptionFileFlag,
+    prTitle: prTitleFlag,
+  },
+  Effect.fn("fill-pr-template.handler")(function* ({
+    logFile,
+    filesFile,
+    template,
+    format,
+    quiet,
+    validateTitle,
+    outputDescriptionPrompt,
+    descriptionFile,
+    prTitle,
+  }) {
+    const titleToValidate = Option.getOrUndefined(validateTitle);
+    if (titleToValidate !== undefined) {
+      yield* handleValidateTitle(titleToValidate);
+      return;
+    }
+    const logFilePath = Option.getOrUndefined(logFile);
+    const filesFilePath = Option.getOrUndefined(filesFile);
+    const quietVal = Option.getOrElse(quiet, () => false);
+    const outputDescriptionPromptVal = Option.getOrElse(outputDescriptionPrompt, () => false);
 
-		if (outputDescriptionPromptVal) {
-			const logPath = yield* logFilePath
-				? Effect.succeed(logFilePath)
-				: Effect.fail(new Error("--output-description-prompt requires --log-file."));
-			yield* handleOutputDescriptionPrompt(logPath, quietVal);
-			return;
-		}
+    if (outputDescriptionPromptVal) {
+      const logPath = yield* logFilePath
+        ? Effect.succeed(logFilePath)
+        : Effect.fail(new Error("--output-description-prompt requires --log-file."));
+      yield* handleOutputDescriptionPrompt(logPath, quietVal);
+      return;
+    }
 
-		const templatePath = yield* Option.match(template, {
-			onNone: () => Effect.fail(new Error("--template is required")),
-			onSome: (t) => Effect.succeed(t),
-		});
-		const formatVal = yield* Option.match(format, {
-			onNone: () => Effect.fail(new Error("--format is required")),
-			onSome: (f) =>
-				isOutputFormat(f)
-					? Effect.succeed(f)
-					: Effect.fail(new Error("--format must be 'body' or 'title-body'")),
-		});
+    const templatePath = yield* Option.match(template, {
+      onNone: () => Effect.fail(new Error("--template is required")),
+      onSome: (t) => Effect.succeed(t),
+    });
+    const formatVal = yield* Option.match(format, {
+      onNone: () => Effect.fail(new Error("--format is required")),
+      onSome: (f) =>
+        isOutputFormat(f)
+          ? Effect.succeed(f)
+          : Effect.fail(new Error("--format must be 'body' or 'title-body'")),
+    });
 
-		const logPath = yield* logFilePath
-			? Effect.succeed(logFilePath)
-			: Effect.fail(
-					new Error(
-						"--log-file and --files-file are required. Generate them via git before invoking.",
-					),
-				);
-		const filesPath = yield* filesFilePath
-			? Effect.succeed(filesFilePath)
-			: Effect.fail(
-					new Error(
-						"--log-file and --files-file are required. Generate them via git before invoking.",
-					),
-				);
-		yield* handleFill(
-			logPath,
-			filesPath,
-			templatePath,
-			formatVal,
-			quietVal,
-			descriptionFile,
-			prTitle,
-		);
-	}),
+    const logPath = yield* logFilePath
+      ? Effect.succeed(logFilePath)
+      : Effect.fail(
+          new Error(
+            "--log-file and --files-file are required. Generate them via git before invoking.",
+          ),
+        );
+    const filesPath = yield* filesFilePath
+      ? Effect.succeed(filesFilePath)
+      : Effect.fail(
+          new Error(
+            "--log-file and --files-file are required. Generate them via git before invoking.",
+          ),
+        );
+    yield* handleFill(
+      logPath,
+      filesPath,
+      templatePath,
+      formatVal,
+      quietVal,
+      descriptionFile,
+      prTitle,
+    );
+  }),
 );
 
 const cliProgram = Command.run(fillCommand, { version: pkg.version });
@@ -281,16 +281,16 @@ const cliProgram = Command.run(fillCommand, { version: pkg.version });
 export const CliLayer = BunServices.layer.pipe(Layer.provideMerge(AutoPrLoggerLayer));
 
 if (import.meta.main) {
-	BunRuntime.runMain(
-		cliProgram.pipe(
-			Effect.provide(CliLayer),
-			Effect.tapError((e) =>
-				Effect.logError({
-					event: "fill_pr_template_failed",
-					error: formatError(e),
-					...(e instanceof Error && e.stack ? { stack: e.stack } : {}),
-				}),
-			),
-		),
-	);
+  BunRuntime.runMain(
+    cliProgram.pipe(
+      Effect.provide(CliLayer),
+      Effect.tapError((e) =>
+        Effect.logError({
+          event: "fill_pr_template_failed",
+          error: formatError(e),
+          ...(e instanceof Error && e.stack ? { stack: e.stack } : {}),
+        }),
+      ),
+    ),
+  );
 }

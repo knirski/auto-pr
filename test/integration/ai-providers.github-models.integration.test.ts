@@ -17,30 +17,30 @@ import { requireIntegrationEnv } from "./integration-env.js";
 const canRun = (process.env.GH_TOKEN ?? "").trim() !== "";
 
 describe.skipIf(!canRun)("integration: github-models", () => {
-	test(
-		"generatePrContent (2 commits) returns title and structured description",
-		async () => {
-			const model = requireIntegrationEnv("INTEGRATION_GITHUB_MODEL");
-			const token = process.env.GH_TOKEN ?? "";
-			const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
-			const layer = layerGithubModels(model, token);
-			await runEffect(layer)(
-				Effect.gen(function* () {
-					const result = yield* generatePrContent({
-						baseRef: "origin/main",
-						headRef: "ai/test",
-						templateContent: TEMPLATE,
-						descriptionPromptText,
-						provider: "github-models",
-						model,
-					});
-					expect(result.count).toBe(2);
-					expect(result.title.trim().length).toBeGreaterThan(0);
-					expect(result.body).toContain("### Motivation");
-					expect(result.body).toContain("### Risks");
-				}),
-			);
-		},
-		{ timeout: 180_000 },
-	);
+  test(
+    "generatePrContent (2 commits) returns title and structured description",
+    async () => {
+      const model = requireIntegrationEnv("INTEGRATION_GITHUB_MODEL");
+      const token = process.env.GH_TOKEN ?? "";
+      const descriptionPromptText = await PR_DESCRIPTION_PROMISE;
+      const layer = layerGithubModels(model, token);
+      await runEffect(layer)(
+        Effect.gen(function* () {
+          const result = yield* generatePrContent({
+            baseRef: "origin/main",
+            headRef: "ai/test",
+            templateContent: TEMPLATE,
+            descriptionPromptText,
+            provider: "github-models",
+            model,
+          });
+          expect(result.count).toBe(2);
+          expect(result.title.trim().length).toBeGreaterThan(0);
+          expect(result.body).toContain("### Motivation");
+          expect(result.body).toContain("### Risks");
+        }),
+      );
+    },
+    { timeout: 180_000 },
+  );
 });

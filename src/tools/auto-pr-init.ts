@@ -12,54 +12,54 @@ import { AutoPrLoggerLayer, AutoPrPlatformLayer, redactPath, runMain } from "#au
 import { getInitFileSpecs } from "#core/init-core.js";
 
 function copy(
-	fs: FileSystem.FileSystem,
-	pathApi: Path.Path,
-	pkgRoot: string,
-	from: string,
-	to: string,
+  fs: FileSystem.FileSystem,
+  pathApi: Path.Path,
+  pkgRoot: string,
+  from: string,
+  to: string,
 ): Effect.Effect<void, Error, never> {
-	return Effect.gen(function* () {
-		const srcPath = pathApi.join(pkgRoot, from);
-		const content = yield* fs.readFileString(srcPath);
-		const toDir = pathApi.dirname(to);
-		yield* fs.makeDirectory(toDir, { recursive: true });
-		yield* fs.writeFileString(to, content);
-	});
+  return Effect.gen(function* () {
+    const srcPath = pathApi.join(pkgRoot, from);
+    const content = yield* fs.readFileString(srcPath);
+    const toDir = pathApi.dirname(to);
+    yield* fs.makeDirectory(toDir, { recursive: true });
+    yield* fs.writeFileString(to, content);
+  });
 }
 
 function runInit(cwd: string): Effect.Effect<void, Error, FileSystem.FileSystem | Path.Path> {
-	return Effect.gen(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const pathApi = yield* Path.Path;
-		const scriptUrl = yield* Effect.fromResult(Url.fromString(import.meta.url)).pipe(
-			Effect.mapError((e) => new Error(`Invalid import.meta.url: ${e.message}`)),
-		);
-		const scriptPath = yield* pathApi.fromFileUrl(scriptUrl);
-		const pkgRoot = pathApi.join(pathApi.dirname(scriptPath), "..", "..");
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathApi = yield* Path.Path;
+    const scriptUrl = yield* Effect.fromResult(Url.fromString(import.meta.url)).pipe(
+      Effect.mapError((e) => new Error(`Invalid import.meta.url: ${e.message}`)),
+    );
+    const scriptPath = yield* pathApi.fromFileUrl(scriptUrl);
+    const pkgRoot = pathApi.join(pathApi.dirname(scriptPath), "..", "..");
 
-		for (const spec of getInitFileSpecs()) {
-			const destPath = pathApi.join(cwd, spec.dest);
-			const exists = yield* fs.exists(destPath);
-			if (exists) {
-				yield* Effect.log({
-					event: "init",
-					status: "skipped",
-					path: redactPath(destPath),
-					reason: "already exists",
-				});
-			} else if (spec.content !== undefined) {
-				yield* fs.writeFileString(destPath, spec.content);
-				yield* Effect.log({ event: "init", status: "created", path: redactPath(destPath) });
-			} else if (spec.from !== undefined) {
-				yield* copy(fs, pathApi, pkgRoot, spec.from, destPath);
-				yield* Effect.log({ event: "init", status: "created", path: redactPath(destPath) });
-			}
-		}
+    for (const spec of getInitFileSpecs()) {
+      const destPath = pathApi.join(cwd, spec.dest);
+      const exists = yield* fs.exists(destPath);
+      if (exists) {
+        yield* Effect.log({
+          event: "init",
+          status: "skipped",
+          path: redactPath(destPath),
+          reason: "already exists",
+        });
+      } else if (spec.content !== undefined) {
+        yield* fs.writeFileString(destPath, spec.content);
+        yield* Effect.log({ event: "init", status: "created", path: redactPath(destPath) });
+      } else if (spec.from !== undefined) {
+        yield* copy(fs, pathApi, pkgRoot, spec.from, destPath);
+        yield* Effect.log({ event: "init", status: "created", path: redactPath(destPath) });
+      }
+    }
 
-		yield* Effect.log({
-			event: "init",
-			status: "next_steps",
-			message: `Next steps (required for the workflow to create PRs):
+    yield* Effect.log({
+      event: "init",
+      status: "next_steps",
+      message: `Next steps (required for the workflow to create PRs):
 1. Create a GitHub App: https://github.com/settings/apps/new
    - Permissions: Contents, Pull requests (Read and write)
    - Webhook: Uncheck Active
@@ -73,18 +73,18 @@ Then push to ai/** to test:
   git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push
 
 See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md for full instructions.`,
-		});
-	});
+    });
+  });
 }
 
 if (import.meta.main) {
-	runMain(
-		Effect.gen(function* () {
-			const cwd = yield* Effect.sync(() => process.cwd());
-			yield* runInit(cwd);
-		}).pipe(Effect.provide(AutoPrPlatformLayer), Effect.provide(AutoPrLoggerLayer)),
-		"init",
-	);
+  runMain(
+    Effect.gen(function* () {
+      const cwd = yield* Effect.sync(() => process.cwd());
+      yield* runInit(cwd);
+    }).pipe(Effect.provide(AutoPrPlatformLayer), Effect.provide(AutoPrLoggerLayer)),
+    "init",
+  );
 }
 
 export { runInit };
