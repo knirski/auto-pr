@@ -3,6 +3,8 @@
 # Runs when a release-please PR touches .release-please-manifest.json (opened or updated).
 # Do not add package.json or CHANGELOG.md here: those fire for ordinary PRs and would push
 # chore: update dist to feature branches, fighting the "no dist in PRs" policy.
+# Branch guard: job only runs when head ref starts with 'release-please--' so that formatting
+# PRs that touch .release-please-manifest.json do not trigger a dist commit.
 # Loop prevention: only pushes when dist changes; re-run finds no diff.
 
 name: Add dist to release PR
@@ -12,7 +14,7 @@ on:
     branches:
       - main
     paths:
-      - '.release-please-manifest.json'
+      - ".release-please-manifest.json"
 
 concurrency:
   group: add-dist-to-release-pr-${{ github.event.pull_request.number }}
@@ -22,7 +24,9 @@ permissions: {}
 
 jobs:
   add-dist:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--')
     permissions:
       contents: write
       pull-requests: read
