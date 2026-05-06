@@ -12,10 +12,12 @@ type ToolRoundtripReproFetchOptions = {
 
 function createToolRoundtripReproFetch(options?: ToolRoundtripReproFetchOptions): {
   readonly fetch: typeof fetch;
+  readonly getRequestBodies: () => ReadonlyArray<string>;
   readonly getInvalidRequest: () => string | undefined;
 } {
   let callCount = 0;
   let invalidRequest: string | undefined;
+  const requestBodies: Array<string> = [];
   const requiredToolCallIds: ReadonlyArray<string> = ["call_ci", "call_docs"];
   const impl = async (input: RequestInfo | URL, init?: RequestInit) => {
     callCount += 1;
@@ -30,6 +32,7 @@ function createToolRoundtripReproFetch(options?: ToolRoundtripReproFetchOptions)
               body: init.body as BodyInit,
             }).text()
           : ((await request?.clone().text()) ?? "");
+    requestBodies.push(bodyText);
 
     if (callCount === 1) {
       return new Response(
@@ -157,6 +160,7 @@ function createToolRoundtripReproFetch(options?: ToolRoundtripReproFetchOptions)
     fetch: Object.assign(impl, {
       preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
     }),
+    getRequestBodies: () => requestBodies,
     getInvalidRequest: () => invalidRequest,
   };
 }
@@ -335,6 +339,29 @@ describe("generatePrContent tool-call roundtrip repro", () => {
           retryDelay: Duration.zero,
         });
 
+        const secondRequestBody = JSON.parse(mock.getRequestBodies()[1] ?? "{}") as {
+          readonly messages?: ReadonlyArray<{
+            readonly role?: string;
+            readonly content?: unknown;
+            readonly tool_calls?: ReadonlyArray<unknown>;
+          }>;
+        };
+        const toolCallMessageIndex = secondRequestBody.messages?.findIndex(
+          (message) => Array.isArray(message.tool_calls) && message.tool_calls.length > 0,
+        );
+
+        if (toolCallMessageIndex === undefined) {
+          throw new Error(
+            "expected the second request to contain a tool-calling assistant message",
+          );
+        }
+
+        expect(toolCallMessageIndex).toBeGreaterThanOrEqual(1);
+        expect(secondRequestBody.messages?.[toolCallMessageIndex - 1]).toMatchObject({
+          role: "assistant",
+          content: "Looking at CI.\nLooking at docs.",
+        });
+        expect(secondRequestBody.messages?.[toolCallMessageIndex - 1]?.tool_calls).toBeUndefined();
         expect(mock.getInvalidRequest()).toBeUndefined();
         expect(result.title).toBe("feat: ok");
       }).pipe(Effect.scoped),

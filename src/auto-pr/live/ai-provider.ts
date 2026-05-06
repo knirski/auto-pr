@@ -223,11 +223,22 @@ function normalizeOpenAiChatCompletionsFetch(baseFetch: typeof fetch): typeof fe
     const normalized = coalesceAdjacentAssistantToolCallMessages(parsed);
     return baseFetch(input, { ...init, body: JSON.stringify(normalized) });
   };
-  const preconnectFetch = baseFetch.preconnect !== undefined ? baseFetch : globalThis.fetch;
+  const normalizedFetch = impl as typeof fetch;
+  const basePreconnect = (baseFetch as { readonly preconnect?: unknown }).preconnect;
+  if (typeof basePreconnect === "function") {
+    return Object.assign(normalizedFetch, {
+      preconnect: basePreconnect.bind(baseFetch),
+    });
+  }
 
-  return Object.assign(impl, {
-    preconnect: (baseFetch.preconnect ?? globalThis.fetch.preconnect).bind(preconnectFetch),
-  });
+  const globalPreconnect = (globalThis.fetch as { readonly preconnect?: unknown }).preconnect;
+  if (typeof globalPreconnect === "function") {
+    return Object.assign(normalizedFetch, {
+      preconnect: globalPreconnect.bind(globalThis.fetch),
+    });
+  }
+
+  return normalizedFetch;
 }
 
 /**
