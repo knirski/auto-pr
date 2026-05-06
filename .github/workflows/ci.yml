@@ -51,6 +51,8 @@ jobs:
         with:
           # `every` is required for the `code` filter because it uses a broad include (`**`)
           # plus excludes. With `some`, docs-only changes also match `code`.
+          # Keep pure Nix file changes out of `code` so flake.lock and *.nix edits
+          # only fan out to the dedicated nix workflow.
           predicate-quantifier: every
           filters: |
             code:
@@ -59,6 +61,8 @@ jobs:
               - '!*.md'
               - '!.github/**'
               - '!website/**'
+              - '!**/*.nix'
+              - '!flake.lock'
       - name: Compute path filters
         id: filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
