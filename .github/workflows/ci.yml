@@ -100,7 +100,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Dependency review
-        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
 
   # Full check pipeline: lint, typecheck, unit tests, secret scan, workflow pin verify.
   # Runs for code changes and for release-please PRs (when `release_manifest` or `code` paths match).
