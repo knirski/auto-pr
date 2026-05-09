@@ -6,7 +6,7 @@
       "name": "auto-pr",
       "dependencies": {
         "@effect/ai-openai-compat": "4.0.0-beta.59",
-        "@effect/platform-bun": "4.0.0-beta.59",
+        "@effect/platform-bun": "4.0.0-beta.64",
         "@effect/platform-node-shared": "4.0.0-beta.59",
         "conventional-commits-parser": "^6.4.0",
         "effect": "4.0.0-beta.59",
@@ -100,7 +100,7 @@
 
     "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.59", "", { "peerDependencies": { "effect": "^4.0.0-beta.59" } }, "sha512-eFpQWgzgHh6HtV/6McTtT3Cg26sIvgoBTazOx+Y8MmchAWpXdphO3ZmSDPH7CYQjAHzg3pc/aAESE/tMeuUGaQ=="],
 
-    "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.59", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.59" }, "peerDependencies": { "effect": "^4.0.0-beta.59" } }, "sha512-1jXCIx34X80ojiK9ACO9Q7RST9CXudRmlAbsP4kPqjUo6aqOuGSWXq9ueBO4LbaIZiioRxtTciom35U9ldfTkQ=="],
+    "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.64", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.64" }, "peerDependencies": { "effect": "^4.0.0-beta.64" } }, "sha512-rSPECyeN4ab1s+0l5DOXqlG31da3Np6UK/LujAAwBKCkZYAWM6bbh2+7GnKLI71UPG5eeEsNNPQR4epHifcTbg=="],
 
     "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.59", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.20.0" }, "peerDependencies": { "effect": "^4.0.0-beta.59" } }, "sha512-fGwFJuG0Te9U/ZeqeDZ2HcSKZBhX5wLjX2/Rxb5+yaOkvvFAN9MvIh05R0QQK5DCcERvnbhHSl1CjSIAN4aEwQ=="],
 
@@ -1127,6 +1127,8 @@
     "@commitlint/types/conventional-commits-parser": ["conventional-commits-parser@6.3.0", "", { "dependencies": { "@simple-libs/stream-utils": "^1.2.0", "meow": "^13.0.0" }, "bin": "dist/cli/index.js" }, "sha512-RfOq/Cqy9xV9bOA8N+ZH6DlrDR+5S3Mi0B5kACEjESpE+AviIpAptx9a9cFpWCCvgRtWT+0BbUw+e1BZfts9jg=="],
 
     "@conventional-changelog/git-client/semver": ["semver@7.7.4", "", { "bin": "bin/semver.js" }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
+
+    "@effect/platform-bun/@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.64", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.20.0" }, "peerDependencies": { "effect": "^4.0.0-beta.64" } }, "sha512-F5hVnPZbgKzxy2TijjhNZKqj7tQi60dx1W/JinnsNxYKGuspvW2gDUeqmNw7sP2bEA5ToeGDPqRCRdpHj3sZxg=="],
 
     "@grpc/grpc-js/@grpc/proto-loader": ["@grpc/proto-loader@0.8.0", "", { "dependencies": { "lodash.camelcase": "^4.3.0", "long": "^5.0.0", "protobufjs": "^7.5.3", "yargs": "^17.7.2" }, "bin": { "proto-loader-gen-types": "build/bin/proto-loader-gen-types.js" } }, "sha512-rc1hOQtjIWGxcxpb9aHAfLpIctjEnsDehj0DAiVfBlmT84uvR0uUtN2hEi/ecvWVjXUGf5qPF4qEgiLOx1YIMQ=="],
 

@@ -69,7 +69,7 @@
   },
   "dependencies": {
     "@effect/ai-openai-compat": "4.0.0-beta.59",
-    "@effect/platform-bun": "4.0.0-beta.59",
+    "@effect/platform-bun": "4.0.0-beta.64",
     "@effect/platform-node-shared": "4.0.0-beta.59",
     "conventional-commits-parser": "^6.4.0",
     "effect": "4.0.0-beta.59",
