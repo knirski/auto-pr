@@ -60,10 +60,10 @@ jobs:
         run: bun run check:code
 
       - name: Markdown lint
-        uses: rvben/rumdl@50f402f7aa90089dc8ce30765371fc5537946268 # v0.1.86
+        uses: rvben/rumdl@d9e57d93efd2c85a2b4efa1f597652fe017e464a # v0.2.0
 
       - name: Spell check
-        uses: crate-ci/typos@bbaefadf97b0ec5fdc942684b647f1a6ab250274 # v1.46.0
+        uses: crate-ci/typos@aca895bf05aec0cb7dffa6f94495e923224d9f17 # v1.46.2
 
       - name: Lint workflows
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
@@ -84,7 +84,7 @@ jobs:
           args: --timeout 90 --max-retries 10 --retry-wait-time 2 --no-progress --accept 200,429 .
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
@@ -93,7 +93,7 @@ jobs:
           disable_search: true
 
       - name: Upload test results to Codecov
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./test-report.junit.xml
