@@ -60,13 +60,13 @@ jobs:
         run: bun run check:code
 
       - name: Markdown lint
-        uses: rvben/rumdl@50f402f7aa90089dc8ce30765371fc5537946268 # v0.1.86
+        uses: rvben/rumdl@63d438f754667a8617cad7613f0d100fe4e8823d # v0.2.23
 
       - name: Spell check
-        uses: crate-ci/typos@bbaefadf97b0ec5fdc942684b647f1a6ab250274 # v1.46.0
+        uses: crate-ci/typos@37bb98842b0d8c4ffebdb75301a13db0267cef89 # v1.47.2
 
       - name: Lint workflows
-        uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
 
       - name: Lint scripts (shellcheck, shfmt)
         uses: luizm/action-sh-checker@883217215b11c1fabbf00eb1a9a041f62d74c744 # v0.10.0
