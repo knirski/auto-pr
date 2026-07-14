@@ -8,6 +8,44 @@
 - **AI generation path:** Multi-commit PR title/description uses **`LanguageModel.generateText`** plus JSON parsing and `TitleDescriptionSchema` validation — not `generateObject` / OpenAI `json_schema` (incompatible with GitHub Models and many OpenAI-compatible servers).
 - **AI providers:** Removed the Ollama-specific integration (`ollama` npm package, `AUTO_PR_AI_OLLAMA_MODEL`, workflow `ai_ollama_model` / setup-ollama steps). Use **`local`** with `AUTO_PR_AI_OPENAI_COMPAT_URL`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`, and optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, or **`github-models`** with `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. The reusable generate workflow defaults to **`github-models`** on GitHub-hosted runners. **`AUTO_PR_AI_GITHUB_MODEL` is removed** — use `AUTO_PR_AI_OPENAI_COMPAT_MODEL` for both providers.
 
+## [0.1.5](https://github.com/knirski/auto-pr/compare/v0.1.4...v0.1.5) (2026-07-14)
+
+
+### Features
+
+* AI observability — token usage logging, tool call tracing, transient error handling ([#93](https://github.com/knirski/auto-pr/issues/93)) ([e89fe15](https://github.com/knirski/auto-pr/commit/e89fe15dd6a9e89dbfd8eeb0fe798b1c00db9dbb))
+* AI pipeline resilience — diff sanitization and git command timeouts ([#95](https://github.com/knirski/auto-pr/issues/95)) ([2b90631](https://github.com/knirski/auto-pr/commit/2b90631dcd922496642e415c84eba913ff473991))
+* **ci:** default GitHub Models to gpt-4.1 for generate ([#103](https://github.com/knirski/auto-pr/issues/103)) ([9bcc57a](https://github.com/knirski/auto-pr/commit/9bcc57a6c04f7db70e974c434704b25e97b321ab))
+* **ci:** pin and run local llama server via Docker in workflows and integration ([#120](https://github.com/knirski/auto-pr/issues/120)) ([0528e4e](https://github.com/knirski/auto-pr/commit/0528e4ec343fda0976319cccdf5c82e51e1d02ca))
+* **ci:** pin SBOM Node via .nvmrc and run after core checks ([#98](https://github.com/knirski/auto-pr/issues/98)) ([04050c2](https://github.com/knirski/auto-pr/commit/04050c2b28b7249538b1a505ecbbfff1f98f7b20))
+* **ci:** resolve OpenAI model id and run local happy-path tests ([#99](https://github.com/knirski/auto-pr/issues/99)) ([15b41a4](https://github.com/knirski/auto-pr/commit/15b41a4b4619b404a2f72dfbf8326d0077997473))
+* **ci:** skip main CI on website-only changes and add ci-website ([#105](https://github.com/knirski/auto-pr/issues/105)) ([ad173ed](https://github.com/knirski/auto-pr/commit/ad173edf6079d08fbfb8008404a57fad5584e450))
+* **config:** validate AUTO_PR_AI_OPENAI_COMPAT_URL shape, fail early ([#136](https://github.com/knirski/auto-pr/issues/136)) ([90dac30](https://github.com/knirski/auto-pr/commit/90dac30fe1c6d2617e8fc2d18e4693b86b7e9841))
+* **prompt:** pass existing PR title into multi-commit generate flow ([#124](https://github.com/knirski/auto-pr/issues/124)) ([f6a72ea](https://github.com/knirski/auto-pr/commit/f6a72ea9545f0a169401aea6cf18dbae53ddd68b))
+* **routing:** add schema-typed github model routing and artifacts ([#229](https://github.com/knirski/auto-pr/issues/229)) ([431a593](https://github.com/knirski/auto-pr/commit/431a593637b7478ba517385943ca69a988e62bc1))
+* **website:** implement Starlight documentation website with GitHub Pages CI deployment ([#87](https://github.com/knirski/auto-pr/issues/87)) ([f98300b](https://github.com/knirski/auto-pr/commit/f98300b7d25b10d278dc837be1026c1dcf153d78))
+
+
+### Bug Fixes
+
+* **ai:** normalize parallel tool-call history ([#235](https://github.com/knirski/auto-pr/issues/235)) ([62de41d](https://github.com/knirski/auto-pr/commit/62de41dd0aa3fac46f2b339de79ffa00c2f6f9ec))
+* **ci:** guard add-dist job to release-please branches only ([4ae434c](https://github.com/knirski/auto-pr/commit/4ae434ce742fd024ec2917b2ced7819d375cb463))
+* **ci:** make patch gate practical and project gate informational ([#231](https://github.com/knirski/auto-pr/issues/231)) ([9e1c229](https://github.com/knirski/auto-pr/commit/9e1c22955da65ac6ca520ba00c0d60db3538135a))
+* **ci:** run astro via bun to avoid system Node.js version check ([#89](https://github.com/knirski/auto-pr/issues/89)) ([42df3fd](https://github.com/knirski/auto-pr/commit/42df3fd5d72e3d52a4bfed81912a7d28de2e3a53))
+* **ci:** set GH_REPO env in create step to restore gh pr create repo context ([b80bc90](https://github.com/knirski/auto-pr/commit/b80bc907fd78cf56a7ed1bf8de8c7b66cea70644))
+* **ci:** suppress CodeQL untrusted-checkout alerts and remove unnecessary checkout ([#92](https://github.com/knirski/auto-pr/issues/92)) ([64d20cb](https://github.com/knirski/auto-pr/commit/64d20cb5a2a0b988c6375e7071666e0b16bfd574))
+* **ci:** use client-id for create-github-app-token inputs ([#134](https://github.com/knirski/auto-pr/issues/134)) ([54a6f29](https://github.com/knirski/auto-pr/commit/54a6f29c0784bf823ac3c67979c2a8bc53eae5c7))
+* **config:** normalize optional run branch ([#194](https://github.com/knirski/auto-pr/issues/194)) ([b884560](https://github.com/knirski/auto-pr/commit/b884560bed712db86a92663123f936fae1ffe2f4))
+* **config:** trim required env values ([#195](https://github.com/knirski/auto-pr/issues/195)) ([57cfce4](https://github.com/knirski/auto-pr/commit/57cfce464838d84d10e5bef64598f7771e9e5e93))
+* **core:** extract first balanced model JSON object ([#183](https://github.com/knirski/auto-pr/issues/183)) ([4e0352a](https://github.com/knirski/auto-pr/commit/4e0352a3423867548a1705b8047ef9674e28ce68))
+* **deps:** update bun, typescript, and other tools to latest versions ([#252](https://github.com/knirski/auto-pr/issues/252)) ([70699e3](https://github.com/knirski/auto-pr/commit/70699e3ee65a1a5967637fd32511fb11df99003e))
+* **deps:** update transitive dependencies to resolve security vulnerabilities ([f9c6e7c](https://github.com/knirski/auto-pr/commit/f9c6e7c76e7d6b2f8fb7947426e281048fd5dcb7))
+* jitter retry schedules ([#167](https://github.com/knirski/auto-pr/issues/167)) ([a56dd26](https://github.com/knirski/auto-pr/commit/a56dd26411598e973cc66992ae0407eaaf23e5b1))
+* **workflow:** harden output and diff caps ([#224](https://github.com/knirski/auto-pr/issues/224)) ([b295709](https://github.com/knirski/auto-pr/commit/b2957092c5b7823f6b1b013a11f0d88cbfd83306))
+* **workflow:** provide ChildProcessSpawner to PR client layer ([#198](https://github.com/knirski/auto-pr/issues/198)) ([da31776](https://github.com/knirski/auto-pr/commit/da31776272eaba61614fe65ae3f66ce25c78bbaf))
+* **workflow:** retry pull request lookup ([#182](https://github.com/knirski/auto-pr/issues/182)) ([40251e9](https://github.com/knirski/auto-pr/commit/40251e991345c1a9038c2abda029e3fc7c7a10f3))
+* **workflows:** scope paths-filter predicate quantifier ([#216](https://github.com/knirski/auto-pr/issues/216)) ([37208f2](https://github.com/knirski/auto-pr/commit/37208f2bc550f3b7526a3c7bd581ded7f2dc6a5a))
+
 ## [0.1.4](https://github.com/knirski/auto-pr/compare/v0.1.3...v0.1.4) (2026-04-07)
 
 
