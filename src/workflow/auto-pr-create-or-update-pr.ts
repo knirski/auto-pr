@@ -41,13 +41,14 @@ function createPrClientRetrySchedule(
 ) {
   const delayLabel = formatRetryDelay(delay);
   return Schedule.recurs(PR_CLIENT_RETRY_ATTEMPTS - 1).pipe(
-    Schedule.addDelay(() =>
+    Schedule.addDelay(() => Effect.succeed(delay)),
+    Schedule.tap(() =>
       Effect.logWarning({
         event: "create_or_update_pr",
         status: "pr_client_retry",
         branch,
         message: `GitHub PR request failed, retrying in about ${delayLabel}...`,
-      }).pipe(Effect.as(delay)),
+      }),
     ),
     // Effect v4 jitter keeps the delay within 80%-120%, so the log remains approximate.
     Schedule.jittered,

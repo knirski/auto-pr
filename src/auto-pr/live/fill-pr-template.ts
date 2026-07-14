@@ -2,7 +2,7 @@
  * Live FillPrTemplate interpreter. Uses fill-pr-template core, FileSystem, and Path.
  */
 
-import { Context, Effect, FileSystem, Layer, Path, pipe } from "effect";
+import { Context, Effect, FileSystem, Layer, Path } from "effect";
 import type {
   FillPrTemplateParams,
   FillPrTemplateService,
@@ -60,12 +60,10 @@ function resolveTemplatePath(pathApi: Path.Path, cwd: string, templatePath: stri
 function readTemplate(
   filePath: string,
 ): Effect.Effect<string, FileSystemError, FileSystem.FileSystem> {
-  return pipe(
-    FileSystem.FileSystem.asEffect(),
-    Effect.flatMap((fs) =>
-      fs.readFileString(filePath).pipe(mapFsError(filePath, "readFileString")),
-    ),
-  );
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.readFileString(filePath).pipe(mapFsError(filePath, "readFileString"));
+  });
 }
 
 function readLogAndFiles(
@@ -73,7 +71,7 @@ function readLogAndFiles(
   filesFilePath: string,
 ): Effect.Effect<readonly [string, readonly string[]], FileSystemError, FileSystem.FileSystem> {
   return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem.asEffect();
+    const fs = yield* FileSystem.FileSystem;
     const [logContent, filesContent] = yield* Effect.all([
       fs.readFileString(logFilePath).pipe(mapFsError(logFilePath, "readFileString")),
       fs.readFileString(filesFilePath).pipe(mapFsError(filesFilePath, "readFileString")),
@@ -115,7 +113,7 @@ function loadTemplateAndParams(
 
     let descriptionOverride: string | undefined;
     if (params.descriptionFilePath) {
-      const fs = yield* FileSystem.FileSystem.asEffect();
+      const fs = yield* FileSystem.FileSystem;
       descriptionOverride = yield* fs
         .readFileString(params.descriptionFilePath)
         .pipe(mapFsError(params.descriptionFilePath, "readFileString"));
