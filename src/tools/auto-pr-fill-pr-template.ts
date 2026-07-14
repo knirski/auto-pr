@@ -78,7 +78,16 @@ export function runFillBody(
     }),
     ...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
   } satisfies FillPrTemplateParams;
-  return Effect.gen(function* () {
+  return Effect.fn("runFillBody")(function* (): Effect.fn.Return<
+    string,
+    | Error
+    | FileSystemError
+    | ParseError
+    | PullRequestBodyBlankError
+    | PullRequestTitleBlankError
+    | TemplateRenderError,
+    FileSystem.FileSystem | FillPrTemplate | Path.Path
+  > {
     const fillPr = yield* FillPrTemplate;
     if (format === "body") {
       return yield* fillPr.getBody(params);
@@ -86,7 +95,7 @@ export function runFillBody(
     const titleLine = Option.isSome(prTitle) ? prTitle.value : yield* fillPr.getTitle(params);
     const body = yield* fillPr.getBody(params);
     return formatTitleBody(titleLine, body);
-  });
+  })();
 }
 
 // ─── CLI ───────────────────────────────────────────────────────────────────
@@ -145,34 +154,37 @@ const prTitleFlag = Flag.string("pr-title").pipe(
 );
 
 /** Validate conventional commit title. Exported for testing. */
-export function handleValidateTitle(title: string): Effect.Effect<void, Error> {
-  return Effect.gen(function* () {
-    const valid = isValidConventionalTitle(title);
-    if (!valid) yield* Effect.fail(new Error("Invalid conventional commit title"));
-  });
-}
+export const handleValidateTitle = Effect.fn("handleValidateTitle")(function* (
+  title: string,
+): Effect.fn.Return<void, Error> {
+  const valid = isValidConventionalTitle(title);
+  if (!valid) yield* Effect.fail(new Error("Invalid conventional commit title"));
+});
 
 /** Output description prompt from log file. Exported for testing. */
-export function handleOutputDescriptionPrompt(
+export const handleOutputDescriptionPrompt = Effect.fn("handleOutputDescriptionPrompt")(function* (
   logPath: string,
   quiet: boolean,
-): Effect.Effect<void, Error, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
-    const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
-    const output = yield* Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const logContent = yield* fs
-        .readFileString(logPath)
-        .pipe(mapFsError(logPath, "readFileString"));
-      const parseResult = parseCommits(logContent);
-      const rawCommits = yield* Effect.fromResult(parseResult);
-      const commits = filterMergeCommits(rawCommits);
-      return getDescriptionPromptText(commits);
-    }).pipe(Effect.provide(layer));
-    yield* Console.log(output);
+): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+  const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
+  const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
+  const readAndParse = Effect.fn("handleOutputDescriptionPrompt.readAndParse")(function* (): Effect.fn.Return<
+    string,
+    FileSystemError | ParseError,
+    FileSystem.FileSystem
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    const logContent = yield* fs
+      .readFileString(logPath)
+      .pipe(mapFsError(logPath, "readFileString"));
+    const parseResult = parseCommits(logContent);
+    const rawCommits = yield* Effect.fromResult(parseResult);
+    const commits = filterMergeCommits(rawCommits);
+    return getDescriptionPromptText(commits);
   });
-}
+  const output = yield* readAndParse().pipe(Effect.provide(layer));
+  yield* Console.log(output);
+});
 
 function handleFill(
   logPath: string,
@@ -183,7 +195,7 @@ function handleFill(
   descriptionFile: Option.Option<string>,
   prTitle: Option.Option<string>,
 ) {
-  return Effect.gen(function* () {
+  return Effect.fn("handleFill")(function* (): Effect.fn.Return<void, Error> {
     const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
     const layer = Layer.mergeAll(BunServices.layer, loggerLayer, FillPrTemplate.Live);
     const output = yield* runFillBody(logPath, filesPath, templatePath, format, {
@@ -191,7 +203,7 @@ function handleFill(
       ...(Option.isSome(prTitle) && { prTitleForTypeOfChange: prTitle.value }),
     }).pipe(Effect.provide(layer));
     yield* Console.log(output);
-  });
+  })();
 }
 
 /** Fill command for CLI. Exported for testing. */

@@ -75,33 +75,33 @@ export function generateContentConfigFromRunAutoPrConfig(
  * This keeps orchestration testable: live GitHub, git, AI, filesystem, and path
  * implementations are provided by the CLI adapter.
  */
-export const runAutoPrPipelineWithServices = Effect.fn("runAutoPrPipelineWithServices")(
-  function* (config: RunAutoPrConfigService) {
-    const pathApi = yield* Path.Path;
-    const fs = yield* FileSystem.FileSystem;
-    const { workspace, defaultBranch } = config;
-    const branchVal = yield* resolveRunAutoPrBranch(config);
+export const runAutoPrPipelineWithServices = Effect.fn("runAutoPrPipelineWithServices")(function* (
+  config: RunAutoPrConfigService,
+) {
+  const pathApi = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+  const { workspace, defaultBranch } = config;
+  const branchVal = yield* resolveRunAutoPrBranch(config);
 
-    yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
-    yield* runGeneratePrContentWithServices(
-      generateContentConfigFromRunAutoPrConfig(config, branchVal),
-    );
+  yield* Effect.log({ event: "run_auto_pr", step: "generate_content" });
+  yield* runGeneratePrContentWithServices(
+    generateContentConfigFromRunAutoPrConfig(config, branchVal),
+  );
 
-    const titlePath = pathApi.join(workspace, PR_TITLE_FILE_NAME);
-    const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
-    const title = (yield* fs
-      .readFileString(titlePath)
-      .pipe(Effect.mapError(prTitleReadError))).trim();
+  const titlePath = pathApi.join(workspace, PR_TITLE_FILE_NAME);
+  const bodyPath = pathApi.join(workspace, PR_BODY_FILE_NAME);
+  const title = (yield* fs
+    .readFileString(titlePath)
+    .pipe(Effect.mapError(prTitleReadError))).trim();
 
-    yield* Effect.log({ event: "run_auto_pr", step: "create_or_update_pr" });
-    yield* runCreateOrUpdatePr({
-      branch: branchVal,
-      defaultBranch,
-      title,
-      bodyFile: bodyPath,
-      workspace,
-    });
+  yield* Effect.log({ event: "run_auto_pr", step: "create_or_update_pr" });
+  yield* runCreateOrUpdatePr({
+    branch: branchVal,
+    defaultBranch,
+    title,
+    bodyFile: bodyPath,
+    workspace,
+  });
 
-    yield* Effect.log({ event: "run_auto_pr", status: "done" });
-  },
-);
+  yield* Effect.log({ event: "run_auto_pr", status: "done" });
+});
