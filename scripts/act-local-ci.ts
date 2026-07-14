@@ -275,6 +275,8 @@ export type BuildActArgsInput = {
   readonly artifactServerPort?: string;
   /** Passed to act as **`--container-options`** (Docker flags for job containers; e.g. Docker-in-Docker socket access). */
   readonly containerOptions?: string;
+  /** Bind-mount the workspace into containers instead of `docker cp`. Preserves `.git` so `dorny/paths-filter` works in PR checkouts (act ≥ 0.2.89 regression). */
+  readonly bind?: boolean;
 };
 
 /**
@@ -324,6 +326,9 @@ export function buildActArgv(input: BuildActArgsInput): readonly string[] {
   const co = input.containerOptions?.trim();
   if (co !== undefined && co.length > 0) {
     tail.push("--container-options", co);
+  }
+  if (input.bind) {
+    tail.push("--bind");
   }
   /* Only integration workflow simulation: signals nested act / long LLM timeouts in integration tests. */
   if (input.workflowPath === INTEGRATION_WORKFLOW) {
@@ -479,6 +484,7 @@ function runWorkflowJob(
     readonly runnerImage: string;
     readonly eventFile: string | undefined;
     readonly failureIntro: string;
+    readonly bind?: boolean;
   },
   resolveBackend: () => Option.Option<ActBackend>,
 ): Effect.Effect<void, ActLocalCiError, ChildProcessSpawner> {
@@ -507,6 +513,7 @@ function runWorkflowJob(
       eventFile: input.eventFile,
       ...artifact,
       ...(containerOpts !== undefined ? { containerOptions: containerOpts } : {}),
+      ...(input.bind ? { bind: true } : {}),
     });
     const plan = planActRun(backend, input.repoRoot, actArgv);
     yield* spawnAct(plan.command, plan.args, plan.cwd).pipe(
@@ -554,6 +561,7 @@ function runActCheckWorkflowsJob(
       workflowPath: CI_WORKFLOW,
       jobName: "workflows-lint",
       failureIntro,
+      bind: true,
     },
     resolveBackend,
   );
