@@ -18,9 +18,9 @@ export const resolveRunAutoPrBranch = Effect.fn("resolveRunAutoPrBranch")(functi
 ) {
   if (config.branch !== undefined) return config.branch;
   const git = yield* GitContext;
-  return yield* git.getCurrentBranch().pipe(
-    Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })),
-  );
+  return yield* git
+    .getCurrentBranch()
+    .pipe(Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })));
 });
 
 export function prTitleReadError(error: unknown): UnexpectedError {
