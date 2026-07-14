@@ -200,6 +200,7 @@ describe("pure helpers", () => {
     expect(parsed.deleted).toBe(false);
     expect(parsed.after).toBe("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
     expect(parsed.ref).toBe("refs/pull/1/merge");
+    expect(parsed.act_local_ci).toBe(true);
     expect(parsed.repository).toEqual({
       name: "n",
       full_name: "o/n",
@@ -211,8 +212,9 @@ describe("pure helpers", () => {
   test("stringifyWorkflowDispatchEventJson respects defaultBranch option", () => {
     const repo = { owner: "o", name: "n" };
     const json = stringifyWorkflowDispatchEventJson(repo, undefined, { defaultBranch: "develop" });
-    const parsed = JSON.parse(json) as { repository: { default_branch: string } };
-    expect(parsed.repository.default_branch).toBe("develop");
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    expect((parsed.repository as { default_branch: string }).default_branch).toBe("develop");
+    expect(parsed.act_local_ci).toBe(true);
   });
 
   test("buildActArgv uses runsOnLabel as act -P key (not tied to a single OS name)", () => {

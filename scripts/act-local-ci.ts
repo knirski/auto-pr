@@ -172,13 +172,14 @@ export function stringifyWorkflowDispatchEventJson(
     default_branch: defaultBranch,
   };
   if (gitPointer === undefined) {
-    return JSON.stringify({ repository });
+    return JSON.stringify({ repository, act_local_ci: true });
   }
   return JSON.stringify({
     repository,
     ref: gitPointer.ref,
     after: gitPointer.sha,
     deleted: false,
+    act_local_ci: true,
   });
 }
 

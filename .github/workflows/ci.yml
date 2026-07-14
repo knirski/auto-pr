@@ -141,7 +141,7 @@ jobs:
   # actionlint + shellcheck + shfmt + self-referential pin verify. .github-only path.
   workflows-lint:
     needs: changes
-    if: needs.changes.outputs.workflows == 'true'
+    if: always() && (needs.changes.outputs.workflows == 'true' || github.event.act_local_ci)
     permissions:
       contents: read
     uses: ./.github/workflows/check-workflows.yml
