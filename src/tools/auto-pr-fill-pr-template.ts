@@ -168,20 +168,18 @@ export const handleOutputDescriptionPrompt = Effect.fn("handleOutputDescriptionP
 ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
   const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
   const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
-  const readAndParse = Effect.fn("handleOutputDescriptionPrompt.readAndParse")(function* (): Effect.fn.Return<
-    string,
-    FileSystemError | ParseError,
-    FileSystem.FileSystem
-  > {
-    const fs = yield* FileSystem.FileSystem;
-    const logContent = yield* fs
-      .readFileString(logPath)
-      .pipe(mapFsError(logPath, "readFileString"));
-    const parseResult = parseCommits(logContent);
-    const rawCommits = yield* Effect.fromResult(parseResult);
-    const commits = filterMergeCommits(rawCommits);
-    return getDescriptionPromptText(commits);
-  });
+  const readAndParse = Effect.fn("handleOutputDescriptionPrompt.readAndParse")(
+    function* (): Effect.fn.Return<string, FileSystemError | ParseError, FileSystem.FileSystem> {
+      const fs = yield* FileSystem.FileSystem;
+      const logContent = yield* fs
+        .readFileString(logPath)
+        .pipe(mapFsError(logPath, "readFileString"));
+      const parseResult = parseCommits(logContent);
+      const rawCommits = yield* Effect.fromResult(parseResult);
+      const commits = filterMergeCommits(rawCommits);
+      return getDescriptionPromptText(commits);
+    },
+  );
   const output = yield* readAndParse().pipe(Effect.provide(layer));
   yield* Console.log(output);
 });
