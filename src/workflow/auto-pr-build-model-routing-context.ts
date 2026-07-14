@@ -578,63 +578,63 @@ function buildFileSummary(input: {
 const buildRoutingContextInput = Effect.fn("buildRoutingContextInput")(function* (
   input: RoutingContextInputs,
 ): Effect.fn.Return<RoutingContextSignalInput, Error, never> {
-    const range = `origin/${input.defaultBranch}..HEAD`;
-    const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
-    const numstatOutput = yield* runGit(input.workspace, ["diff", "--numstat", range]);
-    const nameStatusOutput = yield* runGit(input.workspace, ["diff", "--name-status", range]);
-    const logOutput = yield* runGit(input.workspace, ["log", "--format=%H%n%B%x00", range]);
+  const range = `origin/${input.defaultBranch}..HEAD`;
+  const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
+  const numstatOutput = yield* runGit(input.workspace, ["diff", "--numstat", range]);
+  const nameStatusOutput = yield* runGit(input.workspace, ["diff", "--name-status", range]);
+  const logOutput = yield* runGit(input.workspace, ["log", "--format=%H%n%B%x00", range]);
 
-    const files = filesOutput.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const numstat = numstatOutput.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const nameStatus = nameStatusOutput.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const commits = parseCommitLog(logOutput.stdout);
-    const semanticCommits = commits.filter((commit) => !commit.subject.startsWith("Merge "));
-    const mergeCommitCount = commits.length - semanticCommits.length;
-    const commitSummary = buildCommitSummary(
-      semanticCommits.map((commit) => ({
-        type: commit.type,
-        breaking: commit.breaking,
-      })),
-      mergeCommitCount,
-    );
-    const fileSummary = buildFileSummary({ files, numstat, nameStatus });
-    const semanticCommitCount = input.commitsCount ?? semanticCommits.length;
-    const signals: ModelBandSignals = {
+  const files = filesOutput.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const numstat = numstatOutput.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const nameStatus = nameStatusOutput.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const commits = parseCommitLog(logOutput.stdout);
+  const semanticCommits = commits.filter((commit) => !commit.subject.startsWith("Merge "));
+  const mergeCommitCount = commits.length - semanticCommits.length;
+  const commitSummary = buildCommitSummary(
+    semanticCommits.map((commit) => ({
+      type: commit.type,
+      breaking: commit.breaking,
+    })),
+    mergeCommitCount,
+  );
+  const fileSummary = buildFileSummary({ files, numstat, nameStatus });
+  const semanticCommitCount = input.commitsCount ?? semanticCommits.length;
+  const signals: ModelBandSignals = {
+    semanticCommitCount,
+    conventionalTypeCount: new Set(
+      semanticCommits.map((commit) => commit.type?.toLowerCase() ?? "").filter(Boolean),
+    ).size,
+    topLevelSpread: fileSummary.topLevelDirs.length,
+    changedFileCount: files.length,
+    sourceFileCount: fileSummary.sourceFileCount,
+    docsFileCount: fileSummary.docsFileCount,
+    testFileCount: fileSummary.testFileCount,
+    generatedFileCount: fileSummary.generatedFileCount,
+    lockfileCount: fileSummary.lockfileCount,
+    packageManifestCount: fileSummary.packageManifestCount,
+    rawChurn: fileSummary.rawChurn,
+    sourceChurn: fileSummary.sourceChurn,
+    generatedChurn: fileSummary.generatedChurn,
+    hasBreakingChange: semanticCommits.some((commit) => commit.breaking),
+    hasBinaryFiles: fileSummary.hasBinaryFiles,
+  };
+  return {
+    signals,
+    commits: {
+      ...commitSummary,
       semanticCommitCount,
-      conventionalTypeCount: new Set(
-        semanticCommits.map((commit) => commit.type?.toLowerCase() ?? "").filter(Boolean),
-      ).size,
-      topLevelSpread: fileSummary.topLevelDirs.length,
-      changedFileCount: files.length,
-      sourceFileCount: fileSummary.sourceFileCount,
-      docsFileCount: fileSummary.docsFileCount,
-      testFileCount: fileSummary.testFileCount,
-      generatedFileCount: fileSummary.generatedFileCount,
-      lockfileCount: fileSummary.lockfileCount,
-      packageManifestCount: fileSummary.packageManifestCount,
-      rawChurn: fileSummary.rawChurn,
-      sourceChurn: fileSummary.sourceChurn,
-      generatedChurn: fileSummary.generatedChurn,
-      hasBreakingChange: semanticCommits.some((commit) => commit.breaking),
-      hasBinaryFiles: fileSummary.hasBinaryFiles,
-    };
-    return {
-      signals,
-      commits: {
-        ...commitSummary,
-        semanticCommitCount,
-      },
-      files: fileSummary,
-    };
+    },
+    files: fileSummary,
+  };
 });
 
 function writeDecisionOutputs(
