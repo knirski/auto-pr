@@ -575,10 +575,9 @@ function buildFileSummary(input: {
   };
 }
 
-function buildRoutingContextInput(
+const buildRoutingContextInput = Effect.fn("buildRoutingContextInput")(function* (
   input: RoutingContextInputs,
-): Effect.Effect<RoutingContextSignalInput, Error> {
-  return Effect.gen(function* () {
+): Effect.fn.Return<RoutingContextSignalInput, Error, never> {
     const range = `origin/${input.defaultBranch}..HEAD`;
     const filesOutput = yield* runGit(input.workspace, ["diff", "--name-only", range]);
     const numstatOutput = yield* runGit(input.workspace, ["diff", "--numstat", range]);
@@ -636,8 +635,7 @@ function buildRoutingContextInput(
       },
       files: fileSummary,
     };
-  });
-}
+});
 
 function writeDecisionOutputs(
   githubOutput: string,

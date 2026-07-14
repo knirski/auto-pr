@@ -161,7 +161,7 @@ export function handleOutputDescriptionPrompt(
     const loggerLayer = quiet ? Logger.layer([]) : AutoPrLoggerLayer;
     const layer = BunServices.layer.pipe(Layer.provideMerge(loggerLayer));
     const output = yield* Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem.asEffect();
+      const fs = yield* FileSystem.FileSystem;
       const logContent = yield* fs
         .readFileString(logPath)
         .pipe(mapFsError(logPath, "readFileString"));
@@ -237,10 +237,7 @@ export const fillCommand = Command.make(
       return;
     }
 
-    const templatePath = yield* Option.match(template, {
-      onNone: () => Effect.fail(new Error("--template is required")),
-      onSome: (t) => Effect.succeed(t),
-    });
+    const templatePath = yield* Effect.fromOption(template, () => new Error("--template is required"));
     const formatVal = yield* Option.match(format, {
       onNone: () => Effect.fail(new Error("--format is required")),
       onSome: (f) =>

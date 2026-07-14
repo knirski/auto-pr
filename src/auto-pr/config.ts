@@ -91,10 +91,9 @@ function requireRedactedOption(
   opt: Option.Option<Redacted.Redacted<string>>,
   missingMessage: string,
 ): Effect.Effect<Redacted.Redacted<string>, AutoPrConfigError, never> {
-  return Option.match(opt, {
-    onNone: () => Effect.fail(new AutoPrConfigError({ missing: [missingMessage] })),
-    onSome: (v) => requireRedactedNonEmpty(name, v),
-  });
+  return Effect.fromOption(opt, () => new AutoPrConfigError({ missing: [missingMessage] })).pipe(
+    Effect.flatMap((v) => requireRedactedNonEmpty(name, v)),
+  );
 }
 
 function optionalTrimmedNonEmpty(opt: Option.Option<string>): string | undefined {
@@ -272,16 +271,14 @@ function parseRoutingDecisionJson(
   routingDecisionJson: Option.Option<string>,
 ): Effect.Effect<RoutingDecision, ModelRoutingOutputError, never> {
   return Effect.gen(function* () {
-    const raw = yield* Option.match(routingDecisionJson, {
-      onNone: () =>
-        Effect.fail(
-          new ModelRoutingOutputError({
-            message:
-              "Missing routing output: AUTO_PR_ROUTING_DECISION_JSON is required for github-models.",
-          }),
-        ),
-      onSome: (jsonText) => Effect.succeed(jsonText),
-    });
+    const raw = yield* Effect.fromOption(
+      routingDecisionJson,
+      () =>
+        new ModelRoutingOutputError({
+          message:
+            "Missing routing output: AUTO_PR_ROUTING_DECISION_JSON is required for github-models.",
+        }),
+    );
     const parsed = yield* Effect.try({
       try: () => JSON.parse(raw) as unknown,
       catch: () =>

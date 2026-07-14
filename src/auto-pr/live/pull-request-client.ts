@@ -85,10 +85,10 @@ function resolveRepoIdentity(
   if (raw === undefined || raw.trim() === "") {
     return Effect.fail("Missing repository config: set GITHUB_REPOSITORY or GH_REPO as owner/repo");
   }
-  return Option.match(parseRepoIdentity(raw), {
-    onNone: () => Effect.fail(`Invalid repository config: ${raw}. Expected owner/repo`),
-    onSome: Effect.succeed,
-  });
+  return Effect.fromOption(
+    parseRepoIdentity(raw),
+    () => `Invalid repository config: ${raw}. Expected owner/repo`,
+  );
 }
 
 function resolveToken(input: PullRequestClientLiveDeps): Effect.Effect<string, string> {

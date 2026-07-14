@@ -15,10 +15,10 @@ import {
 
 export function resolveRunAutoPrBranch(config: RunAutoPrConfigService) {
   if (config.branch !== undefined) return Effect.succeed(config.branch);
-  return Effect.gen(function* () {
+  return Effect.fn("resolveRunAutoPrBranch")(function* () {
     const git = yield* GitContext;
     return yield* git.getCurrentBranch();
-  }).pipe(Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })));
+  })().pipe(Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })));
 }
 
 export function prTitleReadError(error: unknown): UnexpectedError {
@@ -75,8 +75,8 @@ export function generateContentConfigFromRunAutoPrConfig(
  * This keeps orchestration testable: live GitHub, git, AI, filesystem, and path
  * implementations are provided by the CLI adapter.
  */
-export function runAutoPrPipelineWithServices(config: RunAutoPrConfigService) {
-  return Effect.gen(function* () {
+export const runAutoPrPipelineWithServices = Effect.fn("runAutoPrPipelineWithServices")(
+  function* (config: RunAutoPrConfigService) {
     const pathApi = yield* Path.Path;
     const fs = yield* FileSystem.FileSystem;
     const { workspace, defaultBranch } = config;
@@ -103,5 +103,5 @@ export function runAutoPrPipelineWithServices(config: RunAutoPrConfigService) {
     });
 
     yield* Effect.log({ event: "run_auto_pr", status: "done" });
-  });
-}
+  },
+);
