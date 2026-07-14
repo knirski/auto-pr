@@ -247,7 +247,10 @@ export const fillCommand = Command.make(
       return;
     }
 
-    const templatePath = yield* Effect.fromOption(template, () => new Error("--template is required"));
+    const templatePath = yield* Effect.fromOption(
+      template,
+      () => new Error("--template is required"),
+    );
     const formatVal = yield* Option.match(format, {
       onNone: () => Effect.fail(new Error("--format is required")),
       onSome: (f) =>
