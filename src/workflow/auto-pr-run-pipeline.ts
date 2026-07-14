@@ -13,13 +13,15 @@ import {
   runGeneratePrContentWithServices,
 } from "#workflow/auto-pr-generate-content.js";
 
-export function resolveRunAutoPrBranch(config: RunAutoPrConfigService) {
-  if (config.branch !== undefined) return Effect.succeed(config.branch);
-  return Effect.fn("resolveRunAutoPrBranch")(function* () {
-    const git = yield* GitContext;
-    return yield* git.getCurrentBranch();
-  })().pipe(Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })));
-}
+export const resolveRunAutoPrBranch = Effect.fn("resolveRunAutoPrBranch")(function* (
+  config: RunAutoPrConfigService,
+) {
+  if (config.branch !== undefined) return config.branch;
+  const git = yield* GitContext;
+  return yield* git.getCurrentBranch().pipe(
+    Effect.mapError((e) => new UnexpectedError({ cause: unknownToMessage(e) })),
+  );
+});
 
 export function prTitleReadError(error: unknown): UnexpectedError {
   return new UnexpectedError({
