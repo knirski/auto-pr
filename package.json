@@ -43,7 +43,7 @@
     "test:watch": "bun test --watch",
     "check": "bash scripts/check-nix-hash.sh && bun run check:nix && bun run check:code && bun run check:docs && bun run lint:workflows && bun run lint:scripts",
     "act": "bun scripts/act-local-ci.ts",
-    "check:code": "bun run check:manifest && bun run build && bun audit --audit-level=high && run-p lint knip typecheck && bun run test",
+    "check:code": "bun run check:manifest && bun run build && bun audit --audit-level=high && bun run lint && bun run knip && bun run typecheck && bun run test",
     "check:manifest": "bun run scripts/check-package-manifest.ts",
     "check:patch-coverage": "bun run scripts/check-patch-coverage.ts",
     "check:with-links": "bun run check && bun run check:just-links",
@@ -89,7 +89,6 @@
     "knip": "6.26.0",
     "lefthook": "2.1.10",
     "lint-staged": "17.0.8",
-    "npm-run-all": "4.1.5",
     "rumdl": "0.2.33",
     "testcontainers": "12.0.4",
     "typescript": "7.0.2"
