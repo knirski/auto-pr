@@ -155,32 +155,44 @@ To use a different prefix, adjust the `ai/**` patterns in the `discover` job and
 
 ## Running checks before PR creation
 
-To run your tests or checks before PR creation, add a `check` job and make `generate` depend on it. Edit the check job for your stack.
+To run your tests or checks before generating PR content, add a `check` job to the unprivileged **generate** workflow (`auto-pr.yml`) and make its `generate` job depend on it. Edit the check job for your stack.
 
-**Pattern:** Add a job before `generate` and set `needs: check` on the generate job:
+Two things differ from the old single-workflow layout, and both matter:
+
+- Generation now runs from `auto-pr.yml`'s `discover` → `generate` **matrix** (there is no `push` trigger). A check job must therefore fan across the same matrix and check out each discovered branch's **immutable head SHA** (`matrix.head_sha`), not a mutable ref name — under `workflow_dispatch`/`schedule` the ambient `github.ref_name` is your *default* branch, not the `ai/**` branch being generated for.
+- The privileged **create** phase is a **separate, default-branch-only `workflow_run` workflow** (`auto-pr-create.yml`) that runs automatically after generate succeeds. Do **not** add a `create:` job here or chain it with `needs:`. Chaining a privileged create job into this dispatch/schedule-reachable file is exactly the trust-boundary defect [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) removes — so it is deliberately not possible in the current design.
+
+**Pattern:** Add a `check` job that fans across the discovered matrix, then add it to the stock `generate` job's `needs:` (change `needs: discover` to `needs: [discover, check]` — the rest of the stock `generate` job is unchanged):
 
 ```yaml
 jobs:
+  # discover: ...unchanged from the stock auto-pr.yml (emits the {branch, head_sha} matrix)...
+
   check:
+    needs: discover
+    if: needs.discover.outputs.has_branches == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       # Add your stack's setup and run command below
       - name: Check
         run: echo "Add your check command (npm run check, pytest, cargo test, etc.)" && exit 1
 
   generate:
-    needs: check
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@<SHA>
-
-  create:
-    needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@<SHA>
-    secrets: inherit
+    needs: [discover, check] # stock file has `needs: discover`; add `check`
+    # ...rest unchanged from the stock auto-pr.yml (if, matrix, permissions, uses:@<SHA>, with, secrets)...
 ```
+
+The language examples below show the `check` job's setup/run steps for common stacks. Add the `needs: discover` + `if:` + `strategy.matrix` matrix wiring from the Pattern above to each so it fans across the discovered branches and checks out `matrix.head_sha`.
 
 **Node/npm example:**
 
@@ -190,8 +202,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version-file: ".nvmrc"
@@ -200,7 +213,7 @@ jobs:
       - run: npm run check
 ```
 
-**Bun/pnpm/yarn:** Use `oven-sh/setup-bun`, `pnpm/action-setup` + `actions/setup-node`, or `actions/setup-node` with `cache: "yarn"` respectively. The generate and create jobs auto-detect your runtime; your check job should match.
+**Bun/pnpm/yarn:** Use `oven-sh/setup-bun`, `pnpm/action-setup` + `actions/setup-node`, or `actions/setup-node` with `cache: "yarn"` respectively. The generate job auto-detects your runtime; your check job should match.
 
 **Python example:**
 
@@ -210,8 +223,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
@@ -229,8 +243,9 @@ Adjust the install step for your project (e.g. `pip install -r requirements.txt`
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - run: cargo test
 ```
 
