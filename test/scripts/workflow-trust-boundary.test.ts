@@ -233,8 +233,12 @@ const SHA40 = /[a-f0-9]{40}/;
 // Auto-PR privileged phase, resolved once (throws if the files/jobs are ever renamed).
 const createReusable = findWorkflow("auto-pr-create-reusable.yml");
 const createJob = findJob(createReusable, "create");
-const entryWorkflow = findWorkflow("auto-pr.yml");
-const entryCreateJob = findJob(entryWorkflow, "create");
+// Task 1.3b moved the privileged `create` caller out of the (now push-free, unprivileged)
+// auto-pr.yml into a separate default-branch, workflow_run-triggered file auto-pr-create.yml
+// (ADR 0016 decision 4). The caller `create` job is now looked up there; auto-pr.yml holds only
+// the trigger + discover + generate jobs.
+const createCaller = findWorkflow("auto-pr-create.yml");
+const entryCreateJob = findJob(createCaller, "create");
 
 // Concatenated `run:` step bodies of the create job. We match SHA/guard patterns against THIS,
 // never the whole workflow text: the file's `uses: action@<40-hex-sha>` pins would otherwise make
@@ -246,12 +250,14 @@ const createJobRunText = getSteps(createJob)
 
 // ===========================================================================
 // Bullet 1 — no privileged job consumes a generate-job output as an install target.
-// EXPECTED: FAIL. `auto-pr.yml`'s privileged `create` job forwards
-// `needs.generate.outputs.auto_pr_pkg` straight into the privileged reusable call's `auto_pr_pkg`
-// input, which becomes `bun add "$AUTO_PR_PKG"` downstream. This is the core defect.
+// Task 1.3b outcome: the privileged `create` caller moved to the workflow_run-triggered
+// auto-pr-create.yml, which passes through only raw `github.event.workflow_run.*` context (no
+// `needs.<generate>.outputs.*`). The generate output `auto_pr_pkg` was removed in Task 1.3a. So
+// no privileged job forwards a generate output any more — this bullet flips GREEN. (Its INTENT is
+// unchanged; only the file the caller `create` job lives in moved, per ADR 0016 decision 4.)
 // ===========================================================================
 describe("Bullet 1: privileged job must not consume a generate-job output", () => {
-  test("auto-pr.yml `create` does not forward needs.<generate>.outputs.* into the privileged call", () => {
+  test("auto-pr-create.yml `create` does not forward needs.<generate>.outputs.* into the privileged call", () => {
     const offending = jobSinkStrings(entryCreateJob).filter((s) =>
       /needs\.[\w-]+\.outputs/.test(s),
     );

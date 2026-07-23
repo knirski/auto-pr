@@ -1,50 +1,128 @@
-# Auto-PR — uses two reusable workflows (generate + create). Push to ai/** to auto-create a PR.
-# No package.json required. Run: npx -p github:knirski/auto-pr auto-pr-init (creates this file, template, .nvmrc)
+# Auto-PR — unprivileged GENERATE ingress (ADR 0016). Discovers ai/** branches and produces the
+# PR-content artifact. It holds NO secrets, NO pull-requests: write, and NO privileged job: the
+# privileged create phase lives in a separate default-branch workflow (auto-pr-create.yml) that
+# GitHub always evaluates from the default branch via workflow_run — a pushed branch can never
+# substitute that definition. This file is therefore safe to run from branch-resolved definitions.
 #
-# Two workflows: generate (unprivileged, checkout branch) + create (privileged, checkout default).
-# Satisfies CodeQL "untrusted checkout in trusted context" — no suppression.
+# Ingress (ADR 0016 Open Question resolution):
+#   - workflow_dispatch: manual baseline — generate for one explicit ai/** branch (Option A).
+#   - schedule: scheduled discovery of ai/** branches lacking an open PR (Option B, default auto).
+#   repository_dispatch (Option C) is documented-only and intentionally NOT implemented here.
 #
-# Runs on forks too: add APP_ID/APP_PRIVATE_KEY to your fork to test; else fails with clear message.
+# No package.json required. Run: npx -p github:knirski/auto-pr auto-pr-init (creates this file,
+# template, .nvmrc).
 #
-# Reusable workflow refs: always use a commit SHA — branch name refs do not resolve reliably for same-repo
-# reusable workflows. Update both SHA pins to the current HEAD after each push. After merge to main,
-# pin to the merge commit SHA (same as update-workflow-pins / INTEGRATION).
-# Composite actions in generate + check: same rule — always pin to a SHA, never a branch name.
+# Reusable workflow refs: always use a commit SHA — branch name refs do not resolve reliably for
+# same-repo reusable workflows. Update the SHA pin to the current HEAD after each push. After merge
+# to main, pin to the merge commit SHA (same as update-workflow-pins / INTEGRATION). Composite
+# actions in the reusable follow the same rule.
 
 name: Auto-PR
 
 permissions: {}
 
 on:
-  push:
-    branches:
-      - "ai/**"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "The ai/** branch to generate a PR for (manual baseline, ADR 0016 Option A)."
+        required: true
+        type: string
+  schedule:
+    # Every 15 minutes (ADR 0016 Option B — scheduled discovery). GitHub's scheduled-run minimum
+    # is 5 minutes and scheduled runs are best-effort and frequently delayed under load, so the
+    # realistic end-to-end latency is 10-30+ minutes, not seconds. This is the documented cost of
+    # dropping push as the trusted entry point.
+    - cron: "*/15 * * * *"
 
+# Discovery runs from the default branch on every trigger; key concurrency by dispatch branch (or
+# ref for schedule) so a manual run and the scheduler don't cancel each other and a newer discovery
+# supersedes an older one.
 concurrency:
-  group: auto-pr-${{ github.ref }}
+  group: auto-pr-generate-${{ github.workflow }}-${{ inputs.branch || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Unprivileged discovery (ADR 0016 decision 3): contents: read + pull-requests: read only, no
+  # secrets, no App token. Emits a JSON matrix of {branch, head_sha} pairs. head_sha is the branch
+  # tip resolved via API here — the generate job checks out that immutable SHA, never a mutable ref.
+  discover:
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      has_branches: ${{ steps.discover.outputs.has_branches }}
+    steps:
+      - name: Discover ai/** branches to generate for
+        id: discover
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_BRANCH: ${{ inputs.branch }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Option A: single explicit branch. Resolve its current tip via API (never trust a
+            # client-suppliable SHA). Constrain to ai/** to match the trust model.
+            case "$DISPATCH_BRANCH" in
+              ai/*) : ;;
+              *)
+                echo "::error::Input branch must match ai/** (got '$DISPATCH_BRANCH')."
+                exit 1
+                ;;
+            esac
+            sha="$(gh api "repos/$REPO/git/ref/heads/$DISPATCH_BRANCH" --jq '.object.sha')"
+            matrix="$(jq -cn --arg b "$DISPATCH_BRANCH" --arg s "$sha" \
+              '{include: [{branch: $b, head_sha: $s}]}')"
+          else
+            # Option B: discover ai/** branches (refs/heads/ai/*) whose tip has no open PR yet.
+            gh api --paginate "repos/$REPO/git/matching-refs/heads/ai/" \
+              --jq '.[] | {branch: (.ref | sub("^refs/heads/"; "")), head_sha: .object.sha}' \
+              | jq -s '.' > "$tmp/branches.json"
+            gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+              --jq '.[].head.ref' \
+              | jq -R '.' | jq -s '.' > "$tmp/open_pr_heads.json"
+            matrix="$(jq -c \
+              --slurpfile openheads "$tmp/open_pr_heads.json" \
+              '{include: [ .[] | select((.branch as $b | ($openheads[0] | index($b))) | not) ]}' \
+              "$tmp/branches.json")"
+          fi
+          count="$(printf '%s' "$matrix" | jq '.include | length')"
+          {
+            printf 'matrix=%s\n' "$matrix"
+            if [ "$count" -gt 0 ]; then
+              echo "has_branches=true"
+            else
+              echo "has_branches=false"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          echo "Discovered $count branch(es) to generate for."
+
+  # Unprivileged generate, fanned out across the discovered matrix (ADR 0016 decision 3). Retains
+  # exactly today's minimal permissions: contents: read + models: read (+ pull-requests: read to
+  # cap the reusable's `gh pr view`). No pull-requests: write anywhere in this file.
   generate:
-    if: github.ref_name != github.event.repository.default_branch
+    needs: discover
+    if: needs.discover.outputs.has_branches == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     # timeout-minutes not settable on reusable-call jobs; auto-pr-generate-reusable caps generate at 25m
     permissions:
       contents: read
       pull-requests: read # caps reusable generate job (gh pr view for existing title)
       models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
     uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@70699e3ee65a1a5967637fd32511fb11df99003e
+    with:
+      # Explicit immutable SHA + source branch resolved by the discover job (ADR 0016 decision 3).
+      head_sha: ${{ matrix.head_sha }}
+      source_branch: ${{ matrix.branch }}
     secrets:
       # GitHub API token for the generate job. This workflow grants `models: read` so the default
       # `github.token` works without exposing a long-lived PAT to branch code.
       GH_TOKEN: ${{ github.token }}
-
-  create:
-    needs: generate
-    # timeout-minutes not settable on reusable-call jobs; auto-pr-create-reusable caps create at 5m
-    permissions:
-      contents: read
-      pull-requests: write
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@70699e3ee65a1a5967637fd32511fb11df99003e
-    with:
-      auto_pr_pkg: ${{ needs.generate.outputs.auto_pr_pkg }}
-    secrets: inherit

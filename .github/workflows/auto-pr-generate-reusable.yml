@@ -18,6 +18,21 @@ on:
     # package/executable reference for a privileged job to install (ADR 0016 decisions 3, 6).
     # PR content + immutable identity/digests are delivered via the uploaded artifact manifest.
     inputs:
+      # Explicit head SHA to check out and record (ADR 0016 decision 3). The caller resolves the
+      # ai/** branch's current tip via API and passes the immutable commit here — never a mutable
+      # branch ref name. Under the new default-branch ingress (workflow_dispatch/schedule) the
+      # ambient github.ref/github.sha point at the default branch, so the source commit must be
+      # supplied explicitly.
+      head_sha:
+        required: true
+        type: string
+        description: "Immutable commit SHA of the ai/** branch tip to generate against."
+      # The ai/** source branch name, recorded in the artifact manifest (source_branch) and used
+      # for PR content. Supplied explicitly for the same reason as head_sha.
+      source_branch:
+        required: true
+        type: string
+        description: "The ai/** source branch name being generated for."
       ai_provider:
         required: false
         type: string
@@ -48,8 +63,13 @@ on:
         description: "Port for llama-server when using ai_llamacpp_model_url"
         default: "8080"
 
+# Key concurrency on the source branch, not github.ref: under the default-branch ingress every
+# matrix-fanned-out call runs with github.ref == the default branch, so a github.ref-keyed group
+# would make sibling matrix entries (different branches) cancel each other. Keying on
+# inputs.source_branch lets distinct branches run in parallel while a newer generate for the same
+# branch supersedes an older one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-auto-pr-generate
+  group: ${{ github.workflow }}-auto-pr-generate-${{ inputs.source_branch }}
   cancel-in-progress: true
 
 permissions: {}
@@ -63,12 +83,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      # codeql[actions/untrusted-checkout] github.ref_name in workflow_call context is the
-      # calling workflow's own ref (a pushed branch via push trigger), never a PR head.
+      # codeql[actions/untrusted-checkout] This checks out an explicit, caller-resolved head SHA
+      # (ADR 0016 decision 3) in an unprivileged context (contents: read, no secrets, data-only
+      # output). It is never a privileged checkout.
       - name: Checkout branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ inputs.head_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -178,7 +199,7 @@ jobs:
           runner: ${{ steps.setup.outputs.runner }}
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          BRANCH: ${{ inputs.source_branch }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
@@ -201,9 +222,9 @@ jobs:
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           SOURCE_REPOSITORY: ${{ github.repository }}
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          BRANCH: ${{ inputs.source_branch }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
         run: |
           mkdir -p pr-content
           cp "$GITHUB_WORKSPACE/pr-title.txt" pr-content/title.txt
