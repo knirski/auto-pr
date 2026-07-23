@@ -416,8 +416,16 @@ describe("Bullet 6: every App-secret-consuming job names a protected environment
   })();
 
   test("the expected set of App-secret-consuming jobs is discovered", () => {
-    // Sanity check on the heuristic itself: ADR/context expects 6 consumers.
-    expect(appSecretJobs.length).toBe(6);
+    // Sanity check on the heuristic itself: 5 consumers remain after Task 1.6b.
+    // Task 1.6b (fixing the Task 1.6 environment-gate CI regression) dropped
+    // add-dist-to-release-pr.yml#add-dist from the App-secret-consumer set: that job is
+    // pull_request-triggered, so the main-only `app-credentials` deployment policy would have
+    // failed its entire run permanently. It now uses the default GITHUB_TOKEN (job already has
+    // contents: write) instead of an App token, removing it as an App-secret consumer entirely.
+    // The 5 remaining consumers are: auto-pr-create-reusable.yml#create, release-please.yml#release-please,
+    // update-dist.yml#update-dist, update-workflow-pins.yml#update-pins, and nix.yml#bun-nix-push
+    // (the privileged push job split out of the former nix.yml#bun-nix).
+    expect(appSecretJobs.length).toBe(5);
   });
 
   test.each(appSecretJobs.map((j) => [`${j.workflow}#${j.id}`, j.job] as const))(

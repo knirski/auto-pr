@@ -147,7 +147,17 @@ jobs:
     uses: ./.github/workflows/check-workflows.yml
 
   # Nix flake build matrix + bun.nix regeneration.
-  # ref / push_allowed preserve fork-safe behavior (no push from fork PRs, target right commit).
+  # ref targets the PR head commit on pull_request (else the pushed ref).
+  # push_allowed (Task 1.6b): true ONLY for non-pull_request triggers (push to main,
+  # workflow_dispatch). It is now false for EVERY pull_request — same-repo included, not just forks.
+  # This is the root-cause fix for the Task 1.6 environment-gate regression: the privileged
+  # bun-nix-push job (environment: app-credentials, main-only policy) must never even be attempted on
+  # a pull_request (GITHUB_REF = refs/pull/<n>/merge, which the policy rejects → whole-job failure).
+  # With push_allowed=false on PRs, bun-nix-push's `if:` is always false there, so it is cleanly
+  # SKIPPED (which satisfies gate's "success or skipped"), never failed. Deliberate behavior change:
+  # a same-repo PR with a stale bun.nix is no longer auto-fixed-and-pushed by CI; bun-nix-check fails
+  # with a diagnostic telling the contributor to regenerate bun.nix locally. See nix.yml's header and
+  # .superpowers/sdd/task-1.6b-report.md.
   nix:
     needs: changes
     if: needs.changes.outputs.nix == 'true'
@@ -156,7 +166,7 @@ jobs:
     uses: ./.github/workflows/nix.yml
     with:
       ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
-      push_allowed: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      push_allowed: ${{ github.event_name != 'pull_request' }}
     secrets: inherit
 
   # Required status check for branch protection.
