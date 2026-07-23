@@ -46,13 +46,42 @@
 
 **Fix:** Run `npx -p github:knirski/auto-pr auto-pr-init` to refresh the workflow pin, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from the main branch. Current reusable workflows run routing context through the packaged `auto-pr-build-model-routing-context` command and do not require Bun in adopter repositories.
 
-### "Missing secrets APP_ID or APP_PRIVATE_KEY"
+### "Missing secrets APP_ID or APP_PRIVATE_KEY" (or the create job cannot read them)
 
-**Cause:** The workflow needs a GitHub App token to create PRs.
+**Cause:** The privileged create job now reads `APP_ID` / `APP_PRIVATE_KEY` from the **`app-credentials` environment**, not from plain repository secrets. If they are only set as repository secrets (or the environment's deployment branch policy does not admit the branch the create job runs from), the job cannot read them.
 
-**Fix:** Create a GitHub App (see [INTEGRATION.md](INTEGRATION.md#step-2-create-the-github-app)), install it on your repo, and add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets.
+**Fix:**
 
-**Fork contributors:** The workflow runs on forks. To test auto-PR on your fork, add the same secrets to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Otherwise, create the PR manually from your branch to the upstream repo.
+1. Create the GitHub App (see [INTEGRATION.md](INTEGRATION.md#step-2-create-the-github-app)) and install it on your repo.
+2. Create an environment named **`app-credentials`** with a deployment branch policy restricted to your **default branch** and admin-bypass disabled ([INTEGRATION.md Step 5](INTEGRATION.md#step-5-create-the-protected-environment-and-add-app-credentials)).
+3. Add `APP_ID` and `APP_PRIVATE_KEY` as **environment** secrets on `app-credentials` (not just repository secrets). The create job is `workflow_run`-triggered and always runs from the default branch, so the branch policy passes and the secrets resolve.
+
+If you upgraded from the single-workflow version and still have the secrets only at the repository level, see [Upgrading from the single-workflow version](INTEGRATION.md#upgrading-from-the-single-workflow-version).
+
+### PR is no longer created automatically after pushing
+
+**Cause:** By design, push no longer triggers generation. A `push`-triggered workflow cannot be a trust boundary against the pusher, so the trusted ingress is a default-branch `workflow_dispatch` (manual) plus scheduled discovery ([ADR 0016](adr/0016-immutable-privileged-workflow-executor.md)).
+
+**Fix:** Trigger it manually for immediate results:
+
+```bash
+gh workflow run auto-pr.yml -f branch=ai/your-branch
+```
+
+Or wait for scheduled discovery. It runs about every 15 minutes, but GitHub's scheduled runs are best-effort and often delayed, so realistic end-to-end latency is **10–30+ minutes, not seconds**. If you need seconds-latency, see the `repository_dispatch` advanced opt-in in [INTEGRATION.md](INTEGRATION.md#how-generation-is-triggered).
+
+### Create job fails validation (cross-repo / branch / head-SHA errors)
+
+**Cause:** The create phase validates the generate run before minting a token: it rejects a triggering run from a different repository, a `head_branch` that does not match `ai/**`, a `conclusion` other than `success`, or a `head_sha` that no longer matches the branch tip (e.g. the branch was force-pushed or deleted while the run was queued). These are the trust-boundary checks from [ADR 0016](adr/0016-immutable-privileged-workflow-executor.md) decisions 5–7 — a failure here means the run was rejected safely (fail-closed), not that setup is broken.
+
+**Fix:**
+
+- **Branch/head-SHA mismatch:** the branch changed after generation started. Re-trigger generation for the current tip (`gh workflow run auto-pr.yml -f branch=ai/your-branch`).
+- **Non-`ai/**` branch:** only `ai/**` branches are eligible; rename your branch.
+- **Cross-repo:** the create phase only acts on runs from the same repository — fork runs are intentionally not privileged.
+- **`conclusion` not `success`:** the generate run failed or was cancelled; fix that first (check the "Auto-PR" run logs), then re-trigger.
+
+**Fork contributors:** The privileged create phase deliberately does not run for cross-repository triggers, and environment secrets are not exposed to forks. To test end-to-end on your own fork, create a GitHub App for the fork and set up the `app-credentials` environment there; otherwise open the PR manually from your branch to the upstream repo.
 
 ### "Missing required env: …"
 
