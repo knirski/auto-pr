@@ -38,9 +38,13 @@ jobs:
     # reduced, never elevated). pull-requests: write lives here at the JOB level (not the workflow
     # top level) so it applies only to this privileged call; the App token used for the actual
     # PR write is minted inside the reusable, gated on `environment: app-credentials` (Task 1.3c).
+    # actions: read is required so the reusable can download the triggering run's artifact via the
+    # API (actions/download-artifact with run-id); a reusable cannot add a permission the caller
+    # did not grant, so it must be granted here (ADR 0016 decision 5).
     permissions:
       contents: read
       pull-requests: write
+      actions: read
     uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@70699e3ee65a1a5967637fd32511fb11df99003e
     with:
       # Raw, unvalidated workflow_run context passed through for the reusable (Task 1.3c) to
