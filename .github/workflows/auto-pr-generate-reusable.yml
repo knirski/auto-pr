@@ -14,10 +14,9 @@ on:
       GH_TOKEN:
         description: "Token for GitHub Models API when ai_provider is github-models"
         required: false
-    outputs:
-      auto_pr_pkg:
-        description: "Package spec for npx (e.g. github:knirski/auto-pr#branch)"
-        value: ${{ jobs.generate.outputs.auto_pr_pkg }}
+    # No outputs: the generate phase is a data producer only. It must never emit a
+    # package/executable reference for a privileged job to install (ADR 0016 decisions 3, 6).
+    # PR content + immutable identity/digests are delivered via the uploaded artifact manifest.
     inputs:
       ai_provider:
         required: false
@@ -63,8 +62,6 @@ jobs:
       models: read # GitHub Models API (github-models provider) with GITHUB_TOKEN or GH_TOKEN
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    outputs:
-      auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
     steps:
       # codeql[actions/untrusted-checkout] github.ref_name in workflow_call context is the
       # calling workflow's own ref (a pushed branch via push trigger), never a PR head.
@@ -93,12 +90,14 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: git fetch origin "$DEFAULT_BRANCH"
 
-      - name: Set auto-pr package ref
+      # Determine only HOW this unprivileged generate job invokes its own commands (same-repo
+      # workspace `bun run` vs published-package `npx`). This selects nothing a privileged job
+      # runs: the branch-derived package ref was removed (ADR 0016 decisions 3, 6).
+      - name: Determine auto-pr workspace mode
         id: auto-pr-pkg
         uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@70699e3ee65a1a5967637fd32511fb11df99003e
         with:
           repository: ${{ github.repository }}
-          ref_name: ${{ github.ref_name }}
 
       - name: Install dependencies (workspace only)
         if: steps.auto-pr-pkg.outputs.use_workspace == 'true'
@@ -118,7 +117,9 @@ jobs:
         with:
           command: build-model-routing-context
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
+          # Constant published-package ref, consumed only when use_workspace == false (adopter
+          # repos). Never branch-derived, never reaches a privileged job (ADR 0016 decision 6).
+          auto_pr_pkg: "github:knirski/auto-pr"
           runner: ${{ steps.setup.outputs.runner }}
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -171,7 +172,9 @@ jobs:
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-          auto_pr_pkg: ${{ steps.auto-pr-pkg.outputs.value }}
+          # Constant published-package ref, consumed only when use_workspace == false (adopter
+          # repos). Never branch-derived, never reaches a privileged job (ADR 0016 decision 6).
+          auto_pr_pkg: "github:knirski/auto-pr"
           runner: ${{ steps.setup.outputs.runner }}
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -189,17 +192,46 @@ jobs:
         if: always() && steps.local_llama.outcome != 'skipped'
         uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@70699e3ee65a1a5967637fd32511fb11df99003e
 
+      # Produce the artifact as DATA ONLY (no executable content, no glob patterns): two content
+      # files plus a versioned manifest carrying immutable identity fields and SHA-256 content
+      # digests. The privileged create phase (a later task) validates against this manifest —
+      # head SHA, source repo/branch, default branch, and digests — without trusting the
+      # artifact transport (ADR 0016 decisions 5, 6). See docs for the manifest schema (v1).
       - name: Prepare artifact
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           mkdir -p pr-content
           cp "$GITHUB_WORKSPACE/pr-title.txt" pr-content/title.txt
           cp "$GITHUB_WORKSPACE/pr-body.md" pr-content/body.md
-          echo -n "$BRANCH" > pr-content/branch.txt
-          echo -n "$DEFAULT_BRANCH" > pr-content/default_branch.txt
+          # Head SHA as a standalone file: the exact commit generate ran against. The create
+          # phase cross-checks this against manifest.head_sha and the current branch tip.
+          printf '%s' "$HEAD_SHA" > pr-content/head_sha.txt
+          title_sha256=$(sha256sum pr-content/title.txt | awk '{print $1}')
+          body_sha256=$(sha256sum pr-content/body.md | awk '{print $1}')
+          jq -n \
+            --argjson manifest_version 1 \
+            --arg source_repository "$SOURCE_REPOSITORY" \
+            --arg source_branch "$BRANCH" \
+            --arg default_branch "$DEFAULT_BRANCH" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg title_sha256 "$title_sha256" \
+            --arg body_sha256 "$body_sha256" \
+            '{
+              manifest_version: $manifest_version,
+              source_repository: $source_repository,
+              source_branch: $source_branch,
+              default_branch: $default_branch,
+              head_sha: $head_sha,
+              files: {
+                title: { path: "title.txt", sha256: $title_sha256 },
+                body: { path: "body.md", sha256: $body_sha256 }
+              }
+            }' > pr-content/manifest.json
 
       - name: Upload PR content
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
