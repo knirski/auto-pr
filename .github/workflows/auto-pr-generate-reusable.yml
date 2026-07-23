@@ -3,8 +3,9 @@
 # when ai_provider is github-models (GitHub Models API).
 # Satisfies CodeQL "untrusted checkout in trusted context" — no privileged context.
 #
-# Call with create workflow: generate job → create job (needs: generate).
-# See auto-pr.yml for the pattern.
+# Called from auto-pr.yml's matrix-fanned `generate` job (unprivileged ingress, ADR 0016). The
+# privileged create phase is a SEPARATE workflow_run-triggered file (auto-pr-create.yml), not a
+# needs:-chained job in this run — see ADR 0016 decision 4.
 
 name: Auto-PR generate (reusable)
 
