@@ -2,9 +2,9 @@
 
 ## Status
 
-**Proposed** — this ADR records the target design for the auto-PR trust boundary and **supersedes the same-run trust rationale of [ADR 0002](0002-two-phase-auto-pr-workflow.md)**. It is documentation only; the workflow/action changes land in Task 1.2+ of the [repository remediation plan](../superpowers/specs/2026-07-23-repository-remediation-plan.md).
+**Accepted** — this ADR records the target design for the auto-PR trust boundary and **supersedes the same-run trust rationale of [ADR 0002](0002-two-phase-auto-pr-workflow.md)**. It is documentation only; the workflow/action changes land in Task 1.2+ of the [repository remediation plan](../superpowers/specs/2026-07-23-repository-remediation-plan.md).
 
-One product/ops decision is **not** resolved here and needs maintainer sign-off before implementation proceeds — see [Open Question for Maintainer](#open-question-for-maintainer).
+The ingress trade-off in [Open Question for Maintainer](#open-question-for-maintainer) has been resolved: **Option A (`workflow_dispatch` manual baseline) + Option B (scheduled default-branch discovery) as the default automatic mode**, with Option C (`repository_dispatch` external event bridge) documented as an opt-in for adopters who need seconds-latency. This is a maintainer decision, not a re-derivation from the research below — see that section for the reasoning it was based on.
 
 ## Context and Problem Statement
 
@@ -58,20 +58,22 @@ Adopt an **immutable privileged executor** design in which the privileged workfl
 
 ### Open Question for Maintainer
 
-**Which automatic-generation ingress does the project adopt (recommended-decision point 2)?** This is a product/ops trade-off with no single correct answer, and it changes the advertised "automatic on push within seconds" promise. It must be signed off before Task 1.2+ implementation.
+**Resolved.** **Which automatic-generation ingress does the project adopt (recommended-decision point 2)?** This was a product/ops trade-off with no single correct answer, and it changes the advertised "automatic on push within seconds" promise.
+
+**Decision (confirmed by maintainer):** **A as firm baseline + B as the default automatic mode**, with **C documented as an opt-in** for adopters who need seconds-latency. Option D remains rejected as unavailable.
 
 * **Firm baseline (decided):** the portable, always-available entry is a **default-branch `workflow_dispatch`** (Option A). Every adopter gets this regardless of plan/visibility.
-* **My recommendation for the default "automatic" experience: Option B (scheduled default-branch discovery).** It restores near-automatic behavior with **no external infrastructure and no adopter hosting burden**, and its entire definition lives on the default branch (fully inside the trust boundary). The honest cost is latency: not "seconds" but up-to-cron-interval (realistically 10–30+ min), so the README/marketing claim of "within seconds" must be revised to "within minutes" for this mode.
-* **Option C (repository_dispatch bridge) only as an opt-in** for adopters who genuinely need seconds-latency and accept operating a GitHub App/webhook service. I recommend **against** making it the default: it reintroduces an external trusted component and converts distribution from "copy YAML" to "run a service," and while its blast radius is bounded by decisions 5–7, it is still net-new attack surface and operational cost.
+* **Default "automatic" experience (decided): Option B (scheduled default-branch discovery).** It restores near-automatic behavior with **no external infrastructure and no adopter hosting burden**, and its entire definition lives on the default branch (fully inside the trust boundary). The honest cost is latency: not "seconds" but up-to-cron-interval (realistically 10–30+ min) — the README/marketing claim of "within seconds" must be revised to "within minutes" for this mode.
+* **Option C (repository_dispatch bridge) is documented as an opt-in only**, not the default, for adopters who genuinely need seconds-latency and accept operating a GitHub App/webhook service. It reintroduces an external trusted component and converts distribution from "copy YAML" to "run a service"; its blast radius is bounded by decisions 5–7, but it is still net-new attack surface and operational cost.
 * **Option D (org-enforced workflow execution protection) is not available** to this personal-account public repo and cannot be offered to adopters generically; do not design around it.
 
-Decision needed: confirm **A as baseline + B as recommended default**, with C documented as opt-in — or choose otherwise. Until this is confirmed, treat only A + B as in scope.
+Task 1.2+ implements A and B. C is documented (Task 1.4 adopter docs) as an advanced opt-in, not built by default in this workstream.
 
 ### Consequences
 
 * Good: the App token is never reachable from a same-repository branch author — the privileged definition, its permissions, its executor code, and its secret access are all default-branch-gated and independently validated.
 * Good: reuses existing primitives — `workflow_run` (platform-guaranteed default-branch evaluation), protected environments (branch-policy secret gating), SHA pinning ([ADR 0004](0004-workflow-pin-automation.md)), and `download-artifact` run-id scoping.
-* Bad: loses "automatic on push within seconds" as the default; the baseline is manual `workflow_dispatch` and the recommended automatic mode (pending sign-off) is scheduled discovery with minutes-scale latency. Marketing copy must change.
+* Bad: loses "automatic on push within seconds" as the default; the baseline is manual `workflow_dispatch` and the default automatic mode is scheduled discovery with minutes-scale latency. Marketing copy must change.
 * Bad / operational: adopters must create a protected environment and move `APP_PRIVATE_KEY` into it; `auto-pr-init` must guide this and fail closed where it cannot be enforced (decision 9). More setup than "paste one YAML file."
 * Neutral: CodeQL's file-level concern ([ADR 0002](0002-two-phase-auto-pr-workflow.md)) remains satisfied — the privileged workflow still performs no untrusted checkout — but the *reason* the design is safe is now the trust properties above, not CodeQL passing.
 
