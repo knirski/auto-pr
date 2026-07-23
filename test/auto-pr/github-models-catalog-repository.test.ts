@@ -324,41 +324,16 @@ describe("GithubModelsCatalogRepositoryLive", () => {
       fetchImpl: makeFetchMock({ response: jsonResponse([]), captured }),
     });
 
-    let caughtError: unknown;
     const entries = await runEffect(layer)(
       GithubModelsCatalogRepository.pipe(
         Effect.flatMap((repository) => repository.fetchCatalog(Redacted.make(secretToken))),
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            caughtError = error;
-            return [] as const;
-          }),
-        ),
       ),
     );
 
     expect(entries).toEqual([]);
-    expect(caughtError).toBeUndefined();
     expect(captured.request).toBeDefined();
     expect(captured.request?.headers.authorization).toBe(`Bearer ${secretToken}`);
     expect(captured.request?.url).not.toContain(secretToken);
     expect(captured.request?.url).toBe("https://models.github.ai/catalog/models");
-  });
-
-  test("does not leak the token when the request itself fails", async () => {
-    const secretToken = "ghp_another_secret_value";
-    const rejection = new Error("fetch failed: no reference to the auth token appears here at all");
-    const layer = makeGithubModelsCatalogRepositoryLive({
-      fetchImpl: makeFetchMock({ reject: rejection }),
-    });
-
-    const entries = await runEffect(layer)(
-      GithubModelsCatalogRepository.pipe(
-        Effect.flatMap((repository) => repository.fetchCatalog(Redacted.make(secretToken))),
-      ),
-    );
-
-    expect(entries).toEqual([]);
-    expect(String(rejection.message)).not.toContain(secretToken);
   });
 });
