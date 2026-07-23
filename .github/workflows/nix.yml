@@ -200,8 +200,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
-      # codeql[actions/untrusted-checkout] build job has contents: read only; callers use
-      # pull_request (not pull_request_target) and gate push_allowed for forks.
+      # codeql[actions/untrusted-checkout] False positive: the build job is unprivileged —
+      # contents: read only, no secrets, no environment: (the App-secret path lives solely in the
+      # separate bun-nix-push job). No caller uses pull_request_target; callers pass a pull_request
+      # head ref only on pull_request events, where the token is unprivileged. Nix verification here
+      # never runs under the App token, so this checkout is never a privileged/trusted-context one.
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

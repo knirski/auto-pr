@@ -45,18 +45,23 @@ The create workflow downloads the artifact produced by generate. Artifacts from 
 - **Usage:** Artifact files (title.txt, body.md, branch.txt, default_branch.txt) are read as data and passed to the PR client. No scripts from the artifact are executed.
 - **Validation:** The create-or-update-pr CLI validates inputs before calling the GitHub API.
 
-## CodeQL and Suppression
+## CodeQL Coverage
 
-CodeQL flags "Checkout of untrusted code in trusted context" (CWE-829) when a workflow checks out potentially attacker-controlled refs while having privileged permissions. Our two-phase design satisfies the security intent:
+CodeQL flags "Checkout of untrusted code in trusted context" (CWE-829) when a workflow checks out potentially attacker-controlled refs while having privileged permissions.
 
-- Generate: untrusted checkout, unprivileged context
-- Create: trusted checkout only, privileged context
+The `actions/untrusted-checkout-{critical,high,medium}` queries are **enabled with no repo-wide suppression**. The previous blanket exclusion in [.github/codeql/codeql-config.yml](../.github/codeql/codeql-config.yml) was removed: it rested on ADR 0002's superseded claim that the two-reusable-file split was a trust boundary CodeQL "could not model." Under [ADR 0016](adr/0016-immutable-privileged-workflow-executor.md) the design is genuinely sound rather than merely CodeQL-shaped — the privileged create phase is a default-branch-controlled `workflow_run` executor that performs **no checkout** and installs only a SHA-pinned executor, so no privileged job ever checks out an attacker-influenceable ref. There is nothing repo-wide left to suppress.
 
-CodeQL does not fully model cross-workflow permission separation, so it may report false positives on reusable workflows. We exclude the untrusted-checkout queries via [.github/codeql/codeql-config.yml](../.github/codeql/codeql-config.yml); the security model above is preserved.
+Two narrow, per-line inline suppressions remain, each on an **unprivileged** checkout that CodeQL flags as a false positive because it analyzes reusable workflows without caller context:
+
+- `auto-pr-generate-reusable.yml` (generate job): checks out an explicit, caller-resolved head SHA with read-only permissions and no privileged secret; its only output is the data-only artifact.
+- `nix.yml` (build job): `contents: read` only, no secrets, no `environment:`; the App-secret path lives solely in the separate `bun-nix-push` job.
+
+Each carries a `# codeql[actions/untrusted-checkout]` comment stating its specific justification. No new suppression is added without a documented, reviewed proof of safety for a specific flagged result.
 
 ## Related
 
-- [ADR 0002: Two-Phase Auto-PR Workflow](adr/0002-two-phase-auto-pr-workflow.md) — Design decision and alternatives
+- [ADR 0016: Immutable privileged workflow executor](adr/0016-immutable-privileged-workflow-executor.md) — Current same-repository trust boundary (supersedes ADR 0002's trust rationale)
+- [ADR 0002: Two-Phase Auto-PR Workflow](adr/0002-two-phase-auto-pr-workflow.md) — Original design decision and alternatives (trust rationale superseded)
 - [ADR 0014: Replace gh PR wrapper with Octokit](adr/0014-replace-gh-pr-wrapper-with-octokit.md) — Privileged PR client transport
 - [ADR 0015: Packaged model routing context command](adr/0015-packaged-model-routing-context-command.md) — Generate-job routing context command design
 - [docs/CI.md](CI.md) — Workflow overview

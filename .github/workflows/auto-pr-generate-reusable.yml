@@ -84,9 +84,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      # codeql[actions/untrusted-checkout] This checks out an explicit, caller-resolved head SHA
-      # (ADR 0016 decision 3) in an unprivileged context (contents: read, no secrets, data-only
-      # output). It is never a privileged checkout.
+      # codeql[actions/untrusted-checkout] False positive: this reusable workflow is analyzed by
+      # CodeQL without caller context, but the job is unprivileged by construction (ADR 0016
+      # decision 3). It checks out an explicit, caller-resolved head SHA (never a mutable ref) with
+      # contents/pull-requests/models: read only — no write access and no long-lived/privileged
+      # secret (only an optional models-scoped GH_TOKEN, defaulting to github.token). Its sole
+      # output is the data-only pr-content artifact; the privileged create phase is a SEPARATE
+      # workflow_run executor that performs no checkout, so this checkout is never privileged.
       - name: Checkout branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
