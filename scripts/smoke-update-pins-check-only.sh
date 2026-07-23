@@ -28,12 +28,12 @@ SCRIPT="$ROOT/.github/actions/update-workflow-pins/update-pins.sh"
 run_real_tree_positive() {
 	local out
 	out="$(mktemp)"
+	trap 'rm -f "$out"' RETURN
 	(
 		cd "$ROOT"
 		GITHUB_SHA="$(git rev-parse HEAD)" INPUT_CHECK_ONLY=true GITHUB_OUTPUT="$out" \
 			bash "$SCRIPT"
 	)
-	rm -f "$out"
 	echo "PASS: current tree validates (uses: + executor pins agree)"
 }
 
