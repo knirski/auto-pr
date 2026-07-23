@@ -13,7 +13,9 @@
 //
 // These tests use Bun's built-in `Bun.YAML.parse` (no new YAML dependency — a prior workstream
 // removed `js-yaml` and adding it back would be exactly wrong). Shell bodies inside `run:` steps
-// and `.sh` files are matched as text/regex; bash is not parsed structurally.
+// are matched as text/regex, not parsed structurally. Only `.github/workflows/*.yml` is loaded —
+// composite-action `.sh` files (e.g. auto-pr-set-pkg.sh) are not read by this suite, since the
+// privileged `create` job's logic is entirely inline in `run:` bodies.
 //
 // SCOPING NOTE (important for green-ability after Task 1.3)
 // --------------------------------------------------------
