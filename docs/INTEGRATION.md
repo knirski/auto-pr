@@ -92,6 +92,18 @@ The App credentials (`APP_ID` / `APP_PRIVATE_KEY`) must live on a **protected Gi
 
 > **Note:** `auto-pr-init` cannot do any of this for you. It is a local file-copy tool with no GitHub API access — it never creates the environment, sets branch policies, or writes secrets. Those are manual steps for every adopter, first-time or upgrading.
 
+**⚠️ Create the environment BEFORE the workflows first run — skipping it or doing it out of order fails silently, not loudly.** If a workflow references an environment name that does not yet exist, GitHub **auto-creates it with no protection rules** on first reference instead of erroring. You would silently get an *unprotected* `app-credentials` environment (all branches may deploy, the App secret reachable from any `ai/**` branch) — defeating the entire control with no visible failure. Always create the protected environment (with the default-branch-only deployment policy above) **before** any workflow that names it runs.
+
+**Verify the live environment is actually protected.** YAML cannot prove GitHub's live environment config; only the API can. After creating the environment, and again after any change to it, run the settings check against your repo:
+
+```bash
+scripts/check-app-credentials-environment.sh <owner>/<repo>   # add env name if not `app-credentials`
+```
+
+It asserts (via `gh api`) that admin-bypass is disabled, a *custom* deployment-branch policy exists (not "all branches" / not the silent auto-created default), that the policy lists **exactly** your default branch, and that both `APP_ID` and `APP_PRIVATE_KEY` exist as environment secrets. It exits non-zero with a clear message on any failure. Requires `gh` (authenticated) and `jq`. Run it in particular **before removing any repository-level `APP_ID`/`APP_PRIVATE_KEY` secrets**.
+
+**If environments are unavailable on your plan.** Deployment-branch-policy environments are free for **public** repositories on all plans, but for **private** repositories they require GitHub **Pro/Team/Enterprise** ([ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) research finding 7). If your repo is private on a plan without environments, the protected-environment control — the load-bearing gate of this whole design — **cannot be enforced**, and required reviewers are not a substitute (on a single-owner repo there is no independent reviewer anyway). Per [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) decision 9, do **not** enable the automatic privileged create path in that configuration: without the environment gate the App secret is reachable by any same-repo branch — the exact defect this design fixes. Your options are to (a) make the repo public, (b) upgrade to a plan that offers environments, or (c) accept and clearly document a narrower threat model (e.g. only fully-trusted collaborators can push branches at all, so "any same-repo pusher is untrusted" no longer applies). Building an external secret broker is an alternative but is out of scope for this project's stock setup.
+
 Optional: **`GH_TOKEN`** (repository secret) — only for local CLI use or advanced workflows that intentionally provide a separate GitHub Models token. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes the default **`github.token`** to the generate workflow and grants **`models: read`**. Avoid forwarding a long-lived PAT secret to the generate job: that job checks out branch code by design.
 
 `APP_*` are used by the create job (and release-please if you use it).
@@ -324,7 +336,7 @@ Earlier auto-pr shipped a single `push`-triggered `.github/workflows/auto-pr.yml
    gh secret set APP_PRIVATE_KEY --env app-credentials --repo <owner>/<repo> < path/to/private-key.pem
    ```
 
-   (Or add them via the environment's UI.) **Keep your existing repository-level `APP_ID` / `APP_PRIVATE_KEY` secrets in place until** the new workflow has successfully created a PR end-to-end, then remove the repository-level copies. This is exactly the sequencing `knirski/auto-pr` itself used when adopting the design (create environment → set environment secrets → verify → remove repo-level secrets).
+   (Or add them via the environment's UI.) **Keep your existing repository-level `APP_ID` / `APP_PRIVATE_KEY` secrets in place until** the new workflow has successfully created a PR end-to-end, then remove the repository-level copies. This is exactly the sequencing `knirski/auto-pr` itself used when adopting the design (create environment → set environment secrets → verify → remove repo-level secrets). Before removing the repository-level copies, run `scripts/check-app-credentials-environment.sh <owner>/<repo>` (see [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials)) and confirm it passes — otherwise you may be relying on an unprotected auto-created environment while the still-present repository secrets mask the misconfiguration.
 5. **Verify** with a manual dispatch (`gh workflow run auto-pr.yml -f branch=ai/your-branch`) before relying on scheduled discovery.
 
 ## Verification

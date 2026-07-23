@@ -30,6 +30,15 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
+    # Protected environment (ADR 0016 decision 8): APP_ID/APP_PRIVATE_KEY resolve from the
+    # `app-credentials` environment, whose deployment-branch policy admits only the default branch
+    # (main) with admin-bypass disabled, so the App secret is unreachable from any non-default ref.
+    # NOTE: this job is pull_request-triggered, so GITHUB_REF is refs/pull/<n>/merge, which the
+    # main-only policy does NOT admit — the job will fail closed on the environment gate. Reworking
+    # this release-tooling credential path to run against a permitted ref is out of scope here (add
+    # the `environment:` gate only, per Task 1.6); see the Task 1.6 report for the flagged follow-up.
+    # Repository-level APP_ID/APP_PRIVATE_KEY are intentionally left in place until verified.
+    environment: app-credentials
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

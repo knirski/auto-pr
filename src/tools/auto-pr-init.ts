@@ -44,11 +44,14 @@ auto-pr-init only copies files; it never touches your GitHub settings.
    - Webhook: Uncheck Active
 2. Generate a private key (app settings → Private keys) and install the app on this repository.
 3. Create a GitHub Actions ENVIRONMENT named "app-credentials"
-   (Settings → Environments → New environment):
+   (Settings → Environments → New environment) BEFORE the workflows first run:
    - Deployment branch policy: "Selected branches and tags", allowing ONLY your default branch (e.g. main).
      This is the load-bearing control: it keeps the App secret unreachable from an ai/** branch.
    - Disable "Allow administrators to bypass configured protection rules".
    - (Required reviewers are NOT a meaningful control on a single-owner repo — do not rely on them.)
+   - WARNING: if a workflow references this environment before you create it, GitHub silently
+     auto-creates it with NO protection rules (it does not error) — you would get an UNPROTECTED
+     environment. Create it first, then verify with scripts/check-app-credentials-environment.sh.
 4. Add the App credentials to that ENVIRONMENT (not as plain repository secrets):
    - APP_ID (from app settings → About)
    - APP_PRIVATE_KEY (full contents of the .pem file)
