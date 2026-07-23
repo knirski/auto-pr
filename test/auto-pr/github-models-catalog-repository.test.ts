@@ -317,7 +317,7 @@ describe("GithubModelsCatalogRepositoryLive", () => {
     expect(entries).toEqual([]);
   });
 
-  test("sends the redacted token only as a Bearer authorization header, never in the URL or errors", async () => {
+  test("sends the redacted token only as a Bearer authorization header, never in the URL", async () => {
     const secretToken = "ghp_super_secret_value_do_not_leak";
     const captured: { request?: CapturedRequest } = {};
     const layer = makeGithubModelsCatalogRepositoryLive({
