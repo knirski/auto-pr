@@ -21,7 +21,6 @@ import {
   mapFsError,
   PullRequestClient,
   type PullRequestFailedError,
-  runMain,
 } from "#auto-pr";
 import type { PullRequestLookupError, PullRequestUrlParseError } from "#core/errors.js";
 
@@ -183,7 +182,3 @@ export const program = Effect.gen(function* () {
   Effect.provide(AutoPrPlatformLayer),
   Effect.provide(ChildProcessSpawnerLayer),
 );
-
-if (import.meta.main) {
-  runMain(program, "create_or_update_pr_failed");
-}

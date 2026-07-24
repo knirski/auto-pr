@@ -22,9 +22,9 @@
   },
   "type": "module",
   "bin": {
-    "auto-pr-generate-content": "./dist/workflow/auto-pr-generate-content.js",
+    "auto-pr-generate-content": "./dist/workflow/auto-pr-generate-content-cli.js",
     "auto-pr-build-model-routing-context": "./dist/workflow/auto-pr-build-model-routing-context.js",
-    "auto-pr-create-or-update-pr": "./dist/workflow/auto-pr-create-or-update-pr.js",
+    "auto-pr-create-or-update-pr": "./dist/workflow/auto-pr-create-or-update-pr-cli.js",
     "auto-pr-run": "./dist/workflow/auto-pr-run.js",
     "auto-pr-fill-pr-template": "./dist/tools/auto-pr-fill-pr-template.js",
     "auto-pr-init": "./dist/tools/auto-pr-init.js"
@@ -58,9 +58,9 @@
     "format": "biome format --write .",
     "knip": "knip",
     "typecheck": "tsgo --noEmit",
-    "generate-content": "bun run src/workflow/auto-pr-generate-content.ts",
+    "generate-content": "bun run src/workflow/auto-pr-generate-content-cli.ts",
     "build-model-routing-context": "bun run src/workflow/auto-pr-build-model-routing-context.ts",
-    "create-or-update-pr": "bun run src/workflow/auto-pr-create-or-update-pr.ts",
+    "create-or-update-pr": "bun run src/workflow/auto-pr-create-or-update-pr-cli.ts",
     "fill-pr-template": "bun run src/tools/auto-pr-fill-pr-template.ts",
     "build": "bun run scripts/build.ts",
     "prepare": "bun run build || exit 0",
