@@ -1,6 +1,6 @@
 # update-workflow-pins
 
-Composite action that replaces self-referential `knirski/auto-pr/...@SHA` refs with a target commit SHA.
+Composite action that replaces self-referential `knirski/auto-pr` refs with a target commit SHA: both `uses: knirski/auto-pr/...@SHA` lines and the npm-style executor ref `github:knirski/auto-pr#SHA` (the SHA-pinned privileged executor install, ADR 0016).
 
 **Used by:**
 
@@ -34,7 +34,7 @@ Composite action that replaces self-referential `knirski/auto-pr/...@SHA` refs w
     target_sha: ${{ github.sha }}
 ```
 
-**Validate pins (CI):** all `uses: ... knirski/auto-pr/...@<sha>` lines must use the **same** 40-char SHA; that commit must exist, be an **ancestor of `HEAD`**, and contain every referenced workflow or action path (so a pin cannot point at a tree that lacks a composite you reference).
+**Validate pins (CI):** all `uses: ... knirski/auto-pr/...@<sha>` lines **and** the `github:knirski/auto-pr#<sha>` executor ref must use the **same** 40-char SHA; that commit must exist, be an **ancestor of `HEAD`**, contain every referenced workflow or action path (so a pin cannot point at a tree that lacks a composite you reference), and contain `package.json` (so the executor ref resolves to an installable package tree).
 
 ```yaml
 - uses: ./.github/actions/update-workflow-pins
@@ -54,6 +54,6 @@ GITHUB_SHA=$(git rev-parse HEAD) INPUT_CHECK_ONLY=true bash .github/actions/upda
 
 ## Notes
 
-- Only updates `uses:` lines matching `knirski/auto-pr/<path>@<40-char-sha>`.
+- Updates `uses:` lines matching `knirski/auto-pr/<path>@<40-char-sha>` and the executor ref `github:knirski/auto-pr#<40-char-sha>` (both move to the same SHA in lockstep). The `#<40-hex>` anchor is literal, so `github:knirski/auto-pr#<sha>` placeholders in comments are never matched.
 - Skips this action's own directory (no self-reference).
 - Do not add self-referential pins to this action without excluding them from the update logic.

@@ -1,17 +1,19 @@
 # Integration Guide
 
-This guide walks through adding auto-pr to any repository so that pushes to `ai/**` branches automatically create or update pull requests.
+This guide walks through adding auto-pr to any repository so that `ai/**` branches get a well-structured pull request created or updated for them. Generation is started manually (`workflow_dispatch`) or automatically by a scheduled discovery job — **not** on push. See [How generation is triggered](#how-generation-is-triggered) for why (short answer: a `push`-triggered workflow cannot be a trust boundary against the pusher — [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md)).
 
-**Typical setup:** GitHub Actions only — `auto-pr-init`, GitHub App, secrets, then push to `ai/**`. No `package.json` or install of auto-pr in your repo; reusable workflows pull from `knirski/auto-pr`. **Optional:** install or `npx -p github:knirski/auto-pr …` to run CLIs locally — [Step 1 (optional)](#step-1-optional-install-the-package-for-local-cli).
+**Already running the old single-`auto-pr.yml` version?** Jump to [Upgrading from the single-workflow version](#upgrading-from-the-single-workflow-version) — you must migrate manually; re-running `auto-pr-init` will refuse to proceed until you replace the old push-triggered file.
+
+**Typical setup:** GitHub Actions only — `auto-pr-init`, GitHub App, a protected **environment** holding the App secrets, then trigger the workflow. No `package.json` or install of auto-pr in your repo; reusable workflows pull from `knirski/auto-pr`. **Optional:** install or `npx -p github:knirski/auto-pr …` to run CLIs locally — [Step 1 (optional)](#step-1-optional-install-the-package-for-local-cli).
 
 ## Getting started
 
-1. **Run** `npx -p github:knirski/auto-pr auto-pr-init` in your repo — creates the workflow, PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` (llama-server image pin when using local Docker llama)
+1. **Run** `npx -p github:knirski/auto-pr auto-pr-init` in your repo — creates **both** workflows (`.github/workflows/auto-pr.yml` for the unprivileged generate/discover phase and `.github/workflows/auto-pr-create.yml` for the privileged create phase), the PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` (llama-server image pin when using local Docker llama)
 2. **Create** a [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
 3. **Generate** a private key in the app settings and save the `.pem` file
 4. **Install** the app on your repository
-5. **Add** `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
-6. **Test** — push to an `ai/**` branch: `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push -u origin HEAD`
+5. **Create** a protected **environment** named `app-credentials` (deployment branch policy restricted to your default branch, admin-bypass disabled) and add `APP_ID` and `APP_PRIVATE_KEY` **to that environment** — not as plain repository secrets. See [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials).
+6. **Test** — trigger a run for one branch: `gh workflow run auto-pr.yml -f branch=ai/test` (or **Actions → Auto-PR → Run workflow**, set the `branch` input). Scheduled discovery then runs automatically about every 15 minutes.
 
 No `package.json` required. Works with any project (Node, Python, Rust, etc.). No Nix required.
 
@@ -19,21 +21,23 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 
 | Requirement | How to set up |
 |-------------|---------------|
-| **Workflow + template** | Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo. Creates `.github/workflows/auto-pr.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.nvmrc`, and `.github/llama-server/Dockerfile`. [Step 6](#step-6-add-the-workflow-file) |
+| **Both workflows + template** | Run `npx -p github:knirski/auto-pr auto-pr-init` in your repo. Creates `.github/workflows/auto-pr.yml`, `.github/workflows/auto-pr-create.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `.nvmrc`, and `.github/llama-server/Dockerfile`. [Step 6](#step-6-add-the-workflow-files) |
 | **GitHub App** | Create at [github.com/settings/apps/new](https://github.com/settings/apps/new). Permissions: Contents, Pull requests (Read and write). [Step 2](#step-2-create-the-github-app) |
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
-| **Secrets** | Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions** (optional: `GH_TOKEN` to override the default token for GitHub Models). [Step 5](#step-5-add-repository-secrets) |
+| **Protected environment** | Create an environment `app-credentials` (branch policy = default branch only, admin-bypass disabled) and add `APP_ID` / `APP_PRIVATE_KEY` **to the environment**, not as repository secrets. (Optional: `GH_TOKEN` repo secret to override the default token for GitHub Models.) [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials) |
 | **Branch protection** | (Optional) Require `Auto-PR generate (reusable) / generate` and `Auto-PR create (reusable) / create` before merging. [Step 8](#step-8-configure-branch-protection-optional) |
 
-**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App + secrets (Steps 2–5) → push to `ai/**`.
+**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App + protected environment (Steps 2–5) → `gh workflow run auto-pr.yml -f branch=ai/…`.
 
 ## Overview
 
 1. **AI agent** (or developer) pushes a branch (e.g. `ai/feature-x` or `ai/fix-y`)
-2. **Workflow** runs on push to `ai/**` branches (title from first commit subject; for 2+ commits: AI generates description)
-3. **GitHub App** creates or updates the PR using its token
+2. **Generation is triggered** either manually (`workflow_dispatch` with a `branch` input) or by the scheduled discovery job that finds `ai/**` branches without an open PR (about every 15 minutes; realistically 10–30+ min end-to-end). The unprivileged **generate** phase (title from first commit subject; for 2+ commits: AI generates description) produces a data-only artifact.
+3. **A separate, default-branch-only privileged workflow** (`auto-pr-create.yml`, `workflow_run`-triggered) validates that artifact and mints a **GitHub App** token — gated by the `app-credentials` environment — to create or update the PR.
 4. **PR** is opened by `your-app-name[bot]` → you approve it
+
+See [How generation is triggered](#how-generation-is-triggered) and [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) for the trust-boundary rationale.
 
 ## Step 1 (optional): Install the package for local CLI
 
@@ -69,25 +73,48 @@ When you do install from git (e.g. `npx -p github:knirski/auto-pr` or `bun add g
 2. Choose **Only select repositories** and select your repo
 3. Click **Install**
 
-## Step 5: Add repository secrets
+## Step 5: Create the protected environment and add App credentials
 
-1. Go to your repo → **Settings** → **Secrets and variables** → **Actions**
-2. Add these repository secrets:
+The App credentials (`APP_ID` / `APP_PRIVATE_KEY`) must live on a **protected GitHub Actions environment**, not as plain repository secrets. Repository secrets are readable by any workflow run in the repo — including one defined by a pushed `ai/**` branch — so the App token would be reachable by an untrusted branch author. An environment secret is only readable once the environment's protection rules pass, and the deployment branch policy is matched against the running ref. This is the **load-bearing control** of the whole design ([ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) decision 8).
 
-| Secret name | Value |
-|-------------|-------|
-| `APP_ID` | Your app's App ID (from app settings, "About") |
-| `APP_PRIVATE_KEY` | Full contents of the `.pem` file |
+1. Go to your repo → **Settings** → **Environments** → **New environment**. Name it exactly **`app-credentials`**.
+2. **Deployment branches and tags:** choose **Selected branches and tags** and add a rule for your **default branch only** (e.g. `main`). Do not use "All branches". (Avoid "Protected branches only" unless your default branch actually has branch protection — otherwise the policy can misbehave.)
+3. **Disable** "Allow administrators to bypass configured protection rules".
+4. **Required reviewers are not a meaningful control here** — on a single-owner repo there is effectively no independent second reviewer, so do not rely on them. The deployment branch policy is what keeps the secret unreachable from an `ai/**` branch.
+5. Under the environment, add these **environment secrets**:
 
-Optional: **`GH_TOKEN`** — only for local CLI use or advanced workflows that intentionally provide a separate GitHub Models token. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes the default **`github.token`** to the generate workflow and grants **`models: read`**. Avoid forwarding a long-lived PAT secret to the generate job: that job checks out branch code by design.
+   | Secret name | Value |
+   |-------------|-------|
+   | `APP_ID` | Your app's App ID (from app settings, "About") |
+   | `APP_PRIVATE_KEY` | Full contents of the `.pem` file |
+
+   **First-time setup:** add them straight to the environment — there is nothing to migrate. **Upgrading from repo secrets:** see [Upgrading from the single-workflow version](#upgrading-from-the-single-workflow-version).
+
+> **Note:** `auto-pr-init` cannot do any of this for you. It is a local file-copy tool with no GitHub API access — it never creates the environment, sets branch policies, or writes secrets. Those are manual steps for every adopter, first-time or upgrading.
+
+**⚠️ Create the environment BEFORE the workflows first run — skipping it or doing it out of order fails silently, not loudly.** If a workflow references an environment name that does not yet exist, GitHub **auto-creates it with no protection rules** on first reference instead of erroring. You would silently get an *unprotected* `app-credentials` environment (all branches may deploy, the App secret reachable from any `ai/**` branch) — defeating the entire control with no visible failure. Always create the protected environment (with the default-branch-only deployment policy above) **before** any workflow that names it runs.
+
+**Verify the live environment is actually protected.** YAML cannot prove GitHub's live environment config; only the API can. After creating the environment, and again after any change to it, run the settings check against your repo:
+
+```bash
+scripts/check-app-credentials-environment.sh <owner>/<repo>   # add env name if not `app-credentials`
+```
+
+It asserts (via `gh api`) that admin-bypass is disabled, a *custom* deployment-branch policy exists (not "all branches" / not the silent auto-created default), that the policy lists **exactly** your default branch, and that both `APP_ID` and `APP_PRIVATE_KEY` exist as environment secrets. It exits non-zero with a clear message on any failure. Requires `gh` (authenticated) and `jq`. Run it in particular **before removing any repository-level `APP_ID`/`APP_PRIVATE_KEY` secrets**.
+
+**If environments are unavailable on your plan.** Deployment-branch-policy environments are free for **public** repositories on all plans, but for **private** repositories they require GitHub **Pro/Team/Enterprise** ([ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) research finding 7). If your repo is private on a plan without environments, the protected-environment control — the load-bearing gate of this whole design — **cannot be enforced**, and required reviewers are not a substitute (on a single-owner repo there is no independent reviewer anyway). Per [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) decision 9, do **not** enable the automatic privileged create path in that configuration: without the environment gate the App secret is reachable by any same-repo branch — the exact defect this design fixes. Your options are to (a) make the repo public, (b) upgrade to a plan that offers environments, or (c) accept and clearly document a narrower threat model (e.g. only fully-trusted collaborators can push branches at all, so "any same-repo pusher is untrusted" no longer applies). Building an external secret broker is an alternative but is out of scope for this project's stock setup.
+
+Optional: **`GH_TOKEN`** (repository secret) — only for local CLI use or advanced workflows that intentionally provide a separate GitHub Models token. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes the default **`github.token`** to the generate workflow and grants **`models: read`**. Avoid forwarding a long-lived PAT secret to the generate job: that job checks out branch code by design.
 
 `APP_*` are used by the create job (and release-please if you use it).
 
-## Step 6: Add the workflow file
+## Step 6: Add the workflow files
 
-**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates the workflow, PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` in one command. The reusable generate job runs through pinned reusable actions in `knirski/auto-pr`; you do not need `scripts/` in your repository.
+**Recommended:** Run `npx -p github:knirski/auto-pr auto-pr-init` — creates **both** workflows (`auto-pr.yml` + `auto-pr-create.yml`), the PR template, `.nvmrc`, and `.github/llama-server/Dockerfile` in one command. The reusable generate job runs through pinned reusable actions in `knirski/auto-pr`; you do not need `scripts/` in your repository.
 
-**Manual:** Copy [auto-pr.yml](../.github/workflows/auto-pr.yml) to `.github/workflows/auto-pr.yml` in your repo. The workflow calls two reusable workflows (generate + create) and pins to a commit SHA for reproducible runs; do not change the ref unless you intend to upgrade.
+Both files are required and work as a pair: `auto-pr.yml` is the unprivileged **generate/discover** ingress (`workflow_dispatch` + `schedule`, no secrets, no `pull-requests: write`); `auto-pr-create.yml` is the privileged **create** phase, triggered by `workflow_run` after generate completes. GitHub always evaluates a `workflow_run`-triggered workflow's definition from the **default branch**, so a pushed branch can never substitute the privileged file, its permissions, or the executor it runs.
+
+**Manual:** Copy both [auto-pr.yml](../.github/workflows/auto-pr.yml) and [auto-pr-create.yml](../.github/workflows/auto-pr-create.yml) to `.github/workflows/` in your repo. Each pins its reusable workflows to a commit SHA for reproducible runs; do not change the refs unless you intend to upgrade.
 
 **No action copying required.** The reusable workflows fetch repo-owned actions from `knirski/auto-pr`. A relative `./` path would resolve to your repo; we use full paths so you do not need anything under `.github/actions/` in your project. The model routing context step runs as a packaged auto-pr command, so your repository does not need Bun, `node_modules`, or auto-pr source files.
 
@@ -119,41 +146,53 @@ See [Managing a branch protection rule](https://docs.github.com/en/repositories/
 
 ## Step 9: Use the right branch names
 
-When creating changes, use branch names that match the workflow:
+Use branch names under `ai/**` — both the scheduled discovery job and the `workflow_dispatch` `branch` input only accept `ai/**` branches:
 
 - `ai/feature-name`
 - `ai/fix-bug-description`
 
-Or adjust the `branches` filter in the workflow.
+To use a different prefix, adjust the `ai/**` patterns in the `discover` job and the `workflow_dispatch` input validation in `auto-pr.yml`.
 
 ## Running checks before PR creation
 
-To run your tests or checks before PR creation, add a `check` job and make `generate` depend on it. Edit the check job for your stack.
+To run your tests or checks before generating PR content, add a `check` job to the unprivileged **generate** workflow (`auto-pr.yml`) and make its `generate` job depend on it. Edit the check job for your stack.
 
-**Pattern:** Add a job before `generate` and set `needs: check` on the generate job:
+Two things differ from the old single-workflow layout, and both matter:
+
+- Generation now runs from `auto-pr.yml`'s `discover` → `generate` **matrix** (there is no `push` trigger). A check job must therefore fan across the same matrix and check out each discovered branch's **immutable head SHA** (`matrix.head_sha`), not a mutable ref name — under `workflow_dispatch`/`schedule` the ambient `github.ref_name` is your *default* branch, not the `ai/**` branch being generated for.
+- The privileged **create** phase is a **separate, default-branch-only `workflow_run` workflow** (`auto-pr-create.yml`) that runs automatically after generate succeeds. Do **not** add a `create:` job here or chain it with `needs:`. Chaining a privileged create job into this dispatch/schedule-reachable file is exactly the trust-boundary defect [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) removes — so it is deliberately not possible in the current design.
+
+**Pattern:** Add a `check` job that fans across the discovered matrix, then add it to the stock `generate` job's `needs:` (change `needs: discover` to `needs: [discover, check]` — the rest of the stock `generate` job is unchanged):
 
 ```yaml
 jobs:
+  # discover: ...unchanged from the stock auto-pr.yml (emits the {branch, head_sha} matrix)...
+
   check:
+    needs: discover
+    if: needs.discover.outputs.has_branches == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       # Add your stack's setup and run command below
       - name: Check
         run: echo "Add your check command (npm run check, pytest, cargo test, etc.)" && exit 1
 
   generate:
-    needs: check
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@<SHA>
-
-  create:
-    needs: generate
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@<SHA>
-    secrets: inherit
+    needs: [discover, check] # stock file has `needs: discover`; add `check`
+    # ...rest unchanged from the stock auto-pr.yml (if, matrix, permissions, uses:@<SHA>, with, secrets)...
 ```
+
+The language examples below show the `check` job's setup/run steps for common stacks. Add the `needs: discover` + `if:` + `strategy.matrix` matrix wiring from the Pattern above to each so it fans across the discovered branches and checks out `matrix.head_sha`.
 
 **Node/npm example:**
 
@@ -163,8 +202,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version-file: ".nvmrc"
@@ -173,7 +213,7 @@ jobs:
       - run: npm run check
 ```
 
-**Bun/pnpm/yarn:** Use `oven-sh/setup-bun`, `pnpm/action-setup` + `actions/setup-node`, or `actions/setup-node` with `cache: "yarn"` respectively. The generate and create jobs auto-detect your runtime; your check job should match.
+**Bun/pnpm/yarn:** Use `oven-sh/setup-bun`, `pnpm/action-setup` + `actions/setup-node`, or `actions/setup-node` with `cache: "yarn"` respectively. The generate job auto-detects your runtime; your check job should match.
 
 **Python example:**
 
@@ -183,8 +223,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
@@ -202,8 +243,9 @@ Adjust the install step for your project (e.g. `pip install -r requirements.txt`
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ matrix.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - run: cargo test
 ```
 
@@ -277,6 +319,41 @@ Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common failures.
 
+## How generation is triggered
+
+Push no longer starts generation. A `push`-triggered workflow is defined by the pushed branch, so a same-repository branch author would control the privileged workflow, its permissions, and the code it runs — see [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md). The trusted ingress is instead:
+
+- **Manual (`workflow_dispatch`) — immediate, the baseline.** Run the generate workflow for one explicit `ai/**` branch:
+
+  ```bash
+  gh workflow run auto-pr.yml -f branch=ai/your-branch
+  ```
+
+  Or **Actions → Auto-PR → Run workflow**, then set the **`branch`** input. This is the fastest way to test and always available on every plan.
+
+- **Scheduled discovery (`schedule`) — automatic, ongoing.** A cron job (about every 15 minutes) discovers `ai/**` branches that have no open PR yet and generates for them. GitHub's scheduled runs are best-effort and frequently delayed, so realistic end-to-end latency is **10–30+ minutes, not seconds**. This is the documented cost of dropping push as the trusted entry point.
+
+- **`repository_dispatch` — advanced, opt-in, seconds-latency.** If you genuinely need near-instant generation, you can operate an external GitHub App / webhook receiver that listens for pushes to `ai/**` and fires a `repository_dispatch`. This is **documented, not built in** ([ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) Option C): it requires you to run and secure a network service holding a dispatch-capable credential, converting "copy some YAML" into "operate a service". Its blast radius is bounded by the create phase's validation, but it is net-new attack surface — use only if the latency of scheduled discovery is unacceptable.
+
+## Upgrading from the single-workflow version
+
+Earlier auto-pr shipped a single `push`-triggered `.github/workflows/auto-pr.yml` that contained the privileged `create` job. That is unsafe: a same-repository branch author supplies the pushed workflow definition and can therefore reach the App token ([ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md), one-line summary: a `push`-triggered workflow cannot be a trust boundary against the pusher). The fix splits it into an unprivileged push-free `auto-pr.yml` and a separate default-branch-only privileged `auto-pr-create.yml`, and moves the App secrets onto a protected environment.
+
+`auto-pr-init` **will not migrate you automatically** and, by design, **refuses to silently succeed** if it finds your old push-triggered `auto-pr.yml`: it leaves the file untouched and exits non-zero with an "ACTION REQUIRED" message, so an upgrade can never look done while leaving the vulnerable file in place. Migrate manually:
+
+1. **Replace `auto-pr.yml`.** Overwrite your existing `.github/workflows/auto-pr.yml` with the new push-free version ([auto-pr.yml](../.github/workflows/auto-pr.yml)) — it triggers only on `workflow_dispatch` + `schedule` and has no privileged `create` job.
+2. **Add `auto-pr-create.yml`.** Copy [auto-pr-create.yml](../.github/workflows/auto-pr-create.yml) into `.github/workflows/`. After both files are in place, re-running `npx -p github:knirski/auto-pr auto-pr-init` will proceed normally (it detects the new shape) and fill in anything still missing.
+3. **Create the protected `app-credentials` environment** with a default-branch-only deployment policy and admin-bypass disabled — see [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials).
+4. **Move your App credentials into the environment.** GitHub has no API to copy a secret's value, so re-enter the `APP_ID` / `APP_PRIVATE_KEY` values you already have as **environment** secrets on `app-credentials`:
+
+   ```bash
+   gh secret set APP_ID --env app-credentials --repo <owner>/<repo>
+   gh secret set APP_PRIVATE_KEY --env app-credentials --repo <owner>/<repo> < path/to/private-key.pem
+   ```
+
+   (Or add them via the environment's UI.) **Keep your existing repository-level `APP_ID` / `APP_PRIVATE_KEY` secrets in place until** the new workflow has successfully created a PR end-to-end, then remove the repository-level copies. This is exactly the sequencing `knirski/auto-pr` itself used when adopting the design (create environment → set environment secrets → verify → remove repo-level secrets). Before removing the repository-level copies, run `scripts/check-app-credentials-environment.sh <owner>/<repo>` (see [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials)) and confirm it passes — otherwise you may be relying on an unprotected auto-created environment while the still-present repository secrets mask the misconfiguration.
+5. **Verify** with a manual dispatch (`gh workflow run auto-pr.yml -f branch=ai/your-branch`) before relying on scheduled discovery.
+
 ## Verification
 
 1. Create and push a branch:
@@ -287,8 +364,14 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common f
    git push origin ai/test-setup
    ```
 
-2. Check **Actions** in your repo — the workflow should run
-3. A new PR should appear, opened by `your-app-name[bot]`
+2. Trigger generation for it (push alone does not start it):
+
+   ```bash
+   gh workflow run auto-pr.yml -f branch=ai/test-setup
+   ```
+
+3. Check **Actions** in your repo — the **Auto-PR** (generate) run appears, then the **Auto-PR create** run starts via `workflow_run`
+4. A new PR should appear, opened by `your-app-name[bot]`. (Left to scheduled discovery instead of a manual dispatch, this can take 10–30+ minutes.)
 
 ## Environment variables reference
 
@@ -307,12 +390,14 @@ If you work on **this** repository (not only consuming the workflow), `bun run t
 
 | Issue | Fix |
 |-------|-----|
-| Workflow doesn't run | Ensure branch name matches `ai/**`; workflow runs on forks too (add secrets to enable) |
-| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx -p github:knirski/auto-pr auto-pr-init` to get the latest workflow, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) from main. Contributors: when testing on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
+| Nothing happens after pushing an `ai/**` branch | Push does not start generation anymore. Trigger it manually (`gh workflow run auto-pr.yml -f branch=ai/…`) or wait for scheduled discovery (10–30+ min). See [How generation is triggered](#how-generation-is-triggered). |
+| Workflow doesn't run at all | Ensure both `auto-pr.yml` and `auto-pr-create.yml` exist; the `branch` input / discovered branch must match `ai/**`. |
+| "workflow was not found" / "failed to fetch workflow" | The pinned SHA may not exist. Run `npx -p github:knirski/auto-pr auto-pr-init` to get the latest workflows, or copy [auto-pr.yml](../.github/workflows/auto-pr.yml) and [auto-pr-create.yml](../.github/workflows/auto-pr-create.yml) from main. Contributors: when testing on a branch, update all `@SHA` refs to the current commit (`git rev-parse HEAD`). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#workflow-was-not-found-or-failed-to-fetch-workflow). |
 | "Missing [path]" (PR template) | Run `npx -p github:knirski/auto-pr auto-pr-init` or copy the template to the path shown. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | "node-version-file" error | Ensure `.nvmrc` exists (run `npx -p github:knirski/auto-pr auto-pr-init`). Use `node-version-file: ".nvmrc"` for single source of truth. |
 | Check job fails | Ensure your check command exists (e.g. `npm run check`, `pytest`, `cargo test`). See [Running checks before PR creation](#running-checks-before-pr-creation) |
 | "Resource not accessible" | Check app permissions (Contents, Pull requests, Actions: Read and write) |
-| "Secret not found" | Verify `APP_ID` and `APP_PRIVATE_KEY` in repo secrets |
+| "Secret not found" / "Missing secrets" | Verify `APP_ID` and `APP_PRIVATE_KEY` are set on the **`app-credentials` environment** (not only as repository secrets), and that the environment's deployment branch policy admits your default branch. See [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials). |
+| `auto-pr-init` exits with "ACTION REQUIRED" | Your existing `auto-pr.yml` predates the security fix (still push-triggered). Follow [Upgrading from the single-workflow version](#upgrading-from-the-single-workflow-version); the tool refuses to proceed until it is replaced. |
 | PR already exists | Workflow updates the PR title and body from the latest commits |
 | AI provider returns invalid description | Retries up to five attempts; description override may be empty on failure |

@@ -6,6 +6,19 @@
 # Branch guard: job only runs when head ref starts with 'release-please--' so that formatting
 # PRs that touch .release-please-manifest.json do not trigger a dist commit.
 # Loop prevention: only pushes when dist changes; re-run finds no diff.
+#
+# Token (Task 1.6b): this job uses the default GITHUB_TOKEN (the job already has job-level
+# `contents: write`), NOT a GitHub App token. It therefore consumes no App secret and needs no
+# protected `environment:`. This is a deliberate correction of Task 1.6's environment gate: because
+# this workflow is only ever pull_request-triggered, GITHUB_REF is always refs/pull/<n>/merge, which
+# the `app-credentials` environment's main-only deployment-branch policy never admits — an
+# App-token/`environment:` design here would fail the ENTIRE job on 100% of runs (the environment
+# gate is evaluated at job start, before any step). The only thing the App token bought was that its
+# push would retrigger a fresh check run on the release-please PR (GITHUB_TOKEN-authored pushes do
+# NOT trigger workflows). That is a minor operational nicety, acceptable to lose here: dist is
+# machine-generated from already-reviewed source, and dropping the App token removes an entire
+# App-secret consumer from the inventory (a net security simplification — fewer things touch the App
+# credentials). See docs/adr/0016 decision 8 and .superpowers/sdd/task-1.6b-report.md.
 
 name: Add dist to release PR
 
@@ -39,17 +52,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
       - name: Build and commit dist
         uses: ./.github/actions/build-and-commit-dist
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ github.token }}
           fetch_depth: "1"
           push_branch: ${{ github.event.pull_request.head.ref }}

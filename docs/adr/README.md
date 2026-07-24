@@ -28,6 +28,7 @@ When creating or editing ADRs, follow the workflow in [AGENTS.md](../../AGENTS.m
 | 0013 | [Transient vs permanent AI error classification](0013-transient-vs-permanent-ai-errors.md) |
 | 0014 | [Replace gh PR wrapper with Octokit](0014-replace-gh-pr-wrapper-with-octokit.md) |
 | 0015 | [Packaged model routing context command](0015-packaged-model-routing-context-command.md) |
+| 0016 | [Immutable privileged workflow executor](0016-immutable-privileged-workflow-executor.md) |
 
 ## Supporting documents (research and plans)
 

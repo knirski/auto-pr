@@ -1,9 +1,41 @@
 # Reusable workflow: Nix build with bun.nix auto-update.
 # Called by ci.yml's `nix` job and update-bun-nix.yml.
 #
-# Uses GitHub App token for trusted same-repo update runs so the push can trigger CI
-# on the new commit (GITHUB_TOKEN pushes do not trigger workflows). Dependabot PRs
-# do not receive repository secrets, so they run bun.nix as check-only.
+# Job structure (Task 1.6b — split to keep the App-secret path off the always-needed build path):
+#   1. bun-nix-check  — UNPRIVILEGED. No `environment:`, no App token, checkout via the default
+#                       token (persist-credentials: false). Regenerates bun.nix and diffs it. If it
+#                       changed and this run is NOT allowed to push, it fails with a check-only
+#                       diagnostic (a legitimate, expected failure — a stale bun.nix SHOULD fail CI).
+#                       If it changed and a push IS going to be attempted, it uploads the regenerated
+#                       bun.nix as an artifact for the push job. Outputs `changed`.
+#   2. bun-nix-push   — PRIVILEGED. `environment: app-credentials` (the ONLY job here that touches
+#                       the App secret). Runs only when bun-nix-check reported a change AND
+#                       push_allowed AND the actor is not dependabot. Mints the App token so the push
+#                       can retrigger CI on the new commit (GITHUB_TOKEN pushes do not trigger
+#                       workflows), downloads the artifact, and commits+pushes bun.nix.
+#   3. build          — UNPRIVILEGED Nix flake-check matrix. Depends only on bun-nix-check, never on
+#                       bun-nix-push, so the actual Nix verification is never collateral-killed by the
+#                       privileged auto-push convenience.
+#
+# Why the split (ADR 0016 decision 8; Task 1.6b): a job that names a protected `environment:` has
+# that environment's deployment-branch policy matched against GITHUB_REF *at job start, before any
+# step runs*; if the ref does not match, the ENTIRE job fails. The former single `bun-nix` job
+# carried `environment: app-credentials` (main-only), so on a pull_request run (GITHUB_REF =
+# refs/pull/<n>/merge) it failed the whole job — killing real Nix build verification for ordinary
+# same-repo PRs touching nix/deps paths, not just the auto-push convenience. Splitting the privileged
+# push into its own environment-gated job (only ever reached on non-pull_request triggers, see below)
+# keeps bun-nix-check and build ungated and always able to verify.
+#
+# Dropped behavior (deliberate, user-visible — see ci.yml's push_allowed and Task 1.6b report):
+# a same-repo PR with a stale bun.nix is NO LONGER auto-fixed-and-pushed by CI. push_allowed is now
+# false for ANY pull_request (fork or same-repo), so bun-nix-push is cleanly SKIPPED on every PR and
+# bun-nix-check fails with the diagnostic telling the contributor to regenerate bun.nix locally and
+# commit it. Auto-pushing privileged commits in response to same-repo PR content is exactly the class
+# of defect ADR 0016 addresses; this removes it at a small scale. Pushes still happen on push:[main]
+# and via update-bun-nix.yml (workflow_dispatch), where GITHUB_REF = main matches the policy.
+# Dependabot PRs never receive repository/environment secrets, so they run check-only regardless.
+#
+# Repository-level APP_ID/APP_PRIVATE_KEY are intentionally left in place until verified.
 #
 # Uses upstream Nix (cachix/install-nix-action).
 # Builds on x86_64-linux, aarch64-linux, and aarch64-darwin (macos-latest).
@@ -20,7 +52,7 @@ on:
         type: string
         default: ""
       push_allowed:
-        description: "Whether to commit and push bun.nix updates (false for fork PRs)"
+        description: "Whether to commit and push bun.nix updates (false for any pull_request)"
         required: false
         type: boolean
         default: true
@@ -32,28 +64,20 @@ concurrency:
 permissions: {}
 
 jobs:
-  bun-nix:
+  bun-nix-check:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
     outputs:
-      bun_nix_changed: ${{ steps.bun-nix.outputs.changed != '' }}
+      changed: ${{ steps.bun-nix.outputs.changed == 'true' }}
     steps:
-      - name: Generate GitHub App token
-        if: inputs.push_allowed && github.actor != 'dependabot[bot]'
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ steps.app-token.outputs.token || github.token }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Nix with cache
         uses: ./.github/actions/setup-nix-with-cache
@@ -75,19 +99,22 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit and push bun.nix
+      # If a push will be attempted (see bun-nix-push's `if:`), hand the regenerated bun.nix to the
+      # privileged push job as an artifact so that job does not need to redo the Nix run under
+      # privilege. Mutually exclusive with the check-only fail below.
+      - name: Upload regenerated bun.nix
         if: steps.bun-nix.outputs.changed == 'true' && inputs.push_allowed && github.actor != 'dependabot[bot]'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add bun.nix
-          git commit -m "fix(nix): update bun.nix for bun.lock"
-          if ! git push; then
-            echo "::error::git push failed (exit 128 often = permission denied; check App has Contents: Read and write)"
-            exit 1
-          fi
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-nix
+          path: bun.nix
+          if-no-files-found: error
+          retention-days: 1
 
+      # If bun.nix is stale and this run cannot push (any pull_request, or dependabot), fail with a
+      # clear diagnostic. This is a legitimate, expected, ungated failure — not a secret-touching
+      # operation. Mutually exclusive with the upload above; together they cover all changed==true
+      # cases, so a real drift is never silently ignored.
       - name: Fail on bun.nix mismatch (check-only)
         if: steps.bun-nix.outputs.changed == 'true' && (!inputs.push_allowed || github.actor == 'dependabot[bot]')
         shell: bash
@@ -99,8 +126,65 @@ jobs:
           echo "  git add bun.nix && git commit -m 'fix(nix): update bun.nix for bun.lock'"
           exit 1
 
+  bun-nix-push:
+    needs: bun-nix-check
+    if: needs.bun-nix-check.outputs.changed == 'true' && inputs.push_allowed && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # Protected environment (ADR 0016 decision 8): APP_ID/APP_PRIVATE_KEY resolve from the
+    # `app-credentials` environment, whose deployment-branch policy admits only the default branch
+    # (main) with admin-bypass disabled, so the App secret is unreachable from any non-default ref.
+    # This is the ONLY job in this file that names the environment — it is the only one that touches
+    # the App secret. Its `if:` can only be true on non-pull_request triggers (push:[main],
+    # workflow_dispatch) because ci.yml sets push_allowed=false for every pull_request; on those
+    # triggers GITHUB_REF = main matches the policy, so the gate passes. On any pull_request this job
+    # is cleanly SKIPPED (never attempted), so it can never fail on the environment gate.
+    environment: app-credentials
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 1
+
+      # Download the bun.nix regenerated by bun-nix-check (same run — default run scoping) and
+      # overwrite the checked-out copy before committing.
+      - name: Download regenerated bun.nix
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bun-nix
+          path: .
+
+      - name: Commit and push bun.nix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bun.nix
+          git commit -m "fix(nix): update bun.nix for bun.lock"
+          if ! git push; then
+            echo "::error::git push failed (exit 128 often = permission denied; check App has Contents: Read and write)"
+            exit 1
+          fi
+
   build:
-    needs: bun-nix
+    # Depends ONLY on bun-nix-check, never on bun-nix-push: the Nix verification is orthogonal to
+    # whether the auto-fix-and-push convenience ran/was skipped/failed, and Actions job scheduling
+    # considers only this job's own `needs:` list. `if: !cancelled()` additionally lets build run
+    # even when bun-nix-check's check-only diagnostic failed, so a stale-bun.nix PR still receives
+    # the full Nix build feedback (the gate still fails via bun-nix-check).
+    needs: bun-nix-check
+    if: ${{ !cancelled() }}
     permissions:
       contents: read
     strategy:
@@ -116,8 +200,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
-      # codeql[actions/untrusted-checkout] build job has contents: read only; callers use
-      # pull_request (not pull_request_target) and gate push_allowed for forks.
+      # codeql[actions/untrusted-checkout] False positive: the build job is unprivileged —
+      # contents: read only, no secrets, no environment: (the App-secret path lives solely in the
+      # separate bun-nix-push job). No caller uses pull_request_target; callers pass a pull_request
+      # head ref only on pull_request events, where the token is unprivileged. Nix verification here
+      # never runs under the App token, so this checkout is never a privileged/trusted-context one.
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>auto-pr — AI-powered pull requests from conventional commits</title>
-    <meta name="description" content="Push to an ai/** branch, get a well-structured PR with title, description, and filled template — automatically." />
+    <meta name="description" content="Point auto-pr at your ai/** branches and get a well-structured PR with title, description, and filled template — generated on demand or on a schedule." />
     <link rel="icon" type="image/svg+xml" href="/auto-pr/favicon.svg" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -146,8 +146,9 @@
       <div class="hero-badge">auto-pr</div>
       <h1>AI-powered pull requests from conventional commits</h1>
       <p>
-        Push to an <code>ai/**</code> branch, get a well-structured PR with title,
-        description, and filled template &mdash; automatically.
+        Point auto-pr at your <code>ai/**</code> branches and get a well-structured PR
+        with title, description, and filled template &mdash; generated on demand or on a
+        schedule.
       </p>
       <div class="cta-group">
         <a href="/auto-pr/integration/" class="cta cta-primary">Get Started</a>
@@ -184,12 +185,13 @@
         <div class="code-comment"># Initialize auto-pr in your repo</div>
         <div class="code-cmd">npx -p github:knirski/auto-pr auto-pr-init</div>
       </div>
-      <p class="subtitle">Then push to an ai/** branch and watch the magic happen</p>
+      <p class="subtitle">Then trigger auto-pr for your branch and watch the magic happen</p>
       <div class="code-block">
         <div class="code-cmd">git checkout -b ai/my-feature</div>
         <div class="code-cmd">git commit -m "feat: add new feature"</div>
         <div class="code-cmd">git push -u origin HEAD</div>
-        <div class="code-result" style="margin-top: 0.5rem;">&#10132; PR created automatically</div>
+        <div class="code-cmd">gh workflow run auto-pr.yml -f branch=ai/my-feature</div>
+        <div class="code-result" style="margin-top: 0.5rem;">&#10132; PR created for you</div>
       </div>
     </section>
 

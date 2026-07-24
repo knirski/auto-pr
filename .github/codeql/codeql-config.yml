@@ -1,12 +1,15 @@
 # CodeQL config for code scanning.
-# Excludes untrusted-checkout queries: auto-pr uses two-phase design (generate unprivileged +
-# create trusted checkout only). CodeQL does not model cross-workflow permission separation;
-# security model is satisfied. See docs/WORKFLOW_SECURITY.md, docs/adr/0002-two-phase-auto-pr-workflow.md.
+#
+# The untrusted-checkout queries (actions/untrusted-checkout-{critical,high,medium}) are
+# NOT suppressed here. They previously were, under ADR 0002's now-superseded rationale that
+# the two-reusable-file split was a trust boundary CodeQL "could not model." ADR 0016 replaced
+# that with a genuinely sound design: the privileged create phase is a default-branch-controlled
+# workflow_run executor that performs NO checkout and installs only a SHA-pinned executor, so no
+# privileged job checks out an attacker-influenceable ref. There is therefore nothing repo-wide to
+# suppress — the queries run and are expected to pass on their own merits.
+#
+# Two narrow, per-line inline suppressions remain (see the `# codeql[actions/untrusted-checkout]`
+# comments in auto-pr-generate-reusable.yml and nix.yml), each documenting why the flagged line is a
+# genuine false positive (an unprivileged checkout in a reusable workflow analyzed without caller
+# context). See docs/WORKFLOW_SECURITY.md and docs/adr/0016-immutable-privileged-workflow-executor.md.
 name: "CodeQL config"
-
-query-filters:
-  - exclude:
-      id:
-        - actions/untrusted-checkout-critical
-        - actions/untrusted-checkout-high
-        - actions/untrusted-checkout-medium

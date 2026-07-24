@@ -1,5 +1,9 @@
 # Two-Phase Auto-PR Workflow (CodeQL Without Suppression)
 
+## Status
+
+**Partially superseded by [ADR 0016](0016-immutable-privileged-workflow-executor.md).** The two-reusable-file split described here satisfies CodeQL's file-level analysis and that rationale still holds, but it was mistakenly treated as a *trust* boundary. Because the `push`-triggered entry workflow is evaluated from the pushed (untrusted) branch's own revision, a same-repository branch author controls the workflow definition, its `permissions:` blocks, and the package ref the privileged `create` job installs — a same-repository privilege escalation to code execution under the GitHub App token. ADR 0016 replaces the same-run trust model with a default-branch-controlled immutable privileged executor. Treat the design below as historical for anything trust-related.
+
 ## Context and Problem Statement
 
 CodeQL flags "Checkout of untrusted code in trusted context" (CWE-829) when a workflow checks out untrusted code (e.g. `${{ github.ref_name }}`) while having privileged permissions (secrets, `pull-requests: write`). CodeQL analyzes at the workflow-file level; job-level permission separation within a single file does not satisfy the query.

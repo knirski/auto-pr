@@ -1,0 +1,57 @@
+# Auto-PR — privileged CREATE ingress (ADR 0016 decision 4). This workflow is triggered by
+# workflow_run after the unprivileged "Auto-PR" (generate) workflow completes. GitHub ALWAYS
+# evaluates a workflow_run-triggered workflow's definition — its code, permissions:, and secrets
+# access — from the DEFAULT BRANCH, regardless of what ref triggered the upstream run. A pushed
+# ai/** branch therefore cannot substitute this file, its permissions, or the executor it runs.
+#
+# This file is a deliberately THIN caller: it passes the raw workflow_run context through to the
+# reusable create workflow and does NOT itself validate anything. All validation — conclusion,
+# repository, branch/head-SHA re-resolution, manifest parsing, run-id-scoped artifact download,
+# path/symlink/size guards, SHA-pinned executor install, App-token mint gated on
+# `environment: app-credentials` — lives in auto-pr-create-reusable.yml (Task 1.3c). In particular
+# this caller intentionally does NOT gate on `conclusion == 'success'`: per ADR 0016 decision 5 the
+# validation (including the conclusion check) happens inside the reusable, before a token is minted.
+#
+# Reusable workflow ref: always a commit SHA (see auto-pr.yml). Update the pin to HEAD after each
+# push; after merge to main, pin to the merge commit SHA (update-workflow-pins / INTEGRATION).
+
+name: Auto-PR create
+
+on:
+  workflow_run:
+    workflows: ["Auto-PR"]
+    types:
+      - completed
+
+permissions: {}
+
+# Per-repository-and-branch create concurrency: a newer head SHA for the same branch supersedes an
+# older pending create run. head_branch is available pre-validation — here it is only a grouping
+# key, not a security check, so using it is safe (ADR 0016).
+concurrency:
+  group: auto-pr-create-${{ github.repository }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  create:
+    # Job-level permissions cap the reusable's GITHUB_TOKEN (reusable permissions can only be
+    # reduced, never elevated). pull-requests: write lives here at the JOB level (not the workflow
+    # top level) so it applies only to this privileged call; the App token used for the actual
+    # PR write is minted inside the reusable, gated on `environment: app-credentials` (Task 1.3c).
+    # actions: read is required so the reusable can download the triggering run's artifact via the
+    # API (actions/download-artifact with run-id); a reusable cannot add a permission the caller
+    # did not grant, so it must be granted here (ADR 0016 decision 5).
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@70699e3ee65a1a5967637fd32511fb11df99003e
+    with:
+      # Raw, unvalidated workflow_run context passed through for the reusable (Task 1.3c) to
+      # validate. See the "interface contract" in .superpowers/sdd/task-1.3b-report.md.
+      workflow_run_id: ${{ github.event.workflow_run.id }}
+      head_branch: ${{ github.event.workflow_run.head_branch }}
+      head_sha: ${{ github.event.workflow_run.head_sha }}
+      source_repository: ${{ github.event.workflow_run.repository.full_name }}
+      conclusion: ${{ github.event.workflow_run.conclusion }}
+    secrets: inherit

@@ -1,19 +1,20 @@
-# Composite action: set auto-pr package ref and use_workspace (npx vs workspace).
-name: Set auto-pr package ref
-description: Set package spec for npx/bun and whether to use workspace install
+# Composite action: determine auto-pr workspace mode (same-repo workspace vs published package).
+#
+# SECURITY NOTE (ADR 0016 decisions 3, 6): the branch-derived package ref
+# `github:knirski/auto-pr#<branch>` this action used to emit was removed. That ref selected what
+# code the PRIVILEGED create job installed and executed, which a same-repo branch author could
+# influence. This action now only reports `use_workspace` — a purely informational flag that
+# controls how the ALREADY-UNPRIVILEGED generate job invokes ITS OWN commands. It selects nothing
+# a privileged job runs.
+name: Determine auto-pr workspace mode
+description: Determine whether to run auto-pr from the same-repo workspace (bun install) or a published package.
 
 inputs:
   repository:
     description: GitHub repository (owner/name)
     required: true
-  ref_name:
-    description: Branch ref name (e.g. ai/feature)
-    required: true
 
 outputs:
-  value:
-    description: Package spec for npx (e.g. github:knirski/auto-pr#branch)
-    value: ${{ steps.set.outputs.value }}
   use_workspace:
     description: "true when knirski/auto-pr same repo (bun install workspace)"
     value: ${{ steps.set.outputs.use_workspace }}
@@ -26,4 +27,3 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/auto-pr-set-pkg.sh"
       env:
         REPO: ${{ inputs.repository }}
-        REF_NAME: ${{ inputs.ref_name }}

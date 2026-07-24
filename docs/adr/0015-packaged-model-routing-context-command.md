@@ -62,4 +62,4 @@ Chosen option: **package model routing context as an auto-pr workflow command**.
 - [Architecture](../ARCHITECTURE.md)
 - [CI: workflow pin automation](../CI.md#workflow-pin-automation)
 - [CI: dist and .gitignore](../CI.md#dist-and-gitignore)
-- [Integration: Step 6](../INTEGRATION.md#step-6-add-the-workflow-file)
+- [Integration: Step 6](../INTEGRATION.md#step-6-add-the-workflow-files)
