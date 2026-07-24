@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "sources": ["../src/workflow/auto-pr-generate-content-cli.ts"],
+  "sourcesContent": [
+    "/**\n * CLI entry point for auto-pr-generate-content. Kept separate from\n * `auto-pr-generate-content.ts` (the library module) so that bundling `auto-pr-generate-content.ts`\n * into another entrypoint (e.g. `auto-pr-run.ts`, via `auto-pr-run-pipeline.ts`) never inlines\n * this file's `runMain` call alongside it.\n *\n * This repo: bun run generate-content · installed: npx auto-pr-generate-content\n */\n\nimport { runMain } from \"#auto-pr\";\nimport { program } from \"#workflow/auto-pr-generate-content.js\";\n\nrunMain(program, \"generate_pr_content_failed\");\n"
+  ],
+  "mappings": ";gJAYA,oBAAQ,oBAAS,4BAA4B",
+  "debugId": "0E55FED14349211A64756E2164756E21",
+  "names": []
+}

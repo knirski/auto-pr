@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "sources": ["../src/workflow/auto-pr-create-or-update-pr-cli.ts"],
+  "sourcesContent": [
+    "/**\n * CLI entry point for auto-pr-create-or-update-pr. Kept separate from\n * `auto-pr-create-or-update-pr.ts` (the library module) so that bundling\n * `auto-pr-create-or-update-pr.ts` into another entrypoint (e.g. `auto-pr-run.ts`, via\n * `auto-pr-run-pipeline.ts`) never inlines this file's `runMain` call alongside it.\n *\n * This repo: bun run create-or-update-pr · installed: npx auto-pr-create-or-update-pr\n */\n\nimport { runMain } from \"#auto-pr\";\nimport { program } from \"#workflow/auto-pr-create-or-update-pr.js\";\n\nrunMain(program, \"create_or_update_pr_failed\");\n"
+  ],
+  "mappings": ";gJAYA,oBAAQ,oBAAS,4BAA4B",
+  "debugId": "8DECB1232F8DE1FF64756E2164756E21",
+  "names": []
+}
