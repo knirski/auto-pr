@@ -41,12 +41,6 @@
           shfmt
         ];
 
-        # `apps.default`'s script, bound once so both `apps.default.program` and
-        # `checks.app-uses-built-package` inspect the identical realized derivation.
-        appProgram = pkgs.writeShellScript "run-auto-pr" ''
-          cd "${self}" && exec bun run src/workflow/auto-pr-run.ts "$@"
-        '';
-
         # The PATH-prepend line from devShells.default.shellHook, bound once so
         # `checks.dev-shell-path-precedence` exercises the identical string the dev shell
         # actually uses (not a copy that could silently drift from it).
@@ -113,17 +107,20 @@
             touch $out
           '';
 
-          # Defect: apps.default ignores packages.default and instead cds into the flake's own
-          # source tree (`${self}`) to run ambient `bun` against uncompiled TS source.
+          # Fixed by Task 3.3: apps.default.program is now a plain path string pointing at
+          # packages.default's installed binary (see below), so there's no separate wrapper
+          # script left to grep. Assert the exact string instead of a substring/grep match, so a
+          # subtly-wrong value (e.g. pointing at a different binary that also happens to mention
+          # `package`'s store path) can't slip through - see the equivalent hardening called out
+          # in Workstream 2's review.
           app-uses-built-package = pkgs.runCommand "app-uses-built-package" { } ''
-            if grep -qF "${builtins.toString self}" ${appProgram}; then
-              echo "FAIL: apps.default still cds into the flake source tree (self)" >&2
-              echo "instead of invoking packages.default's built output. Fixed by Task 3.3." >&2
-              exit 1
-            fi
-            if ! grep -qF "${package}" ${appProgram}; then
-              echo "FAIL: apps.default's script does not reference packages.default's store" >&2
-              echo "path. Fixed by Task 3.3." >&2
+            actual=${pkgs.lib.escapeShellArg self.apps.${system}.default.program}
+            expected=${pkgs.lib.escapeShellArg "${package}/bin/run-auto-pr"}
+            if [ "$actual" != "$expected" ]; then
+              echo "FAIL: apps.default.program is \"$actual\"," >&2
+              echo "expected exactly \"$expected\" (packages.default's installed binary)." >&2
+              echo "apps.default must invoke packages.default's built output, not the flake" >&2
+              echo "source tree. Fixed by Task 3.3." >&2
               exit 1
             fi
             touch $out
@@ -218,7 +215,7 @@
 
         apps.default = {
           type = "app";
-          program = toString appProgram;
+          program = "${package}/bin/run-auto-pr";
         };
 
         formatter = pkgs.nixfmt;
