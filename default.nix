@@ -9,7 +9,8 @@ let
   src = pkgs.lib.cleanSourceWith {
     src = ./.;
     name = "auto-pr-src";
-    filter = path: _:
+    filter =
+      path: _:
       let
         baseName = builtins.baseNameOf path;
       in
@@ -30,7 +31,11 @@ pkgs.stdenv.mkDerivation rec {
   inherit src;
   strictDeps = true;
 
-  nativeBuildInputs = [ bun2nix.hook pkgs.bun pkgs.makeWrapper ];
+  nativeBuildInputs = [
+    bun2nix.hook
+    pkgs.bun
+    pkgs.makeWrapper
+  ];
   bunDeps = bun2nix.fetchBunDeps { bunNix = ./bun.nix; };
 
   dontUseBunBuild = true;
