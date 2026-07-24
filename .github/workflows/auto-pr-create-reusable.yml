@@ -265,7 +265,7 @@ jobs:
         id: install
         run: |
           set -euo pipefail
-          EXECUTOR_PKG="github:knirski/auto-pr#6999e12ddba519130741c4f6365853114df6ae1d"
+          EXECUTOR_PKG="github:knirski/auto-pr#e8be4e779f7ad467713a4d7c3f95e224cba1d00a"
           if ! printf '%s' "$EXECUTOR_PKG" | grep -Eq '^github:knirski/auto-pr#[a-f0-9]{40}$'; then
             echo "::error::Executor ref is not a well-formed 40-hex SHA pin: '$EXECUTOR_PKG'."
             exit 1
