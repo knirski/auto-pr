@@ -35,8 +35,6 @@
 # and via update-bun-nix.yml (workflow_dispatch), where GITHUB_REF = main matches the policy.
 # Dependabot PRs never receive repository/environment secrets, so they run check-only regardless.
 #
-# Repository-level APP_ID/APP_PRIVATE_KEY are intentionally left in place until verified.
-#
 # Uses upstream Nix (cachix/install-nix-action).
 # Builds on x86_64-linux, aarch64-linux, and aarch64-darwin (macos-latest).
 # v31+ ships a newer Nix installer (2.34.x) with better macOS dscl behavior; it no-ops if nix is already on PATH.
