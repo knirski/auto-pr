@@ -24,7 +24,9 @@ import {
 } from "#auto-pr";
 import {
   resolveRunAutoPrBranch,
+  runAutoPrHelpText,
   runAutoPrPipelineWithServices,
+  shouldShowRunAutoPrHelp,
 } from "#workflow/auto-pr-run-pipeline.js";
 
 // ─── Pipeline ────────────────────────────────────────────────────────────────
@@ -51,8 +53,16 @@ function livePipeline(config: RunAutoPrConfigService): CliMainEffect {
   }).pipe(Effect.provide(baseLayer));
 }
 
-/* c8 ignore next 6 */
 function runPipeline(): CliMainEffect {
+  // Checked before RunAutoPrConfig is resolved: --help must never require the real env vars
+  // (DEFAULT_BRANCH, GITHUB_WORKSPACE, GH_TOKEN) or touch git/network.
+  if (shouldShowRunAutoPrHelp(process.argv)) {
+    return Effect.sync(() => {
+      process.stdout.write(`${runAutoPrHelpText()}\n`);
+    });
+  }
+
+  /* c8 ignore next 6 */
   return Effect.gen(function* () {
     const config = yield* RunAutoPrConfig;
     yield* livePipeline(config);

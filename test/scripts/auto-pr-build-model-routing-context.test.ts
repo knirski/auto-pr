@@ -9,10 +9,35 @@ import {
   runBuildModelRoutingContext,
 } from "../../src/workflow/auto-pr-build-model-routing-context.js";
 
+// When this test runs from lefthook's pre-push hook, git has GIT_DIR / GIT_WORK_TREE /
+// GIT_INDEX_FILE etc. exported pointing at the REAL repo. If those leak into the fixture git
+// commands below (which build throwaway repos under a tmpdir), the fixtures init/commit against
+// the real repo instead of their temp dir, corrupting the real HEAD/index mid-commit. Strip them
+// from every subprocess env this file spawns so git always resolves purely from `cwd`. Harmless
+// when run standalone (the vars are simply absent from `process.env` already).
+const GIT_ENV_LEAK_KEYS = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_PREFIX",
+] as const;
+
+function sanitizedEnv(overrides: Record<string, string> = {}): Record<string, string | undefined> {
+  const env = { ...process.env };
+  for (const key of GIT_ENV_LEAK_KEYS) {
+    delete env[key];
+  }
+  return { ...env, ...overrides };
+}
+
 function runGit(cwd: string, args: readonly string[]): Effect.Effect<void, Error> {
   return Effect.try({
     try: () => {
-      const result = spawnSync("git", [...args], { cwd, encoding: "utf8" });
+      const result = spawnSync("git", [...args], { cwd, encoding: "utf8", env: sanitizedEnv() });
       if (result.status !== 0) {
         throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
       }
@@ -114,8 +139,7 @@ describe("build-model-routing-context", () => {
         {
           cwd: process.cwd(),
           encoding: "utf8",
-          env: {
-            ...process.env,
+          env: sanitizedEnv({
             AUTO_PR_AI_PROVIDER: "local",
             AUTO_PR_LOCAL_MODEL: "",
             AUTO_PR_AI_OPENAI_COMPAT_URL: "",
@@ -129,7 +153,7 @@ describe("build-model-routing-context", () => {
             RUNNER: "npx",
             RUNNER_LABEL: "ubuntu-24.04",
             USE_WORKSPACE: "true",
-          },
+          }),
         },
       );
 
@@ -168,8 +192,7 @@ describe("build-model-routing-context", () => {
         {
           cwd: dir,
           encoding: "utf8",
-          env: {
-            ...process.env,
+          env: sanitizedEnv({
             AUTO_PR_AI_PROVIDER: "local",
             AUTO_PR_LOCAL_MODEL: "",
             AUTO_PR_AI_OPENAI_COMPAT_URL: "",
@@ -180,7 +203,7 @@ describe("build-model-routing-context", () => {
             GITHUB_WORKSPACE: dir,
             REPOSITORY_VISIBILITY: "private",
             RUNNER_LABEL: "ubuntu-24.04",
-          },
+          }),
         },
       );
 
