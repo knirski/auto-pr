@@ -195,8 +195,12 @@ describe("Nix credential boundary: PR-reachable jobs are read-only", () => {
 describe("Nix credential boundary: the write job is unreachable from any pull_request", () => {
   test("bun-nix-push's `if:` requires push_allowed, which ci.yml sets to false for every pull_request", () => {
     const ifExpr = asString(bunNixPush.if);
-    expect(ifExpr).toBeDefined();
-    expect(ifExpr).toContain("inputs.push_allowed");
+    // Exact match, not `.toContain("inputs.push_allowed")`: a substring check would let a
+    // regression like `if: true || inputs.push_allowed` (which always runs, defeating the gate)
+    // pass silently.
+    expect(ifExpr).toBe(
+      "needs.bun-nix-check.outputs.changed == 'true' && inputs.push_allowed && github.actor != 'dependabot[bot]'",
+    );
 
     const withBlock = ciNixJob.with;
     expect(isRecord(withBlock)).toBe(true);
