@@ -25,6 +25,7 @@ Chosen option: **"cachix/install-nix-action + nix-community/cache-nix-action"** 
 * Good: ci-nix runs `nix flake check -L` on matrix (x86_64-linux, aarch64-linux) via ubuntu-latest and ubuntu-24.04-arm.
 * Bad: Must maintain custom bun.nix update logic; Determinate's `fix hashes` would simplify that if we migrate later.
 * Note: [determinate-nix-migration-plan.md](supporting/determinate-nix-migration-plan.md) documents a future migration path if we switch to Determinate Nix.
+* Security note (added by the repository remediation plan's Workstream 2, alongside [ADR 0016](0016-immutable-privileged-workflow-executor.md)): "same repository" is not equivalent to "trusted code" — a same-repo PR author can supply arbitrary `bun.nix`/`flake.nix`/`package.json` content. `nix.yml` splits accordingly: PRs (any PR, same-repo or fork) only ever run the read-only `bun-nix-check`/`build` jobs (`contents: read`, `persist-credentials: false`, no App secret reachable, no `git push`); regenerating and pushing `bun.nix` is a separate `bun-nix-push` job gated by the `app-credentials` protected environment (main-only) and reachable only from `push:[main]` or the manual `update-bun-nix.yml` dispatch, never from a `pull_request` event. A same-repo PR with a stale `bun.nix` now fails read-only with a local-remediation message instead of being auto-fixed-and-pushed by CI — see [`test/scripts/nix-credential-boundary.test.ts`](../../test/scripts/nix-credential-boundary.test.ts) for the regression suite.
 
 ## References
 
