@@ -72,8 +72,15 @@ jobs:
     outputs:
       changed: ${{ steps.bun-nix.outputs.changed == 'true' }}
     steps:
+      # This job is unprivileged (contents: read, no environment:, no secrets) and its `nix run`
+      # step below does execute PR-controlled code. The only two things it produces — the Nix
+      # store cache and the `bun-nix` artifact — are never consumed by a privileged job: the sole
+      # privileged job in this file, bun-nix-push, never calls setup-nix-with-cache, and its `if:`
+      # (inputs.push_allowed, false for every pull_request per ci.yml) guarantees it can only run
+      # on non-pull_request triggers, where this job's own ref is main itself, not PR-controlled.
+      # So there is no cache/artifact handoff across the trust boundary for CodeQL's rule to flag.
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 codeql[actions/untrusted-checkout/medium]
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
@@ -200,13 +207,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
-      # codeql[actions/untrusted-checkout] False positive: the build job is unprivileged —
-      # contents: read only, no secrets, no environment: (the App-secret path lives solely in the
-      # separate bun-nix-push job). No caller uses pull_request_target; callers pass a pull_request
-      # head ref only on pull_request events, where the token is unprivileged. Nix verification here
-      # never runs under the App token, so this checkout is never a privileged/trusted-context one.
+      # Same reasoning as bun-nix-check's Checkout step above: this job is unprivileged
+      # (contents: read, no environment:, no secrets), and no privileged job in this file ever
+      # consumes anything this job produces, so there is no cross-trust-boundary handoff here.
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 codeql[actions/untrusted-checkout/medium]
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
