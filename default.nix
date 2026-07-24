@@ -30,7 +30,7 @@ pkgs.stdenv.mkDerivation rec {
   inherit src;
   strictDeps = true;
 
-  nativeBuildInputs = [ bun2nix.hook pkgs.bun ];
+  nativeBuildInputs = [ bun2nix.hook pkgs.bun pkgs.makeWrapper ];
   bunDeps = bun2nix.fetchBunDeps { bunNix = ./bun.nix; };
 
   dontUseBunBuild = true;
@@ -40,9 +40,7 @@ pkgs.stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/lib/node_modules/auto-pr
     cp -r package.json bun.lock dist .github .nvmrc $out/lib/node_modules/auto-pr/
-    mkdir -p $out/bin
-    echo '#!${pkgs.runtimeShell}
-    cd "$out/lib/node_modules/auto-pr" && exec node dist/workflow/auto-pr-run.js "$@"' > $out/bin/run-auto-pr
-    chmod +x $out/bin/run-auto-pr
+    makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/run-auto-pr \
+      --add-flags "$out/lib/node_modules/auto-pr/dist/workflow/auto-pr-run.js"
   '';
 }
