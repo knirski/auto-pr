@@ -37,7 +37,6 @@ jobs:
     # `app-credentials` environment, whose deployment-branch policy admits only the default branch
     # (main) with admin-bypass disabled, so the App secret is unreachable from any non-default ref.
     # Triggers are push:[main] + workflow_dispatch; both resolve against main, so the policy passes.
-    # Repository-level APP_ID/APP_PRIVATE_KEY are intentionally left in place until verified.
     environment: app-credentials
     steps:
       - name: Checkout

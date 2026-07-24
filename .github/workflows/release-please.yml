@@ -20,8 +20,6 @@ jobs:
     # `app-credentials` environment, whose deployment-branch policy admits only the default branch
     # (main) with admin-bypass disabled, so the App secret is unreachable from any non-default ref.
     # This job is push:[main]-only, so its GITHUB_REF is always main and the policy always passes.
-    # Repository-level APP_ID/APP_PRIVATE_KEY are intentionally left in place until this is verified
-    # end-to-end (see Task 1.6 / rollout).
     environment: app-credentials
     runs-on: ubuntu-24.04
     timeout-minutes: 10

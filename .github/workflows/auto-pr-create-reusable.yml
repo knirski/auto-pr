@@ -79,8 +79,7 @@ jobs:
     # Protected environment (ADR 0016 decision 8). APP_ID/APP_PRIVATE_KEY live as environment
     # secrets on `app-credentials`, whose deployment-branch policy admits ONLY the default branch
     # (main) and whose admin-bypass is disabled. A job whose GITHUB_REF is not the default branch is
-    # denied the secrets before it can read them. Repository-level APP_ID/APP_PRIVATE_KEY are NOT
-    # removed yet — deferred to Task 1.6 until this path is verified working end-to-end.
+    # denied the secrets before it can read them.
     environment: app-credentials
     runs-on: ubuntu-24.04
     timeout-minutes: 5
