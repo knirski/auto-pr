@@ -46,6 +46,11 @@
         appProgram = pkgs.writeShellScript "run-auto-pr" ''
           cd "${self}" && exec bun run src/workflow/auto-pr-run.ts "$@"
         '';
+
+        # The PATH-prepend line from devShells.default.shellHook, bound once so
+        # `checks.dev-shell-path-precedence` exercises the identical string the dev shell
+        # actually uses (not a copy that could silently drift from it).
+        devShellPathExport = ''export PATH="$PWD/node_modules/.bin:$PATH"'';
       in
       {
         checks = {
@@ -138,7 +143,9 @@
             touch $out
           '';
 
-          # Defect: devShells.default.packages does not provide Node at all yet.
+          # Defect: devShells.default.packages does not provide Node at all yet. Checks the
+          # *major version* against .nvmrc (not just presence): once Task 3.4 adds a nodejs
+          # package here, it must actually match .nvmrc/the supported LTS, not just be "some node".
           dev-shell-node-version = pkgs.runCommand "dev-shell-node-version" {
             nativeBuildInputs = devShellPackages;
           } ''
@@ -146,7 +153,42 @@
               echo "FAIL: no \`node\` on PATH from devShells.default.packages. Fixed by Task 3.4." >&2
               exit 1
             fi
-            node --version
+            actual_major="$(node --version | sed -E 's/^v([0-9]+).*/\1/')"
+            expected_major="$(tr -d '[:space:]' < ${./.nvmrc} | sed -E 's/^v?([0-9]+).*/\1/')"
+            if [ "$actual_major" != "$expected_major" ]; then
+              echo "FAIL: node on PATH is major version $actual_major, but .nvmrc says" >&2
+              echo "$expected_major. Fixed by Task 3.4 (which also aligns .nvmrc/engines.node" >&2
+              echo "with the supported LTS)." >&2
+              exit 1
+            fi
+            touch $out
+          '';
+
+          # Defect (Task 3.4's PATH-ordering requirement, currently violated): shellHook
+          # PREPENDS node_modules/.bin, so an npm-installed binary of the same name as a
+          # Nix-provided tool shadows the working Nix version instead of the plan's required
+          # "append node_modules/.bin after Nix-provided tools". Reproduced with `bun` itself
+          # (already in devShellPackages) as the overlapping name, via a decoy
+          # node_modules/.bin/bun, so this check is meaningful today rather than waiting for
+          # Task 3.4 to add biome/rumdl to devShellPackages.
+          dev-shell-path-precedence = pkgs.runCommand "dev-shell-path-precedence" {
+            nativeBuildInputs = devShellPackages;
+          } ''
+            mkdir -p node_modules/.bin
+            cat > node_modules/.bin/bun <<'DECOY'
+            #!/bin/sh
+            echo DECOY
+            DECOY
+            chmod +x node_modules/.bin/bun
+
+            ${devShellPathExport}
+            resolved="$(command -v bun)"
+            if [ "$resolved" = "$PWD/node_modules/.bin/bun" ]; then
+              echo "FAIL: devShells.default's shellHook prepends node_modules/.bin, so a" >&2
+              echo "same-named npm-installed binary shadows the Nix-provided tool instead of" >&2
+              echo "the reverse. Fixed by Task 3.4." >&2
+              exit 1
+            fi
             touch $out
           '';
         };
@@ -169,7 +211,7 @@
         devShells.default = pkgs.mkShell {
           packages = devShellPackages;
           shellHook = ''
-            export PATH="$PWD/node_modules/.bin:$PATH"
+            ${devShellPathExport}
             [ -d node_modules ] || bun install
           '';
         };
