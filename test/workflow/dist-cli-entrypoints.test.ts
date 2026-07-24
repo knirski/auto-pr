@@ -15,7 +15,7 @@
  * distinguishing error event name — never another entrypoint's.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
+import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..", "..");
@@ -26,18 +26,20 @@ const CREATE_OR_UPDATE_PR_EVENT = "create_or_update_pr_failed";
 
 const ALL_EVENTS = [RUN_AUTO_PR_EVENT, GENERATE_CONTENT_EVENT, CREATE_OR_UPDATE_PR_EVENT];
 
-function runBunDistScript(relativeDistPath: string): string {
-  const result = spawnSync(process.execPath, [join(root, "dist", relativeDistPath)], {
+function runBunDistScript(relativeDistPath: string): SpawnSyncReturns<string> {
+  return spawnSync(process.execPath, [join(root, "dist", relativeDistPath)], {
     cwd: root,
     encoding: "utf8",
     // Deliberately strip all env vars (GITHUB_WORKSPACE, DEFAULT_BRANCH, GH_TOKEN, BRANCH, ...):
     // each entrypoint should fail on its *own* missing-env-var validation, not run any real logic.
     env: { PATH: process.env.PATH ?? "" },
   });
-  return `${result.stdout}\n${result.stderr}`;
 }
 
-function expectOnlyOwnEvent(output: string, ownEvent: string): void {
+function expectOnlyOwnEvent(result: SpawnSyncReturns<string>, ownEvent: string): void {
+  // A process that printed the expected event text but exited 0 would otherwise still pass.
+  expect(result.status).not.toBe(0);
+  const output = `${result.stdout}\n${result.stderr}`;
   expect(output).toContain(ownEvent);
   for (const event of ALL_EVENTS) {
     if (event !== ownEvent) {
