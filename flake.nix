@@ -16,10 +16,40 @@
     ] (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+
+        # Bound once and reused by `checks.default`, `packages.default`, and the Task 3.1 RED
+        # checks below, so the checks build/inspect the exact same derivation the package exposes.
+        package = pkgs.callPackage ./default.nix { inherit (bun2nix.packages.${system}) bun2nix; };
+
+        # `packages.default`'s full runtime closure, used to assert (or, for now, refute) that it
+        # references a Nix-provided Node interpreter. See `checks.launcher-references-node`.
+        packageClosure = pkgs.closureInfo { rootPaths = [ package ]; };
+
+        # Mirrors `devShells.default.packages` (see below) so RED checks can assert what a tool
+        # invoked via `nix develop -c <tool>` would actually resolve to, without recursively
+        # invoking `nix develop` from inside a sandboxed check build (which Nix does not support:
+        # check derivations build in an isolated sandbox with no access to the Nix daemon/CLI).
+        devShellPackages = with pkgs; [
+          act
+          bun
+          statix
+          deadnix
+          typos
+          actionlint
+          lychee
+          shellcheck
+          shfmt
+        ];
+
+        # `apps.default`'s script, bound once so both `apps.default.program` and
+        # `checks.app-uses-built-package` inspect the identical realized derivation.
+        appProgram = pkgs.writeShellScript "run-auto-pr" ''
+          cd "${self}" && exec bun run src/workflow/auto-pr-run.ts "$@"
+        '';
       in
       {
         checks = {
-          default = pkgs.callPackage ./default.nix { inherit (bun2nix.packages.${system}) bun2nix; };
+          default = package;
           nix-lint = pkgs.runCommand "nix-lint" { } ''
             cp -r ${self} /tmp/check-src
             cd /tmp/check-src
@@ -27,10 +57,102 @@
             ${pkgs.deadnix}/bin/deadnix --exclude bun.nix .
             touch $out
           '';
+
+          # ─── Task 3.1 (RED phase, Workstream 3) ──────────────────────────────────────────────
+          # These checks reproduce confirmed defects in default.nix/flake.nix. They are EXPECTED
+          # TO FAIL until Tasks 3.2-3.4 fix the launcher, `apps.default`, and the dev shell. Do
+          # not "fix" a failure here without checking the task/plan first.
+
+          # Defect: default.nix's installPhase builds bin/run-auto-pr via a single-quoted `echo`,
+          # so `$out` inside it is never shell-expanded and survives into the installed script
+          # as a literal, unresolved `$out`.
+          launcher-no-unresolved-out = pkgs.runCommand "launcher-no-unresolved-out" { } ''
+            if grep -F '$out' ${package}/bin/run-auto-pr; then
+              echo "FAIL: bin/run-auto-pr contains a literal, unresolved \$out (see above)." >&2
+              echo "default.nix's installPhase single-quotes the echo body around \$out, so it" >&2
+              echo "is never expanded at build time. Fixed by Task 3.2." >&2
+              exit 1
+            fi
+            touch $out
+          '';
+
+          # Defect: the launcher calls ambient `exec node ...`; nothing in the derivation ties it
+          # to a Nix-provided Node, so the package's runtime closure has no nodejs store path.
+          launcher-references-node = pkgs.runCommand "launcher-references-node" { } ''
+            if grep -Eq -- '-nodejs-[0-9]' ${packageClosure}/store-paths; then
+              touch $out
+            else
+              echo "FAIL: run-auto-pr's runtime closure has no nodejs store path." >&2
+              echo "default.nix never references a Nix-provided Node interpreter, so nothing" >&2
+              echo "pins the launcher's \`exec node\` to the Nix store. Fixed by Task 3.2." >&2
+              exit 1
+            fi
+          '';
+
+          # Defect: combining the two above, the installed package cannot even start.
+          launcher-help-smoke = pkgs.runCommand "launcher-help-smoke" { } ''
+            set +e
+            ${package}/bin/run-auto-pr --help >out.log 2>err.log
+            status=$?
+            set -e
+            if [ "$status" -ne 0 ] || ! grep -q "DEFAULT_BRANCH" out.log; then
+              echo "FAIL: run-auto-pr --help did not exit 0 with the expected usage text" >&2
+              echo "(exit status: $status). Fixed by Task 3.2 (see also Task 3.1's added" >&2
+              echo "--help flag in src/workflow/auto-pr-run.ts)." >&2
+              echo "--- stdout ---" >&2
+              cat out.log >&2
+              echo "--- stderr ---" >&2
+              cat err.log >&2
+              exit 1
+            fi
+            touch $out
+          '';
+
+          # Defect: apps.default ignores packages.default and instead cds into the flake's own
+          # source tree (`${self}`) to run ambient `bun` against uncompiled TS source.
+          app-uses-built-package = pkgs.runCommand "app-uses-built-package" { } ''
+            if grep -qF "${builtins.toString self}" ${appProgram}; then
+              echo "FAIL: apps.default still cds into the flake source tree (self)" >&2
+              echo "instead of invoking packages.default's built output. Fixed by Task 3.3." >&2
+              exit 1
+            fi
+            if ! grep -qF "${package}" ${appProgram}; then
+              echo "FAIL: apps.default's script does not reference packages.default's store" >&2
+              echo "path. Fixed by Task 3.3." >&2
+              exit 1
+            fi
+            touch $out
+          '';
+
+          # Defect: `.bun-version` and nixpkgs' `bun` are allowed to drift silently.
+          dev-shell-bun-version = pkgs.runCommand "dev-shell-bun-version" {
+            nativeBuildInputs = devShellPackages;
+          } ''
+            actual="$(bun --version)"
+            expected="$(cat ${./.bun-version})"
+            if [ "$actual" != "$expected" ]; then
+              echo "FAIL: a tool on PATH in devShells.default reports bun $actual, but" >&2
+              echo ".bun-version says $expected. Fixed by Task 3.4." >&2
+              exit 1
+            fi
+            touch $out
+          '';
+
+          # Defect: devShells.default.packages does not provide Node at all yet.
+          dev-shell-node-version = pkgs.runCommand "dev-shell-node-version" {
+            nativeBuildInputs = devShellPackages;
+          } ''
+            if ! command -v node >/dev/null 2>&1; then
+              echo "FAIL: no \`node\` on PATH from devShells.default.packages. Fixed by Task 3.4." >&2
+              exit 1
+            fi
+            node --version
+            touch $out
+          '';
         };
 
         packages = {
-          default = pkgs.callPackage ./default.nix { inherit (bun2nix.packages.${system}) bun2nix; };
+          default = package;
           inherit (pkgs) act statix deadnix typos actionlint lychee shellcheck shfmt;
           bun2nix = bun2nix.packages.${system}.default;
           update-bun-nix = pkgs.writeShellApplication {
@@ -45,17 +167,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [
-            act
-            bun
-            statix
-            deadnix
-            typos
-            actionlint
-            lychee
-            shellcheck
-            shfmt
-          ];
+          packages = devShellPackages;
           shellHook = ''
             export PATH="$PWD/node_modules/.bin:$PATH"
             [ -d node_modules ] || bun install
@@ -64,11 +176,7 @@
 
         apps.default = {
           type = "app";
-          program = toString (
-            pkgs.writeShellScript "run-auto-pr" ''
-              cd "${self}" && exec bun run src/workflow/auto-pr-run.ts "$@"
-            ''
-          );
+          program = toString appProgram;
         };
 
         formatter = pkgs.nixfmt;
