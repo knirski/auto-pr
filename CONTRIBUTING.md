@@ -94,13 +94,7 @@ Lefthook runs `bun run check:code` before each push. It is installed as a devDep
 
 If you change `bun.lock` (e.g. add a dependency), `bun.nix` must be updated:
 
-**CI handles it:** Push your branch. CI will update `bun.nix` automatically for trusted same-repo PRs and main. No need to commit the change yourself.
-
-**Local warning:** `bun run check` warns when `bun.nix` is stale. You can ignore it — CI will fix it when you push.
-
-**If CI pushes a bun.nix update:** The PR head will change. Wait 1–2 minutes for **`CI / gate`** to complete before merging. See [docs/CI.md](docs/CI.md#troubleshooting-ci--gate-waiting-for-status) if the required check stays "waiting for status".
-
-**Fork and Dependabot PRs:** CI cannot push generated `bun.nix` updates from these contexts. If the **`nix`** job fails in CI, update locally or run the manual **Update bun.nix** workflow from a trusted branch: `nix run .#update-bun-nix`, then commit and push. See [docs/CI.md](docs/CI.md).
+**Update it yourself before pushing:** `nix run .#update-bun-nix`, then commit `bun.nix` and push. No PR — same-repo or fork — gets `bun.nix` auto-fixed-and-pushed by CI; a stale `bun.nix` fails the **`nix`** job's `bun-nix-check` read-only, with the same remediation instructions in the CI log. See [docs/CI.md](docs/CI.md).
 
 See [README.md](README.md) for overview and [AGENTS.md](AGENTS.md) for architecture.
 
