@@ -80,7 +80,7 @@ jobs:
       # on non-pull_request triggers, where this job's own ref is main itself, not PR-controlled.
       # So there is no cache/artifact handoff across the trust boundary for CodeQL's rule to flag.
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 codeql[actions/untrusted-checkout/medium]
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2 codeql[actions/untrusted-checkout/medium]
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
@@ -158,7 +158,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ steps.app-token.outputs.token }}
@@ -211,7 +211,7 @@ jobs:
       # (contents: read, no environment:, no secrets), and no privileged job in this file ever
       # consumes anything this job produces, so there is no cross-trust-boundary handoff here.
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 codeql[actions/untrusted-checkout/medium]
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2 codeql[actions/untrusted-checkout/medium]
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
