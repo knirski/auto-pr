@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: Markdown lint
-        uses: rvben/rumdl@c5f50cbbbc790d7adb5583b51e4322ed3dcae65c # v0.2.28
+        uses: rvben/rumdl@50e0d35538974a90f462931dd359b7fcf7e33a8f # v0.2.46
 
       - name: Check links
         continue-on-error: true
