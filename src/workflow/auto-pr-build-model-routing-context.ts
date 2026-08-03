@@ -133,7 +133,10 @@ function parseOptionalPositiveNumber(
 function runGit(workspace: string, args: readonly string[]): Effect.Effect<GitResult, Error> {
   return Effect.try({
     try: () => {
-      const result = spawnSync("git", [...args], { cwd: workspace, encoding: "utf8" });
+      const env = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+      );
+      const result = spawnSync("git", [...args], { cwd: workspace, encoding: "utf8", env });
       if (result.status !== 0) {
         throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
       }

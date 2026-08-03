@@ -26,6 +26,10 @@ const GIT_ENV_LEAK_KEYS = [
   "GIT_PREFIX",
 ] as const;
 
+for (const key of Object.keys(process.env).filter((key) => key.startsWith("GIT_"))) {
+  delete process.env[key];
+}
+
 function sanitizedEnv(overrides: Record<string, string> = {}): Record<string, string | undefined> {
   const env = { ...process.env };
   for (const key of GIT_ENV_LEAK_KEYS) {
