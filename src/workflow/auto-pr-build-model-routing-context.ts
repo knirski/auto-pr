@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { Effect } from "effect";
+import { cleanGitEnv } from "#auto-pr/shell.js";
 import {
   buildGithubModelsRequestEnvelope,
   type GithubModelCatalogEntry,
@@ -133,10 +134,13 @@ function parseOptionalPositiveNumber(
 function runGit(workspace: string, args: readonly string[]): Effect.Effect<GitResult, Error> {
   return Effect.try({
     try: () => {
-      const env = Object.fromEntries(
-        Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
-      );
-      const result = spawnSync("git", [...args], { cwd: workspace, encoding: "utf8", env });
+      const result = spawnSync("git", [...args], {
+        cwd: workspace,
+        encoding: "utf8",
+        env: cleanGitEnv(),
+        timeout: 30_000,
+      });
+      if (result.error) throw result.error;
       if (result.status !== 0) {
         throw new Error(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
       }
