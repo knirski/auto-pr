@@ -25,8 +25,8 @@ generate-content)
 	;;
 esac
 
-if [ "$USE_WORKSPACE" = "true" ]; then
+if [ "$USE_WORKSPACE" = "true" ] && [ "$RUNNER" = "bunx" ]; then
 	bun run "$SCRIPT"
 else
-	$RUNNER -p "$AUTO_PR_PKG" "$BIN"
+	"$RUNNER" -p "$AUTO_PR_PKG" "$BIN"
 fi

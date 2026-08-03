@@ -13,6 +13,9 @@ inputs:
   repository:
     description: GitHub repository (owner/name)
     required: true
+  runner:
+    description: Package runner selected by setup-runtime (npx or bunx)
+    required: true
 
 outputs:
   use_workspace:
@@ -27,3 +30,4 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/auto-pr-set-pkg.sh"
       env:
         REPO: ${{ inputs.repository }}
+        RUNNER: ${{ inputs.runner }}

@@ -126,7 +126,7 @@ describe("build-model-routing-context", () => {
             GITHUB_OUTPUT: githubOutput,
             GITHUB_WORKSPACE: dir,
             REPOSITORY_VISIBILITY: "private",
-            RUNNER: "npx",
+            RUNNER: "bunx",
             RUNNER_LABEL: "ubuntu-24.04",
             USE_WORKSPACE: "true",
           },
