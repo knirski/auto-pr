@@ -321,6 +321,7 @@ jobs:
         with:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
 
       # ── 11. force-push race defense #2: re-resolve again immediately before the PR write ──
       - name: Re-resolve branch tip before PR write
