@@ -13,6 +13,34 @@ import {
   runGeneratePrContentWithServices,
 } from "#workflow/auto-pr-generate-content.js";
 
+/**
+ * True when argv requests help (`--help`/`-h`). Checked before {@link RunAutoPrConfig} is
+ * resolved so `run-auto-pr --help` never requires `DEFAULT_BRANCH`/`GITHUB_WORKSPACE`/`GH_TOKEN`
+ * or touches git/network.
+ */
+export function shouldShowRunAutoPrHelp(argv: readonly string[]): boolean {
+  return argv.some((arg) => arg === "--help" || arg === "-h");
+}
+
+/** Usage text printed by `run-auto-pr --help`/`-h`. Side-effect-free: safe for smoke checks. */
+export function runAutoPrHelpText(): string {
+  return [
+    "Usage: auto-pr-run [--help]",
+    "",
+    "Run the auto-PR pipeline locally (no GitHub Actions).",
+    "",
+    "Required environment variables:",
+    "  DEFAULT_BRANCH     Base branch to diff against and open the PR against.",
+    "  GITHUB_WORKSPACE   Path to the git workspace (repo checkout).",
+    "  GH_TOKEN           GitHub token used to create/update the pull request.",
+    "",
+    "Optional environment variables:",
+    "  AUTO_PR_AI_PROVIDER  AI provider to use (default: local).",
+    "",
+    "See #auto-pr/config.ts for provider-specific environment variables.",
+  ].join("\n");
+}
+
 export const resolveRunAutoPrBranch = Effect.fn("resolveRunAutoPrBranch")(function* (
   config: RunAutoPrConfigService,
 ) {

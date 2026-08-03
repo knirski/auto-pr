@@ -53,7 +53,6 @@ import {
   ParseError,
   PR_BODY_FILE_NAME,
   PR_TITLE_FILE_NAME,
-  runMain,
   TemplateRenderError,
   UnexpectedError,
   unknownToMessage,
@@ -1397,8 +1396,3 @@ export const program = Effect.gen(function* () {
     Effect.provide(AutoPrPlatformLayer),
   );
 }).pipe(Effect.provide(GeneratePrContentConfigLayer));
-
-/* c8 ignore next 3 */
-if (import.meta.main) {
-  runMain(program, "generate_pr_content_failed");
-}

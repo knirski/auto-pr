@@ -12,7 +12,9 @@ import {
 import {
   generateContentConfigFromRunAutoPrConfig,
   prTitleReadError,
+  runAutoPrHelpText,
   runAutoPrPipelineWithServices,
+  shouldShowRunAutoPrHelp,
 } from "#workflow/auto-pr-run-pipeline.js";
 
 function logContent(...subjects: readonly string[]): string {
@@ -20,6 +22,32 @@ function logContent(...subjects: readonly string[]): string {
     .map((subject) => `0000000000000000000000000000000000000000\n${subject}`)
     .join("\n---COMMIT---\n")}`;
 }
+
+// auto-pr-run.ts's runPipeline() gates on shouldShowRunAutoPrHelp() *before* RunAutoPrConfig is
+// resolved (see that file): `if (shouldShowRunAutoPrHelp(process.argv)) return Effect.sync(() =>
+// process.stdout.write(runAutoPrHelpText()));`. We test that decision + its output here, at the
+// pipeline-helper level, rather than importing runPipeline() itself into this test file: doing so
+// would pull auto-pr-run.ts's live-wiring composition (`livePipeline`, real git/network/AI
+// services) into this file's bun test coverage instrumentation for the first time, and that
+// function is intentionally exercised via real usage/integration rather than unit tests (per
+// bunfig.toml's coveragePathIgnorePatterns comment: "CLI scripts include process-exit and
+// subprocess paths; tests cover their pure helpers where useful") — which would trip the
+// per-file coverageThreshold for a file no test previously loaded.
+describe("run-auto-pr --help", () => {
+  test("shouldShowRunAutoPrHelp recognizes --help and -h anywhere in argv", () => {
+    expect(shouldShowRunAutoPrHelp(["bun", "auto-pr-run.js", "--help"])).toBe(true);
+    expect(shouldShowRunAutoPrHelp(["bun", "auto-pr-run.js", "-h"])).toBe(true);
+    expect(shouldShowRunAutoPrHelp(["bun", "auto-pr-run.js"])).toBe(false);
+  });
+
+  test("runAutoPrHelpText mentions the required and optional env vars", () => {
+    const text = runAutoPrHelpText();
+    expect(text).toContain("DEFAULT_BRANCH");
+    expect(text).toContain("GITHUB_WORKSPACE");
+    expect(text).toContain("GH_TOKEN");
+    expect(text).toContain("AUTO_PR_AI_PROVIDER");
+  });
+});
 
 describe("runAutoPrPipelineWithServices", () => {
   test("formats pr-title read failures", () => {

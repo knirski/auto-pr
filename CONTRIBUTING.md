@@ -14,7 +14,7 @@ bun run build
 bun x lefthook install
 ```
 
-The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.14 for local parity with CI.
+The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.13 for local parity with CI. Update both files together (and this flake's locked `nixpkgs` `bun`, if bumping past it) — see [flake.nix](flake.nix)'s `devShellPackages`/`checks.dev-shell-bun-version` for the single source of truth these must all agree with.
 
 **Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/**` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
@@ -110,7 +110,7 @@ The flake provides:
 
 | Use | Command | Purpose |
 |-----|---------|---------|
-| **Dev shell** | `nix develop` | Bun, act, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
+| **Dev shell** | `nix develop` | Bun, Node 24, Biome, rumdl, act, statix, deadnix, typos, actionlint, lychee, shellcheck, shfmt in PATH; run `bun run check` |
 | **direnv** | `direnv allow` | Same as dev shell when you `cd` here (see `.envrc`; not on Intel Mac) |
 | **Reproducible build** | `nix build` | Pinned, reproducible package (no network at build time) |
 | **Verify flake** | `nix flake check -L` | Run all checks (statix, deadnix, build; same as CI) |
@@ -118,6 +118,8 @@ The flake provides:
 | **Update bun.nix** | `nix run .#update-bun-nix` | Regenerate `bun.nix` after changing `bun.lock` |
 | **Format Nix** | `nix fmt` | Format `*.nix` with nixfmt |
 | **Run tools** | `nix run .#statix -- check .`, `nix run .#typos`, etc. | Run statix, deadnix, typos, actionlint, lychee, bun2nix directly |
+
+**Nix vs. project-dependency tools:** Bun, Node, Biome (`@biomejs/biome`), and rumdl are *also* declared as project dependencies (`packageManager`/`.bun-version` for Bun; `devDependencies` for Biome and rumdl) so `bun install` alone works without Nix. `nix develop` puts Nix-built versions of the same tools on `PATH` (see `devShellPackages` in `flake.nix`) — pinned to this flake's locked `nixpkgs`, and dynamically linked in a way that runs correctly on NixOS, where prebuilt native binaries fetched via `bun install`/npm often fail outside a Nix environment (missing dynamic linker paths). `act`, `statix`, `deadnix`, `typos`, `actionlint`, `lychee`, `shellcheck`, and `shfmt` are Nix-only — they are not npm/Bun packages and have no project-dependency equivalent; use `nix develop`, `nix run .#<tool>`, or a per-OS install (see the table above) to get them. `checks.dev-shell-bun-version` and `checks.dev-shell-node-version` in `flake.nix` guard the Bun/Node versions from drifting apart across these sources.
 
 ```bash
 # Development shell
