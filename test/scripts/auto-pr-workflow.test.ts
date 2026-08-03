@@ -10,11 +10,14 @@ function runSetPackageAction(options: {
   packageJson: string;
   runner: "bunx" | "npx";
   repository?: string;
+  includePackageJson?: boolean;
 }): { output: string; status: number | null } {
   const directory = mkdtempSync(join(tmpdir(), "auto-pr-workflow-"));
   try {
     const outputPath = join(directory, "github-output");
-    writeFileSync(join(directory, "package.json"), options.packageJson);
+    if (options.includePackageJson !== false) {
+      writeFileSync(join(directory, "package.json"), options.packageJson);
+    }
     const result = spawnSync(
       "bash",
       [join(repoRoot, ".github/actions/auto-pr-set-pkg/auto-pr-set-pkg.sh")],
@@ -38,6 +41,17 @@ function runSetPackageAction(options: {
 describe("auto-pr workflow selection", () => {
   test("does not select workspace mode when Bun is unavailable", () => {
     const result = runSetPackageAction({ packageJson: '{"name":"old-branch"}', runner: "npx" });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("use_workspace=false\n");
+  });
+
+  test("does not select workspace mode when package.json is missing", () => {
+    const result = runSetPackageAction({
+      packageJson: "{}",
+      runner: "bunx",
+      includePackageJson: false,
+    });
 
     expect(result.status).toBe(0);
     expect(result.output).toContain("use_workspace=false\n");
