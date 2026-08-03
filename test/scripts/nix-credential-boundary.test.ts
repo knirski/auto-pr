@@ -142,54 +142,59 @@ const ciNixJob = findJob(ciWorkflow, "nix");
 const updateBunNixWorkflow = findWorkflow("update-bun-nix.yml");
 
 describe("Nix credential boundary: PR-reachable jobs are read-only", () => {
-  test.each(
-    prReachableJobs.map((j) => [j.id, j.job] as const),
-  )("%s has permissions.contents === 'read' and no other permission keys", (_id, job) => {
-    const perms = job.permissions;
-    expect(isRecord(perms)).toBe(true);
-    if (isRecord(perms)) {
-      expect(perms.contents).toBe("read");
-      expect(Object.keys(perms)).toEqual(["contents"]);
-    }
-  });
+  test.each(prReachableJobs.map((j) => [j.id, j.job] as const))(
+    "%s has permissions.contents === 'read' and no other permission keys",
+    (_id, job) => {
+      const perms = job.permissions;
+      expect(isRecord(perms)).toBe(true);
+      if (isRecord(perms)) {
+        expect(perms.contents).toBe("read");
+        expect(Object.keys(perms)).toEqual(["contents"]);
+      }
+    },
+  );
 
-  test.each(
-    prReachableJobs.map((j) => [j.id, j.job] as const),
-  )("%s's checkout step sets persist-credentials: false", (_id, job) => {
-    const checkouts = getSteps(job).filter((s) => asString(s.uses)?.includes("actions/checkout"));
-    expect(checkouts.length).toBeGreaterThan(0);
-    for (const step of checkouts) {
-      const withBlock = step.with;
-      expect(isRecord(withBlock) && withBlock["persist-credentials"] === false).toBe(true);
-    }
-  });
+  test.each(prReachableJobs.map((j) => [j.id, j.job] as const))(
+    "%s's checkout step sets persist-credentials: false",
+    (_id, job) => {
+      const checkouts = getSteps(job).filter((s) => asString(s.uses)?.includes("actions/checkout"));
+      expect(checkouts.length).toBeGreaterThan(0);
+      for (const step of checkouts) {
+        const withBlock = step.with;
+        expect(isRecord(withBlock) && withBlock["persist-credentials"] === false).toBe(true);
+      }
+    },
+  );
 
-  test.each(
-    prReachableJobs.map((j) => [j.id, j.job] as const),
-  )("%s never mints a GitHub App token", (_id, job) => {
-    const mintsToken = getSteps(job).some((s) =>
-      asString(s.uses)?.includes("actions/create-github-app-token"),
-    );
-    expect(mintsToken).toBe(false);
-  });
+  test.each(prReachableJobs.map((j) => [j.id, j.job] as const))(
+    "%s never mints a GitHub App token",
+    (_id, job) => {
+      const mintsToken = getSteps(job).some((s) =>
+        asString(s.uses)?.includes("actions/create-github-app-token"),
+      );
+      expect(mintsToken).toBe(false);
+    },
+  );
 
-  test.each(
-    prReachableJobs.map((j) => [j.id, j.job] as const),
-  )("%s never references the App secrets", (_id, job) => {
-    const text = jobText(job);
-    expect(text.includes("secrets.APP_ID")).toBe(false);
-    expect(text.includes("secrets.APP_PRIVATE_KEY")).toBe(false);
-  });
+  test.each(prReachableJobs.map((j) => [j.id, j.job] as const))(
+    "%s never references the App secrets",
+    (_id, job) => {
+      const text = jobText(job);
+      expect(text.includes("secrets.APP_ID")).toBe(false);
+      expect(text.includes("secrets.APP_PRIVATE_KEY")).toBe(false);
+    },
+  );
 
-  test.each(
-    prReachableJobs.map((j) => [j.id, j.job] as const),
-  )("%s contains no `git push`", (_id, job) => {
-    const runBodies = getSteps(job)
-      .map((s) => asString(s.run))
-      .filter((r): r is string => r !== undefined)
-      .join("\n");
-    expect(runBodies).not.toMatch(/\bgit push\b/);
-  });
+  test.each(prReachableJobs.map((j) => [j.id, j.job] as const))(
+    "%s contains no `git push`",
+    (_id, job) => {
+      const runBodies = getSteps(job)
+        .map((s) => asString(s.run))
+        .filter((r): r is string => r !== undefined)
+        .join("\n");
+      expect(runBodies).not.toMatch(/\bgit push\b/);
+    },
+  );
 });
 
 describe("Nix credential boundary: the write job is unreachable from any pull_request", () => {
