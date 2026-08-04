@@ -208,7 +208,7 @@ default = pkgs.callPackage ./default.nix {
 
 **Omitted:** `test.effect`, `test.layer`, `test.live`, `flakyTest`, `excludeTestServices`, `test.prop`, `addEqualityTesters`.
 
-**Reference:** [Effect-TS/effect-smol packages/vitest](https://github.com/Effect-TS/effect-smol/tree/main/packages/vitest) `internal.ts`
+**Reference:** [Effect-TS/effect packages/vitest](https://github.com/Effect-TS/effect/tree/main/packages/vitest) `internal.ts`
 
 ### 3.2 Migrate test files
 

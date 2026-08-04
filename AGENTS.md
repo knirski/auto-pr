@@ -127,7 +127,7 @@ Develop with **Bun** (`bun run`, `bun test`). **`npx`** in docs and `setup-runti
 
 ### Research and Decision-Making
 
-**GitHub MCP first.** Otherwise: (1) Official docs (2) Effect: `effect-smol` LLMS.md — replace `effect%404.0.0-beta.XX` with `package.json` version (3) Popular repos when options exist.
+**GitHub MCP first.** Otherwise: (1) Official docs (2) Effect: `effect` LLMS.md — replace `effect%404.0.0-beta.XX` with `package.json` version (3) Popular repos when options exist.
 
 ### Branch, commit, checkout
 

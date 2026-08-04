@@ -1,6 +1,6 @@
 /**
  * Run Effect with layer. Replaces @effect/vitest it.effect without adapter.
- * Based on effect-smol packages/vitest/src/internal/internal.ts
+ * Based on effect packages/vitest/src/internal/internal.ts
  *
  * Curried: runEffect(layer)(effect) — layer type is inferred first.
  */
