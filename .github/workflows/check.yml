@@ -60,7 +60,7 @@ jobs:
         run: bun run check:code
 
       - name: Markdown lint
-        uses: rvben/rumdl@c5f50cbbbc790d7adb5583b51e4322ed3dcae65c # v0.2.28
+        uses: rvben/rumdl@50e0d35538974a90f462931dd359b7fcf7e33a8f # v0.2.46
 
       - name: Spell check
         uses: crate-ci/typos@bee27e3a4fd1ea2111cf90ab89cd076c870fce14 # v1.48.0
