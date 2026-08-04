@@ -92,7 +92,7 @@ jobs:
       # output is the data-only pr-content artifact; the privileged create phase is a SEPARATE
       # workflow_run executor that performs no checkout, so this checkout is never privileged.
       - name: Checkout branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.head_sha }}
           fetch-depth: 0
