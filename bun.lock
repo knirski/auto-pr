@@ -5,7 +5,7 @@
     "": {
       "name": "auto-pr",
       "dependencies": {
-        "@effect/ai-openai-compat": "4.0.0-beta.98",
+        "@effect/ai-openai-compat": "4.0.0-beta.102",
         "@effect/platform-bun": "4.0.0-beta.98",
         "@effect/platform-node-shared": "4.0.0-beta.98",
         "conventional-commits-parser": "7.1.2",
@@ -102,7 +102,7 @@
 
     "@conventional-changelog/template": ["@conventional-changelog/template@1.2.1", "", {}, "sha512-TzlTVpKPjaqW6qOYjQcYUDuGsLCNsvFHVBXkYGTAnf5V37jCWrE5haKNXzz0WZUtVHjrpV76L1buANjwXMfT8w=="],
 
-    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.98", "", { "peerDependencies": { "effect": "^4.0.0-beta.98" } }, "sha512-ittDFm4/oXpXnTIP9efTDkzC2RAgWHyzNQjEz4msIHgMiQRnvbrcaRWxLJIHfZnPO2eE7w4zDBsH8J+f5AK4UA=="],
+    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-beta.102", "", { "peerDependencies": { "effect": "^4.0.0-beta.102" } }, "sha512-/++aEJNKqVrtbWVmNiHZ2t40QwAk1+/rCWtdOxl8iCG0UtyFYxc/vyT5OOot3VBCJIQ/mw11vNlH+K9bLQBXvA=="],
 
     "@effect/platform-bun": ["@effect/platform-bun@4.0.0-beta.98", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-beta.98" }, "peerDependencies": { "effect": "^4.0.0-beta.98" } }, "sha512-QorRKhvwHDPwvE8lH5lE0r0dI2z+zj12VUN4h7hfoIunKUiXSoSOMZqF3w13W30RpV6ivsvJywUycaa/18yMPA=="],
 
