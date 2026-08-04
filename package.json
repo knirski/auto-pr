@@ -70,7 +70,7 @@
   "dependencies": {
     "@effect/ai-openai-compat": "4.0.0-beta.98",
     "@effect/platform-bun": "4.0.0-beta.98",
-    "@effect/platform-node-shared": "4.0.0-beta.98",
+    "@effect/platform-node-shared": "4.0.0-beta.102",
     "conventional-commits-parser": "7.1.2",
     "effect": "4.0.0-beta.98",
     "micromustache": "8.0.3",
