@@ -33,7 +33,13 @@ Source: <https://openrouter.ai/docs>
 
 ### OpenRouter Model Metadata
 
-OpenRouter documents `GET /api/v1/models` for model metadata. The response includes model IDs, pricing, context length, architecture metadata, and supported parameters. Free model variants use the `:free` suffix.
+OpenRouter documents `GET /api/v1/models` for model metadata. The response includes model IDs,
+context length, architecture metadata, `supported_parameters`, and `expiration_date`. Architecture
+metadata includes `input_modalities` and `output_modalities`; this workflow needs text output.
+
+OpenRouter also documents a pricing object where `"0"` means the feature is free. Chargeable fields
+include prompt, completion, request, image, web search, internal reasoning, cache reads/writes, and
+conditional `pricing.overrides`. Free model variants use the `:free` suffix.
 
 Source: <https://openrouter.ai/docs/guides/overview/models>
 
@@ -197,8 +203,31 @@ export type OpenRouterModelCatalogEntry = {
   readonly supportedParameters: readonly string[];
   readonly inputModalities: readonly string[];
   readonly outputModalities: readonly string[];
-  readonly promptPrice: number;
-  readonly completionPrice: number;
+  readonly expirationDate?: string;
+  readonly pricing: OpenRouterModelPricing;
+};
+
+export type OpenRouterModelPricing = {
+  readonly prompt: number | undefined;
+  readonly completion: number | undefined;
+  readonly request: number | undefined;
+  readonly image: number | undefined;
+  readonly imageOutput: number | undefined;
+  readonly imageToken: number | undefined;
+  readonly audio: number | undefined;
+  readonly audioOutput: number | undefined;
+  readonly webSearch: number | undefined;
+  readonly internalReasoning: number | undefined;
+  readonly inputCacheRead: number | undefined;
+  readonly inputCacheWrite: number | undefined;
+  readonly inputCacheWrite1h: number | undefined;
+  readonly overrides: readonly OpenRouterModelPricingOverride[];
+  readonly unknownPriceKeys: readonly string[];
+};
+
+export type OpenRouterModelPricingOverride = {
+  readonly conditionKeys: readonly string[];
+  readonly prices: Readonly<Record<string, number | undefined>>;
 };
 
 export type OpenRouterModelSelection = {
@@ -207,6 +236,7 @@ export type OpenRouterModelSelection = {
   readonly selectionMode:
     | "preferred"
     | "configured"
+    | "catalog"
     | "free-tool-fallback"
     | "free-text-fallback"
     | "static-fallback";
@@ -217,8 +247,21 @@ export type OpenRouterModelSelection = {
 `OpenRouterModelCatalogEntry` should normalize OpenRouter's model response:
 
 - `context_length` -> `contextLength`
-- `pricing.prompt` -> `promptPrice`
-- `pricing.completion` -> `completionPrice`
+- `expiration_date` -> `expirationDate`
+- `pricing.prompt` -> `pricing.prompt`
+- `pricing.completion` -> `pricing.completion`
+- `pricing.request` -> `pricing.request`
+- `pricing.image` -> `pricing.image`
+- `pricing.image_output` -> `pricing.imageOutput`
+- `pricing.image_token` -> `pricing.imageToken`
+- `pricing.audio` -> `pricing.audio`
+- `pricing.audio_output` -> `pricing.audioOutput`
+- `pricing.web_search` -> `pricing.webSearch`
+- `pricing.internal_reasoning` -> `pricing.internalReasoning`
+- `pricing.input_cache_read` -> `pricing.inputCacheRead`
+- `pricing.input_cache_write` -> `pricing.inputCacheWrite`
+- `pricing.input_cache_write_1h` -> `pricing.inputCacheWrite1h`
+- `pricing.overrides` -> `pricing.overrides`
 - `supported_parameters` -> `supportedParameters`
 - `architecture.input_modalities` -> `inputModalities`
 - `architecture.output_modalities` -> `outputModalities`
@@ -227,9 +270,12 @@ Parsing rules:
 
 - Skip malformed entries without failing the whole catalog.
 - Treat missing `context_length` as `8_000`.
-- Treat missing prices as `0` only when the ID ends with `:free`; otherwise treat missing prices as non-free.
+- Treat missing or malformed `pricing` values as unknown. Unknown pricing is infeasible for automatic
+  free-model selection except where a known-static configured fallback is explicitly allowed below.
 - Treat string prices with decimal values as numbers.
 - Treat missing `supported_parameters` as no advertised parameter support.
+- Treat missing or malformed `expiration_date` as not deprecated only when the value is absent or
+  explicitly `null`; malformed non-empty dates make the catalog entry infeasible.
 
 ## Free Model Policy
 
@@ -239,9 +285,22 @@ Free model predicate:
 
 ```ts
 function isOpenRouterFreeModel(entry: OpenRouterModelCatalogEntry): boolean {
-  return entry.id.endsWith(":free") && entry.promptPrice === 0 && entry.completionPrice === 0;
+  return (
+    entry.id.endsWith(":free") &&
+    isNotExpired(entry.expirationDate) &&
+    hasOnlyKnownZeroPrices(entry.pricing)
+  );
 }
 ```
+
+`hasOnlyKnownZeroPrices` must reject any present, chargeable pricing component that is non-zero.
+It must also reject unknown pricing keys and unknown pricing values, including conditional
+`pricing.overrides`, because any of those can make a request non-free. The free predicate therefore
+must evaluate OpenRouter's prompt, completion, request, image, audio, web search, reasoning, cache,
+and conditional override prices rather than relying only on prompt/completion pricing.
+
+`isNotExpired` should treat an `expirationDate` earlier than the current UTC date as infeasible.
+Entries expiring today remain feasible until a later run evaluates them after that date boundary.
 
 The static default also requires the `:free` suffix:
 
@@ -326,14 +385,17 @@ Selection order:
 6. Prefer configured/route preference order when entries are feasible.
 7. Fall back to any feasible free tool-capable model for tool routes.
 8. Fall back to any feasible free text model for text routes.
-9. If the catalog is unavailable or unusable, use the static default `openai/gpt-oss-20b:free`.
+9. If the catalog is unavailable or unusable, use the configured model when it is set and passes
+   static free-model validation; otherwise use the static default `openai/gpt-oss-20b:free`.
 
 Feasibility rules:
 
-- Text output is required when `architecture.output_modalities` exists.
+- `architecture.output_modalities` must include `text`; image/audio/embedding-only models are
+  infeasible for this text-generation workflow.
 - Tool routes require `tools` and `tool_choice`.
 - The requested token budget plus output reserve must fit the catalog `context_length`.
-- Models with non-zero prompt or completion pricing are rejected.
+- Models with expired `expiration_date` values are rejected.
+- Models with any non-zero or unknown chargeable pricing component are rejected.
 - Models without `:free` are rejected except `openrouter/free`, which is allowed only when explicitly configured.
 
 Do not add paid fallbacks in this migration.
@@ -466,13 +528,22 @@ With provider-neutral or OpenRouter-specific names:
 
 Attempt plan for OpenRouter:
 
-1. selected OpenRouter model with tools if tools are required
-2. selected OpenRouter model without tools
-3. catalog fallback model with tools if different and tools are required
-4. catalog fallback model without tools
-5. optional local fallback with tools
-6. optional local fallback without tools
-7. primitive commit-derived fallback
+When tools are required:
+
+1. selected OpenRouter model with tools
+2. catalog fallback model with tools if different
+3. optional local fallback with tools
+4. primitive commit-derived fallback
+
+Do not run no-tools AI attempts after the route says tools are required. A text-only model response
+must not be allowed to look successful when the route required tool execution.
+
+When tools are not required:
+
+1. selected OpenRouter model without tools
+2. catalog fallback model without tools if different
+3. optional local fallback without tools
+4. primitive commit-derived fallback
 
 Authentication/config failures (`401`, `403`, malformed key, empty model) should fail the job. Rate-limit or provider availability failures (`429`, `5xx`, network timeout) should retry and then move through the fallback plan. `402 Payment Required` should be treated as config/quota exhaustion and fail with an OpenRouter-specific troubleshooting hint.
 
@@ -506,6 +577,21 @@ OpenRouter env must be wired into both OpenRouter-capable steps:
 - `Generate PR content` needs `OPENROUTER_API_KEY`, `AUTO_PR_OPENROUTER_MODEL`,
   `AUTO_PR_OPENROUTER_HTTP_REFERER`, and `AUTO_PR_OPENROUTER_TITLE`, because that step performs
   inference and sends optional OpenRouter attribution headers.
+
+Secret isolation requirement:
+
+- No step that receives `OPENROUTER_API_KEY` may execute branch-controlled package scripts,
+  imports, or generated binaries.
+- The branch checkout may remain the data input for git reads and diff extraction, but keyed
+  OpenRouter catalog and inference commands must execute from trusted auto-pr code.
+- For `ai_provider == "openrouter"` with a non-empty projected `OPENROUTER_API_KEY`, invoke
+  `auto-pr-run-command` in package mode (`use_workspace: false`) and use an immutable trusted
+  auto-pr package ref that matches the reusable workflow/action revision.
+- Workspace mode may continue for `local`, and for OpenRouter dry paths where no OpenRouter key is
+  present. Do not pass `OPENROUTER_API_KEY` to dependency installation, workspace `bun run`, test,
+  setup, artifact-preparation, or other branch-controlled shell steps.
+- Keep the OpenRouter key dedicated to auto-pr and set a low per-key credit limit in OpenRouter;
+  this is defense-in-depth, not a substitute for the trusted-code execution requirement.
 
 Build model routing context env:
 
@@ -608,7 +694,20 @@ Migration path for adopters:
 
 ## Security And Trust Boundary
 
-The generate workflow remains unprivileged and checks out untrusted branch code by immutable SHA. Passing `OPENROUTER_API_KEY` into this job is still an external secret exposure to branch code. The risk profile resembles the retired GitHub Models `GH_TOKEN` inference-token pattern, but the blast radius changes:
+The generate workflow remains unprivileged and checks out untrusted branch code by immutable SHA.
+Unlike the retired GitHub Models path, OpenRouter uses a long-lived external API key. Keyed
+OpenRouter steps therefore must treat the branch checkout as data only:
+
+- The steps may run trusted auto-pr code against the checked-out branch to inspect commits, diffs,
+  and repository files.
+- The steps must not execute branch-controlled package scripts, imports, generated binaries, or
+  workspace `bun run` commands while `OPENROUTER_API_KEY` is present.
+- The `auto-pr-run-command` action should enforce this by selecting package mode with an immutable
+  trusted auto-pr package ref for secret-bearing OpenRouter steps.
+- The key must not be projected into unrelated setup, dependency install, local CI, or artifact
+  preparation steps.
+
+Residual blast radius for the dedicated OpenRouter key:
 
 - The key can spend or consume OpenRouter quota according to the user's key settings.
 - The key is not a GitHub repository token and does not grant repository write access.
@@ -630,9 +729,15 @@ Update or add tests for:
 - config rejects non-free OpenRouter model IDs
 - AI provider layer builds OpenRouter client with API URL, bearer auth, and attribution headers
 - AI provider layer rejects empty OpenRouter key/model
-- OpenRouter catalog parser handles valid, malformed, missing, and non-free entries
+- OpenRouter catalog parser handles valid, malformed, missing, expired, unknown-price, and non-free
+  entries
+- OpenRouter free-model selection rejects non-zero request/image/audio/web-search/reasoning/cache
+  prices and conditional override prices
+- OpenRouter text selection requires `outputModalities.includes("text")`
 - OpenRouter model selection prefers free tool-capable models for tool routes
-- OpenRouter model selection falls back to static free model when catalog is unavailable
+- OpenRouter model selection preserves a statically valid configured model when catalog discovery is
+  unavailable, then falls back to the static free model
+- OpenRouter attempt planning never includes no-tools AI attempts when tools are required
 - run config maps OpenRouter provider through `runGeneratePrContent`
 - retired GitHub provider fails before network calls
 
@@ -645,6 +750,9 @@ Update workflow tests to assert:
 - `OPENROUTER_API_KEY` is declared as an optional reusable-workflow secret
 - `OPENROUTER_API_KEY` is passed only when `ai_provider == 'openrouter'`
 - the routing-context and generate-content steps both receive the OpenRouter env they need
+- OpenRouter secret-bearing steps cannot run workspace mode and must use an immutable trusted
+  package/action source
+- `OPENROUTER_API_KEY` is not present in install/setup/artifact-preparation step env
 - local llama conditions still use `ai_provider == 'local'`
 - stock `auto-pr.yml` includes `strategy.max-parallel: 2`
 - workflow YAML does not reference `secrets.OPENROUTER_API_KEY` directly inside `if:`
