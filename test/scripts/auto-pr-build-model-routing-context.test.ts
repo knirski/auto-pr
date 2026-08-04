@@ -26,6 +26,10 @@ const GIT_ENV_LEAK_KEYS = [
   "GIT_PREFIX",
 ] as const;
 
+for (const key of Object.keys(process.env).filter((key) => key.startsWith("GIT_"))) {
+  delete process.env[key];
+}
+
 function sanitizedEnv(overrides: Record<string, string> = {}): Record<string, string | undefined> {
   const env = { ...process.env };
   for (const key of GIT_ENV_LEAK_KEYS) {
@@ -150,7 +154,7 @@ describe("build-model-routing-context", () => {
             GITHUB_OUTPUT: githubOutput,
             GITHUB_WORKSPACE: dir,
             REPOSITORY_VISIBILITY: "private",
-            RUNNER: "npx",
+            RUNNER: "bunx",
             RUNNER_LABEL: "ubuntu-24.04",
             USE_WORKSPACE: "true",
           }),

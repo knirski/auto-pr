@@ -428,13 +428,14 @@ describe("Bullet 6: every App-secret-consuming job names a protected environment
     expect(appSecretJobs.length).toBe(5);
   });
 
-  test.each(
-    appSecretJobs.map((j) => [`${j.workflow}#${j.id}`, j.job] as const),
-  )("%s declares a job-level environment", (_label, job) => {
-    const env = job.environment;
-    const named = asString(env) !== undefined || isRecord(env);
-    expect(named).toBe(true);
-  });
+  test.each(appSecretJobs.map((j) => [`${j.workflow}#${j.id}`, j.job] as const))(
+    "%s declares a job-level environment",
+    (_label, job) => {
+      const env = job.environment;
+      const named = asString(env) !== undefined || isRecord(env);
+      expect(named).toBe(true);
+    },
+  );
 });
 
 // ===========================================================================
@@ -449,11 +450,12 @@ describe("Bullet 7: no repository-secret fallback for App credentials (regressio
   const APP_SECRET_FALLBACK =
     /secrets\.APP_(?:ID|PRIVATE_KEY)\s*\|\||\|\|\s*secrets\.APP_(?:ID|PRIVATE_KEY)/;
 
-  test.each(
-    workflows.map((w) => [w.name, w] as const),
-  )("%s has no `secrets.APP_* || ...` fallback", (_name, wf) => {
-    expect(APP_SECRET_FALLBACK.test(wf.raw)).toBe(false);
-  });
+  test.each(workflows.map((w) => [w.name, w] as const))(
+    "%s has no `secrets.APP_* || ...` fallback",
+    (_name, wf) => {
+      expect(APP_SECRET_FALLBACK.test(wf.raw)).toBe(false);
+    },
+  );
 });
 
 // ===========================================================================

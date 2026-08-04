@@ -8,16 +8,25 @@
 # (github:knirski/auto-pr#<branch>) that this script used to emit was removed because it was an
 # attacker-influenceable install target for the privileged create job (ADR 0016 decisions 3, 6).
 #
-# Requires: REPO, GITHUB_OUTPUT
+# Requires: REPO, RUNNER, GITHUB_OUTPUT
 
 set -euo pipefail
 
 REPO="${REPO:?}"
+RUNNER="${RUNNER:?}"
 GITHUB_OUTPUT="${GITHUB_OUTPUT:?}"
 
-# Use workspace when running in the auto-pr source repo: avoids "Package does not provide binary"
-# when dist/ is gitignored. Adopter repos run the published package via npx/bunx instead.
-if [ "$REPO" = "knirski/auto-pr" ]; then
+# Use workspace only when the checked-out branch has both current workflow scripts and Bun.
+# Older ai/** branches fall back to the stable published package.
+workspace_ready=false
+if [ "$REPO" = "knirski/auto-pr" ] && [ "$RUNNER" = "bunx" ] && [ -f package.json ] && jq -e '
+  (.scripts["build-model-routing-context"] | type == "string" and length > 0) and
+  (.scripts["generate-content"] | type == "string" and length > 0)
+' package.json >/dev/null 2>&1; then
+	workspace_ready=true
+fi
+
+if [ "$workspace_ready" = "true" ]; then
 	echo "use_workspace=true" >>"$GITHUB_OUTPUT"
 else
 	echo "use_workspace=false" >>"$GITHUB_OUTPUT"

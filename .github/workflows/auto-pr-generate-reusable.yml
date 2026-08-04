@@ -124,9 +124,10 @@ jobs:
         uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@e8be4e779f7ad467713a4d7c3f95e224cba1d00a
         with:
           repository: ${{ github.repository }}
+          runner: ${{ steps.setup.outputs.runner }}
 
       - name: Install dependencies (workspace only)
-        if: steps.auto-pr-pkg.outputs.use_workspace == 'true'
+        if: steps.auto-pr-pkg.outputs.use_workspace == 'true' && steps.setup.outputs.runner == 'bunx'
         run: bun install --frozen-lockfile
 
       - name: Count non-merge commits
@@ -137,8 +138,22 @@ jobs:
           count=$(git log --format=%s "origin/$DEFAULT_BRANCH..HEAD" | grep -cvE '^Merge ' || true)
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
+      - name: Check for semantic commits
+        id: semantic
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if git log --format=%s "origin/$DEFAULT_BRANCH..HEAD" | grep -E '^[[:alpha:]][[:alnum:]-]*(\([^)]*\))?!?: .+' >/dev/null; then
+            echo "should_create_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_create_pr=false" >> "$GITHUB_OUTPUT"
+            echo "No semantic commits found; uploading a skip marker."
+          fi
+
       - name: Build model routing context
         id: ai_routing
+        if: steps.semantic.outputs.should_create_pr == 'true'
         uses: knirski/auto-pr/.github/actions/auto-pr-run-command@e8be4e779f7ad467713a4d7c3f95e224cba1d00a
         with:
           command: build-model-routing-context
@@ -158,6 +173,7 @@ jobs:
 
       - name: Resolve llama Docker image
         id: llama_release
+        if: steps.semantic.outputs.should_create_pr == 'true'
         uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@e8be4e779f7ad467713a4d7c3f95e224cba1d00a
         with:
           commits_count: ${{ steps.commits.outputs.count }}
@@ -168,7 +184,7 @@ jobs:
 
       - name: Local llama.cpp — cache key
         id: llama_cache_key
-        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         env:
           MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
         run: |
@@ -176,7 +192,7 @@ jobs:
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
       - name: Cache llama.cpp (GGUF model + Docker image tar)
-        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}/auto-pr-llama
@@ -184,7 +200,7 @@ jobs:
 
       - name: Start local llama.cpp (Docker)
         id: local_llama
-        if: steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         uses: knirski/auto-pr/.github/actions/llama-server-docker-start@e8be4e779f7ad467713a4d7c3f95e224cba1d00a
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
@@ -194,6 +210,7 @@ jobs:
 
       - name: Generate PR content
         id: generate
+        if: steps.semantic.outputs.should_create_pr == 'true'
         uses: knirski/auto-pr/.github/actions/auto-pr-run-command@e8be4e779f7ad467713a4d7c3f95e224cba1d00a
         with:
           command: generate-content
@@ -230,10 +247,16 @@ jobs:
           BRANCH: ${{ inputs.source_branch }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           HEAD_SHA: ${{ inputs.head_sha }}
+          SHOULD_CREATE_PR: ${{ steps.semantic.outputs.should_create_pr }}
         run: |
           mkdir -p pr-content
-          cp "$GITHUB_WORKSPACE/pr-title.txt" pr-content/title.txt
-          cp "$GITHUB_WORKSPACE/pr-body.md" pr-content/body.md
+          if [ "$SHOULD_CREATE_PR" = "true" ]; then
+            cp "$GITHUB_WORKSPACE/pr-title.txt" pr-content/title.txt
+            cp "$GITHUB_WORKSPACE/pr-body.md" pr-content/body.md
+          else
+            : > pr-content/title.txt
+            : > pr-content/body.md
+          fi
           # Head SHA as a standalone file: the exact commit generate ran against. The create
           # phase cross-checks this against manifest.head_sha and the current branch tip.
           printf '%s' "$HEAD_SHA" > pr-content/head_sha.txt
@@ -247,8 +270,10 @@ jobs:
             --arg head_sha "$HEAD_SHA" \
             --arg title_sha256 "$title_sha256" \
             --arg body_sha256 "$body_sha256" \
+            --arg status "$SHOULD_CREATE_PR" \
             '{
               manifest_version: $manifest_version,
+              status: (if $status == "true" then "generated" else "skipped" end),
               source_repository: $source_repository,
               source_branch: $source_branch,
               default_branch: $default_branch,
