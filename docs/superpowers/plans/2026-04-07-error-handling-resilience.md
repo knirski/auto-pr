@@ -8,7 +8,7 @@
 
 **Architecture:** PR 1 focuses on `src/auto-pr/errors.ts`, `src/auto-pr/config.ts`, `src/auto-pr/diff-toolkit.ts`, and `src/workflow/auto-pr-generate-content.ts`. PR 2 focuses on `src/auto-pr/git-context.ts` and a new `src/core/sanitize-diff.ts`. All changes are TDD: write the failing test first, implement minimally to pass, then commit.
 
-**Tech Stack:** TypeScript, Effect v4 (effect-smol), bun:test, `Effect.catchIf`, `Effect.timeout`, `Duration`, `Logger`
+**Tech Stack:** TypeScript, Effect v4, bun:test, `Effect.catchIf`, `Effect.timeout`, `Duration`, `Logger`
 
 ---
 
@@ -1313,7 +1313,7 @@ const run = (cmd: string, args: string[]) =>
   );
 ```
 
-**Note on `Effect.timeout`:** In Effect v4 (effect-smol), `Effect.timeout` maps the effect to fail with a `TimeoutException` or `NoSuchElementException` when the duration expires. Check the actual type by looking at usage examples. In effect-smol, `Effect.timeout` returns `Effect<A, E | TimeoutException, R>`. The `TimeoutException` can be checked via `Cause.isTimeoutException`. Use:
+**Note on `Effect.timeout`:** In Effect v4, `Effect.timeout` maps the effect to fail with a `TimeoutException` or `NoSuchElementException` when the duration expires. Check the actual type by looking at usage examples. In effect, `Effect.timeout` returns `Effect<A, E | TimeoutException, R>`. The `TimeoutException` can be checked via `Cause.isTimeoutException`. Use:
 
 ```typescript
 import { Cause, Duration, Effect, Layer, ServiceMap } from "effect";
@@ -1330,10 +1330,10 @@ const run = (cmd: string, args: string[]) =>
   );
 ```
 
-However, `Effect.timeout` in effect-smol may produce a different type. Look at the actual Effect.timeout signature in the library to use the correct error type. You can check:
+However, `Effect.timeout` in effect may produce a different type. Look at the actual Effect.timeout signature in the library to use the correct error type. You can check:
 
 ```bash
-grep -n "timeout" /home/krzysiek/github/Effect-TS/effect-smol/packages/effect/src/Effect.ts | head -20
+grep -n "timeout" /home/krzysiek/github/Effect-TS/effect/packages/effect/src/Effect.ts | head -20
 ```
 
 If the exact API differs, adjust accordingly. The key change is wrapping `runCommand` with a 30s timeout and mapping the timeout error to a clear message.

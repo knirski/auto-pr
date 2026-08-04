@@ -4,7 +4,7 @@
  * Handlers delegate to GitContext.
  */
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import { GitContext } from "#auto-pr/git-context.js";
 import { capDiffForAiToolRoundtrip, sanitizeDiffForAi } from "#core/sanitize-diff.js";
@@ -14,15 +14,9 @@ const GetDiff = Tool.make("get_diff", {
   description: "Get the git diff for changed files. Provide path for one file, omit for all.",
   parameters: Schema.Struct({
     path: Schema.optionalKey(
-      Schema.String.annotate({ description: "File path to diff. Omit for all changed files." }),
-    ).pipe(
-      Schema.catchDecoding((issue) => {
-        const rendered = String(issue);
-        if (rendered.includes("got null")) {
-          return Effect.succeed(Option.none());
-        }
-        return Effect.fail(issue);
-      }),
+      Schema.NullOr(
+        Schema.String.annotate({ description: "File path to diff. Omit for all changed files." }),
+      ),
     ),
   }),
   success: Schema.String,

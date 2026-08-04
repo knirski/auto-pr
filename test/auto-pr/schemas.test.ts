@@ -33,6 +33,6 @@ describe("FillPrTemplateParamsSchema", () => {
   });
 
   test("decoding fails for null", async () => {
-    await asserts.decoding().fail(null, "Expected object, got null");
+    await asserts.decoding().fail(null, "Expected object");
   });
 });

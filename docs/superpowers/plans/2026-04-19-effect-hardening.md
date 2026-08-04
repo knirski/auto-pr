@@ -10,7 +10,7 @@
 
 **Tech Stack:** TypeScript, Effect v4 beta (`effect`, `@effect/ai-openai-compat`, `@effect/platform-bun`), bun:test, Biome, Nix, Lefthook. Pinned via `package.json`; run `bun run check:code` to verify.
 
-**Effect v4 API reference order:** when an Effect v4 signature is unclear, consult in order: (1) `https://github.com/Effect-TS/effect-smol/blob/main/LLMS.md` (local clone at `/home/krzysiek/github/Effect-TS/effect-smol/LLMS.md`), (2) the `effect-smol` source tree (`packages/*`), (3) context7 / web only as a fallback. Effect v4 is still in beta; third-party docs lag.
+**Effect v4 API reference order:** when an Effect v4 signature is unclear, consult in order: (1) `https://github.com/Effect-TS/effect/blob/main/LLMS.md` (local clone at `/home/krzysiek/github/Effect-TS/effect/LLMS.md`), (2) the `effect` source tree (`packages/*`), (3) context7 / web only as a fallback. Effect v4 is still in beta; third-party docs lag.
 
 **Design source:** `docs/superpowers/specs/2026-04-19-effect-hardening-design.md`.
 
@@ -63,7 +63,7 @@ grep -n "function runCommand\|export function runCommand\|runCommand =" src/auto
 
 Read the function. Answer: when the spawner fails with a `PlatformError.systemError` (e.g., gh exits non-zero), does `runCommand` wrap it in `PullRequestFailedError`, or propagate the raw `systemError`? Record the answer; it decides which error shape the predicate below matches.
 
-If unclear, consult LLMS.md § on `Effect.catch` / `Effect.catchTag` and the `effect-smol/packages/unstable-process` source.
+If unclear, consult LLMS.md § on `Effect.catch` / `Effect.catchTag` and the `effect/packages/unstable-process` source.
 
 - [x] **Step 2: Add `PullRequestLookupError` class**
 
@@ -359,7 +359,7 @@ grep -rn "Url\.fromString\|\"#core/url" src/ test/ 2>/dev/null
 
 If a project-internal `Url.fromString` exists and accepts arbitrary http(s) URLs returning a `Result<URL, E>`, reuse it inside `parseGhPrCreateOutput`. If it's limited (e.g., only `import.meta.url`-style parsing as used in `src/tools/auto-pr-init.ts:34`), fall back to regex validation below and add a one-line comment justifying.
 
-Consult `effect-smol/LLMS.md` for Effect v4's URL parsing primitives if LLMS.md covers them.
+Consult `effect/LLMS.md` for Effect v4's URL parsing primitives if LLMS.md covers them.
 
 - [x] **Step 2: Add `PullRequestUrlParseError` class**
 
@@ -626,7 +626,7 @@ One task, one PR, one commit.
 
 - [x] **Step 1: Research — Effect v4 `OpenAiClient.layer` / `Layer.mergeAll` signatures**
 
-Consult `effect-smol/LLMS.md` for:
+Consult `effect/LLMS.md` for:
 - Return type of `OpenAiClient.layer(options: OpenAiClient.Options)` at the project's pinned version.
 - Error-channel behaviour of `Layer.provide(childLayer)(parentLayer)`.
 - How `Layer.mergeAll(a, b)` unions `a`'s and `b`'s error channels.
@@ -634,7 +634,7 @@ Consult `effect-smol/LLMS.md` for:
 If LLMS.md is silent, read type declarations directly:
 
 ```bash
-find /home/krzysiek/github/Effect-TS/effect-smol/packages -name "*.d.ts" | xargs grep -l "OpenAiClient" 2>/dev/null | head
+find /home/krzysiek/github/Effect-TS/effect/packages -name "*.d.ts" | xargs grep -l "OpenAiClient" 2>/dev/null | head
 ```
 
 If the local clone is missing, check:

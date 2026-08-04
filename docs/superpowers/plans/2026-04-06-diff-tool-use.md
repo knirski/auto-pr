@@ -10,7 +10,7 @@
 
 **Tech Stack:** Effect v4 (`ServiceMap.Service`, `Layer`, `Toolkit`, `Tool`), `@effect/ai-openai-compat`, Bun test runner, GitHub Actions
 
-**Reference:** Design spec at `docs/superpowers/specs/2026-04-06-diff-tool-use-design.md`. Effect v4 source at `/home/krzysiek/github/Effect-TS/effect-smol`.
+**Reference:** Design spec at `docs/superpowers/specs/2026-04-06-diff-tool-use-design.md`. Effect v4 source at `/home/krzysiek/github/Effect-TS/effect`.
 
 ---
 
@@ -874,7 +874,7 @@ export function makeDiffToolkitLayer(baseRef: string, headRef: string) {
 }
 ```
 
-Note: The exact `Toolkit.of` / `DiffToolkit.of` API should be verified against the installed `effect@4.0.0-beta.42`. The handler pattern matches `ai-docs/src/71_ai/20_tools.ts` from effect-smol. If `DiffToolkit.of` is not available, use a plain object: `{ get_diff: ..., get_commit_diff: ... }`.
+Note: The exact `Toolkit.of` / `DiffToolkit.of` API should be verified against the installed `effect@4.0.0-beta.42`. The handler pattern matches `ai-docs/src/71_ai/20_tools.ts` from effect. If `DiffToolkit.of` is not available, use a plain object: `{ get_diff: ..., get_commit_diff: ... }`.
 
 - [x] **Step 5: Run test**
 

@@ -26,8 +26,8 @@
 
 Effect v4 is still in beta; third-party docs lag. When any task needs an Effect v4 API signature confirmed, consult in this order:
 
-1. **Primary:** `https://github.com/Effect-TS/effect-smol/blob/main/LLMS.md` (local clone at `/home/krzysiek/github/Effect-TS/effect-smol/LLMS.md`).
-2. **Secondary:** the `effect-smol` source tree itself (`packages/ai-openai-compat/`, `packages/platform/`, etc.) for type declarations LLMS.md doesn't cover.
+1. **Primary:** `https://github.com/Effect-TS/effect/blob/main/LLMS.md` (local clone at `/home/krzysiek/github/Effect-TS/effect/LLMS.md`).
+2. **Secondary:** the `effect` source tree itself (`packages/ai-openai-compat/`, `packages/platform/`, etc.) for type declarations LLMS.md doesn't cover.
 3. **Tertiary (only if above silent):** context7, then web. Both can be stale for beta APIs.
 
 ### 1.3 Per-task rigor
@@ -171,7 +171,7 @@ Both assert the inferred type matches the declared shape without evidence. `Matc
 
 **Design.**
 
-1. **Research step (mandatory).** Consult `effect-smol/LLMS.md` for the return-type shape of `OpenAiClient.layer(options)`, error-channel behaviour of `Layer.provide`, and how `Layer.mergeAll` unions error channels. If LLMS.md is silent on any of these, read type declarations directly in `effect-smol/packages/ai-openai-compat/`. No context7, no web.
+1. **Research step (mandatory).** Consult `effect/LLMS.md` for the return-type shape of `OpenAiClient.layer(options)`, error-channel behaviour of `Layer.provide`, and how `Layer.mergeAll` unions error channels. If LLMS.md is silent on any of these, read type declarations directly in `effect/packages/ai-openai-compat/`. No context7, no web.
 2. **Drop the inner cast** and the explicit `: Layer.Layer<LanguageModel.LanguageModel, never>` return annotation on `openAiLanguageModelStack`. Let TypeScript infer. Run `bun run typecheck` and read the compiler output.
 3. **Handle the inferred type:**
    - **(a) Inferred error is `never`.** Cast was redundant; proceed.
@@ -281,7 +281,7 @@ Two traversals of the same `Option`, repeated 3-5 times.
 
 **Design.**
 
-- **Research step.** Check whether `Url.fromString(...)` (used at `src/tools/auto-pr-init.ts:34`) accepts arbitrary http(s) URLs and returns `Result<URL, E>`. Consult `effect-smol/LLMS.md` first; fall back to source at `effect-smol/packages/*`. If suitable, reuse inside the helper below. If not, document why and fall back to a `new URL(...)` try/catch with explicit scheme check.
+- **Research step.** Check whether `Url.fromString(...)` (used at `src/tools/auto-pr-init.ts:34`) accepts arbitrary http(s) URLs and returns `Result<URL, E>`. Consult `effect/LLMS.md` first; fall back to source at `effect/packages/*`. If suitable, reuse inside the helper below. If not, document why and fall back to a `new URL(...)` try/catch with explicit scheme check.
 - **Pure helper** in `src/core/openai-compat-url.ts`:
 
   ```ts
