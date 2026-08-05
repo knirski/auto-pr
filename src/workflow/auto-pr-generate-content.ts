@@ -1010,7 +1010,7 @@ export function runGeneratePrContent(
     );
     const toolkitLayer = makeDiffToolkitLayer(
       baseRef,
-      config.branch,
+      "HEAD",
       toolResponseCharBudget !== undefined ? { toolResponseCharBudget } : undefined,
     ).pipe(Layer.provide(gitLayer));
     const liveLayer = Layer.mergeAll(
@@ -1207,7 +1207,7 @@ export function runGeneratePrContent(
                   config.fetch !== undefined ? { fetch: config.fetch } : undefined,
                 ),
                 gitLayer,
-                makeDiffToolkitLayer(baseRef, config.branch, {
+                makeDiffToolkitLayer(baseRef, "HEAD", {
                   toolResponseCharBudget: resolveAiToolRoundtripDiffCharBudget(
                     config.provider,
                     config.model,
@@ -1346,7 +1346,7 @@ export function runGeneratePrContentWithServices(config: RunGeneratePrContentWit
 
     const { title, body, count } = yield* generatePrContent({
       baseRef,
-      headRef: branch,
+      headRef: "HEAD",
       templateContent,
       descriptionPromptText,
       ...(routingContext !== undefined ? { routingContext } : {}),

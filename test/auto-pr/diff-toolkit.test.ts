@@ -15,7 +15,7 @@ describe("DiffToolkit handlers", () => {
         return Effect.succeed("diff --git a/foo.ts b/foo.ts\n+const x = 1;");
       },
     });
-    const toolkitLayer = makeDiffToolkitLayer("origin/main", "ai/feature");
+    const toolkitLayer = makeDiffToolkitLayer("origin/main", "HEAD");
     const gitLayer = Layer.succeed(GitContext, mockGitCtx);
     const TestLayer = Layer.mergeAll(
       TestBaseLayer,
@@ -31,6 +31,7 @@ describe("DiffToolkit handlers", () => {
         const result = handlerResult.result;
         expect(String(result)).toContain("+const x = 1;");
         expect(capturedArgs?.baseRef).toBe("origin/main");
+        expect(capturedArgs?.headRef).toBe("HEAD");
         expect(capturedArgs?.path).toBe("foo.ts");
       }).pipe(Effect.scoped),
     );

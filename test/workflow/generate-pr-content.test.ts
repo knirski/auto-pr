@@ -1180,6 +1180,7 @@ function setupGitRepoForRunGeneratePrContent(
   workspace: string,
   commits: Array<{ message: string }>,
   branchName: string,
+  detached = false,
 ): Effect.Effect<void, Error, ChildProcessSpawner> {
   return Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner;
@@ -1201,6 +1202,7 @@ function setupGitRepoForRunGeneratePrContent(
     for (const { message } of commits) {
       yield* run(["commit", "--allow-empty", "-m", message]);
     }
+    if (detached) yield* run(["checkout", "--detach", "HEAD"]);
   });
 }
 
@@ -1429,7 +1431,7 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
     );
   });
 
-  test("writes pr-title.txt and pr-body.md for 1 commit (no AI call)", async () => {
+  test("writes pr-title.txt and pr-body.md for 1 commit from a detached checkout", async () => {
     await runEffect(IntegrationTestLayer)(
       Effect.gen(function* () {
         const tmp = yield* createTestTempDirEffect("run-generate-");
@@ -1439,6 +1441,7 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
             tmp.path,
             [{ message: "feat: add x" }],
             "ai/test",
+            true,
           );
 
           // Write the PR template
@@ -1508,6 +1511,46 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
           expect(title.trim()).toBe("feat: add A and fix B");
           expect(body).toContain("### Motivation");
           expect(body).toContain("### Risks");
+        } finally {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+        }
+      }).pipe(Effect.scoped),
+    );
+  });
+
+  test("uses detached HEAD refs for primitive fallback", async () => {
+    await runEffect(IntegrationTestLayer)(
+      Effect.gen(function* () {
+        const tmp = yield* createTestTempDirEffect("run-generate-fallback-detached-");
+        try {
+          yield* setupGitRepoForRunGeneratePrContent(
+            tmp.path,
+            [{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+            "ai/test",
+            true,
+          );
+
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+          yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+          yield* runGeneratePrContent({
+            defaultBranch: "main",
+            branch: "ai/test",
+            workspace: tmp.path,
+            templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+            provider: "local",
+            model: "gpt-oss",
+            retryDelay: Duration.zero,
+            fetch: createOpenAiChatCompletionsMockFetch(INVALID_AI_RESPONSE),
+          });
+
+          const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+          const body = yield* fs.readFileString(tmp.join("pr-body.md"));
+          expect(title.trim()).toBe("fix: fix bug in B");
+          expect(body).toContain("add module A");
+          expect(body).toContain("fix bug in B");
         } finally {
           const fs = yield* FileSystem.FileSystem;
           yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
