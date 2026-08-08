@@ -45,7 +45,7 @@ jobs:
       contents: read
       pull-requests: write
       actions: read
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@710a5c6033f8f6ee786e5608aca34de43073ca40
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@be0a1853357e5d444d5e36cee39e25bb69cd935a
     with:
       # Raw, unvalidated workflow_run context passed through for the reusable (Task 1.3c) to
       # validate. See the "interface contract" in .superpowers/sdd/task-1.3b-report.md.
