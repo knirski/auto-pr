@@ -6,7 +6,7 @@
 #
 # Ingress (ADR 0016 Open Question resolution):
 #   - workflow_dispatch: manual baseline — generate for one explicit ai/** branch (Option A).
-#   - schedule: scheduled discovery of ai/** branches lacking an open PR (Option B, default auto).
+#   - schedule: scheduled discovery of recent ai/** branches without an existing PR (Option B, default auto).
 #   repository_dispatch (Option C) is documented-only and intentionally NOT implemented here.
 #
 # No package.json required. Run: npx -p github:knirski/auto-pr auto-pr-init (creates this file,
@@ -80,16 +80,28 @@ jobs:
             matrix="$(jq -cn --arg b "$DISPATCH_BRANCH" --arg s "$sha" \
               '{include: [{branch: $b, head_sha: $s}]}')"
           else
-            # Option B: discover ai/** branches (refs/heads/ai/*) whose tip has no open PR yet.
-            gh api --paginate "repos/$REPO/git/matching-refs/heads/ai/" \
-              --jq '.[] | {branch: (.ref | sub("^refs/heads/"; "")), head_sha: .object.sha}' \
+            # Option B: discover recent ai/** branches (refs/heads/ai/*) without any existing PR.
+            # Branches older than 30 days are treated as abandoned; workflow_dispatch remains the
+            # explicit escape hatch for intentionally reviving one.
+            owner="${REPO%%/*}"
+            name="${REPO##*/}"
+            # shellcheck disable=SC2016
+            gh api graphql --paginate \
+              -f query='query($owner:String!,$name:String!,$endCursor:String){repository(owner:$owner,name:$name){refs(refPrefix:"refs/heads/ai/",first:100,after:$endCursor){nodes{name target{... on Commit{oid committedDate}}} pageInfo{hasNextPage endCursor}}}}' \
+              -F owner="$owner" -F name="$name" \
+              --jq '.data.repository.refs.nodes[] | {branch: .name, head_sha: .target.oid, committed_at: .target.committedDate}' \
               | jq -s '.' > "$tmp/branches.json"
-            gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            gh api --paginate "repos/$REPO/pulls?state=all&per_page=100" \
               --jq '.[].head.ref' \
-              | jq -R '.' | jq -s '.' > "$tmp/open_pr_heads.json"
-            matrix="$(jq -c \
-              --slurpfile openheads "$tmp/open_pr_heads.json" \
-              '{include: [ .[] | select((.branch as $b | ($openheads[0] | index($b))) | not) ]}' \
+              | jq -R '.' | jq -s '.' > "$tmp/all_pr_heads.json"
+            cutoff="$(date -u -d '30 days ago' '+%Y-%m-%dT%H:%M:%SZ')"
+            matrix="$(jq -c --arg cutoff "$cutoff" \
+              --slurpfile allheads "$tmp/all_pr_heads.json" \
+              '{include: [ .[]
+                | select(.committed_at >= $cutoff)
+                | select((.branch as $b | ($allheads[0] | index($b))) | not)
+                | del(.committed_at)
+              ]}' \
               "$tmp/branches.json")"
           fi
           count="$(printf '%s' "$matrix" | jq '.include | length')"

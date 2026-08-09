@@ -131,4 +131,13 @@ describe("auto-pr workflow selection", () => {
     expect(createWorkflow).toContain("manifest.status");
     expect(createWorkflow).toContain("steps.manifest.outputs.skipped != 'true'");
   });
+
+  test("scheduled discovery excludes old branches and branches with existing PRs", () => {
+    const autoPrWorkflow = readFileSync(join(repoRoot, ".github/workflows/auto-pr.yml"), "utf8");
+
+    expect(autoPrWorkflow).toContain("pulls?state=all&per_page=100");
+    expect(autoPrWorkflow).toContain("30 days");
+    expect(autoPrWorkflow).toContain("committed_at");
+    expect(autoPrWorkflow).toContain("head_sha");
+  });
 });
