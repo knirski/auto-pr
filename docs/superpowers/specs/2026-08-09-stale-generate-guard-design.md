@@ -1,6 +1,6 @@
 # Stale Auto-PR Generate Guard (Design)
 
-**Date:** 2026-08-09  
+**Date:** 2026-08-09
 **Scope:** Prevent queued or manually triggered Auto-PR generation jobs from failing on stale `ai/**` branches.
 
 ## Goal
@@ -9,7 +9,7 @@ Make stale branch handling safe at the point of execution, not only during sched
 
 ## Design
 
-Add a read-only validation step to `.github/workflows/auto-pr-generate-reusable.yml`, before checkout and before any package or source code is executed. The caller supplies `source_branch` and the immutable `head_sha` already resolved by discovery.
+Add a read-only validation step to `.github/workflows/auto-pr-generate-reusable.yml`, before checkout and before any package or source code is executed. The caller supplies `source_branch` and the immutable `head_sha` already resolved by discovery. Generated and skipped outcomes are uploaded intentionally under `pr-content-<head_sha>`, so matrix jobs cannot collide on a shared artifact name.
 
 The validation checks the repository API for:
 
@@ -18,9 +18,11 @@ The validation checks the repository API for:
 3. The branch tip is newer than the 30-day abandonment cutoff.
 4. No pull request in any state has the requested branch as its head.
 
-If validation fails, the job writes a skip output and exits with status zero. Generation, artifact upload, and downstream content work are conditional on the validation output. A skipped branch therefore does not create a failing check or consume model/container work.
+If validation fails, the job writes a skip output and exits with status zero. Checkout, package execution, generation, and model/container work are conditional on the validation output. Artifact preparation and upload are intentionally not conditional: a skipped branch publishes an empty-content manifest with `status: skipped`, allowing the create phase to stop before Bun setup, App-secret reads, token minting, or PR writes.
 
-The existing scheduled-discovery filter remains in place as an efficiency optimization. The reusable-workflow guard is the correctness boundary for scheduled runs that were already queued and for manual invocations.
+The existing scheduled-discovery filter remains in place as an efficiency optimization. PR association requires both the `head.ref` match and `head.repo.full_name` equal to the current repository, so a fork PR using the same branch name does not suppress a same-repository source branch.
+
+The privileged `workflow_run` ingress does not use `workflow_run.head_branch` or `workflow_run.head_sha` as source identity: scheduled and manual generate runs execute from the default branch, and those ambient fields therefore identify `main`, not each matrix source. Instead, the ingress enumerates SHA-qualified PR-content artifacts from the exact triggering run and fans out one reusable create call per exact artifact name. The reusable create workflow validates the selected artifact name and manifest repository, `ai/**` branch, default branch, head SHA, file set, and content digests. It then uses the validated manifest branch/SHA for live branch-tip re-resolution before privileged work.
 
 ## API and permissions
 
@@ -34,6 +36,8 @@ Extend workflow tests with representative validation inputs for:
 - a branch older than 30 days — generation skips;
 - a deleted branch or mismatched tip — generation skips;
 - a branch with an open, closed, or merged PR — generation skips.
+
+Add structural regressions for immutable artifact names, exact-run artifact enumeration and create fanout, manifest-derived scheduled identity, skipped-manifest early exit, and same-repository PR matching.
 
 Retain the existing scheduled-discovery tests to ensure filtering continues to avoid unnecessary matrix entries.
 
@@ -49,4 +53,5 @@ Retain the existing scheduled-discovery tests to ensure filtering continues to a
 - Current unassociated branches continue through generation.
 - No branch-controlled code runs before validation.
 - Existing permissions remain read-only.
+- Every triggering-run artifact is selected explicitly and processed with manifest-derived identity.
 - `bun run check` passes.

@@ -115,9 +115,9 @@ jobs:
           committed_at=$(gh api "repos/$REPO/commits/$current_sha" | jq -er '.commit.committer.date')
           date -u -d "$committed_at" +%s >/dev/null
           cutoff=$(date -u -d "30 days ago" +%Y-%m-%dT%H:%M:%SZ)
-          all_pr_heads=$(gh api --paginate "repos/$REPO/pulls?state=all&per_page=100" | jq -s --arg source_branch "$SOURCE_BRANCH" '
-            if all(.[]; type == "array") and all(.[][]; (.head? | type == "object") and (.head.ref? | type == "string")) then
-              any(.[][]; .head.ref == $source_branch)
+          all_pr_heads=$(gh api --paginate "repos/$REPO/pulls?state=all&per_page=100" | jq -s --arg source_branch "$SOURCE_BRANCH" --arg repo "$REPO" '
+            if all(.[]; type == "array") and all(.[][]; (.head? | type == "object") and (.head.ref? | type == "string") and (.head.repo.full_name? | type == "string")) then
+              any(.[][]; .head.ref == $source_branch and .head.repo.full_name == $repo)
             else
               error("malformed pull request API response")
             end
@@ -346,5 +346,5 @@ jobs:
       - name: Upload PR content
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pr-content
+          name: pr-content-${{ inputs.head_sha }}
           path: pr-content/

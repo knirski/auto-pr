@@ -6,6 +6,32 @@ import { join } from "node:path";
 
 const repoRoot = process.cwd();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function workflowJob(workflowName: string, jobName: string): Record<string, unknown> {
+  const workflow = Bun.YAML.parse(
+    readFileSync(join(repoRoot, ".github/workflows", workflowName), "utf8"),
+  );
+  if (!isRecord(workflow) || !isRecord(workflow.jobs) || !isRecord(workflow.jobs[jobName])) {
+    throw new Error(`Expected job '${jobName}' in ${workflowName}`);
+  }
+  return workflow.jobs[jobName];
+}
+
+function workflowSteps(job: Record<string, unknown>): readonly Record<string, unknown>[] {
+  return Array.isArray(job.steps) ? job.steps.filter(isRecord) : [];
+}
+
+function namedStep(job: Record<string, unknown>, name: string): Record<string, unknown> {
+  const step = workflowSteps(job).find((candidate) => candidate.name === name);
+  if (step === undefined) {
+    throw new Error(`Expected step '${name}'`);
+  }
+  return step;
+}
+
 function runSetPackageAction(options: {
   packageJson: string;
   runner: "bunx" | "npx";
@@ -171,5 +197,80 @@ describe("auto-pr workflow selection", () => {
     );
     expect(prepareArtifact).not.toContain("if: steps.validate.outputs.skip != 'true'");
     expect(uploadArtifact).not.toContain("if: steps.validate.outputs.skip != 'true'");
+  });
+
+  test("names each generated artifact for its immutable source commit", () => {
+    const generateJob = workflowJob("auto-pr-generate-reusable.yml", "generate");
+    const upload = namedStep(generateJob, "Upload PR content");
+
+    expect(upload.with).toEqual({
+      name: `pr-content-\${{ inputs.head_sha }}`,
+      path: "pr-content/",
+    });
+  });
+
+  test("enumerates the triggering run artifacts and fans out one create call per artifact", () => {
+    const enumerateJob = workflowJob("auto-pr-create.yml", "enumerate");
+    const createJob = workflowJob("auto-pr-create.yml", "create");
+    const enumerate = namedStep(enumerateJob, "Enumerate PR content artifacts");
+
+    expect(enumerate.run).toContain("actions/runs/$RUN_ID/artifacts?per_page=100");
+    expect(enumerateJob.outputs).toEqual({
+      has_artifacts: `\${{ steps.artifacts.outputs.has_artifacts }}`,
+      matrix: `\${{ steps.artifacts.outputs.matrix }}`,
+    });
+    expect(createJob.needs).toBe("enumerate");
+    expect(createJob.if).toBe("needs.enumerate.outputs.has_artifacts == 'true'");
+    expect(createJob.strategy).toEqual({
+      "fail-fast": false,
+      matrix: `\${{ fromJSON(needs.enumerate.outputs.matrix) }}`,
+    });
+    expect(createJob.with).toEqual({
+      artifact_name: `\${{ matrix.artifact_name }}`,
+      conclusion: `\${{ github.event.workflow_run.conclusion }}`,
+      source_repository: `\${{ github.event.workflow_run.repository.full_name }}`,
+      workflow_run_id: `\${{ github.event.workflow_run.id }}`,
+    });
+  });
+
+  test("derives scheduled source identity from the selected artifact manifest", () => {
+    const createWorkflow = readFileSync(
+      join(repoRoot, ".github/workflows/auto-pr-create-reusable.yml"),
+      "utf8",
+    );
+    const createJob = workflowJob("auto-pr-create-reusable.yml", "create");
+    const download = namedStep(createJob, "Download selected PR content artifact");
+    const firstTipCheck = namedStep(createJob, "Re-resolve branch tip before minting token");
+
+    expect(createWorkflow).not.toContain("inputs.head_branch");
+    expect(createWorkflow).not.toContain("inputs.head_sha");
+    expect(download.with).toEqual({
+      "github-token": `\${{ github.token }}`,
+      name: `\${{ inputs.artifact_name }}`,
+      path: `\${{ runner.temp }}/pr-artifact`,
+      "run-id": `\${{ inputs.workflow_run_id }}`,
+    });
+    expect(firstTipCheck.env).toEqual({
+      EXPECTED_HEAD_SHA: `\${{ steps.manifest.outputs.head_sha }}`,
+      GH_TOKEN: `\${{ github.token }}`,
+      HEAD_BRANCH: `\${{ steps.manifest.outputs.branch }}`,
+      REPO: `\${{ github.repository }}`,
+    });
+    expect(createWorkflow).toContain("manifest.source_repository");
+    expect(createWorkflow).toContain("manifest.source_branch");
+    expect(createWorkflow).toContain("manifest.default_branch");
+    expect(createWorkflow).toContain("manifest.head_sha");
+    expect(createWorkflow).toContain("steps.manifest.outputs.skipped != 'true'");
+  });
+
+  test("matches pull requests only for the same repository source branch", () => {
+    const generateWorkflow = readFileSync(
+      join(repoRoot, ".github/workflows/auto-pr-generate-reusable.yml"),
+      "utf8",
+    );
+
+    expect(generateWorkflow).toContain(
+      ".head.ref == $source_branch and .head.repo.full_name == $repo",
+    );
   });
 });

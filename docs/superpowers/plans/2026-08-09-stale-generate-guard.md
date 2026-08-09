@@ -4,7 +4,7 @@
 
 **Goal:** Make every Auto-PR generation invocation skip stale, deleted, tip-mismatched, or PR-associated `ai/**` branches successfully before checkout or branch-controlled execution.
 
-**Architecture:** Add a read-only `Validate source branch` step as the first step in the reusable generate job. It queries the branch tip and all PR head refs, writes `skip=true/false` to `GITHUB_OUTPUT`, and fails only on API or validation errors that cannot establish branch state. Every existing generate step becomes conditional on the validation result, while cleanup remains able to run with `always()` where needed.
+**Architecture:** Add a read-only `Validate source branch` step as the first step in the reusable generate job. It queries the branch tip and same-repository PR head refs, writes `skip=true/false` to `GITHUB_OUTPUT`, and fails only on API or validation errors that cannot establish branch state. Expensive generate steps become conditional on the validation result, while artifact preparation and upload remain intentional so every source commit produces either generated content or a skipped marker. The privileged `workflow_run` ingress enumerates those immutable, SHA-qualified artifacts from the exact run and derives source identity from each validated manifest rather than ambient workflow-run branch/SHA fields.
 
 **Tech Stack:** GitHub Actions YAML, `gh api`, `jq`, Bash, Bun tests, actionlint.
 
@@ -15,6 +15,7 @@
 - A confirmed stale, deleted, tip-mismatched, or PR-associated branch exits successfully and reports a deliberate skip.
 - API failures remain workflow failures; do not convert authentication or transport errors into skips.
 - Preserve the existing scheduled-discovery filter and manual-dispatch behavior.
+- Upload intentionally skipped manifests under a source-commit-qualified artifact name.
 - Use full 40-character SHA pins for self-referenced reusable actions/workflows.
 - Run `bun run check` before completion and do not commit generated `dist/` output.
 
@@ -100,13 +101,15 @@ For each confirmed skip, print a neutral explanation and append `skip=true` to `
 
 - [ ] **Step 2: Gate checkout and all generation work**
 
-Add `if: steps.validate.outputs.skip != 'true'` to checkout, prerequisites, setup, fetch, package installation, commit counting, semantic detection, routing, and artifact preparation. For steps already guarded by semantic-generation conditions, combine them with the validation condition, for example:
+Add `if: steps.validate.outputs.skip != 'true'` to checkout, prerequisites, setup, fetch, package installation, commit counting, semantic detection, and routing. For steps already guarded by semantic-generation conditions, combine them with the validation condition, for example:
 
 ```yaml
 if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
 ```
 
 Keep local llama cleanup guarded by `always()` and its existing outcome check so a future failure after validation still stops the container. A stale skip must not start that container.
+
+Keep artifact preparation and upload unconditional. They intentionally publish a skipped manifest for a confirmed stale/deleted/PR-associated source so the run-scoped create fanout can consume a complete outcome without starting Bun, reading App secrets, minting a token, or writing a PR.
 
 - [ ] **Step 3: Run the focused tests and workflow linter**
 

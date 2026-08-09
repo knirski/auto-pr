@@ -4,13 +4,11 @@
 # access — from the DEFAULT BRANCH, regardless of what ref triggered the upstream run. A pushed
 # ai/** branch therefore cannot substitute this file, its permissions, or the executor it runs.
 #
-# This file is a deliberately THIN caller: it passes the raw workflow_run context through to the
-# reusable create workflow and does NOT itself validate anything. All validation — conclusion,
-# repository, branch/head-SHA re-resolution, manifest parsing, run-id-scoped artifact download,
-# path/symlink/size guards, SHA-pinned executor install, App-token mint gated on
-# `environment: app-credentials` — lives in auto-pr-create-reusable.yml (Task 1.3c). In particular
-# this caller intentionally does NOT gate on `conclusion == 'success'`: per ADR 0016 decision 5 the
-# validation (including the conclusion check) happens inside the reusable, before a token is minted.
+# This file enumerates data artifacts from the exact triggering run and fans out one reusable create
+# call per artifact. It passes only raw workflow_run repository/conclusion/run identity plus the
+# selected artifact name. Source branch/SHA identity comes exclusively from each validated manifest;
+# workflow_run.head_branch/head_sha describe the default-branch ingress for scheduled/manual runs and
+# are never trusted as source identity. All privileged validation remains in the reusable workflow.
 #
 # Reusable workflow ref: always a commit SHA (see auto-pr.yml). Update the pin to HEAD after each
 # push; after merge to main, pin to the merge commit SHA (update-workflow-pins / INTEGRATION).
@@ -25,15 +23,59 @@ on:
 
 permissions: {}
 
-# Per-repository-and-branch create concurrency: a newer head SHA for the same branch supersedes an
-# older pending create run. head_branch is available pre-validation — here it is only a grouping
-# key, not a security check, so using it is safe (ADR 0016).
-concurrency:
-  group: auto-pr-create-${{ github.repository }}-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: true
-
 jobs:
+  enumerate:
+    permissions:
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.artifacts.outputs.matrix }}
+      has_artifacts: ${{ steps.artifacts.outputs.has_artifacts }}
+    steps:
+      - name: Enumerate PR content artifacts
+        id: artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          pages="$(mktemp)"
+          trap 'rm -f "$pages"' EXIT
+          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" > "$pages"
+          matrix="$(jq -cs '
+            if all(.[]; type == "object" and (.artifacts? | type == "array"))
+              and all(.[] | .artifacts[]; (.name? | type == "string") and (.expired? | type == "boolean"))
+            then
+              {
+                include: [
+                  .[] | .artifacts[]
+                  | select(.expired == false and (.name | test("^pr-content-[a-f0-9]{40}$")))
+                  | {artifact_name: .name}
+                ] | unique_by(.artifact_name)
+              }
+            else
+              error("malformed workflow artifact API response")
+            end
+          ' "$pages")"
+          count="$(printf '%s' "$matrix" | jq -er '.include | length')"
+          {
+            printf 'matrix=%s\n' "$matrix"
+            if [ "$count" -gt 0 ]; then
+              echo "has_artifacts=true"
+            else
+              echo "has_artifacts=false"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          echo "Found $count PR content artifact(s) in triggering run $RUN_ID."
+
   create:
+    needs: enumerate
+    if: needs.enumerate.outputs.has_artifacts == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.enumerate.outputs.matrix) }}
     # Job-level permissions cap the reusable's GITHUB_TOKEN (reusable permissions can only be
     # reduced, never elevated). pull-requests: write lives here at the JOB level (not the workflow
     # top level) so it applies only to this privileged call; the App token used for the actual
@@ -47,11 +89,9 @@ jobs:
       actions: read
     uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@840fb7b21ef30105a86e259e9ce912b44941aca6
     with:
-      # Raw, unvalidated workflow_run context passed through for the reusable (Task 1.3c) to
-      # validate. See the "interface contract" in .superpowers/sdd/task-1.3b-report.md.
+      # Raw run context plus the exact run-scoped artifact selected by the enumeration matrix.
       workflow_run_id: ${{ github.event.workflow_run.id }}
-      head_branch: ${{ github.event.workflow_run.head_branch }}
-      head_sha: ${{ github.event.workflow_run.head_sha }}
+      artifact_name: ${{ matrix.artifact_name }}
       source_repository: ${{ github.event.workflow_run.repository.full_name }}
       conclusion: ${{ github.event.workflow_run.conclusion }}
     secrets: inherit

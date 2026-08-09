@@ -7,20 +7,21 @@
 # needed. Satisfies CodeQL: no untrusted checkout in this privileged workflow.
 #
 # TRUST BOUNDARY (ADR 0016 decisions 5-9). Every input below arrives raw and UNVALIDATED from the
-# thin caller (the workflow_run payload the branch author cannot forge). This job fails closed
-# against every same-repo-untrusted input, in this strict order, BEFORE any secret is read or the
-# App token is minted:
+# thin caller. The workflow_run payload authenticates only run/repository/conclusion; source identity
+# is established from the selected artifact manifest and live repository state. This job fails closed
+# in this strict order, BEFORE any secret is read or the App token is minted:
 #   1. conclusion == 'success'                              (reject failure/cancelled/timed_out/…)
 #   2. source_repository == github.repository               (reject cross-repo)
-#   3. head_branch matches ai/**                            (reject non-ai/** branches)
+#   3. artifact_name == pr-content-<40-hex-SHA>             (reject malformed selection)
 #   4. download the artifact scoped to the EXACT triggering run id (never "latest matching name")
 #   5. artifact structure guard: exact expected file set, no symlinks, no path escape, size ceiling
-#   6. manifest validation: version==1, repo/branch/default-branch/head-sha identity, SHA-256
-#      content digests of title.txt/body.md, head_sha cross-checked vs head_sha.txt
+#   6. manifest validation: version==1, same repo, ai/** branch, current default branch, artifact SHA,
+#      content digests of title.txt/body.md, and head_sha cross-checked vs head_sha.txt
 #   7. re-resolve the branch tip via API == validated head SHA  (force-push race defense #1)
-#   8. mint the App token (only now — after all of the above)
-#   9. re-resolve the branch tip again == validated head SHA    (force-push race defense #2)
-#  10. install ONLY the maintainer-pinned 40-hex-SHA executor, then create/update the PR
+#   8. install ONLY the maintainer-pinned 40-hex-SHA executor
+#   9. mint the App token (only now — after all of the above)
+#  10. re-resolve the branch tip again == validated head SHA    (force-push race defense #2)
+#  11. create/update the PR
 #
 # EXECUTOR PIN: the executor is installed from a literal, full 40-char commit SHA hardcoded below
 # (github:knirski/auto-pr#<sha>). Nothing in the artifact, the source branch, or the generate job
@@ -35,21 +36,16 @@ name: Auto-PR create (reusable)
 on:
   workflow_call:
     inputs:
-      # Raw, unvalidated workflow_run context (see the interface contract in
-      # .superpowers/sdd/task-1.3b-report.md). ALL of these are validated below before anything
-      # privileged happens. Run id is a string here — it is only interpolated into download-artifact.
+      # Raw, unvalidated workflow_run context plus one exact artifact name enumerated from that run.
+      # Source branch/SHA are intentionally absent: scheduled/manual workflow_run identity is main.
       workflow_run_id:
         required: true
         type: string
         description: "id of the triggering generate run; scopes the artifact download."
-      head_branch:
+      artifact_name:
         required: true
         type: string
-        description: "ai/** source branch of the triggering run; matched vs ai/** and the manifest."
-      head_sha:
-        required: true
-        type: string
-        description: "Immutable head commit of the triggering run; cross-checked vs the manifest, head_sha.txt, and the live branch tip."
+        description: "Exact pr-content-<SHA> artifact selected from the triggering run."
       source_repository:
         required: true
         type: string
@@ -59,13 +55,10 @@ on:
         type: string
         description: "Conclusion of the triggering generate run; must be 'success'."
 
-# Per-source-branch create concurrency. Under workflow_run, github.ref is the default branch for
-# every call, so keying on github.ref would serialize (and cancel) creates for DIFFERENT branches.
-# Key on inputs.head_branch instead so distinct branches run in parallel while a newer create for
-# the same branch supersedes an older one (same rationale as the generate reusable's re-key in
-# Task 1.3b). head_branch is only a grouping key here, not a security check.
+# Per-artifact concurrency prevents duplicate handling of the same immutable source commit. The
+# artifact name is only a grouping key here; its shape and manifest binding are validated below.
 concurrency:
-  group: ${{ github.workflow }}-auto-pr-create-${{ inputs.head_branch }}
+  group: ${{ github.workflow }}-auto-pr-create-${{ inputs.artifact_name }}
   cancel-in-progress: true
 
 permissions: {}
@@ -107,26 +100,26 @@ jobs:
             exit 1
           fi
 
-      # ── 3. branch gate (same glob semantics as the old push filter: ai/<anything>, not bare ai) ──
-      - name: Validate head branch pattern
+      # ── 3. selected artifact name gate + immutable SHA extraction ──
+      - name: Validate selected artifact name
+        id: artifact
         env:
-          HEAD_BRANCH: ${{ inputs.head_branch }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
         run: |
           set -euo pipefail
-          case "$HEAD_BRANCH" in
-            ai/*) : ;;
-            *)
-              echo "::error::Head branch '$HEAD_BRANCH' does not match ai/**. Refusing."
-              exit 1
-              ;;
-          esac
+          if [[ "$ARTIFACT_NAME" =~ ^pr-content-([a-f0-9]{40})$ ]]; then
+            echo "head_sha=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Artifact name '$ARTIFACT_NAME' is not pr-content-<40-hex-SHA>."
+            exit 1
+          fi
 
       # ── 4. download the artifact scoped to the EXACT triggering run id (ADR 0016 decision 5) ──
       # run-id binds to the triggering run, never "latest matching name". Requires actions: read.
-      - name: Download PR content artifact
+      - name: Download selected PR content artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: pr-content
+          name: ${{ inputs.artifact_name }}
           path: ${{ runner.temp }}/pr-artifact
           run-id: ${{ inputs.workflow_run_id }}
           github-token: ${{ github.token }}
@@ -178,21 +171,36 @@ jobs:
           done
 
       # ── 6. manifest validation (identity + content digests) ──
-      # Uses EXPECTED_BRANCH / EXPECTED_DEFAULT_BRANCH so the branch identity comparison is explicit;
-      # the validated branch/default-branch/head-sha are emitted for the create step to consume.
+      # Source identity is derived here, not from workflow_run.head_branch/head_sha. The artifact-name
+      # SHA binds selection to manifest/head_sha.txt; live branch-tip checks below bind the manifest
+      # branch to that immutable commit before any privileged operation.
       - name: Validate manifest and content digests
         id: manifest
         env:
           ARTIFACT_DIR: ${{ runner.temp }}/pr-artifact
           EXPECTED_REPO: ${{ github.repository }}
-          EXPECTED_BRANCH: ${{ inputs.head_branch }}
           EXPECTED_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          EXPECTED_HEAD_SHA: ${{ inputs.head_sha }}
+          EXPECTED_HEAD_SHA: ${{ steps.artifact.outputs.head_sha }}
         run: |
           set -euo pipefail
           MANIFEST="$ARTIFACT_DIR/manifest.json"
-          if ! jq -e 'type == "object"' "$MANIFEST" >/dev/null 2>&1; then
-            echo "::error::manifest.json is not a JSON object."
+          if ! jq -e '
+            type == "object"
+            and (.manifest_version | type == "number")
+            and (.status | type == "string")
+            and (.source_repository | type == "string")
+            and (.source_branch | type == "string")
+            and (.default_branch | type == "string")
+            and (.head_sha | type == "string")
+            and (.files | type == "object")
+            and (.files.title | type == "object")
+            and (.files.title.path | type == "string")
+            and (.files.title.sha256 | type == "string")
+            and (.files.body | type == "object")
+            and (.files.body.path | type == "string")
+            and (.files.body.sha256 | type == "string")
+          ' "$MANIFEST" >/dev/null 2>&1; then
+            echo "::error::manifest.json has an invalid schema."
             exit 1
           fi
           version="$(jq -r '.manifest_version' "$MANIFEST")"
@@ -204,7 +212,9 @@ jobs:
           m_branch="$(jq -r '.source_branch' "$MANIFEST")"
           m_default="$(jq -r '.default_branch' "$MANIFEST")"
           m_head="$(jq -r '.head_sha' "$MANIFEST")"
-          m_status="$(jq -r '.status // "generated"' "$MANIFEST")"
+          m_status="$(jq -r '.status' "$MANIFEST")"
+          m_title_path="$(jq -r '.files.title.path' "$MANIFEST")"
+          m_body_path="$(jq -r '.files.body.path' "$MANIFEST")"
           m_title_sha="$(jq -r '.files.title.sha256' "$MANIFEST")"
           m_body_sha="$(jq -r '.files.body.sha256' "$MANIFEST")"
 
@@ -212,10 +222,13 @@ jobs:
             echo "::error::manifest.source_repository '$m_repo' != '$EXPECTED_REPO'."
             exit 1
           fi
-          if [ "$m_branch" != "$EXPECTED_BRANCH" ]; then
-            echo "::error::manifest.source_branch '$m_branch' != head branch '$EXPECTED_BRANCH'."
-            exit 1
-          fi
+          case "$m_branch" in
+            ai/*) : ;;
+            *)
+              echo "::error::manifest.source_branch '$m_branch' does not match ai/**."
+              exit 1
+              ;;
+          esac
           if [ "$m_default" != "$EXPECTED_DEFAULT_BRANCH" ]; then
             echo "::error::manifest.default_branch '$m_default' != repository default '$EXPECTED_DEFAULT_BRANCH'."
             exit 1
@@ -224,13 +237,17 @@ jobs:
             echo "::error::Unsupported manifest.status '$m_status'."
             exit 1
           fi
-          # head_sha must be a 40-hex SHA, must equal the input, and must equal head_sha.txt.
+          if [ "$m_title_path" != "title.txt" ] || [ "$m_body_path" != "body.md" ]; then
+            echo "::error::Manifest content paths must be title.txt and body.md."
+            exit 1
+          fi
+          # head_sha must be a 40-hex SHA, equal the selected artifact suffix, and equal head_sha.txt.
           if ! printf '%s' "$m_head" | grep -Eq '^[a-f0-9]{40}$'; then
             echo "::error::manifest.head_sha '$m_head' is not a 40-char lowercase hex SHA."
             exit 1
           fi
           if [ "$m_head" != "$EXPECTED_HEAD_SHA" ]; then
-            echo "::error::manifest.head_sha '$m_head' != workflow_run head_sha '$EXPECTED_HEAD_SHA'."
+            echo "::error::manifest.head_sha '$m_head' != selected artifact SHA '$EXPECTED_HEAD_SHA'."
             exit 1
           fi
           # head_sha.txt was written with printf '%s' (no trailing newline); $(...) strips any
@@ -258,7 +275,23 @@ jobs:
             echo "skipped=$([ "$m_status" = "skipped" ] && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
-      # ── 7. Bun + pinned executor install (trusted, SHA-pinned code only) ──
+      # ── 7. force-push defense #1 using identity emitted by the validated manifest ──
+      - name: Re-resolve branch tip before minting token
+        if: steps.manifest.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ steps.manifest.outputs.branch }}
+          EXPECTED_HEAD_SHA: ${{ steps.manifest.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$REPO/git/ref/heads/$HEAD_BRANCH" --jq '.object.sha')"
+          if [ "$current" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "::error::Branch '$HEAD_BRANCH' tip moved to '$current' (validated '$EXPECTED_HEAD_SHA'). Aborting (force-push race)."
+            exit 1
+          fi
+
+      # ── 8. Bun + pinned executor install (trusted, SHA-pinned code only) ──
       - name: Setup Bun for create job
         if: steps.manifest.outputs.skipped != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -283,7 +316,7 @@ jobs:
           bun add "$EXECUTOR_PKG"
           echo "dir=$(pwd)" >> "$GITHUB_OUTPUT"
 
-      # ── 8. secrets presence (nice error); secrets are only read after all identity validation ──
+      # ── 9. secrets presence; skipped manifests never read them ──
       - name: Check prerequisites (secrets)
         if: steps.manifest.outputs.skipped != 'true'
         env:
@@ -294,22 +327,6 @@ jobs:
           if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
             echo "::error::Missing secrets APP_ID or APP_PRIVATE_KEY on the app-credentials environment."
             echo "::error::See https://github.com/knirski/auto-pr/blob/main/docs/INTEGRATION.md"
-            exit 1
-          fi
-
-      # ── 9. force-push race defense #1: re-resolve the branch tip immediately before minting ──
-      - name: Re-resolve branch tip before minting token
-        if: steps.manifest.outputs.skipped != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          HEAD_BRANCH: ${{ inputs.head_branch }}
-          EXPECTED_HEAD_SHA: ${{ inputs.head_sha }}
-        run: |
-          set -euo pipefail
-          current="$(gh api "repos/$REPO/git/ref/heads/$HEAD_BRANCH" --jq '.object.sha')"
-          if [ "$current" != "$EXPECTED_HEAD_SHA" ]; then
-            echo "::error::Branch '$HEAD_BRANCH' tip moved to '$current' (validated '$EXPECTED_HEAD_SHA'). Aborting (force-push race)."
             exit 1
           fi
 
@@ -329,8 +346,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_BRANCH: ${{ inputs.head_branch }}
-          EXPECTED_HEAD_SHA: ${{ inputs.head_sha }}
+          HEAD_BRANCH: ${{ steps.manifest.outputs.branch }}
+          EXPECTED_HEAD_SHA: ${{ steps.manifest.outputs.head_sha }}
         run: |
           set -euo pipefail
           current="$(gh api "repos/$REPO/git/ref/heads/$HEAD_BRANCH" --jq '.object.sha')"
