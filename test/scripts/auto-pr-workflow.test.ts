@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,6 +38,48 @@ function namedStep(job: Record<string, unknown>, name: string): Record<string, u
     throw new Error(`Expected step '${name}'`);
   }
   return step;
+}
+
+function runWorkflowStep(options: {
+  workflowName: string;
+  jobName: string;
+  stepName: string;
+  env: Readonly<Record<string, string>>;
+  setup?: (directory: string) => void;
+}): { output: string; status: number | null; stderr: string } {
+  const directory = mkdtempSync(join(tmpdir(), "auto-pr-workflow-step-"));
+  try {
+    const outputPath = join(directory, "github-output");
+    options.setup?.(directory);
+    const step = namedStep(workflowJob(options.workflowName, options.jobName), options.stepName);
+    if (typeof step.run !== "string") {
+      throw new Error(`Expected run script for step '${options.stepName}'`);
+    }
+    const result = spawnSync("bash", ["-c", step.run], {
+      cwd: directory,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_OUTPUT: outputPath,
+        PATH: `${join(directory, "bin")}:${process.env.PATH ?? ""}`,
+        ...options.env,
+      },
+    });
+    return {
+      output: existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "",
+      status: result.status,
+      stderr: result.stderr,
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function getOutputValue(output: string, key: string): string | undefined {
+  return output
+    .split("\n")
+    .find((line) => line.startsWith(`${key}=`))
+    ?.slice(key.length + 1);
 }
 
 function runSetPackageAction(options: {
@@ -199,12 +249,37 @@ describe("auto-pr workflow selection", () => {
     expect(uploadArtifact).not.toContain("if: steps.validate.outputs.skip != 'true'");
   });
 
-  test("names each generated artifact for its immutable source commit", () => {
+  test("gives branches sharing a commit distinct immutable artifact names", () => {
     const generateJob = workflowJob("auto-pr-generate-reusable.yml", "generate");
     const upload = namedStep(generateJob, "Upload PR content");
+    const headSha = "a".repeat(40);
+    const runPrepare = (branch: string) =>
+      runWorkflowStep({
+        workflowName: "auto-pr-generate-reusable.yml",
+        jobName: "generate",
+        stepName: "Prepare artifact",
+        env: {
+          BRANCH: branch,
+          DEFAULT_BRANCH: "main",
+          GITHUB_WORKSPACE: "/unused-for-skipped-artifact",
+          HEAD_SHA: headSha,
+          SHOULD_CREATE_PR: "false",
+          SOURCE_REPOSITORY: "knirski/auto-pr",
+        },
+      });
 
+    const first = runPrepare("ai/first");
+    const second = runPrepare("ai/second");
+    const firstName = getOutputValue(first.output, "name");
+    const secondName = getOutputValue(second.output, "name");
+
+    expect(first.status).toBe(0);
+    expect(second.status).toBe(0);
+    expect(firstName).toMatch(/^pr-content-[a-f0-9]{40}-[a-f0-9]{64}$/);
+    expect(secondName).toMatch(/^pr-content-[a-f0-9]{40}-[a-f0-9]{64}$/);
+    expect(firstName).not.toBe(secondName);
     expect(upload.with).toEqual({
-      name: `pr-content-\${{ inputs.head_sha }}`,
+      name: `\${{ steps.artifact.outputs.name }}`,
       path: "pr-content/",
     });
   });
@@ -260,17 +335,52 @@ describe("auto-pr workflow selection", () => {
     expect(createWorkflow).toContain("manifest.source_branch");
     expect(createWorkflow).toContain("manifest.default_branch");
     expect(createWorkflow).toContain("manifest.head_sha");
+    expect(createWorkflow).toContain("steps.artifact.outputs.branch_identity");
+    expect(createWorkflow).toContain("printf '%s' \"$m_branch\" | sha256sum");
     expect(createWorkflow).toContain("steps.manifest.outputs.skipped != 'true'");
   });
 
-  test("matches pull requests only for the same repository source branch", () => {
+  test("tolerates deleted-fork PRs and ignores matching refs from other repositories", () => {
     const generateWorkflow = readFileSync(
       join(repoRoot, ".github/workflows/auto-pr-generate-reusable.yml"),
       "utf8",
     );
+    const headSha = "a".repeat(40);
+    const result = runWorkflowStep({
+      workflowName: "auto-pr-generate-reusable.yml",
+      jobName: "generate",
+      stepName: "Validate source branch",
+      env: {
+        EXPECTED_SHA: headSha,
+        GH_TOKEN: "test-token",
+        REPO: "knirski/auto-pr",
+        SOURCE_BRANCH: "ai/source",
+      },
+      setup: (directory) => {
+        const binDirectory = join(directory, "bin");
+        const ghPath = join(binDirectory, "gh");
+        mkdirSync(binDirectory);
+        writeFileSync(
+          ghPath,
+          `#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"git/ref/heads/ai/source"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
+  *"commits/${headSha}"*) printf '%s' '{"commit":{"committer":{"date":"2099-01-01T00:00:00Z"}}}' ;;
+  *"pulls?state=all&per_page=100"*) printf '%s' '[{"head":{"ref":"ai/deleted","repo":null}},{"head":{"ref":"ai/missing"}},{"head":{"ref":"ai/source","repo":{"full_name":"fork/repo"}}}]' ;;
+  *) exit 64 ;;
+esac
+`,
+        );
+        chmodSync(ghPath, 0o755);
+      },
+    });
 
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.output).toContain("skip=false\n");
     expect(generateWorkflow).toContain(
-      ".head.ref == $source_branch and .head.repo.full_name == $repo",
+      ".head.ref == $source_branch and .head.repo.full_name? == $repo",
     );
   });
 });

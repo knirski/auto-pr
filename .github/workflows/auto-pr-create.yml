@@ -51,7 +51,7 @@ jobs:
               {
                 include: [
                   .[] | .artifacts[]
-                  | select(.expired == false and (.name | test("^pr-content-[a-f0-9]{40}$")))
+                  | select(.expired == false and (.name | test("^pr-content-[a-f0-9]{40}-[a-f0-9]{64}$")))
                   | {artifact_name: .name}
                 ] | unique_by(.artifact_name)
               }

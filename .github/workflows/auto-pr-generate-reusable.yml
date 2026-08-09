@@ -116,8 +116,12 @@ jobs:
           date -u -d "$committed_at" +%s >/dev/null
           cutoff=$(date -u -d "30 days ago" +%Y-%m-%dT%H:%M:%SZ)
           all_pr_heads=$(gh api --paginate "repos/$REPO/pulls?state=all&per_page=100" | jq -s --arg source_branch "$SOURCE_BRANCH" --arg repo "$REPO" '
-            if all(.[]; type == "array") and all(.[][]; (.head? | type == "object") and (.head.ref? | type == "string") and (.head.repo.full_name? | type == "string")) then
-              any(.[][]; .head.ref == $source_branch and .head.repo.full_name == $repo)
+            if all(.[]; type == "array") and all(.[][];
+              (.head? | type == "object")
+              and (.head.ref? | type == "string")
+              and ((.head.repo? == null) or ((.head.repo? | type == "object") and (.head.repo.full_name? | type == "string")))
+            ) then
+              any(.[][]; .head.ref == $source_branch and .head.repo.full_name? == $repo)
             else
               error("malformed pull request API response")
             end
@@ -300,6 +304,7 @@ jobs:
       # head SHA, source repo/branch, default branch, and digests — without trusting the
       # artifact transport (ADR 0016 decisions 5, 6). See docs for the manifest schema (v1).
       - name: Prepare artifact
+        id: artifact
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           SOURCE_REPOSITORY: ${{ github.repository }}
@@ -319,6 +324,8 @@ jobs:
           # Head SHA as a standalone file: the exact commit generate ran against. The create
           # phase cross-checks this against manifest.head_sha and the current branch tip.
           printf '%s' "$HEAD_SHA" > pr-content/head_sha.txt
+          branch_identity=$(printf '%s' "$BRANCH" | sha256sum | awk '{print $1}')
+          echo "name=pr-content-${HEAD_SHA}-${branch_identity}" >> "$GITHUB_OUTPUT"
           title_sha256=$(sha256sum pr-content/title.txt | awk '{print $1}')
           body_sha256=$(sha256sum pr-content/body.md | awk '{print $1}')
           jq -n \
@@ -346,5 +353,5 @@ jobs:
       - name: Upload PR content
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pr-content-${{ inputs.head_sha }}
+          name: ${{ steps.artifact.outputs.name }}
           path: pr-content/

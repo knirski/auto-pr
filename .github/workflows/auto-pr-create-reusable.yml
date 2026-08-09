@@ -12,7 +12,7 @@
 # in this strict order, BEFORE any secret is read or the App token is minted:
 #   1. conclusion == 'success'                              (reject failure/cancelled/timed_out/…)
 #   2. source_repository == github.repository               (reject cross-repo)
-#   3. artifact_name == pr-content-<40-hex-SHA>             (reject malformed selection)
+#   3. artifact_name == pr-content-<SHA>-<branch-digest>    (reject malformed selection)
 #   4. download the artifact scoped to the EXACT triggering run id (never "latest matching name")
 #   5. artifact structure guard: exact expected file set, no symlinks, no path escape, size ceiling
 #   6. manifest validation: version==1, same repo, ai/** branch, current default branch, artifact SHA,
@@ -45,7 +45,7 @@ on:
       artifact_name:
         required: true
         type: string
-        description: "Exact pr-content-<SHA> artifact selected from the triggering run."
+        description: "Exact pr-content-<SHA>-<branch-digest> artifact selected from the triggering run."
       source_repository:
         required: true
         type: string
@@ -107,10 +107,13 @@ jobs:
           ARTIFACT_NAME: ${{ inputs.artifact_name }}
         run: |
           set -euo pipefail
-          if [[ "$ARTIFACT_NAME" =~ ^pr-content-([a-f0-9]{40})$ ]]; then
-            echo "head_sha=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          if [[ "$ARTIFACT_NAME" =~ ^pr-content-([a-f0-9]{40})-([a-f0-9]{64})$ ]]; then
+            {
+              echo "head_sha=${BASH_REMATCH[1]}"
+              echo "branch_identity=${BASH_REMATCH[2]}"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Artifact name '$ARTIFACT_NAME' is not pr-content-<40-hex-SHA>."
+            echo "::error::Artifact name '$ARTIFACT_NAME' is not pr-content-<SHA>-<branch-digest>."
             exit 1
           fi
 
@@ -181,6 +184,7 @@ jobs:
           EXPECTED_REPO: ${{ github.repository }}
           EXPECTED_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EXPECTED_HEAD_SHA: ${{ steps.artifact.outputs.head_sha }}
+          EXPECTED_BRANCH_IDENTITY: ${{ steps.artifact.outputs.branch_identity }}
         run: |
           set -euo pipefail
           MANIFEST="$ARTIFACT_DIR/manifest.json"
@@ -229,6 +233,11 @@ jobs:
               exit 1
               ;;
           esac
+          actual_branch_identity=$(printf '%s' "$m_branch" | sha256sum | awk '{print $1}')
+          if [ "$actual_branch_identity" != "$EXPECTED_BRANCH_IDENTITY" ]; then
+            echo "::error::manifest.source_branch digest does not match the selected artifact."
+            exit 1
+          fi
           if [ "$m_default" != "$EXPECTED_DEFAULT_BRANCH" ]; then
             echo "::error::manifest.default_branch '$m_default' != repository default '$EXPECTED_DEFAULT_BRANCH'."
             exit 1
