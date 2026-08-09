@@ -152,4 +152,24 @@ describe("auto-pr workflow selection", () => {
       "if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'",
     );
   });
+
+  test("uploads a skipped marker when validation skips generation", () => {
+    const generateWorkflow = readFileSync(
+      join(repoRoot, ".github/workflows/auto-pr-generate-reusable.yml"),
+      "utf8",
+    );
+    const prepareArtifact = generateWorkflow.slice(
+      generateWorkflow.indexOf("- name: Prepare artifact"),
+      generateWorkflow.indexOf("- name: Upload PR content"),
+    );
+    const uploadArtifact = generateWorkflow.slice(
+      generateWorkflow.indexOf("- name: Upload PR content"),
+    );
+
+    expect(prepareArtifact).toContain(
+      'status: (if $status == "true" then "generated" else "skipped" end)',
+    );
+    expect(prepareArtifact).not.toContain("if: steps.validate.outputs.skip != 'true'");
+    expect(uploadArtifact).not.toContain("if: steps.validate.outputs.skip != 'true'");
+  });
 });

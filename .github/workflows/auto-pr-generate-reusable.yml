@@ -300,7 +300,6 @@ jobs:
       # head SHA, source repo/branch, default branch, and digests — without trusting the
       # artifact transport (ADR 0016 decisions 5, 6). See docs for the manifest schema (v1).
       - name: Prepare artifact
-        if: steps.validate.outputs.skip != 'true'
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           SOURCE_REPOSITORY: ${{ github.repository }}
@@ -345,7 +344,6 @@ jobs:
             }' > pr-content/manifest.json
 
       - name: Upload PR content
-        if: steps.validate.outputs.skip != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pr-content
