@@ -273,9 +273,9 @@ describe("auto-pr workflow selection", () => {
     expect(action).toContain("validate-source.sh");
     expect(validation.uses).toMatch(/auto-pr-validate-source@[a-f0-9]{40}$/);
     expect(validation.with).toEqual({
-      expected_sha: "${{ inputs.head_sha }}",
-      repository: "${{ github.repository }}",
-      source_branch: "${{ inputs.source_branch }}",
+      expected_sha: `\${{ inputs.head_sha }}`,
+      repository: `\${{ github.repository }}`,
+      source_branch: `\${{ inputs.source_branch }}`,
     });
   });
 
@@ -321,8 +321,8 @@ esac
 
     expect(createWorkflow).toContain("artifact_id");
     expect(createWorkflow).not.toContain("pr-content-<SHA>-<branch-digest>");
-    expect(callerJob.with).toMatchObject({ artifact_id: "${{ matrix.artifact_id }}" });
-    expect(download.with).toHaveProperty("artifact-ids", "${{ inputs.artifact_id }}");
+    expect(callerJob.with).toMatchObject({ artifact_id: `\${{ matrix.artifact_id }}` });
+    expect(download.with).toHaveProperty("artifact-ids", `\${{ inputs.artifact_id }}`);
   });
 
   test("uploads a skipped marker when validation skips generation", () => {
