@@ -114,6 +114,43 @@ function runSetPackageAction(options: {
   }
 }
 
+function runSourceValidationAction(options: {
+  expectedSha: string;
+  repository?: string;
+  sourceBranch: string;
+  setup?: (directory: string) => void;
+}): { output: string; status: number | null; stderr: string } {
+  const directory = mkdtempSync(join(tmpdir(), "auto-pr-source-validation-"));
+  try {
+    const outputPath = join(directory, "github-output");
+    options.setup?.(directory);
+    const result = spawnSync(
+      "bash",
+      [join(repoRoot, ".github/actions/auto-pr-validate-source/validate-source.sh")],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          EXPECTED_SHA: options.expectedSha,
+          GITHUB_OUTPUT: outputPath,
+          GH_TOKEN: "test-token",
+          REPO: options.repository ?? "knirski/auto-pr",
+          SOURCE_BRANCH: options.sourceBranch,
+          PATH: `${join(directory, "bin")}:${process.env.PATH ?? ""}`,
+        },
+      },
+    );
+    return {
+      output: existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "",
+      status: result.status,
+      stderr: result.stderr,
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 describe("auto-pr workflow selection", () => {
   test("does not select workspace mode when Bun is unavailable", () => {
     const result = runSetPackageAction({ packageJson: '{"name":"old-branch"}', runner: "npx" });
@@ -214,11 +251,7 @@ describe("auto-pr workflow selection", () => {
       "utf8",
     );
 
-    expect(generateWorkflow).toContain("Validate source branch");
-    expect(generateWorkflow).toContain("pulls?state=all&per_page=100");
-    expect(generateWorkflow).toContain("30 days ago");
-    expect(generateWorkflow).toContain("source_branch");
-    expect(generateWorkflow).toContain("head_sha");
+    expect(generateWorkflow).toContain("auto-pr-validate-source");
     expect(generateWorkflow).toContain("steps.validate.outputs.skip != 'true'");
     expect(generateWorkflow.indexOf("Validate source branch")).toBeLessThan(
       generateWorkflow.indexOf("Checkout branch"),
@@ -227,6 +260,69 @@ describe("auto-pr workflow selection", () => {
     expect(generateWorkflow).toContain(
       "if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'",
     );
+  });
+
+  test("runs source validation from a standalone action", () => {
+    const action = readFileSync(
+      join(repoRoot, ".github/actions/auto-pr-validate-source/action.yml"),
+      "utf8",
+    );
+    const generateJob = workflowJob("auto-pr-generate-reusable.yml", "generate");
+    const validation = namedStep(generateJob, "Validate source branch");
+
+    expect(action).toContain("validate-source.sh");
+    expect(validation.uses).toMatch(/auto-pr-validate-source@[a-f0-9]{40}$/);
+    expect(validation.with).toEqual({
+      expected_sha: "${{ inputs.head_sha }}",
+      repository: "${{ github.repository }}",
+      source_branch: "${{ inputs.source_branch }}",
+    });
+  });
+
+  test("source validation action emits skip=false for a current branch", () => {
+    const headSha = "a".repeat(40);
+    const result = runSourceValidationAction({
+      expectedSha: headSha,
+      sourceBranch: "ai/source",
+      setup: (directory) => {
+        const binDirectory = join(directory, "bin");
+        const ghPath = join(binDirectory, "gh");
+        mkdirSync(binDirectory);
+        writeFileSync(
+          ghPath,
+          `#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"git/ref/heads/ai/source"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
+  *"commits/${headSha}"*) printf '%s' '{"commit":{"committer":{"date":"2099-01-01T00:00:00Z"}}}' ;;
+  *"pulls?state=all&per_page=100"*) printf '%s' '[]' ;;
+  *) exit 64 ;;
+esac
+`,
+        );
+        chmodSync(ghPath, 0o755);
+      },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("skip=false\n");
+  });
+
+  test("create fan-out passes artifact IDs rather than artifact names", () => {
+    const createWorkflow = readFileSync(
+      join(repoRoot, ".github/workflows/auto-pr-create-reusable.yml"),
+      "utf8",
+    );
+    const callerJob = workflowJob("auto-pr-create.yml", "create");
+    const download = namedStep(
+      workflowJob("auto-pr-create-reusable.yml", "create"),
+      "Download selected PR content artifact",
+    );
+
+    expect(createWorkflow).toContain("artifact_id");
+    expect(createWorkflow).not.toContain("pr-content-<SHA>-<branch-digest>");
+    expect(callerJob.with).toMatchObject({ artifact_id: "${{ matrix.artifact_id }}" });
+    expect(download.with).toHaveProperty("artifact-ids", "${{ inputs.artifact_id }}");
   });
 
   test("uploads a skipped marker when validation skips generation", () => {
@@ -301,7 +397,7 @@ describe("auto-pr workflow selection", () => {
       matrix: `\${{ fromJSON(needs.enumerate.outputs.matrix) }}`,
     });
     expect(createJob.with).toEqual({
-      artifact_name: `\${{ matrix.artifact_name }}`,
+      artifact_id: `\${{ matrix.artifact_id }}`,
       conclusion: `\${{ github.event.workflow_run.conclusion }}`,
       source_repository: `\${{ github.event.workflow_run.repository.full_name }}`,
       workflow_run_id: `\${{ github.event.workflow_run.id }}`,
@@ -321,7 +417,7 @@ describe("auto-pr workflow selection", () => {
     expect(createWorkflow).not.toContain("inputs.head_sha");
     expect(download.with).toEqual({
       "github-token": `\${{ github.token }}`,
-      name: `\${{ inputs.artifact_name }}`,
+      "artifact-ids": `\${{ inputs.artifact_id }}`,
       path: `\${{ runner.temp }}/pr-artifact`,
       "run-id": `\${{ inputs.workflow_run_id }}`,
     });
@@ -335,27 +431,18 @@ describe("auto-pr workflow selection", () => {
     expect(createWorkflow).toContain("manifest.source_branch");
     expect(createWorkflow).toContain("manifest.default_branch");
     expect(createWorkflow).toContain("manifest.head_sha");
-    expect(createWorkflow).toContain("steps.artifact.outputs.branch_identity");
-    expect(createWorkflow).toContain("printf '%s' \"$m_branch\" | sha256sum");
     expect(createWorkflow).toContain("steps.manifest.outputs.skipped != 'true'");
   });
 
   test("tolerates deleted-fork PRs and ignores matching refs from other repositories", () => {
-    const generateWorkflow = readFileSync(
-      join(repoRoot, ".github/workflows/auto-pr-generate-reusable.yml"),
+    const validationScript = readFileSync(
+      join(repoRoot, ".github/actions/auto-pr-validate-source/validate-source.sh"),
       "utf8",
     );
     const headSha = "a".repeat(40);
-    const result = runWorkflowStep({
-      workflowName: "auto-pr-generate-reusable.yml",
-      jobName: "generate",
-      stepName: "Validate source branch",
-      env: {
-        EXPECTED_SHA: headSha,
-        GH_TOKEN: "test-token",
-        REPO: "knirski/auto-pr",
-        SOURCE_BRANCH: "ai/source",
-      },
+    const result = runSourceValidationAction({
+      expectedSha: headSha,
+      sourceBranch: "ai/source",
       setup: (directory) => {
         const binDirectory = join(directory, "bin");
         const ghPath = join(binDirectory, "gh");
@@ -379,7 +466,7 @@ esac
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.output).toContain("skip=false\n");
-    expect(generateWorkflow).toContain(
+    expect(validationScript).toContain(
       ".head.ref == $source_branch and .head.repo.full_name? == $repo",
     );
   });

@@ -6,7 +6,7 @@
 #
 # This file enumerates data artifacts from the exact triggering run and fans out one reusable create
 # call per artifact. It passes only raw workflow_run repository/conclusion/run identity plus the
-# selected artifact name. Source branch/SHA identity comes exclusively from each validated manifest;
+# selected artifact ID. Source branch/SHA identity comes exclusively from each validated manifest;
 # workflow_run.head_branch/head_sha describe the default-branch ingress for scheduled/manual runs and
 # are never trusted as source identity. All privileged validation remains in the reusable workflow.
 #
@@ -46,14 +46,14 @@ jobs:
           gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" > "$pages"
           matrix="$(jq -cs '
             if all(.[]; type == "object" and (.artifacts? | type == "array"))
-              and all(.[] | .artifacts[]; (.name? | type == "string") and (.expired? | type == "boolean"))
+              and all(.[] | .artifacts[]; (.id? | type == "number") and (.name? | type == "string") and (.expired? | type == "boolean"))
             then
               {
                 include: [
                   .[] | .artifacts[]
-                  | select(.expired == false and (.name | test("^pr-content-[a-f0-9]{40}-[a-f0-9]{64}$")))
-                  | {artifact_name: .name}
-                ] | unique_by(.artifact_name)
+                  | select(.expired == false and (.name | startswith("pr-content-")))
+                  | {artifact_id: (.id | tostring)}
+                ] | unique_by(.artifact_id)
               }
             else
               error("malformed workflow artifact API response")
@@ -87,11 +87,11 @@ jobs:
       contents: read
       pull-requests: write
       actions: read
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@840fb7b21ef30105a86e259e9ce912b44941aca6
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@7c7817eb9246c4a5060d465bd659df1d97081794
     with:
       # Raw run context plus the exact run-scoped artifact selected by the enumeration matrix.
       workflow_run_id: ${{ github.event.workflow_run.id }}
-      artifact_name: ${{ matrix.artifact_name }}
+      artifact_id: ${{ matrix.artifact_id }}
       source_repository: ${{ github.event.workflow_run.repository.full_name }}
       conclusion: ${{ github.event.workflow_run.conclusion }}
     secrets: inherit
