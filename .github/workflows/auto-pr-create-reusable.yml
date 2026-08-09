@@ -273,7 +273,7 @@ jobs:
         if: steps.manifest.outputs.skipped != 'true'
         run: |
           set -euo pipefail
-          EXECUTOR_PKG="github:knirski/auto-pr#90df9d04cac25faa54b4ee8e3c4a4c78151a5eab"
+          EXECUTOR_PKG="github:knirski/auto-pr#840fb7b21ef30105a86e259e9ce912b44941aca6"
           if ! printf '%s' "$EXECUTOR_PKG" | grep -Eq '^github:knirski/auto-pr#[a-f0-9]{40}$'; then
             echo "::error::Executor ref is not a well-formed 40-hex SHA pin: '$EXECUTOR_PKG'."
             exit 1

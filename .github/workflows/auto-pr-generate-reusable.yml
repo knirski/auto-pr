@@ -109,7 +109,7 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/setup-runtime@840fb7b21ef30105a86e259e9ce912b44941aca6
 
       - name: Fetch base branch
         env:
@@ -121,7 +121,7 @@ jobs:
       # runs: the branch-derived package ref was removed (ADR 0016 decisions 3, 6).
       - name: Determine auto-pr workspace mode
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@840fb7b21ef30105a86e259e9ce912b44941aca6
         with:
           repository: ${{ github.repository }}
           runner: ${{ steps.setup.outputs.runner }}
@@ -154,7 +154,7 @@ jobs:
       - name: Build model routing context
         id: ai_routing
         if: steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@840fb7b21ef30105a86e259e9ce912b44941aca6
         with:
           command: build-model-routing-context
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -174,7 +174,7 @@ jobs:
       - name: Resolve llama Docker image
         id: llama_release
         if: steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@840fb7b21ef30105a86e259e9ce912b44941aca6
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -201,7 +201,7 @@ jobs:
       - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@840fb7b21ef30105a86e259e9ce912b44941aca6
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -211,7 +211,7 @@ jobs:
       - name: Generate PR content
         id: generate
         if: steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@840fb7b21ef30105a86e259e9ce912b44941aca6
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -233,7 +233,7 @@ jobs:
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@840fb7b21ef30105a86e259e9ce912b44941aca6
 
       # Produce the artifact as DATA ONLY (no executable content, no glob patterns): two content
       # files plus a versioned manifest carrying immutable identity fields and SHA-256 content
