@@ -117,7 +117,7 @@ jobs:
       contents: read
       pull-requests: read # caps reusable generate job (gh pr view for existing title)
       models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
-    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@81173f4981086001b3053c6bee691c116e137588
+    uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@90df9d04cac25faa54b4ee8e3c4a4c78151a5eab
     with:
       # Explicit immutable SHA + source branch resolved by the discover job (ADR 0016 decision 3).
       head_sha: ${{ matrix.head_sha }}
