@@ -1,0 +1,29 @@
+name: Validate Auto-PR source branch
+description: Skip stale or already-processed ai/** branches before checkout.
+
+inputs:
+  expected_sha:
+    description: Immutable branch tip resolved by the caller.
+    required: true
+  repository:
+    description: GitHub repository in owner/name form.
+    required: true
+  source_branch:
+    description: ai/** branch to validate.
+    required: true
+
+outputs:
+  skip:
+    description: true when generation should be skipped safely.
+    value: ${{ steps.validate.outputs.skip }}
+
+runs:
+  using: composite
+  steps:
+    - id: validate
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/validate-source.sh"
+      env:
+        EXPECTED_SHA: ${{ inputs.expected_sha }}
+        REPO: ${{ inputs.repository }}
+        SOURCE_BRANCH: ${{ inputs.source_branch }}
