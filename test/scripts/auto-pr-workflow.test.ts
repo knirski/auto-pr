@@ -131,4 +131,25 @@ describe("auto-pr workflow selection", () => {
     expect(createWorkflow).toContain("manifest.status");
     expect(createWorkflow).toContain("steps.manifest.outputs.skipped != 'true'");
   });
+
+  test("validates source branches before checkout and generation", () => {
+    const generateWorkflow = readFileSync(
+      join(repoRoot, ".github/workflows/auto-pr-generate-reusable.yml"),
+      "utf8",
+    );
+
+    expect(generateWorkflow).toContain("Validate source branch");
+    expect(generateWorkflow).toContain("pulls?state=all&per_page=100");
+    expect(generateWorkflow).toContain("30 days ago");
+    expect(generateWorkflow).toContain("source_branch");
+    expect(generateWorkflow).toContain("head_sha");
+    expect(generateWorkflow).toContain("steps.validate.outputs.skip != 'true'");
+    expect(generateWorkflow.indexOf("Validate source branch")).toBeLessThan(
+      generateWorkflow.indexOf("Checkout branch"),
+    );
+    expect(generateWorkflow).toContain("if: steps.validate.outputs.skip != 'true'");
+    expect(generateWorkflow).toContain(
+      "if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'",
+    );
+  });
 });
