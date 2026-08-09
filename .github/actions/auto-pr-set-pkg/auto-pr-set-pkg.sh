@@ -20,6 +20,7 @@ GITHUB_OUTPUT="${GITHUB_OUTPUT:?}"
 # Older ai/** branches fall back to the stable published package.
 workspace_ready=false
 if [ "$REPO" = "knirski/auto-pr" ] && [ "$RUNNER" = "bunx" ] && [ -f package.json ] && jq -e '
+  (.autoPr.workspaceCommands == "detached-head-v1") and
   (.scripts["build-model-routing-context"] | type == "string" and length > 0) and
   (.scripts["generate-content"] | type == "string" and length > 0)
 ' package.json >/dev/null 2>&1; then

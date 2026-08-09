@@ -71,6 +71,7 @@ describe("auto-pr workflow selection", () => {
     const result = runSetPackageAction({
       packageJson: JSON.stringify({
         name: "current-branch",
+        autoPr: { workspaceCommands: "detached-head-v1" },
         scripts: {
           "build-model-routing-context":
             "bun run src/workflow/auto-pr-build-model-routing-context.ts",
@@ -82,6 +83,23 @@ describe("auto-pr workflow selection", () => {
 
     expect(result.status).toBe(0);
     expect(result.output).toContain("use_workspace=true\n");
+  });
+
+  test("does not select workspace mode for a stale branch with both scripts", () => {
+    const result = runSetPackageAction({
+      packageJson: JSON.stringify({
+        name: "stale-branch",
+        scripts: {
+          "build-model-routing-context":
+            "bun run src/workflow/auto-pr-build-model-routing-context.ts",
+          "generate-content": "bun run src/workflow/auto-pr-generate-content.ts",
+        },
+      }),
+      runner: "bunx",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("use_workspace=false\n");
   });
 
   test("documents clean no-semantic-commit handling across both workflows", () => {
