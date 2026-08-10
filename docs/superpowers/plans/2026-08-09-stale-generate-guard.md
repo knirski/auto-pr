@@ -117,7 +117,7 @@ Run: `bun test test/scripts/auto-pr-workflow.test.ts`
 
 Expected: PASS with the new guard assertions.
 
-Run: `nix run nixpkgs#actionlint -- .github/workflows/auto-pr-generate-reusable.yml`
+Run: `bun run lint:workflows`
 
 Expected: PASS with no workflow syntax errors.
 
