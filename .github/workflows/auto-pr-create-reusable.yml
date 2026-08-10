@@ -265,7 +265,8 @@ jobs:
           EXPECTED_HEAD_SHA: ${{ steps.manifest.outputs.head_sha }}
         run: |
           set -euo pipefail
-          current="$(gh api "repos/$REPO/git/ref/heads/$HEAD_BRANCH" --jq '.object.sha')"
+          encoded_head_branch="$(jq -rn --arg branch "$HEAD_BRANCH" '$branch | @uri')"
+          current="$(gh api "repos/$REPO/git/ref/heads/$encoded_head_branch" --jq '.object.sha')"
           if [ "$current" != "$EXPECTED_HEAD_SHA" ]; then
             echo "::error::Branch '$HEAD_BRANCH' tip moved to '$current' (validated '$EXPECTED_HEAD_SHA'). Aborting (force-push race)."
             exit 1
@@ -330,7 +331,8 @@ jobs:
           EXPECTED_HEAD_SHA: ${{ steps.manifest.outputs.head_sha }}
         run: |
           set -euo pipefail
-          current="$(gh api "repos/$REPO/git/ref/heads/$HEAD_BRANCH" --jq '.object.sha')"
+          encoded_head_branch="$(jq -rn --arg branch "$HEAD_BRANCH" '$branch | @uri')"
+          current="$(gh api "repos/$REPO/git/ref/heads/$encoded_head_branch" --jq '.object.sha')"
           if [ "$current" != "$EXPECTED_HEAD_SHA" ]; then
             echo "::error::Branch '$HEAD_BRANCH' tip moved to '$current' (validated '$EXPECTED_HEAD_SHA') after token mint. Aborting (force-push race)."
             exit 1

@@ -293,7 +293,36 @@ describe("auto-pr workflow selection", () => {
           `#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  *"git/ref/heads/ai/source"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
+  *"git/ref/heads/ai%2Fsource"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
+  *"commits/${headSha}"*) printf '%s' '{"commit":{"committer":{"date":"2099-01-01T00:00:00Z"}}}' ;;
+  *"pulls?state=all&per_page=100"*) printf '%s' '[]' ;;
+  *) exit 64 ;;
+esac
+`,
+        );
+        chmodSync(ghPath, 0o755);
+      },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("skip=false\n");
+  });
+
+  test("URL-encodes source branch names for GitHub ref lookups", () => {
+    const headSha = "a".repeat(40);
+    const result = runSourceValidationAction({
+      expectedSha: headSha,
+      sourceBranch: "ai/issue#1",
+      setup: (directory) => {
+        const binDirectory = join(directory, "bin");
+        const ghPath = join(binDirectory, "gh");
+        mkdirSync(binDirectory);
+        writeFileSync(
+          ghPath,
+          `#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *"git/ref/heads/ai%2Fissue%231"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
   *"commits/${headSha}"*) printf '%s' '{"commit":{"committer":{"date":"2099-01-01T00:00:00Z"}}}' ;;
   *"pulls?state=all&per_page=100"*) printf '%s' '[]' ;;
   *) exit 64 ;;
@@ -452,7 +481,7 @@ esac
           `#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  *"git/ref/heads/ai/source"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
+  *"git/ref/heads/ai%2Fsource"*) printf '%s' '{"object":{"sha":"${headSha}"}}' ;;
   *"commits/${headSha}"*) printf '%s' '{"commit":{"committer":{"date":"2099-01-01T00:00:00Z"}}}' ;;
   *"pulls?state=all&per_page=100"*) printf '%s' '[{"head":{"ref":"ai/deleted","repo":null}},{"head":{"ref":"ai/missing"}},{"head":{"ref":"ai/source","repo":{"full_name":"fork/repo"}}}]' ;;
   *) exit 64 ;;

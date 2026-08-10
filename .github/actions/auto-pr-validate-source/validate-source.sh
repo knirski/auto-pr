@@ -16,7 +16,8 @@ fi
 
 branch_error=$(mktemp)
 trap 'rm -f "$branch_error"' EXIT
-if ! branch_ref=$(gh api "repos/$REPO/git/ref/heads/$SOURCE_BRANCH" 2>"$branch_error"); then
+encoded_source_branch=$(jq -rn --arg branch "$SOURCE_BRANCH" '$branch | @uri')
+if ! branch_ref=$(gh api "repos/$REPO/git/ref/heads/$encoded_source_branch" 2>"$branch_error"); then
 	if grep -q 'HTTP 404' "$branch_error"; then
 		echo "Skipping generation: source branch no longer exists."
 		echo "skip=true" >>"$GITHUB_OUTPUT"
