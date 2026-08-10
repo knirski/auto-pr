@@ -84,6 +84,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
+      - name: Validate source branch
+        id: validate
+        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@7c7817eb9246c4a5060d465bd659df1d97081794
+        with:
+          expected_sha: ${{ inputs.head_sha }}
+          repository: ${{ github.repository }}
+          source_branch: ${{ inputs.source_branch }}
       # codeql[actions/untrusted-checkout] False positive: this reusable workflow is analyzed by
       # CodeQL without caller context, but the job is unprivileged by construction (ADR 0016
       # decision 3). It checks out an explicit, caller-resolved head SHA (never a mutable ref) with
@@ -92,6 +99,7 @@ jobs:
       # output is the data-only pr-content artifact; the privileged create phase is a SEPARATE
       # workflow_run executor that performs no checkout, so this checkout is never privileged.
       - name: Checkout branch
+        if: steps.validate.outputs.skip != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.head_sha }}
@@ -99,6 +107,7 @@ jobs:
           persist-credentials: false
 
       - name: Check prerequisites (template only)
+        if: steps.validate.outputs.skip != 'true'
         run: |
           if [ ! -f ".github/PULL_REQUEST_TEMPLATE.md" ]; then
             echo "::error::Missing .github/PULL_REQUEST_TEMPLATE.md. Run: npx -p github:knirski/auto-pr auto-pr-init"
@@ -109,9 +118,11 @@ jobs:
       # Full paths to knirski/auto-pr actions (not ./ in caller). Update @SHA when bumping pins (see auto-pr.yml).
       - name: Setup runtime (Node or alternative) with cache
         id: setup
-        uses: knirski/auto-pr/.github/actions/setup-runtime@840fb7b21ef30105a86e259e9ce912b44941aca6
+        if: steps.validate.outputs.skip != 'true'
+        uses: knirski/auto-pr/.github/actions/setup-runtime@7c7817eb9246c4a5060d465bd659df1d97081794
 
       - name: Fetch base branch
+        if: steps.validate.outputs.skip != 'true'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: git fetch origin "$DEFAULT_BRANCH"
@@ -121,17 +132,19 @@ jobs:
       # runs: the branch-derived package ref was removed (ADR 0016 decisions 3, 6).
       - name: Determine auto-pr workspace mode
         id: auto-pr-pkg
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@840fb7b21ef30105a86e259e9ce912b44941aca6
+        if: steps.validate.outputs.skip != 'true'
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@7c7817eb9246c4a5060d465bd659df1d97081794
         with:
           repository: ${{ github.repository }}
           runner: ${{ steps.setup.outputs.runner }}
 
       - name: Install dependencies (workspace only)
-        if: steps.auto-pr-pkg.outputs.use_workspace == 'true' && steps.setup.outputs.runner == 'bunx'
+        if: steps.validate.outputs.skip != 'true' && steps.auto-pr-pkg.outputs.use_workspace == 'true' && steps.setup.outputs.runner == 'bunx'
         run: bun install --frozen-lockfile
 
       - name: Count non-merge commits
         id: commits
+        if: steps.validate.outputs.skip != 'true'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
@@ -140,6 +153,7 @@ jobs:
 
       - name: Check for semantic commits
         id: semantic
+        if: steps.validate.outputs.skip != 'true'
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
@@ -153,8 +167,8 @@ jobs:
 
       - name: Build model routing context
         id: ai_routing
-        if: steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@840fb7b21ef30105a86e259e9ce912b44941aca6
+        if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@7c7817eb9246c4a5060d465bd659df1d97081794
         with:
           command: build-model-routing-context
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -173,8 +187,8 @@ jobs:
 
       - name: Resolve llama Docker image
         id: llama_release
-        if: steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@840fb7b21ef30105a86e259e9ce912b44941aca6
+        if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@7c7817eb9246c4a5060d465bd659df1d97081794
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -184,7 +198,7 @@ jobs:
 
       - name: Local llama.cpp — cache key
         id: llama_cache_key
-        if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         env:
           MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
         run: |
@@ -192,7 +206,7 @@ jobs:
           echo "hash=$h" >> "$GITHUB_OUTPUT"
 
       - name: Cache llama.cpp (GGUF model + Docker image tar)
-        if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/auto-pr-llama
@@ -200,8 +214,8 @@ jobs:
 
       - name: Start local llama.cpp (Docker)
         id: local_llama
-        if: steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@840fb7b21ef30105a86e259e9ce912b44941aca6
+        if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@7c7817eb9246c4a5060d465bd659df1d97081794
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -210,8 +224,8 @@ jobs:
 
       - name: Generate PR content
         id: generate
-        if: steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@840fb7b21ef30105a86e259e9ce912b44941aca6
+        if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@7c7817eb9246c4a5060d465bd659df1d97081794
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -233,7 +247,7 @@ jobs:
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@840fb7b21ef30105a86e259e9ce912b44941aca6
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@7c7817eb9246c4a5060d465bd659df1d97081794
 
       # Produce the artifact as DATA ONLY (no executable content, no glob patterns): two content
       # files plus a versioned manifest carrying immutable identity fields and SHA-256 content
@@ -241,6 +255,7 @@ jobs:
       # head SHA, source repo/branch, default branch, and digests — without trusting the
       # artifact transport (ADR 0016 decisions 5, 6). See docs for the manifest schema (v1).
       - name: Prepare artifact
+        id: artifact
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           SOURCE_REPOSITORY: ${{ github.repository }}
@@ -260,6 +275,8 @@ jobs:
           # Head SHA as a standalone file: the exact commit generate ran against. The create
           # phase cross-checks this against manifest.head_sha and the current branch tip.
           printf '%s' "$HEAD_SHA" > pr-content/head_sha.txt
+          branch_identity=$(printf '%s' "$BRANCH" | sha256sum | awk '{print $1}')
+          echo "name=pr-content-${HEAD_SHA}-${branch_identity}" >> "$GITHUB_OUTPUT"
           title_sha256=$(sha256sum pr-content/title.txt | awk '{print $1}')
           body_sha256=$(sha256sum pr-content/body.md | awk '{print $1}')
           jq -n \
@@ -287,5 +304,5 @@ jobs:
       - name: Upload PR content
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pr-content
+          name: ${{ steps.artifact.outputs.name }}
           path: pr-content/
