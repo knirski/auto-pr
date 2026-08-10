@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Option } from "effect";
 
 const repoRoot = process.cwd();
 
@@ -38,6 +39,14 @@ function namedStep(job: Record<string, unknown>, name: string): Record<string, u
     throw new Error(`Expected step '${name}'`);
   }
   return step;
+}
+
+function fileAtCommit(sha: string, path: string): string {
+  const result = spawnSync("git", ["show", `${sha}:${path}`], { encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`git show ${sha}:${path} failed: ${result.stderr}`);
+  }
+  return result.stdout;
 }
 
 function runWorkflowStep(options: {
@@ -313,6 +322,40 @@ describe("auto-pr workflow selection", () => {
       source_branch: `\${{ inputs.source_branch }}`,
       "github-token": `\${{ github.token }}`,
     });
+  });
+
+  test("pinned validate-source action declares the inputs the caller passes", () => {
+    // GitHub resolves `uses:` refs against the pinned commit, not the branch tip: the runner
+    // loads auto-pr-generate-reusable.yml AT the SHA auto-pr.yml pins, then loads the action AT
+    // the SHA that file pins. A uniform-pin check on the working tree alone cannot catch a pin
+    // target whose own files pin an older, incompatible action (regression: run 31404948016).
+    const caller = readFileSync(join(repoRoot, ".github/workflows/auto-pr.yml"), "utf8");
+    const reusablePin = Option.fromNullishOr(
+      caller.match(
+        /^[ \t]*uses:[ \t]*knirski\/auto-pr\/\.github\/workflows\/auto-pr-generate-reusable\.yml@([a-f0-9]{40})[ \t]*$/m,
+      )?.[1],
+    );
+    expect(Option.isSome(reusablePin)).toBe(true);
+
+    const pinnedReusable = fileAtCommit(
+      Option.getOrThrow(reusablePin),
+      ".github/workflows/auto-pr-generate-reusable.yml",
+    );
+    const actionPin = Option.fromNullishOr(
+      pinnedReusable.match(
+        /^[ \t]*uses:[ \t]*knirski\/auto-pr\/\.github\/actions\/auto-pr-validate-source@([a-f0-9]{40})[ \t]*$/m,
+      )?.[1],
+    );
+    expect(Option.isSome(actionPin)).toBe(true);
+
+    const pinnedAction = fileAtCommit(
+      Option.getOrThrow(actionPin),
+      ".github/actions/auto-pr-validate-source/action.yml",
+    );
+    const actionYaml = Bun.YAML.parse(pinnedAction);
+    const actionInputs = isRecord(actionYaml) ? actionYaml.inputs : undefined;
+    expect(isRecord(actionInputs) && actionInputs["github-token"] !== undefined).toBe(true);
+    expect(pinnedAction).toContain("GH_TOKEN: ${{ inputs.github-token }}");
   });
 
   test("source validation action emits skip=false for a current branch", () => {

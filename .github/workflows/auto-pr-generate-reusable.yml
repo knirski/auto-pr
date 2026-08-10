@@ -86,7 +86,7 @@ jobs:
     steps:
       - name: Validate source branch
         id: validate
-        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@c134943da64a407fe1ae8e664883ff8b8313d58b
         with:
           expected_sha: ${{ inputs.head_sha }}
           github-token: ${{ github.token }}
@@ -120,7 +120,7 @@ jobs:
       - name: Setup runtime (Node or alternative) with cache
         id: setup
         if: steps.validate.outputs.skip != 'true'
-        uses: knirski/auto-pr/.github/actions/setup-runtime@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/setup-runtime@c134943da64a407fe1ae8e664883ff8b8313d58b
 
       - name: Fetch base branch
         if: steps.validate.outputs.skip != 'true'
@@ -134,7 +134,7 @@ jobs:
       - name: Determine auto-pr workspace mode
         id: auto-pr-pkg
         if: steps.validate.outputs.skip != 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@c134943da64a407fe1ae8e664883ff8b8313d58b
         with:
           repository: ${{ github.repository }}
           runner: ${{ steps.setup.outputs.runner }}
@@ -169,7 +169,7 @@ jobs:
       - name: Build model routing context
         id: ai_routing
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@c134943da64a407fe1ae8e664883ff8b8313d58b
         with:
           command: build-model-routing-context
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -189,7 +189,7 @@ jobs:
       - name: Resolve llama Docker image
         id: llama_release
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@c134943da64a407fe1ae8e664883ff8b8313d58b
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -216,7 +216,7 @@ jobs:
       - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@c134943da64a407fe1ae8e664883ff8b8313d58b
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -226,7 +226,7 @@ jobs:
       - name: Generate PR content
         id: generate
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@c134943da64a407fe1ae8e664883ff8b8313d58b
         with:
           command: generate-content
           use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
@@ -248,7 +248,7 @@ jobs:
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@a6b982130853c9b5f824aa24627463cccdeaef43
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@c134943da64a407fe1ae8e664883ff8b8313d58b
 
       # Produce the artifact as DATA ONLY (no executable content, no glob patterns): two content
       # files plus a versioned manifest carrying immutable identity fields and SHA-256 content
