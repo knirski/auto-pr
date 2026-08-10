@@ -14,7 +14,7 @@ bun run build
 bun x lefthook install
 ```
 
-The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.13 for local parity with CI. Update both files together (and this flake's locked `nixpkgs` `bun`, if bumping past it) — see [flake.nix](flake.nix)'s `devShellPackages`/`checks.dev-shell-bun-version` for the single source of truth these must all agree with.
+The repo pins Bun in both `package.json` (`packageManager`) and [`.bun-version`](.bun-version). Use Bun 1.3.14 for local parity with CI. Update both files together (and this flake's locked `nixpkgs` `bun`, if bumping past it) — see [flake.nix](flake.nix)'s `devShellPackages`/`checks.dev-shell-bun-version` for the single source of truth these must all agree with.
 
 **Fork contributors:** Fork the repo, clone your fork, then `bun install`, `bun run build`, and `bun x lefthook install`. Push to `ai/**` branches to auto-create PRs. The auto-PR workflow runs on forks; it will fail with "Missing secrets" unless you add `APP_ID` and `APP_PRIVATE_KEY` to your fork's **Settings → Secrets and variables → Actions** (create a GitHub App for your fork). Without secrets, create the PR manually from your branch to `main`.
 
