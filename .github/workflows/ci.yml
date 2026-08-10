@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
       - name: Compute code path filter
         id: code_filter
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           # `every` is required for the `code` filter because it uses a broad include (`**`)
           # plus excludes. With `some`, docs-only changes also match `code`.
@@ -65,7 +65,7 @@ jobs:
               - '!flake.lock'
       - name: Compute path filters
         id: filter
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
             docs:
