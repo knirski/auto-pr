@@ -89,6 +89,7 @@ jobs:
         uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@186ded646725427bc997daaebb72355c80183b93
         with:
           expected_sha: ${{ inputs.head_sha }}
+          github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           source_branch: ${{ inputs.source_branch }}
       # codeql[actions/untrusted-checkout] False positive: this reusable workflow is analyzed by
