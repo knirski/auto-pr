@@ -40,6 +40,14 @@ function namedStep(job: Record<string, unknown>, name: string): Record<string, u
   return step;
 }
 
+function fileAtCommit(sha: string, path: string): string {
+  const result = spawnSync("git", ["show", `${sha}:${path}`], { encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`git show ${sha}:${path} failed: ${result.stderr}`);
+  }
+  return result.stdout;
+}
+
 function runWorkflowStep(options: {
   workflowName: string;
   jobName: string;
@@ -313,6 +321,30 @@ describe("auto-pr workflow selection", () => {
       source_branch: `\${{ inputs.source_branch }}`,
       "github-token": `\${{ github.token }}`,
     });
+  });
+
+  test("pinned validate-source action declares the inputs the caller passes", () => {
+    // GitHub resolves `uses:` refs against the pinned commit, not the branch tip: the runner
+    // loads auto-pr-generate-reusable.yml AT the SHA auto-pr.yml pins, then loads the action AT
+    // the SHA that file pins. A uniform-pin check on the working tree alone cannot catch a pin
+    // target whose own files pin an older, incompatible action (regression: run 31404948016).
+    const caller = readFileSync(join(repoRoot, ".github/workflows/auto-pr.yml"), "utf8");
+    const reusablePin = caller.match(/auto-pr-generate-reusable\.yml@([a-f0-9]{40})/)?.[1];
+    expect(reusablePin).toBeDefined();
+
+    const pinnedReusable = fileAtCommit(
+      reusablePin ?? "",
+      ".github/workflows/auto-pr-generate-reusable.yml",
+    );
+    const actionPin = pinnedReusable.match(/auto-pr-validate-source@([a-f0-9]{40})/)?.[1];
+    expect(actionPin).toBeDefined();
+
+    const pinnedAction = fileAtCommit(
+      actionPin ?? "",
+      ".github/actions/auto-pr-validate-source/action.yml",
+    );
+    expect(pinnedAction).toContain("github-token");
+    expect(pinnedAction).toContain("GH_TOKEN: ${{ inputs.github-token }}");
   });
 
   test("source validation action emits skip=false for a current branch", () => {
