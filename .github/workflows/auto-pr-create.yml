@@ -87,7 +87,7 @@ jobs:
       contents: read
       pull-requests: write
       actions: read
-    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@7c7817eb9246c4a5060d465bd659df1d97081794
+    uses: knirski/auto-pr/.github/workflows/auto-pr-create-reusable.yml@186ded646725427bc997daaebb72355c80183b93
     with:
       # Raw run context plus the exact run-scoped artifact selected by the enumeration matrix.
       workflow_run_id: ${{ github.event.workflow_run.id }}
