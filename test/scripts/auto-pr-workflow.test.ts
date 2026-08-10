@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Option } from "effect";
 
 const repoRoot = process.cwd();
 
@@ -329,21 +330,31 @@ describe("auto-pr workflow selection", () => {
     // the SHA that file pins. A uniform-pin check on the working tree alone cannot catch a pin
     // target whose own files pin an older, incompatible action (regression: run 31404948016).
     const caller = readFileSync(join(repoRoot, ".github/workflows/auto-pr.yml"), "utf8");
-    const reusablePin = caller.match(/auto-pr-generate-reusable\.yml@([a-f0-9]{40})/)?.[1];
-    expect(reusablePin).toBeDefined();
+    const reusablePin = Option.fromNullishOr(
+      caller.match(
+        /^[ \t]*uses:[ \t]*knirski\/auto-pr\/\.github\/workflows\/auto-pr-generate-reusable\.yml@([a-f0-9]{40})[ \t]*$/m,
+      )?.[1],
+    );
+    expect(Option.isSome(reusablePin)).toBe(true);
 
     const pinnedReusable = fileAtCommit(
-      reusablePin ?? "",
+      Option.getOrThrow(reusablePin),
       ".github/workflows/auto-pr-generate-reusable.yml",
     );
-    const actionPin = pinnedReusable.match(/auto-pr-validate-source@([a-f0-9]{40})/)?.[1];
-    expect(actionPin).toBeDefined();
+    const actionPin = Option.fromNullishOr(
+      pinnedReusable.match(
+        /^[ \t]*uses:[ \t]*knirski\/auto-pr\/\.github\/actions\/auto-pr-validate-source@([a-f0-9]{40})[ \t]*$/m,
+      )?.[1],
+    );
+    expect(Option.isSome(actionPin)).toBe(true);
 
     const pinnedAction = fileAtCommit(
-      actionPin ?? "",
+      Option.getOrThrow(actionPin),
       ".github/actions/auto-pr-validate-source/action.yml",
     );
-    expect(pinnedAction).toContain("github-token");
+    const actionYaml = Bun.YAML.parse(pinnedAction);
+    const actionInputs = isRecord(actionYaml) ? actionYaml.inputs : undefined;
+    expect(isRecord(actionInputs) && actionInputs["github-token"] !== undefined).toBe(true);
     expect(pinnedAction).toContain("GH_TOKEN: ${{ inputs.github-token }}");
   });
 
