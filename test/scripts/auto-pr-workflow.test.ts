@@ -151,6 +151,40 @@ function runSourceValidationAction(options: {
   }
 }
 
+function setupSourceValidationGh(
+  directory: string,
+  options: {
+    sourceBranch: string;
+    branchSha?: string;
+    commitDate?: string;
+    pullRequests?: string;
+    missingBranch?: boolean;
+  },
+): void {
+  const binDirectory = join(directory, "bin");
+  const ghPath = join(binDirectory, "gh");
+  const encodedBranch = encodeURIComponent(options.sourceBranch);
+  const branchCase = options.missingBranch
+    ? `  *"git/ref/heads/${encodedBranch}"*) printf '%s\\n' 'HTTP 404' >&2; exit 1 ;;`
+    : `  *"git/ref/heads/${encodedBranch}"*) printf '%s' '{"object":{"sha":"${options.branchSha}"}}' ;;`;
+  mkdirSync(binDirectory);
+  writeFileSync(
+    ghPath,
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      'case "$*" in',
+      branchCase,
+      `  *"commits/${options.branchSha}"*) printf '%s' '{"commit":{"committer":{"date":"${options.commitDate}"}}}' ;;`,
+      `  *"pulls?state=all&per_page=100"*) printf '%s' '${options.pullRequests ?? "[]"}' ;;`,
+      "  *) exit 64 ;;",
+      "esac",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(ghPath, 0o755);
+}
+
 describe("auto-pr workflow selection", () => {
   test("does not select workspace mode when Bun is unavailable", () => {
     const result = runSetPackageAction({ packageJson: '{"name":"old-branch"}', runner: "npx" });
@@ -335,6 +369,72 @@ esac
 
     expect(result.status).toBe(0);
     expect(result.output).toContain("skip=false\n");
+  });
+
+  test("skips generation when the source branch is missing", () => {
+    const result = runSourceValidationAction({
+      expectedSha: "a".repeat(40),
+      sourceBranch: "ai/missing",
+      setup: (directory) =>
+        setupSourceValidationGh(directory, {
+          missingBranch: true,
+          sourceBranch: "ai/missing",
+        }),
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("skip=true\n");
+  });
+
+  test("skips generation when the source branch tip changed", () => {
+    const result = runSourceValidationAction({
+      expectedSha: "a".repeat(40),
+      sourceBranch: "ai/moved",
+      setup: (directory) =>
+        setupSourceValidationGh(directory, {
+          branchSha: "b".repeat(40),
+          commitDate: "2099-01-01T00:00:00Z",
+          sourceBranch: "ai/moved",
+        }),
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("skip=true\n");
+  });
+
+  test("skips generation when the source commit is expired", () => {
+    const headSha = "a".repeat(40);
+    const result = runSourceValidationAction({
+      expectedSha: headSha,
+      sourceBranch: "ai/expired",
+      setup: (directory) =>
+        setupSourceValidationGh(directory, {
+          branchSha: headSha,
+          commitDate: "2000-01-01T00:00:00Z",
+          sourceBranch: "ai/expired",
+        }),
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("skip=true\n");
+  });
+
+  test("skips generation when a same-repository pull request exists", () => {
+    const headSha = "a".repeat(40);
+    const result = runSourceValidationAction({
+      expectedSha: headSha,
+      sourceBranch: "ai/already-pr",
+      setup: (directory) =>
+        setupSourceValidationGh(directory, {
+          branchSha: headSha,
+          commitDate: "2099-01-01T00:00:00Z",
+          pullRequests: '[{"head":{"ref":"ai/already-pr","repo":{"full_name":"knirski/auto-pr"}}}]',
+          sourceBranch: "ai/already-pr",
+        }),
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("skip=true\n");
   });
 
   test("create fan-out passes artifact IDs rather than artifact names", () => {
