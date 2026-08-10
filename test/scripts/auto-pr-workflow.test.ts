@@ -305,11 +305,13 @@ describe("auto-pr workflow selection", () => {
     const validation = namedStep(generateJob, "Validate source branch");
 
     expect(action).toContain("validate-source.sh");
+    expect(action).toContain("GH_TOKEN: ${{ inputs.github-token }}");
     expect(validation.uses).toMatch(/auto-pr-validate-source@[a-f0-9]{40}$/);
     expect(validation.with).toEqual({
       expected_sha: `\${{ inputs.head_sha }}`,
       repository: `\${{ github.repository }}`,
       source_branch: `\${{ inputs.source_branch }}`,
+      "github-token": `\${{ github.token }}`,
     });
   });
 

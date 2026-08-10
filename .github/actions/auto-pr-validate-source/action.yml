@@ -5,6 +5,10 @@ inputs:
   expected_sha:
     description: Immutable branch tip resolved by the caller.
     required: true
+  github-token:
+    description: Token for gh api calls. Defaults to github.token.
+    required: false
+    default: ${{ github.token }}
   repository:
     description: GitHub repository in owner/name form.
     required: true
@@ -25,5 +29,6 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/validate-source.sh"
       env:
         EXPECTED_SHA: ${{ inputs.expected_sha }}
+        GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ inputs.repository }}
         SOURCE_BRANCH: ${{ inputs.source_branch }}
