@@ -9,7 +9,7 @@ Make stale branch handling safe at the point of execution, not only during sched
 
 ## Design
 
-Add a read-only validation step to `.github/workflows/auto-pr-generate-reusable.yml`, before checkout and before any package or source code is executed. The caller supplies `source_branch` and the immutable `head_sha` already resolved by discovery. Generated and skipped outcomes are uploaded intentionally under `pr-content-<head_sha>`, so matrix jobs cannot collide on a shared artifact name.
+Add a read-only validation step to `.github/workflows/auto-pr-generate-reusable.yml`, before checkout and before any package or source code is executed. The caller supplies `source_branch` and the immutable `head_sha` already resolved by discovery. Generated and skipped outcomes are uploaded intentionally under `pr-content-<head_sha>-<sha256(source_branch)>`. The branch-derived digest is part of the artifact identity, so matrix jobs cannot collide when branches share a commit.
 
 The validation checks the repository API for:
 
