@@ -8,6 +8,21 @@
 - **AI generation path:** Multi-commit PR title/description uses **`LanguageModel.generateText`** plus JSON parsing and `TitleDescriptionSchema` validation — not `generateObject` / OpenAI `json_schema` (incompatible with GitHub Models and many OpenAI-compatible servers).
 - **AI providers:** Removed the Ollama-specific integration (`ollama` npm package, `AUTO_PR_AI_OLLAMA_MODEL`, workflow `ai_ollama_model` / setup-ollama steps). Use **`local`** with `AUTO_PR_AI_OPENAI_COMPAT_URL`, `AUTO_PR_AI_OPENAI_COMPAT_MODEL`, and optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, or **`github-models`** with `AUTO_PR_AI_OPENAI_COMPAT_MODEL` and `GH_TOKEN`. The reusable generate workflow defaults to **`github-models`** on GitHub-hosted runners. **`AUTO_PR_AI_GITHUB_MODEL` is removed** — use `AUTO_PR_AI_OPENAI_COMPAT_MODEL` for both providers.
 
+## [0.1.6](https://github.com/knirski/auto-pr/compare/v0.1.5...v0.1.6) (2026-08-10)
+
+
+### Bug Fixes
+
+* align self-ref pins to a commit whose files pin the fixed action ([#297](https://github.com/knirski/auto-pr/issues/297)) ([1e377e9](https://github.com/knirski/auto-pr/commit/1e377e970233a6b80abe687d06d86d0eaf350644))
+* **ci:** correct CodeQL untrusted-checkout suppression syntax in nix.yml ([#274](https://github.com/knirski/auto-pr/issues/274)) ([2471e1a](https://github.com/knirski/auto-pr/commit/2471e1afdef7af8b2cd5e60801c561bb27aa947e))
+* **generate-content:** use detached HEAD for git history ([#288](https://github.com/knirski/auto-pr/issues/288)) ([3784181](https://github.com/knirski/auto-pr/commit/378418155a10f8b7fec114ce56e348854a15a00a))
+* harden auto-pr CI generation skips ([#283](https://github.com/knirski/auto-pr/issues/283)) ([6994ee1](https://github.com/knirski/auto-pr/commit/6994ee1ea718d84a0a25eea72c9cc7ba76d165e1))
+* **nix:** repair Nix package, app, and development shell (Workstream 3) ([#277](https://github.com/knirski/auto-pr/issues/277)) ([e8be4e7](https://github.com/knirski/auto-pr/commit/e8be4e779f7ad467713a4d7c3f95e224cba1d00a))
+* route stale AI branches to published package ([#294](https://github.com/knirski/auto-pr/issues/294)) ([81173f4](https://github.com/knirski/auto-pr/commit/81173f4981086001b3053c6bee691c116e137588))
+* **security:** rebuild the auto-PR privileged trust boundary (Workstream 1) ([#272](https://github.com/knirski/auto-pr/issues/272)) ([2a41dfc](https://github.com/knirski/auto-pr/commit/2a41dfc94a911871bb59b9f899ec63d0bd6a7b69))
+* skip stale auto-pr generation runs ([#295](https://github.com/knirski/auto-pr/issues/295)) ([186ded6](https://github.com/knirski/auto-pr/commit/186ded646725427bc997daaebb72355c80183b93))
+* wire GH_TOKEN into auto-pr-validate-source action ([#296](https://github.com/knirski/auto-pr/issues/296)) ([176f2c0](https://github.com/knirski/auto-pr/commit/176f2c0116ed96cdecada8deceed2c541c0483a5))
+
 ## [0.1.5](https://github.com/knirski/auto-pr/compare/v0.1.4...v0.1.5) (2026-07-14)
 
 
