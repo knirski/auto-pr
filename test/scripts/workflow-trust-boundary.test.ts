@@ -22,7 +22,7 @@
 // The bullets about the executor/package/artifact mechanics (no untrusted install target, 40-hex
 // SHA pinning, no untrusted install/exec/checkout, checkout absence, token ordering, artifact file
 // set, hostile fixtures) are scoped to the *auto-PR privileged phase* — the `create` job of
-// `auto-pr-create-reusable.yml` and its caller `auto-pr.yml` — because that is the boundary Task
+// `auto-pr-create-reusable.yml` and its caller `auto-pr-create.yml` — because that is the boundary Task
 // 1.3 fixes. Broadening them to "every privileged job in the repo" would flag release tooling
 // (release-please, update-dist, update-workflow-pins on push:[main]; add-dist on pull_request; the
 // Nix CI credential path — the last is explicitly Task 2.1's scope) and produce permanently-RED
@@ -472,7 +472,8 @@ describe("Bullet 8: App token generated only after artifact/identity validation"
     );
     const validationIdx = steps.findIndex((s) => {
       const run = asString(s.run);
-      // The identity/artifact validation compares the artifact branch against the workflow ref.
+      // The identity/artifact validation checks manifest repository/default-branch identity before
+      // emitting the manifest-derived branch and SHA used by the live-tip checks.
       return run !== undefined && /EXPECTED_BRANCH|EXPECTED_DEFAULT_BRANCH/.test(run);
     });
     expect(tokenIdx).toBeGreaterThanOrEqual(0);
