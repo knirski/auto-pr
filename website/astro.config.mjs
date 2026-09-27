@@ -34,7 +34,7 @@ export default defineConfig({
         },
         {
           label: 'ADRs',
-          autogenerate: { directory: 'adr' },
+          items: [{ autogenerate: { directory: 'adr' } }],
         },
       ],
     }),
