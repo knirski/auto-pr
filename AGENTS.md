@@ -1,6 +1,6 @@
 # AI Agent Instructions
 
-auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, Effect v4 beta, Tagless Final, FC/IS.
+auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, Effect v4 RC, Tagless Final, FC/IS.
 
 **Execution order:** apply rules → make changes → run `bun run check` → fix until pass.
 
@@ -84,7 +84,7 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 | No `any`/`!`/`enum` | `unknown`, no non-null asserts, string literal unions |
 | No `console.log` | Use `Effect.log` |
 | Core pure | No Effect/I/O in `*-core.ts`; bridge with `Effect.fromResult` |
-| Domain errors | `Schema.TaggedErrorClass` in `core/errors.ts` |
+| Domain errors | `Schema.TaggedError` in `core/errors.ts` |
 | Optionals | `Option<T>`, not `T \| null` |
 | Nullish style | Prefer optional props / `undefined`; avoid introducing `null` unless API-contract-required |
 | File names | kebab-case |

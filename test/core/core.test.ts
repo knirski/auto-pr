@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "effect";
-import * as FastCheck from "effect/testing/FastCheck";
+import * as FastCheck from "fast-check";
 import {
   buildDescriptionPrompt,
   buildGetCommitsGhEntries,

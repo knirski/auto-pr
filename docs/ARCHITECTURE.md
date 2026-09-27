@@ -1,6 +1,6 @@
 # Architecture
 
-This project uses [Effect](https://effect.website/) v4 beta and TypeScript 7's native compiler (`tsc`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. Prompts at `dist/prompts/`. No declaration emit.
+This project uses [Effect](https://effect.website/) v4 RC and TypeScript 7's native compiler (`tsc`) for typecheck. Bun.build (scripts/build.ts) builds `dist/` from entrypoints derived from `package.json` bin (pkgroll convention); bins run via `node dist/workflow/auto-pr-*.js` and `node dist/tools/auto-pr-*.js`. Prompts at `dist/prompts/`. No declaration emit.
 
 ## Repository layout (on disk)
 

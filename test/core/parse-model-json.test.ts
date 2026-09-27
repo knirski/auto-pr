@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Result } from "effect";
-import * as FastCheck from "effect/testing/FastCheck";
+import * as FastCheck from "fast-check";
 import { type ParsedJsonObject, parseFirstJsonObject } from "#core/parse-model-json.js";
 
 /** Plain JSON object values (not array, not null) — matches `parseFirstJsonObject` success domain. */

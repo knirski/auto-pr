@@ -80,8 +80,12 @@ describe("DiffToolkit handlers", () => {
     await runEffect(TestLayer)(
       Effect.gen(function* () {
         const toolkit = yield* DiffToolkit;
-        const exit = yield* toolkit.handle("get_diff", { path: 123 as never }).pipe(Effect.exit);
-        expect(exit._tag).toBe("Failure");
+        // Parameter validation errors are returned as results (failureMode: "return")
+        // and surface when the handler stream is consumed.
+        const stream = yield* toolkit.handle("get_diff", { path: 123 as never });
+        const handlerResult = Option.getOrThrow(yield* Stream.runLast(stream));
+        expect(handlerResult.isFailure).toBe(true);
+        expect(handlerResult.failureOrigin).toBe("parameters");
       }).pipe(Effect.scoped),
     );
   });

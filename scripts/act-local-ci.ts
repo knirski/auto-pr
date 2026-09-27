@@ -659,13 +659,13 @@ export function program(
   });
 }
 
-const dryRunFlag = Flag.boolean("dry-run").pipe(
+const dryRunFlag = Flag.Boolean("dry-run").pipe(
   Flag.withAlias("n"),
   Flag.optional,
   Flag.withDescription("Pass act --dryrun (validate workflow graph without a full run)."),
 );
 
-const modeArg = Argument.choice("mode", [...ACT_LOCAL_CI_MODES]).pipe(
+const modeArg = Argument.Literals("mode", [...ACT_LOCAL_CI_MODES]).pipe(
   Argument.withDefault("all"),
   Argument.withDescription(
     "check | check-workflows | integration | all (default: all — run check then integration).",

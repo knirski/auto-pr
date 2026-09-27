@@ -100,53 +100,53 @@ export function runFillBody(
 
 // ─── CLI ───────────────────────────────────────────────────────────────────
 
-const logFileFlag = Flag.string("log-file").pipe(
+const logFileFlag = Flag.String("log-file").pipe(
   Flag.optional,
   Flag.withDescription("Path to file containing commit log (---COMMIT--- separated blocks)."),
 );
 
-const filesFileFlag = Flag.string("files-file").pipe(
+const filesFileFlag = Flag.String("files-file").pipe(
   Flag.optional,
   Flag.withDescription("Path to file containing newline-separated changed file names."),
 );
 
-const templateFlag = Flag.string("template").pipe(
+const templateFlag = Flag.String("template").pipe(
   Flag.optional,
   Flag.withDescription("Path to template file (e.g. .github/PULL_REQUEST_TEMPLATE.md). Required."),
 );
 
-const formatFlag = Flag.string("format").pipe(
+const formatFlag = Flag.String("format").pipe(
   Flag.optional,
   Flag.withDescription("Output format: 'body' or 'title-body' (first line = PR title). Required."),
 );
 
-const quietFlag = Flag.boolean("quiet").pipe(
+const quietFlag = Flag.Boolean("quiet").pipe(
   Flag.optional,
   Flag.withDescription("Suppress logs (for CI when capturing stdout)."),
 );
 
-const validateTitleFlag = Flag.string("validate-title").pipe(
+const validateTitleFlag = Flag.String("validate-title").pipe(
   Flag.optional,
   Flag.withDescription(
     "Validate conventional commit title; exit 0 if valid, 1 otherwise. Skips fill when used.",
   ),
 );
 
-const outputDescriptionPromptFlag = Flag.boolean("output-description-prompt").pipe(
+const outputDescriptionPromptFlag = Flag.Boolean("output-description-prompt").pipe(
   Flag.optional,
   Flag.withDescription(
     "Output commit content for an AI model to summarize into PR description. Requires --log-file only. Exits after output.",
   ),
 );
 
-const descriptionFileFlag = Flag.string("description-file").pipe(
+const descriptionFileFlag = Flag.String("description-file").pipe(
   Flag.optional,
   Flag.withDescription(
     "Path to file containing an AI-generated description. Overrides computed description.",
   ),
 );
 
-const prTitleFlag = Flag.string("pr-title").pipe(
+const prTitleFlag = Flag.String("pr-title").pipe(
   Flag.optional,
   Flag.withDescription(
     "Optional conventional PR title. Drives {{typeOfChange}} and {{breakingChanges}} like the workflow’s generated title. With --format title-body, used as the first output line instead of the first commit subject.",
