@@ -1,6 +1,6 @@
 # AI Agent Instructions
 
-auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, Effect v4 beta, Tagless Final, FC/IS.
+auto-pr creates PRs from conventional commits on `ai/**` branches. TypeScript, Effect v4 RC, Tagless Final, FC/IS.
 
 **Execution order:** apply rules → make changes → run `bun run check` → fix until pass.
 
@@ -65,7 +65,7 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 | New tagged error class | `src/core/errors.ts`; add `formatError` branch in `src/auto-pr/errors.ts` |
 | New service interface | `src/auto-pr/interfaces/` |
 | New live interpreter | `src/auto-pr/live/`. Layer: `static readonly Live = Layer.effect(...)` |
-| AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher: `local` \| `github-models`); new providers in `live/` |
+| AI / LanguageModel adapter | `src/auto-pr/live/ai-provider.ts` (provider dispatcher: `local` \| `openrouter`; `local` = `@effect/ai-openai-compat`, `openrouter` = `@effect/ai-openrouter`); new providers in `live/` |
 | New CLI script | `src/workflow/` or `src/tools/` |
 | New shell script | `scripts/` |
 | Reusable action | `.github/actions/<name>/` |
@@ -84,21 +84,22 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 | No `any`/`!`/`enum` | `unknown`, no non-null asserts, string literal unions |
 | No `console.log` | Use `Effect.log` |
 | Core pure | No Effect/I/O in `*-core.ts`; bridge with `Effect.fromResult` |
-| Domain errors | `Schema.TaggedErrorClass` in `core/errors.ts` |
+| Domain errors | `Schema.TaggedError` in `core/errors.ts` |
 | Optionals | `Option<T>`, not `T \| null` |
 | Nullish style | Prefer optional props / `undefined`; avoid introducing `null` unless API-contract-required |
 | File names | kebab-case |
 | Secrets | Never `Redacted.value()` for logging |
 | Workflow / action pins | Self-refs `knirski/auto-pr/...@` must be **one** full **40-char SHA** (ancestor of branch, every path exists at that commit). Third-party `uses:` = SHA + `# v…` comment; Dependabot updates weekly. Same-repo `uses: ./.github/...` needs no SHA. Llama image: `.github/llama-server/Dockerfile`. Details: [docs/CI.md](docs/CI.md#workflow-pin-automation) |
 | Adopter-safe reusable actions | Reusable-workflow actions must not require Bun, repo `node_modules`, or imports from `src/**` at runtime. For auto-pr TypeScript/Effect workflow logic, prefer packaged commands invoked through `auto-pr-run-command` over action-local generated bundles. |
+| Keyed cloud steps | OpenRouter-keyed steps must run trusted pinned auto-pr package code (`trusted_package_required`; immutable 40-char SHA), never branch-controlled workspace scripts. Keep `OPENROUTER_API_KEY` out of install/setup/artifact steps; recommend a dedicated low-limit key. |
 | Workflow testing | `bun run act` locally; align self-ref `@SHA` to `git rev-parse HEAD` when exercising workflow edits on a branch |
-| Multi-commit AI | `LanguageModel.generateText` + JSON parse + Schema decode in `auto-pr-generate-content.ts`; not `generateObject` (`json_schema` unsupported on GitHub Models) |
+| Multi-commit AI | `LanguageModel.generateText` + JSON parse + Schema decode in `auto-pr-generate-content.ts`; not `generateObject` (`json_schema` support varies across OpenRouter free models and compat servers) |
 
 ---
 
 ## Project layout
 
-**Setup:** `bun install` then `bun x lefthook install`. Local env for workflow CLIs: copy `.env.example` → `.env` (see `src/auto-pr/config.ts`). Optional Nix: `nix develop` or direnv + `.envrc` (see [CONTRIBUTING.md](CONTRIBUTING.md#nix-flake-optional)). Build: `scripts/build.ts` → `dist/`; typecheck: `tsgo --noEmit`.
+**Setup:** `bun install` then `bun x lefthook install`. Local env for workflow CLIs: copy `.env.example` → `.env` (see `src/auto-pr/config.ts`). Optional Nix: `nix develop` or direnv + `.envrc` (see [CONTRIBUTING.md](CONTRIBUTING.md#nix-flake-optional)). Build: `scripts/build.ts` → `dist/`; typecheck: `tsc --noEmit`.
 
 ```
 .github/actions/   — reusable shell actions. Workflows use full path (knirski/auto-pr/...)

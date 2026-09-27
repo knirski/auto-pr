@@ -67,6 +67,7 @@ export function createOpenAiChatCompletionsMockFetch(
       object: "chat.completion",
       created: 0,
       model: "mock",
+      system_fingerprint: null,
       choices: [
         {
           index: 0,
@@ -74,6 +75,7 @@ export function createOpenAiChatCompletionsMockFetch(
           message: { role: "assistant", content },
         },
       ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
     };
     return new Response(JSON.stringify(body), { status });
   };

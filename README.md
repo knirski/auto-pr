@@ -9,7 +9,7 @@
 [![Liberapay](https://img.shields.io/badge/Liberapay-Support-yellow.svg)](https://liberapay.com/knirski/)
 [![CII Best Practices](https://img.shields.io/badge/CII%20Best%20Practices-register-green)](https://www.bestpractices.dev/en/projects/new?project_url=https%3A%2F%2Fgithub.com%2Fknirski%2Fauto-pr)
 
-Auto-create pull requests from conventional commits on `ai/**` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider (GitHub Models by default in CI; local OpenAI-compatible servers for self-hosted or dev) to generate descriptions for multi-commit PRs.
+Auto-create pull requests from conventional commits on `ai/**` branches. Parses commit messages, fills a PR template, and optionally uses an AI provider (OpenRouter by default in CI; local OpenAI-compatible servers for self-hosted or dev) to generate descriptions for multi-commit PRs.
 
 **Convention over configuration.** Run `npx -p github:knirski/auto-pr auto-pr-init`, set up a GitHub App, and you're done — most adopters only use GitHub Actions and do not add this package to `package.json` unless they want the CLIs locally. Defaults work for most projects; override via workflow inputs only when needed.
 
@@ -30,7 +30,7 @@ Auto-create pull requests from conventional commits on `ai/**` branches. Parses 
 
 - **Conventional commits** — Parses `feat:`, `fix:`, `docs:`, etc. for PR title and type
 - **PR template** — Fills `.github/PULL_REQUEST_TEMPLATE.md` with description, changes, checklist
-- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **local** (OpenAI-compatible HTTP, e.g. llama.cpp) or **github-models**, with routing context built from commit, diff, file-classification, and runner-resource signals
+- **AI integration** — For 2+ commits, summarizes commit bodies into a PR description via **openrouter** (default cloud provider; GitHub Models was retired on 2026-07-30) or **local** (OpenAI-compatible HTTP, e.g. llama.cpp), with routing context built from commit, diff, file-classification, and runner-resource signals
 - **Octokit PR client** — Uses GitHub's official JavaScript SDK for PR lookup/create/update
 - **CI-agnostic** — **generate-content** reads git state in the workspace and writes `pr-title.txt` and `pr-body.md`; **create-or-update-pr** reads those files and calls the GitHub API. Works with GitHub Actions or any orchestrator that sets the same env conventions.
 
@@ -53,7 +53,7 @@ Add auto-pr to any repo in 6 steps:
 2. **Create** — [GitHub App](https://github.com/settings/apps/new) with Contents and Pull requests (Read and write)
 3. **Generate** — Private key in app settings → save `.pem`
 4. **Install** — Install the app on your repository
-5. **Secrets** — Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**
+5. **Secrets** — Add `APP_ID` and `APP_PRIVATE_KEY` to **Settings → Secrets and variables → Actions**, and `OPENROUTER_API_KEY` for the default cloud provider ([docs/INTEGRATION.md](docs/INTEGRATION.md))
 6. **Test** — `git checkout -b ai/test && git commit --allow-empty -m "chore: test" && git push -u origin HEAD`
 
 No `package.json` required. Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.md).
@@ -74,7 +74,7 @@ For local runs of workflow CLIs or `run-auto-pr`, copy `.env.example` to `.env` 
 |---------|---------|
 | `bun run check` | Local required checks: Nix lint, build, audit, unit tests, Biome, knip, typecheck, markdown lint, typos, actionlint, shellcheck/shfmt |
 | `bun run check:code` | Code only: build, audit, **unit** tests, lint, knip, typecheck. Runs on pre-push (no integration). |
-| `bun run test:integration` | HTTP integration tests: `.env.ci` + optional `.env.local`; Docker + `GH_TOKEN` as needed — see [docs/CI.md](docs/CI.md#integration-tests) |
+| `bun run test:integration` | HTTP integration tests: `.env.ci` + optional `.env.local`; Docker + `OPENROUTER_API_KEY` as needed — see [docs/CI.md](docs/CI.md#integration-tests) |
 | `bun run test:all` | `bun test` then `test:integration` |
 | `bun run act` | `check` + `integration` jobs in Docker (`gh act` or nektos `act`; with Nix, `nix run .#act` on supported platforms — see [CONTRIBUTING.md](CONTRIBUTING.md)) |
 | `bun run act -- check` / `bun run act -- integration` | Only CI `check`, or only `integration` — see [CONTRIBUTING.md](CONTRIBUTING.md#run-ci-locally-check-job) |

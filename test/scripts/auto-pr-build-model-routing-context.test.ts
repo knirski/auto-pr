@@ -3,8 +3,16 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect } from "effect";
+import { Cause, Effect, Exit, Layer, Result } from "effect";
+import { runEffect } from "#test/run-effect.js";
+import type { OpenRouterModelsRepositoryService } from "../../src/auto-pr/interfaces/openrouter-models-repository.js";
+import { OpenRouterModelsRepository } from "../../src/auto-pr/live/openrouter-models-repository.js";
 import {
+  type OpenRouterModelCatalogEntry,
+  parseOpenRouterModelCatalog,
+} from "../../src/core/openrouter-routing.js";
+import {
+  makeProgram,
   program,
   runBuildModelRoutingContext,
 } from "../../src/workflow/auto-pr-build-model-routing-context.js";
@@ -64,6 +72,102 @@ function tempRepo(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
+// ─── OpenRouter catalog fixtures ─────────────────────────────────────────────
+
+const OPENROUTER_GPT_OSS_20B_FREE_WIRE = {
+  id: "openai/gpt-oss-20b:free",
+  name: "OpenAI: gpt-oss-20b (free)",
+  context_length: 131_072,
+  supported_parameters: ["tools", "tool_choice"],
+  architecture: { input_modalities: ["text"], output_modalities: ["text"] },
+  pricing: { prompt: "0", completion: "0" },
+} as const;
+
+const OPENROUTER_TEXT_ONLY_FREE_WIRE = {
+  id: "vendor/text-only:free",
+  name: "Vendor: Text Only (free)",
+  context_length: 32_768,
+  supported_parameters: [],
+  architecture: { input_modalities: ["text"], output_modalities: ["text"] },
+  pricing: { prompt: "0", completion: "0" },
+} as const;
+
+const OPENROUTER_TOOL_CAPABLE_FREE_WIRE = {
+  id: "vendor/tool-capable:free",
+  name: "Vendor: Tool Capable (free)",
+  context_length: 65_536,
+  supported_parameters: ["tools", "tool_choice"],
+  architecture: { input_modalities: ["text"], output_modalities: ["text"] },
+  pricing: { prompt: "0", completion: "0" },
+} as const;
+
+const OPENROUTER_PAID_MODEL_WIRE = {
+  id: "vendor/paid-model",
+  name: "Vendor: Paid Model",
+  context_length: 200_000,
+  supported_parameters: ["tools", "tool_choice"],
+  architecture: { input_modalities: ["text"], output_modalities: ["text"] },
+  pricing: { prompt: "0.000001", completion: "0.000002" },
+} as const;
+
+function openRouterCatalog(
+  wireEntries: readonly unknown[],
+): readonly OpenRouterModelCatalogEntry[] {
+  return parseOpenRouterModelCatalog({ data: wireEntries });
+}
+
+function openRouterRepositoryLayer(
+  entries: readonly OpenRouterModelCatalogEntry[],
+): Layer.Layer<OpenRouterModelsRepositoryService> {
+  return Layer.succeed(OpenRouterModelsRepository, {
+    fetchModels: () => Effect.succeed(entries),
+  });
+}
+
+const unusedOpenRouterRepositoryLayer = openRouterRepositoryLayer([]);
+
+function readRoutingDecision(output: string): Record<string, unknown> {
+  const line = output
+    .split("\n")
+    .find((candidate) => candidate.startsWith("routing_decision_json="));
+  if (line === undefined) throw new Error("routing_decision_json output missing");
+  return JSON.parse(line.slice("routing_decision_json=".length)) as Record<string, unknown>;
+}
+
+type EnvSnapshot = ReadonlyMap<string, string | undefined>;
+
+function snapshotEnv(names: readonly string[]): EnvSnapshot {
+  return new Map(names.map((name) => [name, process.env[name]]));
+}
+
+function restoreEnv(snapshot: EnvSnapshot): void {
+  for (const [name, value] of snapshot) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
+  }
+}
+
+const ROUTING_ENV_NAMES = [
+  "AUTO_PR_AI_PROVIDER",
+  "AUTO_PR_AI_LLAMACPP_MODEL_URL",
+  "AUTO_PR_AI_OPENAI_COMPAT_URL",
+  "AUTO_PR_LOCAL_MODEL",
+  "AUTO_PR_OPENROUTER_MODEL",
+  "AUTO_PR_OPENROUTER_TITLE",
+  "COMMITS_COUNT",
+  "DEFAULT_BRANCH",
+  "GITHUB_OUTPUT",
+  "GITHUB_WORKSPACE",
+  "LOCAL_RUNNER_CPUS",
+  "LOCAL_RUNNER_MEMORY_GB",
+  "OPENROUTER_API_KEY",
+  "REPOSITORY_VISIBILITY",
+  "RUNNER_LABEL",
+] as const;
+
 describe("build-model-routing-context", () => {
   test("routing context is a packaged command instead of an action-local compiled bundle", () => {
     const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
@@ -101,6 +205,11 @@ describe("build-model-routing-context", () => {
     ).toBe(false);
     expect(runCommandAction).toContain("selected_model:");
     expect(runCommandAction).toContain("routing_context:");
+    expect(runCommandAction).toContain("cloud_model_envelope_source:");
+    expect(runCommandAction).toContain("openrouter_model_context_length:");
+    expect(runCommandAction).not.toContain("github_models_plan_class");
+    expect(runCommandAction).not.toContain("github_models_rate_limit_tier");
+    expect(runCommandAction).not.toContain("github_models_envelope_source");
     expect(runCommandScript).toContain("build-model-routing-context)");
     expect(runCommandScript).toContain('BIN="auto-pr-build-model-routing-context"');
     expect(runCommandScript).toContain('SCRIPT="build-model-routing-context"');
@@ -222,7 +331,7 @@ describe("build-model-routing-context", () => {
   test("treats root-only files as one top-level directory", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-root-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -264,7 +373,7 @@ describe("build-model-routing-context", () => {
   test("classifies src test files as tests before source", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-tests-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -305,7 +414,7 @@ describe("build-model-routing-context", () => {
   test("classifies source maps under dist as generated files", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-generated-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -347,7 +456,7 @@ describe("build-model-routing-context", () => {
   test("fails with a clear error when DEFAULT_BRANCH ref does not exist", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-bad-base-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -532,7 +641,7 @@ describe("build-model-routing-context", () => {
   test("emits a default model and signal summary for single-commit PRs", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -598,7 +707,7 @@ describe("build-model-routing-context", () => {
   test("does not count docs-only churn as source churn", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-docs-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -622,7 +731,7 @@ describe("build-model-routing-context", () => {
           yield* runBuildModelRoutingContext({
             workspace: dir,
             defaultBranch: "main",
-            provider: "github-models",
+            provider: "openrouter",
             explicitModel: undefined,
             githubOutput,
             commitsCount: 1,
@@ -639,10 +748,12 @@ describe("build-model-routing-context", () => {
     }
   });
 
-  test("ignores explicit model override for github-models", async () => {
+  test("ignores explicit model override for openrouter", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-override-");
     try {
-      await Effect.runPromise(
+      await runEffect(
+        openRouterRepositoryLayer(openRouterCatalog([OPENROUTER_GPT_OSS_20B_FREE_WIRE])),
+      )(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -661,14 +772,265 @@ describe("build-model-routing-context", () => {
           yield* runBuildModelRoutingContext({
             workspace: dir,
             defaultBranch: "main",
-            provider: "github-models",
+            provider: "openrouter",
             explicitModel: "openai/gpt-4.1",
             githubOutput,
             commitsCount: 1,
           });
 
           const output = yield* read(githubOutput);
-          expect(output).toContain("selected_model=microsoft/phi-4-mini-instruct");
+          expect(output).toContain("selected_model=openai/gpt-oss-20b:free");
+          expect(output).not.toContain("openai/gpt-4.1");
+        }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("selects a feasible OpenRouter catalog model and emits OpenRouter outputs", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-openrouter-catalog-");
+    try {
+      await runEffect(
+        openRouterRepositoryLayer(openRouterCatalog([OPENROUTER_GPT_OSS_20B_FREE_WIRE])),
+      )(
+        Effect.gen(function* () {
+          yield* runGit(dir, ["init", "-b", "main"]);
+          yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+          yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+          yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
+          yield* write(join(dir, "docs", "base.md"), "base\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "docs: base"]);
+          yield* runGit(dir, ["branch", "origin/main"]);
+
+          yield* runGit(dir, ["checkout", "-b", "feature"]);
+          yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+          yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+
+          const githubOutput = join(dir, "github_output");
+          yield* runBuildModelRoutingContext({
+            workspace: dir,
+            defaultBranch: "main",
+            provider: "openrouter",
+            explicitModel: undefined,
+            githubOutput,
+            commitsCount: 1,
+          });
+
+          const output = yield* read(githubOutput);
+          expect(output).toContain("selected_model=openai/gpt-oss-20b:free");
+          expect(output).toContain("provider=openrouter");
+          expect(output).toContain("requires_tool_calls=false");
+          expect(output).toContain("cloud_model_envelope_source=catalog");
+          expect(output).toContain("openrouter_model_context_length=131072");
+          expect(output).not.toContain("github_models_plan_class");
+          expect(output).not.toContain("github_models_rate_limit_tier");
+          expect(output).not.toContain("github_models_envelope_source");
+          expect(readRoutingDecision(output)).toMatchObject({
+            provider: "openrouter",
+            selectedModel: "openai/gpt-oss-20b:free",
+            requiresToolCalls: false,
+            band: "A",
+            selectionMode: "catalog",
+          });
+        }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("prefers a tool-capable free catalog model for tool routes", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-openrouter-tools-");
+    try {
+      await runEffect(
+        openRouterRepositoryLayer(
+          openRouterCatalog([OPENROUTER_TEXT_ONLY_FREE_WIRE, OPENROUTER_TOOL_CAPABLE_FREE_WIRE]),
+        ),
+      )(
+        Effect.gen(function* () {
+          yield* runGit(dir, ["init", "-b", "main"]);
+          yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+          yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+          yield* write(join(dir, "base.txt"), "base\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "docs: base"]);
+          yield* runGit(dir, ["branch", "origin/main"]);
+          yield* runGit(dir, ["checkout", "-b", "feature"]);
+
+          yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+          const sourceLines = (count: number): string =>
+            `${Array.from({ length: count }, (_, i) => `export const value${i} = ${i};`).join("\n")}\n`;
+          yield* write(join(dir, "src", "a.ts"), sourceLines(120));
+          yield* write(join(dir, "src", "b.ts"), sourceLines(100));
+          yield* write(join(dir, "src", "c.ts"), sourceLines(80));
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "feat: add modules"]);
+
+          const githubOutput = join(dir, "github_output");
+          yield* runBuildModelRoutingContext({
+            workspace: dir,
+            defaultBranch: "main",
+            provider: "openrouter",
+            explicitModel: undefined,
+            githubOutput,
+            commitsCount: 1,
+          });
+
+          const output = yield* read(githubOutput);
+          expect(output).toContain("band=B");
+          expect(output).toContain("requires_tool_calls=true");
+          expect(output).toContain("selected_model=vendor/tool-capable:free");
+          expect(output).toContain("cloud_model_envelope_source=catalog");
+          expect(output).toContain("openrouter_model_context_length=65536");
+          expect(readRoutingDecision(output)).toMatchObject({
+            provider: "openrouter",
+            selectedModel: "vendor/tool-capable:free",
+            requiresToolCalls: true,
+            band: "B",
+            selectionMode: "free-tool-fallback",
+          });
+        }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("falls back to the static free model when the catalog has no usable models", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-openrouter-outage-");
+    try {
+      await runEffect(openRouterRepositoryLayer(openRouterCatalog([OPENROUTER_PAID_MODEL_WIRE])))(
+        Effect.gen(function* () {
+          yield* runGit(dir, ["init", "-b", "main"]);
+          yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+          yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+          yield* write(join(dir, "base.txt"), "base\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "docs: base"]);
+          yield* runGit(dir, ["branch", "origin/main"]);
+          yield* runGit(dir, ["checkout", "-b", "feature"]);
+          yield* write(join(dir, "change.txt"), "change\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "feat: change"]);
+
+          const githubOutput = join(dir, "github_output");
+          yield* runBuildModelRoutingContext({
+            workspace: dir,
+            defaultBranch: "main",
+            provider: "openrouter",
+            explicitModel: undefined,
+            githubOutput,
+            commitsCount: 1,
+          });
+
+          const output = yield* read(githubOutput);
+          expect(output).toContain("provider=openrouter");
+          expect(output).toContain("selected_model=openai/gpt-oss-20b:free");
+          expect(output).toContain("cloud_model_envelope_source=static-fallback");
+          expect(output).toContain("openrouter_model_context_length=8000");
+          expect(readRoutingDecision(output)).toMatchObject({
+            provider: "openrouter",
+            selectedModel: "openai/gpt-oss-20b:free",
+            requiresToolCalls: false,
+            selectionMode: "static-fallback",
+          });
+        }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves a configured free model when the catalog is unavailable", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-openrouter-configured-");
+    try {
+      await runEffect(openRouterRepositoryLayer(openRouterCatalog([OPENROUTER_PAID_MODEL_WIRE])))(
+        Effect.gen(function* () {
+          yield* runGit(dir, ["init", "-b", "main"]);
+          yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+          yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+          yield* write(join(dir, "base.txt"), "base\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "docs: base"]);
+          yield* runGit(dir, ["branch", "origin/main"]);
+          yield* runGit(dir, ["checkout", "-b", "feature"]);
+          yield* write(join(dir, "change.txt"), "change\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "feat: change"]);
+
+          const githubOutput = join(dir, "github_output");
+          yield* runBuildModelRoutingContext({
+            workspace: dir,
+            defaultBranch: "main",
+            provider: "openrouter",
+            explicitModel: undefined,
+            openRouterModel: "openrouter/free",
+            githubOutput,
+            commitsCount: 1,
+          });
+
+          const output = yield* read(githubOutput);
+          expect(output).toContain("selected_model=openrouter/free");
+          expect(output).toContain("cloud_model_envelope_source=configured");
+          expect(readRoutingDecision(output)).toMatchObject({
+            provider: "openrouter",
+            selectedModel: "openrouter/free",
+            selectionMode: "configured",
+          });
+        }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps a catalog-feasible configured model as preferred", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-openrouter-preferred-");
+    try {
+      await runEffect(
+        openRouterRepositoryLayer(openRouterCatalog([OPENROUTER_GPT_OSS_20B_FREE_WIRE])),
+      )(
+        Effect.gen(function* () {
+          yield* runGit(dir, ["init", "-b", "main"]);
+          yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+          yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+          yield* write(join(dir, "base.txt"), "base\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "docs: base"]);
+          yield* runGit(dir, ["branch", "origin/main"]);
+          yield* runGit(dir, ["checkout", "-b", "feature"]);
+          yield* write(join(dir, "change.txt"), "change\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "feat: change"]);
+
+          const githubOutput = join(dir, "github_output");
+          yield* runBuildModelRoutingContext({
+            workspace: dir,
+            defaultBranch: "main",
+            provider: "openrouter",
+            explicitModel: undefined,
+            openRouterModel: "openai/gpt-oss-20b:free",
+            githubOutput,
+            commitsCount: 1,
+          });
+
+          const output = yield* read(githubOutput);
+          expect(output).toContain("selected_model=openai/gpt-oss-20b:free");
+          expect(output).toContain("cloud_model_envelope_source=catalog");
+          expect(readRoutingDecision(output)).toMatchObject({
+            provider: "openrouter",
+            selectedModel: "openai/gpt-oss-20b:free",
+            selectionMode: "preferred",
+          });
         }),
       );
     } finally {
@@ -679,7 +1041,7 @@ describe("build-model-routing-context", () => {
   test("classifies dependency manifests separately from generated files", async () => {
     const dir = tempRepo("auto-pr-build-model-routing-context-deps-");
     try {
-      await Effect.runPromise(
+      await runEffect(unusedOpenRouterRepositoryLayer)(
         Effect.gen(function* () {
           yield* runGit(dir, ["init", "-b", "main"]);
           yield* runGit(dir, ["config", "user.email", "test@example.com"]);
@@ -699,7 +1061,7 @@ describe("build-model-routing-context", () => {
           yield* runBuildModelRoutingContext({
             workspace: dir,
             defaultBranch: "main",
-            provider: "github-models",
+            provider: "openrouter",
             explicitModel: undefined,
             githubOutput,
             commitsCount: 1,
@@ -713,6 +1075,93 @@ describe("build-model-routing-context", () => {
         }),
       );
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("program rejects the retired github-models provider", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-retired-");
+    const envSnapshot = snapshotEnv(ROUTING_ENV_NAMES);
+    try {
+      process.env.GITHUB_WORKSPACE = dir;
+      process.env.DEFAULT_BRANCH = "main";
+      process.env.AUTO_PR_AI_PROVIDER = "github-models";
+      process.env.GITHUB_OUTPUT = join(dir, "github_output");
+
+      const exit = await Effect.runPromise(program.pipe(Effect.exit));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        Result.match(Cause.findError(exit.cause), {
+          onSuccess: (error) =>
+            expect(error instanceof Error ? error.message : String(error)).toContain(
+              "Invalid AUTO_PR_AI_PROVIDER: github-models. GitHub Models was retired on 2026-07-30; use openrouter or local.",
+            ),
+          onFailure: () => expect().fail("expected provider validation error"),
+        });
+      }
+    } finally {
+      restoreEnv(envSnapshot);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("program routes openrouter through the injected repository layer", async () => {
+    const dir = tempRepo("auto-pr-build-model-routing-context-openrouter-program-");
+    const envSnapshot = snapshotEnv(ROUTING_ENV_NAMES);
+    try {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          yield* runGit(dir, ["init", "-b", "main"]);
+          yield* runGit(dir, ["config", "user.email", "test@example.com"]);
+          yield* runGit(dir, ["config", "user.name", "Test User"]);
+
+          yield* Effect.sync(() => mkdirSync(join(dir, "docs"), { recursive: true }));
+          yield* write(join(dir, "docs", "base.md"), "base\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "docs: base"]);
+          yield* runGit(dir, ["branch", "origin/main"]);
+
+          yield* runGit(dir, ["checkout", "-b", "feature"]);
+          yield* Effect.sync(() => mkdirSync(join(dir, "src"), { recursive: true }));
+          yield* write(join(dir, "src", "app.ts"), "export const app = 1;\n");
+          yield* runGit(dir, ["add", "."]);
+          yield* runGit(dir, ["commit", "-m", "feat: add app"]);
+
+          const githubOutput = join(dir, "github_output");
+          process.env.GITHUB_WORKSPACE = dir;
+          process.env.DEFAULT_BRANCH = "main";
+          process.env.AUTO_PR_AI_PROVIDER = "openrouter";
+          process.env.AUTO_PR_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
+          process.env.AUTO_PR_OPENROUTER_TITLE = "";
+          process.env.OPENROUTER_API_KEY = "";
+          process.env.GITHUB_OUTPUT = githubOutput;
+          process.env.COMMITS_COUNT = "1";
+          process.env.LOCAL_RUNNER_CPUS = "";
+          process.env.LOCAL_RUNNER_MEMORY_GB = "";
+          process.env.REPOSITORY_VISIBILITY = "private";
+          process.env.RUNNER_LABEL = "ubuntu-24.04";
+
+          yield* makeProgram({
+            openRouterRepositoryLayer: openRouterRepositoryLayer(
+              openRouterCatalog([OPENROUTER_GPT_OSS_20B_FREE_WIRE]),
+            ),
+          });
+
+          const output = yield* read(githubOutput);
+          expect(output).toContain("provider=openrouter");
+          expect(output).toContain("selected_model=openai/gpt-oss-20b:free");
+          expect(output).toContain("cloud_model_envelope_source=catalog");
+          expect(output).toContain("openrouter_model_context_length=131072");
+          expect(readRoutingDecision(output)).toMatchObject({
+            provider: "openrouter",
+            selectedModel: "openai/gpt-oss-20b:free",
+            selectionMode: "preferred",
+          });
+        }),
+      );
+    } finally {
+      restoreEnv(envSnapshot);
       rmSync(dir, { recursive: true, force: true });
     }
   });

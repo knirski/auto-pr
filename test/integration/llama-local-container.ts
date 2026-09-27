@@ -8,6 +8,7 @@ import * as NodeFileSystem from "@effect/platform-node-shared/NodeFileSystem";
 import * as NodePath from "@effect/platform-node-shared/NodePath";
 import type { Scope } from "effect";
 import {
+  ByteSize,
   Effect,
   Array as EffectArray,
   FileSystem,
@@ -39,7 +40,7 @@ export const FsPath = Brand.nominal<FsPath>();
 
 // --- Error hierarchy (tagged union: LlamaIntegrationTestError)
 
-export class LlamaIntegrationDockerfileError extends Schema.TaggedErrorClass<LlamaIntegrationDockerfileError>()(
+export class LlamaIntegrationDockerfileError extends Schema.TaggedError<LlamaIntegrationDockerfileError>()(
   "LlamaIntegrationDockerfileError",
   {
     message: Schema.String,
@@ -47,7 +48,7 @@ export class LlamaIntegrationDockerfileError extends Schema.TaggedErrorClass<Lla
   },
 ) {}
 
-export class LlamaIntegrationModelUrlError extends Schema.TaggedErrorClass<LlamaIntegrationModelUrlError>()(
+export class LlamaIntegrationModelUrlError extends Schema.TaggedError<LlamaIntegrationModelUrlError>()(
   "LlamaIntegrationModelUrlError",
   {
     message: Schema.String,
@@ -55,7 +56,7 @@ export class LlamaIntegrationModelUrlError extends Schema.TaggedErrorClass<Llama
   },
 ) {}
 
-export class LlamaIntegrationHttpError extends Schema.TaggedErrorClass<LlamaIntegrationHttpError>()(
+export class LlamaIntegrationHttpError extends Schema.TaggedError<LlamaIntegrationHttpError>()(
   "LlamaIntegrationHttpError",
   {
     operation: Schema.String,
@@ -63,7 +64,7 @@ export class LlamaIntegrationHttpError extends Schema.TaggedErrorClass<LlamaInte
   },
 ) {}
 
-export class LlamaIntegrationModelsSchemaError extends Schema.TaggedErrorClass<LlamaIntegrationModelsSchemaError>()(
+export class LlamaIntegrationModelsSchemaError extends Schema.TaggedError<LlamaIntegrationModelsSchemaError>()(
   "LlamaIntegrationModelsSchemaError",
   {
     message: Schema.String,
@@ -71,14 +72,14 @@ export class LlamaIntegrationModelsSchemaError extends Schema.TaggedErrorClass<L
   },
 ) {}
 
-export class LlamaIntegrationModelsEmptyError extends Schema.TaggedErrorClass<LlamaIntegrationModelsEmptyError>()(
+export class LlamaIntegrationModelsEmptyError extends Schema.TaggedError<LlamaIntegrationModelsEmptyError>()(
   "LlamaIntegrationModelsEmptyError",
   {
     message: Schema.String,
   },
 ) {}
 
-export class LlamaIntegrationFsError extends Schema.TaggedErrorClass<LlamaIntegrationFsError>()(
+export class LlamaIntegrationFsError extends Schema.TaggedError<LlamaIntegrationFsError>()(
   "LlamaIntegrationFsError",
   {
     operation: Schema.String,
@@ -86,7 +87,7 @@ export class LlamaIntegrationFsError extends Schema.TaggedErrorClass<LlamaIntegr
   },
 ) {}
 
-export class LlamaIntegrationContainerError extends Schema.TaggedErrorClass<LlamaIntegrationContainerError>()(
+export class LlamaIntegrationContainerError extends Schema.TaggedError<LlamaIntegrationContainerError>()(
   "LlamaIntegrationContainerError",
   {
     message: Schema.String,
@@ -310,7 +311,7 @@ const ensureGgufModelFile = Effect.fn("ensureGgufModelFile")(function* (options:
             (cause) => new LlamaIntegrationFsError({ operation: "stat cached model file", cause }),
           ),
         );
-      if (info.type === "File" && info.size > FileSystem.Size(0)) {
+      if (info.type === "File" && ByteSize.isGreaterThan(info.size, ByteSize.bytes(0))) {
         return cacheFile;
       }
     }

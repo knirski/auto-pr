@@ -25,8 +25,8 @@ function redactedForLog<T extends string>(
   return Redacted.make(value, { label: redact(value) });
 }
 
-/** File system error for auto-PR. Compatible with Schema.TaggedErrorClass. */
-export class FileSystemError extends Schema.TaggedErrorClass<FileSystemError>()("FileSystemError", {
+/** File system error for auto-PR. Compatible with Schema.TaggedError. */
+export class FileSystemError extends Schema.TaggedError<FileSystemError>()("FileSystemError", {
   path: Schema.Redacted(Schema.String),
   operation: Schema.String,
   message: Schema.String,

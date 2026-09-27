@@ -7,7 +7,7 @@ description: >-
 inputs:
   omit_llama_integration_env:
     description: >-
-      If true, skip keys starting with INTEGRATION_LLAMA_ and do not set AUTO_PR_AI_OPENAI_COMPAT_URL (GitHub Models–only jobs).
+      If true, skip keys starting with INTEGRATION_LLAMA_ and do not set AUTO_PR_AI_OPENAI_COMPAT_URL (cloud-only jobs, e.g. integration-openrouter).
     required: false
     default: "false"
 

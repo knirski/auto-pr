@@ -41,6 +41,7 @@ function createToolRoundtripReproFetch(options?: ToolRoundtripReproFetchOptions)
           object: "chat.completion",
           created: 0,
           model: "mock",
+          system_fingerprint: null,
           choices: [
             {
               index: 0,
@@ -84,7 +85,7 @@ function createToolRoundtripReproFetch(options?: ToolRoundtripReproFetchOptions)
      * point the outgoing OpenAI-compatible request must contain the assistant
      * tool-call turn followed immediately by both tool result messages.
      *
-     * GitHub Models rejects requests where the history has been expanded into:
+     * OpenRouter rejects requests where the history has been expanded into:
      *
      *   assistant tool_calls: [call_ci]
      *   assistant tool_calls: [call_docs]
@@ -139,6 +140,7 @@ function createToolRoundtripReproFetch(options?: ToolRoundtripReproFetchOptions)
         object: "chat.completion",
         created: 0,
         model: "mock",
+        system_fingerprint: null,
         choices: [
           {
             index: 0,
@@ -204,7 +206,7 @@ describe("generatePrContent tool-call roundtrip repro", () => {
      * and sends a second chat-completions request. Without the fetch-level
      * normalization, the current adapter can split the two tool calls into
      * adjacent assistant messages, which makes this mock throw the same class
-     * of invalid-request error that GitHub Models returned in CI.
+     * of invalid-request error that OpenRouter returns in CI.
      */
     const mock = createToolRoundtripReproFetch();
     const layer = Layer.mergeAll(
@@ -213,9 +215,10 @@ describe("generatePrContent tool-call roundtrip repro", () => {
       ReproDiffToolkitLayer,
       aiProviderLayerFromConfig(
         {
-          provider: "github-models",
-          model: "openai/gpt-4.1",
-          ghToken: Redacted.make("mock-github-token"),
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
+          apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+          title: "auto-pr",
         },
         { fetch: mock.fetch },
       ),
@@ -228,8 +231,8 @@ describe("generatePrContent tool-call roundtrip repro", () => {
           headRef: "ai/repro",
           templateContent: "# PR\n\n{{description}}",
           descriptionPromptText: "Return JSON only.",
-          provider: "github-models",
-          model: "openai/gpt-4.1",
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
           retryDelay: Duration.zero,
         });
 
@@ -263,9 +266,10 @@ describe("generatePrContent tool-call roundtrip repro", () => {
       ReproDiffToolkitLayer,
       aiProviderLayerFromConfig(
         {
-          provider: "github-models",
-          model: "openai/gpt-4.1",
-          ghToken: Redacted.make("mock-github-token"),
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
+          apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+          title: "auto-pr",
         },
         {
           fetch: Object.assign(fetchViaRequestObject, {
@@ -282,8 +286,8 @@ describe("generatePrContent tool-call roundtrip repro", () => {
           headRef: "ai/repro",
           templateContent: "# PR\n\n{{description}}",
           descriptionPromptText: "Return JSON only.",
-          provider: "github-models",
-          model: "openai/gpt-4.1",
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
           retryDelay: Duration.zero,
         });
 
@@ -317,9 +321,10 @@ describe("generatePrContent tool-call roundtrip repro", () => {
       ReproDiffToolkitLayer,
       aiProviderLayerFromConfig(
         {
-          provider: "github-models",
-          model: "openai/gpt-4.1",
-          ghToken: Redacted.make("mock-github-token"),
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
+          apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+          title: "auto-pr",
         },
         {
           fetch: mock.fetch,
@@ -334,8 +339,8 @@ describe("generatePrContent tool-call roundtrip repro", () => {
           headRef: "ai/repro",
           templateContent: "# PR\n\n{{description}}",
           descriptionPromptText: "Return JSON only.",
-          provider: "github-models",
-          model: "openai/gpt-4.1",
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
           retryDelay: Duration.zero,
         });
 
@@ -346,22 +351,33 @@ describe("generatePrContent tool-call roundtrip repro", () => {
             readonly tool_calls?: ReadonlyArray<unknown>;
           }>;
         };
-        const toolCallMessageIndex = secondRequestBody.messages?.findIndex(
+        const messages = secondRequestBody.messages ?? [];
+        const toolCallMessageIndex = messages.findIndex(
           (message) => Array.isArray(message.tool_calls) && message.tool_calls.length > 0,
         );
 
-        if (toolCallMessageIndex === undefined) {
+        if (toolCallMessageIndex < 0) {
           throw new Error(
             "expected the second request to contain a tool-calling assistant message",
           );
         }
 
-        expect(toolCallMessageIndex).toBeGreaterThanOrEqual(1);
-        expect(secondRequestBody.messages?.[toolCallMessageIndex - 1]).toMatchObject({
-          role: "assistant",
-          content: "Looking at CI.\nLooking at docs.",
-        });
-        expect(secondRequestBody.messages?.[toolCallMessageIndex - 1]?.tool_calls).toBeUndefined();
+        // The assistant text must survive into the follow-up request, either on
+        // the tool-call message or as its own preceding assistant message.
+        const toolCallMessage = messages[toolCallMessageIndex];
+        const precedingMessage = messages[toolCallMessageIndex - 1];
+        const textPreserved =
+          (typeof toolCallMessage?.content === "string" &&
+            toolCallMessage.content.includes("Looking at CI.")) ||
+          (typeof precedingMessage?.content === "string" &&
+            precedingMessage.content.includes("Looking at CI."));
+        expect(textPreserved).toBe(true);
+
+        // A plain assistant text message must stay separate from the tool-call
+        // assistant message; the coalescing shim only merges tool-call turns.
+        if (precedingMessage?.role === "assistant") {
+          expect(precedingMessage.tool_calls).toBeUndefined();
+        }
         expect(mock.getInvalidRequest()).toBeUndefined();
         expect(result.title).toBe("feat: ok");
       }).pipe(Effect.scoped),

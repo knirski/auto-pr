@@ -60,7 +60,7 @@
     "lint:workflows": "scripts/nix-run-if-missing.sh actionlint",
     "format": "biome format --write .",
     "knip": "knip",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "generate-content": "bun run src/workflow/auto-pr-generate-content-cli.ts",
     "build-model-routing-context": "bun run src/workflow/auto-pr-build-model-routing-context.ts",
     "create-or-update-pr": "bun run src/workflow/auto-pr-create-or-update-pr-cli.ts",
@@ -71,11 +71,12 @@
     "run-auto-pr": "bun run src/workflow/auto-pr-run.ts"
   },
   "dependencies": {
-    "@effect/ai-openai-compat": "4.0.0-beta.103",
-    "@effect/platform-bun": "4.0.0-beta.103",
-    "@effect/platform-node-shared": "4.0.0-beta.103",
+    "@effect/ai-openai-compat": "4.0.0-rc.117",
+    "@effect/ai-openrouter": "4.0.0-rc.117",
+    "@effect/platform-bun": "4.0.0-rc.117",
+    "@effect/platform-node-shared": "4.0.0-rc.117",
     "conventional-commits-parser": "7.1.2",
-    "effect": "4.0.0-beta.103",
+    "effect": "4.0.0-rc.117",
     "micromustache": "8.0.3",
     "octokit": "5.0.5",
     "remark": "15.0.1",
@@ -87,8 +88,8 @@
     "@commitlint/config-conventional": "21.2.0",
     "@types/mdast": "4.0.4",
     "@types/node": "26.1.2",
-    "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "bun-types": "1.3.14",
+    "bun-types": "1.4.2",
+    "fast-check": "4.10.2",
     "knip": "6.31.0",
     "lefthook": "2.1.10",
     "lint-staged": "17.3.0",
@@ -107,11 +108,11 @@
   "engines": {
     "node": ">=24.0.0"
   },
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.2",
   "overrides": {
     "brace-expansion": "2.1.4",
-    "fast-uri": "3.1.5",
-    "js-yaml": "4.3.1",
+    "fast-uri": "3.1.8",
+    "js-yaml": "4.3.2",
     "picomatch": "^4.0.4",
     "protobufjs": "^7.5.5",
     "undici": "8.10.0"

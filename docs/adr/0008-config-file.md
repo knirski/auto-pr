@@ -90,6 +90,8 @@ How can we centralize and validate the AI configuration surface while preserving
 
 **XOR:** Only one provider is active; validate after `provider` is resolved.
 
+**2026-09-27 update:** GitHub Models was retired on 2026-07-30. The active providers are `local | openrouter` (see [OpenRouter migration design](../superpowers/specs/2026-08-04-openrouter-migration-design.md)); the config-file proposal here is otherwise unchanged.
+
 #### Enforcement (Effect Schema, if implemented)
 
 Validate file + merged config with **Effect Schema** (`Schema.Struct` / `Schema.Union` on `provider`), `Schema.decodeUnknownEffect`, map `ParseError` → `AutoPrConfigError`. Secrets stay validated via `Redacted` / env-only checks.

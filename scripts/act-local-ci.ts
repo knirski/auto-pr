@@ -647,7 +647,7 @@ export function program(
 
     const failCheck = `bun run act failed on job 'check' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check)" : ""}.`;
     const failCw = `bun run act failed on job 'workflows-lint' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check-workflows)" : ""}.`;
-    const failInt = `bun run act failed on job 'integration' from ${INTEGRATION_WORKFLOW}${outcome.dryRun ? " (dry-run integration)" : ""}. Integration runs llama-server + GitHub Models; ensure Docker has enough resources.`;
+    const failInt = `bun run act failed on job 'integration' from ${INTEGRATION_WORKFLOW}${outcome.dryRun ? " (dry-run integration)" : ""}. Integration runs llama-server plus the optional OpenRouter keyed test; ensure Docker has enough resources.`;
 
     yield* Match.value(outcome.mode).pipe(
       Match.when("check", () => runActCheckJob(ctx, failCheck, resolveBackend)),
@@ -659,13 +659,13 @@ export function program(
   });
 }
 
-const dryRunFlag = Flag.boolean("dry-run").pipe(
+const dryRunFlag = Flag.Boolean("dry-run").pipe(
   Flag.withAlias("n"),
   Flag.optional,
   Flag.withDescription("Pass act --dryrun (validate workflow graph without a full run)."),
 );
 
-const modeArg = Argument.choice("mode", [...ACT_LOCAL_CI_MODES]).pipe(
+const modeArg = Argument.Literals("mode", [...ACT_LOCAL_CI_MODES]).pipe(
   Argument.withDefault("all"),
   Argument.withDescription(
     "check | check-workflows | integration | all (default: all — run check then integration).",
