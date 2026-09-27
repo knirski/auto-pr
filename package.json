@@ -110,8 +110,8 @@
   "packageManager": "bun@1.4.2",
   "overrides": {
     "brace-expansion": "2.1.4",
-    "fast-uri": "3.1.5",
-    "js-yaml": "4.3.1",
+    "fast-uri": "3.1.8",
+    "js-yaml": "4.3.2",
     "picomatch": "^4.0.4",
     "protobufjs": "^7.5.5",
     "undici": "8.10.0"
