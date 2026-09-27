@@ -14,7 +14,7 @@ These rules apply to `src/core/**`.
 
 - Return plain values for total computations.
 - Return `Result` for synchronous validation or parse failures.
-- Define domain errors in `src/core/errors.ts` with `Schema.TaggedErrorClass`.
+- Define domain errors in `src/core/errors.ts` with `Schema.TaggedError`.
 - Format errors outside the core in `src/auto-pr/errors.ts`.
 - Use `Option<T>` for optional values and normalize blanks at boundaries when blank should mean absent.
 

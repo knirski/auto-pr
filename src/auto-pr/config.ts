@@ -184,19 +184,19 @@ export const GeneratePrContentConfig =
 const DEFAULT_AI_PROVIDER: AiProvider = "local";
 
 const GeneratePrContentConfigDef = Config.all({
-  workspace: Config.string("GITHUB_WORKSPACE"),
-  defaultBranch: Config.string("DEFAULT_BRANCH"),
-  branch: Config.string("BRANCH"),
-  aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
-  ghToken: Config.option(Config.redacted("GH_TOKEN")),
-  aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
-  aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
-  localModel: Config.option(Config.string("AUTO_PR_LOCAL_MODEL")),
-  routingDecisionJson: Config.option(Config.string("AUTO_PR_ROUTING_DECISION_JSON")),
-  githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
-  ghHost: Config.option(Config.string("GH_HOST")),
-  existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
-  routingContextJson: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT_JSON")),
+  workspace: Config.String("GITHUB_WORKSPACE"),
+  defaultBranch: Config.String("DEFAULT_BRANCH"),
+  branch: Config.String("BRANCH"),
+  aiProvider: Config.option(Config.String("AUTO_PR_AI_PROVIDER")),
+  ghToken: Config.option(Config.Redacted("GH_TOKEN")),
+  aiOpenaiCompatUrl: Config.option(Config.String("AUTO_PR_AI_OPENAI_COMPAT_URL")),
+  aiOpenaiCompatApiKey: Config.option(Config.Redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
+  localModel: Config.option(Config.String("AUTO_PR_LOCAL_MODEL")),
+  routingDecisionJson: Config.option(Config.String("AUTO_PR_ROUTING_DECISION_JSON")),
+  githubApiUrl: Config.option(Config.String("GITHUB_API_URL")),
+  ghHost: Config.option(Config.String("GH_HOST")),
+  existingPrTitle: Config.option(Config.String("AUTO_PR_EXISTING_PR_TITLE")),
+  routingContextJson: Config.option(Config.String("AUTO_PR_ROUTING_CONTEXT_JSON")),
 });
 
 function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError, never> {
@@ -466,12 +466,12 @@ export const CreateOrUpdatePrConfig =
   Context.Service<CreateOrUpdatePrConfig>("CreateOrUpdatePrConfig");
 
 const CreateOrUpdatePrConfigDef = Config.all({
-  branch: Config.string("BRANCH"),
-  defaultBranch: Config.string("DEFAULT_BRANCH"),
-  workspace: Config.string("GITHUB_WORKSPACE"),
-  ghToken: Config.redacted("GH_TOKEN"),
-  githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
-  ghHost: Config.option(Config.string("GH_HOST")),
+  branch: Config.String("BRANCH"),
+  defaultBranch: Config.String("DEFAULT_BRANCH"),
+  workspace: Config.String("GITHUB_WORKSPACE"),
+  ghToken: Config.Redacted("GH_TOKEN"),
+  githubApiUrl: Config.option(Config.String("GITHUB_API_URL")),
+  ghHost: Config.option(Config.String("GH_HOST")),
 });
 
 export const CreateOrUpdatePrConfigLayer = Layer.effect(
@@ -559,19 +559,19 @@ export type RunAutoPrConfig = RunAutoPrConfigLocal | RunAutoPrConfigGithubModels
 export const RunAutoPrConfig = Context.Service<RunAutoPrConfig>("RunAutoPrConfig");
 
 const RunAutoPrConfigDef = Config.all({
-  defaultBranch: Config.string("DEFAULT_BRANCH"),
-  workspace: Config.string("GITHUB_WORKSPACE"),
-  ghToken: Config.redacted("GH_TOKEN"),
-  aiProvider: Config.option(Config.string("AUTO_PR_AI_PROVIDER")),
-  aiOpenaiCompatUrl: Config.option(Config.string("AUTO_PR_AI_OPENAI_COMPAT_URL")),
-  aiOpenaiCompatApiKey: Config.option(Config.redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
-  localModel: Config.option(Config.string("AUTO_PR_LOCAL_MODEL")),
-  routingDecisionJson: Config.option(Config.string("AUTO_PR_ROUTING_DECISION_JSON")),
-  githubApiUrl: Config.option(Config.string("GITHUB_API_URL")),
-  ghHost: Config.option(Config.string("GH_HOST")),
-  branch: Config.option(Config.string("BRANCH")),
-  existingPrTitle: Config.option(Config.string("AUTO_PR_EXISTING_PR_TITLE")),
-  routingContextJson: Config.option(Config.string("AUTO_PR_ROUTING_CONTEXT_JSON")),
+  defaultBranch: Config.String("DEFAULT_BRANCH"),
+  workspace: Config.String("GITHUB_WORKSPACE"),
+  ghToken: Config.Redacted("GH_TOKEN"),
+  aiProvider: Config.option(Config.String("AUTO_PR_AI_PROVIDER")),
+  aiOpenaiCompatUrl: Config.option(Config.String("AUTO_PR_AI_OPENAI_COMPAT_URL")),
+  aiOpenaiCompatApiKey: Config.option(Config.Redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
+  localModel: Config.option(Config.String("AUTO_PR_LOCAL_MODEL")),
+  routingDecisionJson: Config.option(Config.String("AUTO_PR_ROUTING_DECISION_JSON")),
+  githubApiUrl: Config.option(Config.String("GITHUB_API_URL")),
+  ghHost: Config.option(Config.String("GH_HOST")),
+  branch: Config.option(Config.String("BRANCH")),
+  existingPrTitle: Config.option(Config.String("AUTO_PR_EXISTING_PR_TITLE")),
+  routingContextJson: Config.option(Config.String("AUTO_PR_ROUTING_CONTEXT_JSON")),
 });
 
 export const RunAutoPrConfigLayer = Layer.effect(
