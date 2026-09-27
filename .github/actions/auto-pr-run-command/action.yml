@@ -15,6 +15,10 @@ inputs:
   runner:
     description: npx or bunx (from setup-runtime)
     required: true
+  trusted_package_required:
+    description: "true to fail unless package mode uses an immutable trusted auto-pr package ref"
+    required: false
+    default: "false"
 
 outputs:
   selected_model:
@@ -80,3 +84,4 @@ runs:
         USE_WORKSPACE: ${{ inputs.use_workspace }}
         AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
         RUNNER: ${{ inputs.runner }}
+        TRUSTED_PACKAGE_REQUIRED: ${{ inputs.trusted_package_required }}

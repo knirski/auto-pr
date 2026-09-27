@@ -109,17 +109,16 @@ jobs:
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.release_manifest == 'true'
     permissions:
       contents: read
-      models: read
     uses: ./.github/workflows/check.yml
     secrets: inherit
 
   # Real-HTTP integration scenarios against a local llama-server. Code changes only.
+  # The OpenRouter cloud scenario is gated to manual/scheduled runs inside the reusable workflow.
   integration:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
-      models: read
     uses: ./.github/workflows/integration.yml
 
   # Markdown lint + link check + spell check. Docs-only path.

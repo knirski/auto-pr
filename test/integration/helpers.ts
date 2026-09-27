@@ -3,10 +3,10 @@
  *
  * Three scenarios (one file each):
  *   - ai-providers.local-fallback   stub model (no tool calls) → commit-summary fallback path
- *   - ai-providers.github-models    GitHub Models (`INTEGRATION_GITHUB_MODEL`) → real AI generation via cloud
+ *   - ai-providers.openrouter       OpenRouter (`OPENROUTER_API_KEY`) → real AI generation via cloud
  *   - ai-providers.local-happy      full model (`INTEGRATION_LLAMA_MODEL_URL`, `--jinja`) → real AI via local llama
  */
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, type Redacted } from "effect";
 import { aiProviderLayerFromConfig, DiffToolkit, GitContext } from "#auto-pr";
 import { createGitContextMock, TestBaseLayer } from "#test/test-utils.js";
 
@@ -81,13 +81,13 @@ export function layerLocal(model: string, openaiCompatUrl: URL) {
   );
 }
 
-export function layerGithubModels(model: string, ghToken: string) {
+export function layerOpenRouter(model: string, apiKey: Redacted.Redacted<string>) {
   return Layer.mergeAll(
     TestBaseLayer,
     aiProviderLayerFromConfig({
-      provider: "github-models",
+      provider: "openrouter",
       model,
-      ghToken: Redacted.make(ghToken),
+      apiKey,
     }),
     makeGitContextLayer(),
     MockDiffToolkitLayer,
