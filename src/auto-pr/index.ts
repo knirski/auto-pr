@@ -48,6 +48,7 @@ export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
 export type { GithubModelsCatalogRepositoryService } from "#auto-pr/interfaces/github-models-catalog-repository.js";
+export type { OpenRouterModelsRepositoryService } from "#auto-pr/interfaces/openrouter-models-repository.js";
 export type {
   PullRequestClientService,
   PullRequestInfo,
@@ -61,6 +62,11 @@ export {
   GithubModelsCatalogRepository,
   GithubModelsCatalogRepositoryLive,
 } from "#auto-pr/live/github-models-catalog-repository.js";
+export {
+  makeOpenRouterModelsRepositoryLive,
+  OpenRouterModelsRepository,
+  OpenRouterModelsRepositoryLive,
+} from "#auto-pr/live/openrouter-models-repository.js";
 export { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
 export {
   getPrDescriptionPromptPath,
