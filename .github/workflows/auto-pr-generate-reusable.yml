@@ -104,7 +104,7 @@ jobs:
     steps:
       - name: Validate source branch
         id: validate
-        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@ae92620d8eb1dc80e11001c3d47315e69baf731a
         with:
           expected_sha: ${{ inputs.head_sha }}
           github-token: ${{ github.token }}
@@ -139,7 +139,7 @@ jobs:
       - name: Setup runtime (Node or alternative) with cache
         id: setup
         if: steps.validate.outputs.skip != 'true'
-        uses: knirski/auto-pr/.github/actions/setup-runtime@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/setup-runtime@ae92620d8eb1dc80e11001c3d47315e69baf731a
 
       - name: Fetch base branch
         if: steps.validate.outputs.skip != 'true'
@@ -153,7 +153,7 @@ jobs:
       - name: Determine auto-pr workspace mode
         id: auto-pr-pkg
         if: steps.validate.outputs.skip != 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@ae92620d8eb1dc80e11001c3d47315e69baf731a
         with:
           repository: ${{ github.repository }}
           runner: ${{ steps.setup.outputs.runner }}
@@ -188,7 +188,7 @@ jobs:
       - name: Build model routing context
         id: ai_routing
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@ae92620d8eb1dc80e11001c3d47315e69baf731a
         with:
           command: build-model-routing-context
           # Secret-bearing OpenRouter steps must run trusted package code, never branch-controlled
@@ -196,7 +196,7 @@ jobs:
           # knirski/auto-pr self-refs; bump both in the same commit. Non-OpenRouter providers keep
           # the existing workspace/package selection (constant ref, ADR 0016 decision 6).
           use_workspace: ${{ inputs.ai_provider == 'openrouter' && 'false' || steps.auto-pr-pkg.outputs.use_workspace }}
-          auto_pr_pkg: ${{ inputs.ai_provider == 'openrouter' && 'github:knirski/auto-pr#1e377e970233a6b80abe687d06d86d0eaf350644' || 'github:knirski/auto-pr' }}
+          auto_pr_pkg: ${{ inputs.ai_provider == 'openrouter' && 'github:knirski/auto-pr#ae92620d8eb1dc80e11001c3d47315e69baf731a' || 'github:knirski/auto-pr' }}
           trusted_package_required: ${{ inputs.ai_provider == 'openrouter' && 'true' || 'false' }}
           runner: ${{ steps.setup.outputs.runner }}
         env:
@@ -213,7 +213,7 @@ jobs:
       - name: Resolve llama Docker image
         id: llama_release
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@ae92620d8eb1dc80e11001c3d47315e69baf731a
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -240,7 +240,7 @@ jobs:
       - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@ae92620d8eb1dc80e11001c3d47315e69baf731a
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -250,13 +250,13 @@ jobs:
       - name: Generate PR content
         id: generate
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@ae92620d8eb1dc80e11001c3d47315e69baf731a
         with:
           command: generate-content
           # Same trusted-package confinement as the routing step: the OpenRouter key may only sit
           # next to immutable trusted package code, never branch-controlled workspace scripts.
           use_workspace: ${{ inputs.ai_provider == 'openrouter' && 'false' || steps.auto-pr-pkg.outputs.use_workspace }}
-          auto_pr_pkg: ${{ inputs.ai_provider == 'openrouter' && 'github:knirski/auto-pr#1e377e970233a6b80abe687d06d86d0eaf350644' || 'github:knirski/auto-pr' }}
+          auto_pr_pkg: ${{ inputs.ai_provider == 'openrouter' && 'github:knirski/auto-pr#ae92620d8eb1dc80e11001c3d47315e69baf731a' || 'github:knirski/auto-pr' }}
           trusted_package_required: ${{ inputs.ai_provider == 'openrouter' && 'true' || 'false' }}
           runner: ${{ steps.setup.outputs.runner }}
         env:
@@ -277,7 +277,7 @@ jobs:
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@ae92620d8eb1dc80e11001c3d47315e69baf731a
 
       # Produce the artifact as DATA ONLY (no executable content, no glob patterns): two content
       # files plus a versioned manifest carrying immutable identity fields and SHA-256 content
