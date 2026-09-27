@@ -1,16 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   capDiffForAiToolRoundtrip,
-  GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS,
   MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
   MAX_PER_FILE_DIFF_CHARS,
   MAX_TOTAL_DIFF_CHARS,
-  MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-  resolveAiToolRoundtripDiffCharBudget,
   sanitizeDiffForAi,
-  TOKEN_ESTIMATE_CHARS_PER_TOKEN,
-  TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS,
-  TOOL_ROUNDTRIP_RESERVED_TOKENS,
 } from "#core/sanitize-diff.js";
 
 const makeBinaryFileDiff = (path: string) =>
@@ -97,39 +91,5 @@ describe("capDiffForAiToolRoundtrip", () => {
 
   test("exports MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS as 8000", () => {
     expect(MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS).toBe(8_000);
-  });
-
-  test("uses lower round-trip cap for github-models gpt-4.1 family", () => {
-    const availableTokens = GITHUB_MODELS_GPT41_MAX_REQUEST_TOKENS - TOOL_ROUNDTRIP_RESERVED_TOKENS;
-    const expected = Math.min(
-      MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-      Math.max(
-        MIN_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-        Math.floor(availableTokens / TOOL_ROUNDTRIP_ASSUMED_MAX_PARALLEL_TOOL_CALLS) *
-          TOKEN_ESTIMATE_CHARS_PER_TOKEN,
-      ),
-    );
-    expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1")).toBe(expected);
-    expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-mini")).toBe(
-      expected,
-    );
-    expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1-nano")).toBe(
-      expected,
-    );
-    expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.1/preview")).toBe(
-      expected,
-    );
-  });
-
-  test("uses default round-trip cap for other models/providers", () => {
-    expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4.10")).toBe(
-      MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-    );
-    expect(resolveAiToolRoundtripDiffCharBudget("github-models", "openai/gpt-4o-mini")).toBe(
-      MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-    );
-    expect(resolveAiToolRoundtripDiffCharBudget("local", "gpt-oss")).toBe(
-      MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
-    );
   });
 });

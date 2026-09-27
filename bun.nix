@@ -141,6 +141,10 @@
     url = "https://registry.npmjs.org/@effect/ai-openai-compat/-/ai-openai-compat-4.0.0-rc.117.tgz";
     hash = "sha512-TJFO5CGOks+y9d6Fbj3/lfWO4FHWMIS0h+8MOMEcNyDau/BTZYIYP/Ab9OID0Rwsbvq3Wi7kxJKpA88QgaVqkw==";
   };
+  "@effect/ai-openrouter@4.0.0-rc.117" = fetchurl {
+    url = "https://registry.npmjs.org/@effect/ai-openrouter/-/ai-openrouter-4.0.0-rc.117.tgz";
+    hash = "sha512-CNfMPZSsYQmg3vt6/H9lYr2Sov9e+EoviMTKoRGtVgl8EVoj+Hd00kgh1MrhGnNanR7ZNUNOOqTzN1ENV1LMlw==";
+  };
   "@effect/platform-bun@4.0.0-rc.117" = fetchurl {
     url = "https://registry.npmjs.org/@effect/platform-bun/-/platform-bun-4.0.0-rc.117.tgz";
     hash = "sha512-jyvoxPjT9562z5Tc2gib9GB16jcgh43jhpsuNQxs9B8WJ7RB2doPBQdrYLSSWRodGPLJBKJGzToRRbJiaGblsw==";

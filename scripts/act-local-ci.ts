@@ -647,7 +647,7 @@ export function program(
 
     const failCheck = `bun run act failed on job 'check' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check)" : ""}.`;
     const failCw = `bun run act failed on job 'workflows-lint' from ${CI_WORKFLOW}${outcome.dryRun ? " (dry-run check-workflows)" : ""}.`;
-    const failInt = `bun run act failed on job 'integration' from ${INTEGRATION_WORKFLOW}${outcome.dryRun ? " (dry-run integration)" : ""}. Integration runs llama-server + GitHub Models; ensure Docker has enough resources.`;
+    const failInt = `bun run act failed on job 'integration' from ${INTEGRATION_WORKFLOW}${outcome.dryRun ? " (dry-run integration)" : ""}. Integration runs llama-server plus the optional OpenRouter keyed test; ensure Docker has enough resources.`;
 
     yield* Match.value(outcome.mode).pipe(
       Match.when("check", () => runActCheckJob(ctx, failCheck, resolveBackend)),

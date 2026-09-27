@@ -795,3 +795,14 @@ Each commit should keep the tree passing targeted tests for the changed area. Th
 - Query `GET /api/v1/key` for quota diagnostics and clearer preflight warnings.
 - Add user-configurable route preference lists.
 - Add provider-neutral cloud routing if a second active cloud backend is introduced.
+
+## Amendment (2026-09-27): Use `@effect/ai-openrouter`
+
+The implementation uses the official `@effect/ai-openrouter` module (Effect v4 `4.0.0-rc.117`) instead of hand-rolling OpenRouter HTTP and attribution headers:
+
+- **Inference**: `OpenRouterClient.layer({ apiKey, siteReferrer, siteTitle })` + `OpenRouterLanguageModel.model(model)` replaces the planned `@effect/ai-openai-compat` client with a custom `transformClient`. The module sends the bearer key plus `http-referer` and `x-title` attribution headers.
+- **Catalog**: `src/auto-pr/live/openrouter-models-repository.ts` calls the generated client (`client.getModels({ params: { limit: 1000 } })`) and normalizes the typed response with the pure `parseOpenRouterModelCatalog`. The repository service is key-less (`fetchModels()`); authentication lives in the `OpenRouterClient` layer. The 5-second timeout and empty-catalog degradation remain.
+- **Free-model policy is unchanged and remains enforced on every path**: catalog selection, a configured `AUTO_PR_OPENROUTER_MODEL`, and the static fallback all require a `:free` model ID (or the explicit `openrouter/free` alias) with only known zero prices.
+- Chat-completion mocks in tests must satisfy the module's response schema (`id`, `object`, `created`, `model`, `choices`, `usage`).
+
+Live-catalog note (2026-09-27): `openai/gpt-oss-20b:free` is currently not listed by OpenRouter; the preferred-list entries (`google/gemma-4-26b-a4b-it:free`, `cohere/north-mini-code:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`) are listed and tool-capable. The static fallback stays a free ID per the policy above; catalog-driven selection resolves to a currently listed free model when the catalog is available.

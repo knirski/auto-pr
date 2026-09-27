@@ -15,11 +15,18 @@ inputs:
   runner:
     description: npx or bunx (from setup-runtime)
     required: true
+  trusted_package_required:
+    description: "true to fail unless package mode uses an immutable trusted auto-pr package ref"
+    required: false
+    default: "false"
 
 outputs:
   selected_model:
     description: Final model id to pass to generate-content.
     value: ${{ steps.run.outputs.selected_model }}
+  provider:
+    description: Selected AI provider (local or openrouter).
+    value: ${{ steps.run.outputs.provider }}
   routing_context:
     description: Trusted routing context string for prompt conditioning.
     value: ${{ steps.run.outputs.routing_context }}
@@ -59,15 +66,12 @@ outputs:
   tool_response_char_budget:
     description: Dynamic per-tool response char budget for diff payloads.
     value: ${{ steps.run.outputs.tool_response_char_budget }}
-  github_models_plan_class:
-    description: Detected or overridden GitHub Models plan class.
-    value: ${{ steps.run.outputs.github_models_plan_class }}
-  github_models_rate_limit_tier:
-    description: Selected model rate-limit tier from catalog or fallback.
-    value: ${{ steps.run.outputs.github_models_rate_limit_tier }}
-  github_models_envelope_source:
-    description: Source of derived envelope (catalog-and-plan, catalog-only, static-fallback).
-    value: ${{ steps.run.outputs.github_models_envelope_source }}
+  cloud_model_envelope_source:
+    description: Source used for cloud model token envelope selection.
+    value: ${{ steps.run.outputs.cloud_model_envelope_source }}
+  openrouter_model_context_length:
+    description: Context length of the selected OpenRouter model, when available.
+    value: ${{ steps.run.outputs.openrouter_model_context_length }}
 
 runs:
   using: composite
@@ -80,3 +84,4 @@ runs:
         USE_WORKSPACE: ${{ inputs.use_workspace }}
         AUTO_PR_PKG: ${{ inputs.auto_pr_pkg }}
         RUNNER: ${{ inputs.runner }}
+        TRUSTED_PACKAGE_REQUIRED: ${{ inputs.trusted_package_required }}

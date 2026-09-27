@@ -82,16 +82,19 @@ describe("runAutoPrPipelineWithServices", () => {
     });
   });
 
-  test("maps github-models run config to generate-content service config", () => {
+  test("maps openrouter run config to generate-content service config", () => {
     const ghToken = Redacted.make("ghp_test");
     const config = generateContentConfigFromRunAutoPrConfig(
       {
-        provider: "github-models",
+        provider: "openrouter",
         defaultBranch: "main",
         workspace: "/workspace",
         templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
-        model: "openai/gpt-4.1",
+        model: "openai/gpt-oss-20b:free",
         ghToken,
+        openRouterApiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+        openRouterTitle: "auto-pr",
+        requiresToolCalls: true,
         aiTokenBudget: 9000,
         aiToolRoundLimit: 4,
         aiToolResponseCharBudget: 1500,
@@ -100,12 +103,12 @@ describe("runAutoPrPipelineWithServices", () => {
     );
 
     expect(config).toEqual({
-      provider: "github-models",
+      provider: "openrouter",
       defaultBranch: "main",
       branch: "ai/example",
       workspace: "/workspace",
       templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
-      model: "openai/gpt-4.1",
+      model: "openai/gpt-oss-20b:free",
       aiTokenBudget: 9000,
       aiToolRoundLimit: 4,
       aiToolResponseCharBudget: 1500,

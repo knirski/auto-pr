@@ -1,6 +1,7 @@
 # Reusable workflow: generate PR content only (unprivileged).
-# Checkout of branch (untrusted) with contents: read only. Optional GH_TOKEN secret
-# when ai_provider is github-models (GitHub Models API).
+# Checkout of branch (untrusted) with contents: read only. Optional GH_TOKEN secret for GitHub API
+# reads (existing PR title lookup). Optional OPENROUTER_API_KEY secret for cloud inference when
+# ai_provider is openrouter (default); secret-bearing steps run trusted package code only.
 # Satisfies CodeQL "untrusted checkout in trusted context" — no privileged context.
 #
 # Called from auto-pr.yml's matrix-fanned `generate` job (unprivileged ingress, ADR 0016). The
@@ -13,7 +14,10 @@ on:
   workflow_call:
     secrets:
       GH_TOKEN:
-        description: "Token for GitHub Models API when ai_provider is github-models"
+        description: "Token for GitHub API reads (existing PR title lookup); defaults to the job token"
+        required: false
+      OPENROUTER_API_KEY:
+        description: "OpenRouter API key. Required for cloud inference when ai_provider is openrouter."
         required: false
     # No outputs: the generate phase is a data producer only. It must never emit a
     # package/executable reference for a privileged job to install (ADR 0016 decisions 3, 6).
@@ -37,7 +41,22 @@ on:
       ai_provider:
         required: false
         type: string
-        default: "github-models"
+        default: "openrouter"
+      ai_openrouter_model:
+        required: false
+        type: string
+        description: "Optional OpenRouter model id override. Must be a free model (vendor/model:free)."
+        default: ""
+      ai_openrouter_http_referer:
+        required: false
+        type: string
+        description: "Optional OpenRouter HTTP-Referer attribution header value."
+        default: ""
+      ai_openrouter_title:
+        required: false
+        type: string
+        description: "Optional OpenRouter X-Title attribution header value."
+        default: ""
       ai_openai_compat_url:
         required: false
         type: string
@@ -80,13 +99,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: read # gh pr view (existing PR title) when token allows
-      models: read # GitHub Models API (github-models provider) with GITHUB_TOKEN or GH_TOKEN
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Validate source branch
         id: validate
-        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-validate-source@8a98a0da2c396d1016bfa0173795f3af3c597c78
         with:
           expected_sha: ${{ inputs.head_sha }}
           github-token: ${{ github.token }}
@@ -95,8 +113,9 @@ jobs:
       # codeql[actions/untrusted-checkout] False positive: this reusable workflow is analyzed by
       # CodeQL without caller context, but the job is unprivileged by construction (ADR 0016
       # decision 3). It checks out an explicit, caller-resolved head SHA (never a mutable ref) with
-      # contents/pull-requests/models: read only — no write access and no long-lived/privileged
-      # secret (only an optional models-scoped GH_TOKEN, defaulting to github.token). Its sole
+      # contents/pull-requests: read only — no write access and no GitHub App credential. The
+      # optional read-scoped GH_TOKEN defaults to github.token, and the optional OpenRouter
+      # inference key is confined to trusted package-mode steps (see below). Its sole
       # output is the data-only pr-content artifact; the privileged create phase is a SEPARATE
       # workflow_run executor that performs no checkout, so this checkout is never privileged.
       - name: Checkout branch
@@ -120,7 +139,7 @@ jobs:
       - name: Setup runtime (Node or alternative) with cache
         id: setup
         if: steps.validate.outputs.skip != 'true'
-        uses: knirski/auto-pr/.github/actions/setup-runtime@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/setup-runtime@8a98a0da2c396d1016bfa0173795f3af3c597c78
 
       - name: Fetch base branch
         if: steps.validate.outputs.skip != 'true'
@@ -134,7 +153,7 @@ jobs:
       - name: Determine auto-pr workspace mode
         id: auto-pr-pkg
         if: steps.validate.outputs.skip != 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-set-pkg@8a98a0da2c396d1016bfa0173795f3af3c597c78
         with:
           repository: ${{ github.repository }}
           runner: ${{ steps.setup.outputs.runner }}
@@ -169,18 +188,23 @@ jobs:
       - name: Build model routing context
         id: ai_routing
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@8a98a0da2c396d1016bfa0173795f3af3c597c78
         with:
           command: build-model-routing-context
-          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-          # Constant published-package ref, consumed only when use_workspace == false (adopter
-          # repos). Never branch-derived, never reaches a privileged job (ADR 0016 decision 6).
-          auto_pr_pkg: "github:knirski/auto-pr"
+          # Secret-bearing OpenRouter steps must run trusted package code, never branch-controlled
+          # workspace scripts. The package ref is the same immutable SHA that pins this file's
+          # knirski/auto-pr self-refs; bump both in the same commit. Non-OpenRouter providers keep
+          # the existing workspace/package selection (constant ref, ADR 0016 decision 6).
+          use_workspace: ${{ inputs.ai_provider == 'openrouter' && 'false' || steps.auto-pr-pkg.outputs.use_workspace }}
+          auto_pr_pkg: ${{ inputs.ai_provider == 'openrouter' && 'github:knirski/auto-pr#8a98a0da2c396d1016bfa0173795f3af3c597c78' || 'github:knirski/auto-pr' }}
+          trusted_package_required: ${{ inputs.ai_provider == 'openrouter' && 'true' || 'false' }}
           runner: ${{ steps.setup.outputs.runner }}
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           COMMITS_COUNT: ${{ steps.commits.outputs.count }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
+          OPENROUTER_API_KEY: ${{ inputs.ai_provider == 'openrouter' && secrets.OPENROUTER_API_KEY || '' }}
+          AUTO_PR_OPENROUTER_MODEL: ${{ inputs.ai_openrouter_model }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ inputs.ai_openai_compat_url }}
           AUTO_PR_AI_LLAMACPP_MODEL_URL: ${{ inputs.ai_llamacpp_model_url }}
           RUNNER_LABEL: ubuntu-24.04
@@ -189,7 +213,7 @@ jobs:
       - name: Resolve llama Docker image
         id: llama_release
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/resolve-llama-server-tag@8a98a0da2c396d1016bfa0173795f3af3c597c78
         with:
           commits_count: ${{ steps.commits.outputs.count }}
           ai_provider: ${{ inputs.ai_provider }}
@@ -216,7 +240,7 @@ jobs:
       - name: Start local llama.cpp (Docker)
         id: local_llama
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true' && steps.commits.outputs.count != '1' && inputs.ai_provider == 'local' && inputs.ai_llamacpp_model_url != '' && inputs.ai_openai_compat_url == ''
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-start@8a98a0da2c396d1016bfa0173795f3af3c597c78
         with:
           docker_image: ${{ steps.llama_release.outputs.image }}
           model_url: ${{ inputs.ai_llamacpp_model_url }}
@@ -226,29 +250,34 @@ jobs:
       - name: Generate PR content
         id: generate
         if: steps.validate.outputs.skip != 'true' && steps.semantic.outputs.should_create_pr == 'true'
-        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/auto-pr-run-command@8a98a0da2c396d1016bfa0173795f3af3c597c78
         with:
           command: generate-content
-          use_workspace: ${{ steps.auto-pr-pkg.outputs.use_workspace }}
-          # Constant published-package ref, consumed only when use_workspace == false (adopter
-          # repos). Never branch-derived, never reaches a privileged job (ADR 0016 decision 6).
-          auto_pr_pkg: "github:knirski/auto-pr"
+          # Same trusted-package confinement as the routing step: the OpenRouter key may only sit
+          # next to immutable trusted package code, never branch-controlled workspace scripts.
+          use_workspace: ${{ inputs.ai_provider == 'openrouter' && 'false' || steps.auto-pr-pkg.outputs.use_workspace }}
+          auto_pr_pkg: ${{ inputs.ai_provider == 'openrouter' && 'github:knirski/auto-pr#8a98a0da2c396d1016bfa0173795f3af3c597c78' || 'github:knirski/auto-pr' }}
+          trusted_package_required: ${{ inputs.ai_provider == 'openrouter' && 'true' || 'false' }}
           runner: ${{ steps.setup.outputs.runner }}
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           BRANCH: ${{ inputs.source_branch }}
           AUTO_PR_AI_PROVIDER: ${{ inputs.ai_provider }}
+          OPENROUTER_API_KEY: ${{ inputs.ai_provider == 'openrouter' && secrets.OPENROUTER_API_KEY || '' }}
+          AUTO_PR_OPENROUTER_MODEL: ${{ inputs.ai_openrouter_model }}
+          AUTO_PR_OPENROUTER_HTTP_REFERER: ${{ inputs.ai_openrouter_http_referer }}
+          AUTO_PR_OPENROUTER_TITLE: ${{ inputs.ai_openrouter_title }}
           AUTO_PR_AI_OPENAI_COMPAT_URL: ${{ steps.local_llama.outcome == 'success' && format('http://127.0.0.1:{0}/v1', inputs.ai_llamacpp_port) || inputs.ai_openai_compat_url }}
           AUTO_PR_AI_OPENAI_COMPAT_API_KEY: ${{ inputs.ai_openai_compat_api_key }}
           AUTO_PR_LOCAL_MODEL: ${{ steps.local_llama.outputs.model_id }}
           AUTO_PR_ROUTING_DECISION_JSON: ${{ steps.ai_routing.outputs.routing_decision_json }}
           AUTO_PR_ROUTING_CONTEXT_JSON: ${{ steps.ai_routing.outputs.routing_context_json }}
           # Caller may pass PAT via secret; if unset, use job token (caller secret forward can be empty).
-          GH_TOKEN: ${{ inputs.ai_provider == 'github-models' && (secrets.GH_TOKEN || github.token) || '' }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
       - name: Stop local llama-server (Docker)
         if: always() && steps.local_llama.outcome != 'skipped'
-        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@1e377e970233a6b80abe687d06d86d0eaf350644
+        uses: knirski/auto-pr/.github/actions/llama-server-docker-stop@8a98a0da2c396d1016bfa0173795f3af3c597c78
 
       # Produce the artifact as DATA ONLY (no executable content, no glob patterns): two content
       # files plus a versioned manifest carrying immutable identity fields and SHA-256 content

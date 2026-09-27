@@ -10,10 +10,7 @@ import type {
   ToolStrategy,
 } from "#core/model-routing.js";
 
-const ModelProviderSchema = Schema.Union([
-  Schema.Literal("local"),
-  Schema.Literal("github-models"),
-]);
+const ModelProviderSchema = Schema.Union([Schema.Literal("local"), Schema.Literal("openrouter")]);
 const ModelBandSchema = Schema.Union([
   Schema.Literal("A"),
   Schema.Literal("B"),

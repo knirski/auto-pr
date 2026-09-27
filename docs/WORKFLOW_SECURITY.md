@@ -18,17 +18,26 @@ The auto-pr flow is split into two reusable workflows:
 
 | Workflow | Checkout | Permissions | Secrets |
 |----------|----------|-------------|---------|
-| **generate** (`auto-pr-generate-reusable.yml`) | Branch (`github.ref_name`) | `contents: read`, `models: read` | `GH_TOKEN` from caller for GitHub Models; stock workflow passes `github.token` |
+| **generate** (`auto-pr-generate-reusable.yml`) | Branch (explicit head SHA) | `contents: read`, `pull-requests: read` | Optional `GH_TOKEN` from caller for GitHub PR lookup; optional `OPENROUTER_API_KEY` for cloud inference |
 | **create** (`auto-pr-create-reusable.yml`) | No checkout | `contents: read`, `pull-requests: write` | `APP_ID`, `APP_PRIVATE_KEY` |
 
-The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) must also include `models: read` in its top-level `permissions` when it calls the generate reusable workflow. Nested jobs cannot request broader `GITHUB_TOKEN` permissions than the caller grants ([reusable workflows and permissions](https://docs.github.com/en/actions/using-workflows/reusing-workflows#supported-keywords-for-jobs-that-call-a-reusable-workflow)).
+The **entry** workflow ([`auto-pr.yml`](../.github/workflows/auto-pr.yml)) grants only `contents: read` (plus `pull-requests: read` for the generate reusable workflow's PR lookup). **`models: read` is no longer needed** — GitHub Models was retired on 2026-07-30 — and the OpenRouter key is not a GitHub token. Nested jobs cannot request broader `GITHUB_TOKEN` permissions than the caller grants ([reusable workflows and permissions](https://docs.github.com/en/actions/using-workflows/reusing-workflows#supported-keywords-for-jobs-that-call-a-reusable-workflow)).
 
 ### Generate (Unprivileged)
 
 - **Checkout:** The pushed branch — untrusted, but acceptable because the workflow has no privileged permissions.
 - **Runs:** model routing context classification, `auto-pr-generate-content` (AI), artifact preparation.
 - **Output:** Artifact `pr-content` (title, body, branch, default_branch).
-- **Risk:** Limited. It cannot write to the repo. The stock workflow passes the ephemeral default **`github.token`** with `models: read`, not a long-lived PAT and not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`). Custom workflows should not forward repository secrets to generate unless branch authors are trusted to see them.
+- **Risk:** Limited. It cannot write to the repo and holds no GitHub App credential. The stock workflow passes the ephemeral default **`github.token`** for read-only PR lookup, not a long-lived PAT and not the App install secrets (`APP_ID` / `APP_PRIVATE_KEY`). Custom workflows should not forward unrelated repository secrets to generate. Cloud generation receives an optional, separate **OpenRouter inference key** (`OPENROUTER_API_KEY`): it can spend OpenRouter quota but grants no repository access.
+
+**OpenRouter key handling (keyed steps).** The generate job checks out untrusted branch code by immutable SHA, and `OPENROUTER_API_KEY` is a long-lived external credential. The workflow therefore confines it:
+
+- `OPENROUTER_API_KEY` is projected only into the `build-model-routing-context` and `generate-content` steps, and only when `ai_provider` is `openrouter`.
+- Those steps call `auto-pr-run-command` with `trusted_package_required: true`, which fails closed unless the package ref is an immutable `github:knirski/auto-pr#<40-char SHA>`. Trusted auto-pr package code runs against the branch checkout as **data only** (git reads and diffs); branch-controlled package scripts, imports, generated binaries, and workspace `bun run` commands never execute next to the key.
+- Install, setup, test, and artifact-preparation steps do not receive the key.
+- The branch cannot select the package ref: the reusable workflow pins it to the same SHA as its own self-references ([ADR 0016](adr/0016-immutable-privileged-workflow-executor.md) decision 6).
+
+Blast radius is bounded to OpenRouter quota spend (the key is not a GitHub token and cannot write to the repository); a dedicated key with a low credit limit in OpenRouter is recommended defense-in-depth.
 
 ### Create (Privileged, Trusted Checkout Only)
 
@@ -53,7 +62,7 @@ The `actions/untrusted-checkout-{critical,high,medium}` queries are **enabled wi
 
 Two narrow, per-line inline suppressions remain, each on an **unprivileged** checkout that CodeQL flags as a false positive because it analyzes reusable workflows without caller context:
 
-- `auto-pr-generate-reusable.yml` (generate job): checks out an explicit, caller-resolved head SHA with read-only permissions and no privileged secret; its only output is the data-only artifact.
+- `auto-pr-generate-reusable.yml` (generate job): checks out an explicit, caller-resolved head SHA with read-only permissions and no GitHub privileged secret; the optional OpenRouter inference key is confined to trusted package-mode steps, and its only output is the data-only artifact.
 - `nix.yml` (build job): `contents: read` only, no secrets, no `environment:`; the App-secret path lives solely in the separate `bun-nix-push` job.
 
 Each carries a `# codeql[actions/untrusted-checkout]` comment stating its specific justification. No new suppression is added without a documented, reviewed proof of safety for a specific flagged result.

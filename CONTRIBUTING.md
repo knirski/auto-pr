@@ -70,13 +70,13 @@ Pre-push and the CI **`check`** job run **unit tests only** (`bun test`). Integr
 | `bun run act -- check-workflows` | [ci.yml](.github/workflows/ci.yml) job **`workflows-lint`** → [check-workflows.yml](.github/workflows/check-workflows.yml) (actionlint + shellcheck on `.github`; fast). |
 | `bun run act -- --dry-run check` | `act --dryrun` for [ci.yml](.github/workflows/ci.yml) → [check.yml](.github/workflows/check.yml) (validates workflow graph; not a full run). Equivalent: `bun scripts/act-local-ci.ts --dry-run check` (or `-n check`). |
 | `bun run act -- --dry-run check-workflows` | `act --dryrun` for **`ci.yml`** job **`workflows-lint`** only. Equivalent: `bun scripts/act-local-ci.ts --dry-run check-workflows`. |
-| `bun run act -- integration` | [integration.yml](.github/workflows/integration.yml) only — all its jobs (local llama + GitHub Models scenarios); heavy |
+| `bun run act -- integration` | [integration.yml](.github/workflows/integration.yml) only — all its jobs (local llama + OpenRouter scenarios; the OpenRouter step skips without `OPENROUTER_API_KEY`); heavy |
 
 #### Integration test env (this repository)
 
 [`bun run test:integration`](package.json) loads **[`.env.ci`](.env.ci)** (committed), then an optional **`.env.local`** at the repo root (gitignored; same keys as `.env.ci`; overrides). This matches the Vite/Next pattern for local-only env. See [`.env.example`](.env.example) for commented variable names. Hosted CI uses the same pins from `.env.ci` in the workflow; it does not read `.env.local`.
 
-For the **GitHub Models** test file, set **`GH_TOKEN`** when running locally. **Docker** is required for local-llama tests unless you set **`INTEGRATION_SKIP_DOCKER=1`**.
+For the **OpenRouter** test file, export **`OPENROUTER_API_KEY`** when running locally (the test skips when it is unset). **Docker** is required for local-llama tests unless you set **`INTEGRATION_SKIP_DOCKER=1`**.
 
 More detail: [docs/CI.md](docs/CI.md#integration-tests).
 

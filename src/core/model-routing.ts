@@ -2,7 +2,9 @@
  * Routing policy for auto-pr's packaged build-model-routing-context workflow command.
  */
 
-export type ModelProvider = "local" | "github-models";
+import { DEFAULT_OPENROUTER_MODEL } from "./openrouter-routing.js";
+
+export type ModelProvider = "local" | "openrouter";
 
 export type ModelBand = "A" | "B" | "C";
 
@@ -117,9 +119,6 @@ export type ParsedCommit = {
   readonly type: string | undefined;
   readonly breaking: boolean;
 };
-
-const GITHUB_MODELS_SMALL_MODEL = "microsoft/phi-4-mini-instruct";
-const GITHUB_MODELS_STRONG_MODEL = "openai/gpt-4.1";
 
 const LOCAL_TINY_MODEL = "qwen3-0.6b-q4_k_m";
 const LOCAL_SMALL_MODEL = "qwen3-1.7b-q4_k_m";
@@ -341,7 +340,7 @@ function formatLocalRunnerResources(runner: LocalRunnerResources): string {
 
 export function selectModel(
   provider: ModelProvider,
-  band: ModelBand,
+  _band: ModelBand,
   explicitModel?: string,
   routing?: {
     readonly requiresToolCalls?: boolean;
@@ -350,12 +349,10 @@ export function selectModel(
   },
 ): string {
   const override = explicitModel?.trim() ?? "";
-  if (provider === "local" && !isBlank(override)) return override;
-  if (provider === "github-models") {
-    return band === "C" || routing?.requiresToolCalls === true || routing?.reasoningNeed === "high"
-      ? GITHUB_MODELS_STRONG_MODEL
-      : GITHUB_MODELS_SMALL_MODEL;
-  }
+  // OpenRouter models are chosen from the live catalog by
+  // pickOpenRouterModelCatalogEntry; this is only the static seed model.
+  if (provider === "openrouter") return DEFAULT_OPENROUTER_MODEL;
+  if (!isBlank(override)) return override;
   if (usesExternalOpenAiCompat(routing?.localModel)) return LOCAL_LARGE_MODEL;
   return selectLocalModelForRunner(
     routing?.localModel?.runner ?? resolveLocalRunnerResources({ repositoryVisibility: "private" }),
