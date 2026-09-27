@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    bun2nix.url = "github:nix-community/bun2nix?tag=2.0.8";
+    bun2nix.url = "github:nix-community/bun2nix?tag=2.1.2";
     bun2nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
