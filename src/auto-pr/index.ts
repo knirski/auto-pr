@@ -11,8 +11,8 @@ export {
 export type {
   AiProvider,
   RunAutoPrConfigCommon,
-  RunAutoPrConfigGithubModels,
   RunAutoPrConfigLocal,
+  RunAutoPrConfigOpenRouter,
 } from "#auto-pr/config.js";
 export {
   CreateOrUpdatePrConfig,

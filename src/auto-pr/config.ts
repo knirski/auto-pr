@@ -14,13 +14,17 @@
  * | DEFAULT_BRANCH | ✓ | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Base branch (e.g. main) |
  * | GITHUB_WORKSPACE | ✓ | All | Repo root path |
  * | BRANCH | ✓* | GeneratePrContent, CreateOrUpdatePr | Current branch (*optional in RunAutoPr) |
- * | GH_TOKEN | ✓* | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | GitHub token (*required for github-models) |
- * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | local \| github-models (default: local) |
+ * | GH_TOKEN | ✓* | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | GitHub token for GitHub API access |
+ * | AUTO_PR_AI_PROVIDER | | GeneratePrContent, RunAutoPr | local \| openrouter (default: local) |
+ * | OPENROUTER_API_KEY | ✓* | GeneratePrContent, RunAutoPr | OpenRouter API key (*required for openrouter) |
+ * | AUTO_PR_OPENROUTER_MODEL | | GeneratePrContent, RunAutoPr | Optional configured OpenRouter model id (`vendor/model:free`); the routing decision selects the active model. |
+ * | AUTO_PR_OPENROUTER_HTTP_REFERER | | GeneratePrContent, RunAutoPr | Optional OpenRouter attribution referer (HTTP-Referer header). |
+ * | AUTO_PR_OPENROUTER_TITLE | | GeneratePrContent, RunAutoPr | Optional OpenRouter attribution title (X-Title header; default: auto-pr). |
  * | AUTO_PR_AI_OPENAI_COMPAT_URL | | GeneratePrContent, RunAutoPr | OpenAI-compatible base URL when provider=local (default: http://127.0.0.1:8080/v1; e.g. llama.cpp `llama-server`) |
  * | AUTO_PR_AI_OPENAI_COMPAT_API_KEY | | GeneratePrContent, RunAutoPr | Optional API key when provider=local |
  * | AUTO_PR_LOCAL_MODEL | | GeneratePrContent, RunAutoPr | Model id for `local` only (defaults to gpt-oss when unset). |
  * | AUTO_PR_ROUTING_CONTEXT_JSON | | GeneratePrContent, RunAutoPr | Optional trusted typed routing context JSON (change analysis and review focus) injected into the AI prompt. |
- * | AUTO_PR_ROUTING_DECISION_JSON | ✓* | GeneratePrContent, RunAutoPr | Typed routing decision JSON from routing step outputs (*required for github-models). |
+ * | AUTO_PR_ROUTING_DECISION_JSON | ✓* | GeneratePrContent, RunAutoPr | Typed routing decision JSON from routing step outputs (*required for openrouter). |
  * | AUTO_PR_EXISTING_PR_TITLE | | GeneratePrContent, RunAutoPr | Optional. When non-empty, passed into the AI prompt as the current PR title instead of resolving the open PR title. For tests or custom CI. |
  * | GITHUB_API_URL | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional Octokit REST base URL (advanced; overrides GH_HOST mapping). |
  * | GH_HOST | | GeneratePrContent, CreateOrUpdatePr, RunAutoPr | Optional GitHub host. `github.com` maps to api.github.com; other hosts map to `https://<host>/api/v3`. |
@@ -48,6 +52,7 @@ import {
 import { PR_BODY_FILE_NAME, PR_TITLE_FILE_NAME } from "#auto-pr/paths.js";
 import { AutoPrConfigError, ModelRoutingOutputError } from "#core/errors.js";
 import { parseOpenAiCompatUrl } from "#core/openai-compat-url.js";
+import { DEFAULT_OPENROUTER_TITLE, validateOpenRouterModelId } from "#core/openrouter-routing.js";
 import {
   type RoutingContextArtifact,
   RoutingContextSchema,
@@ -100,6 +105,56 @@ function optionalTrimmedNonEmpty(opt: Option.Option<string>): string | undefined
   return Option.getOrUndefined(Option.flatMap(opt, nonBlankOption));
 }
 
+/** Reject header injection attempts in OpenRouter attribution values. */
+function rejectHeaderControlChars(
+  name: string,
+  value: string,
+): Effect.Effect<string, AutoPrConfigError, never> {
+  return /[\r\n]/.test(value)
+    ? Effect.fail(new AutoPrConfigError({ missing: [`${name} must not contain CR or LF`] }))
+    : Effect.succeed(value);
+}
+
+/**
+ * Resolve OpenRouter attribution headers: trimmed values, `auto-pr` title when
+ * unset or blank, and no CR/LF (HTTP header injection).
+ */
+function resolveOpenRouterAttribution(input: {
+  readonly openRouterHttpReferer: Option.Option<string>;
+  readonly openRouterTitle: Option.Option<string>;
+}): Effect.Effect<
+  { readonly httpReferer?: string; readonly title: string },
+  AutoPrConfigError,
+  never
+> {
+  return Effect.gen(function* () {
+    const refererRaw = optionalTrimmedNonEmpty(input.openRouterHttpReferer);
+    const httpReferer =
+      refererRaw === undefined
+        ? undefined
+        : yield* rejectHeaderControlChars("AUTO_PR_OPENROUTER_HTTP_REFERER", refererRaw);
+    const titleRaw = optionalTrimmedNonEmpty(input.openRouterTitle) ?? DEFAULT_OPENROUTER_TITLE;
+    const title = yield* rejectHeaderControlChars("AUTO_PR_OPENROUTER_TITLE", titleRaw);
+    return {
+      title,
+      ...(httpReferer === undefined ? {} : { httpReferer }),
+    };
+  });
+}
+
+/** Validate an optional configured OpenRouter model; paid routing is out of scope. */
+function resolveConfiguredOpenRouterModel(
+  openRouterModel: Option.Option<string>,
+): Effect.Effect<string | undefined, AutoPrConfigError, never> {
+  const raw = optionalTrimmedNonEmpty(openRouterModel);
+  if (raw === undefined) return Effect.succeed(undefined);
+  return Effect.fromResult(validateOpenRouterModelId(raw)).pipe(
+    Effect.mapError(
+      (e) => new AutoPrConfigError({ missing: [`AUTO_PR_OPENROUTER_MODEL: ${e.reason}`] }),
+    ),
+  );
+}
+
 /** Unwrap Option with default; log a warning when the default is used. */
 function getOrDefaultLogged<T>(
   opt: Option.Option<T>,
@@ -133,7 +188,7 @@ function mapConfigError<A, R>(
 
 // ─── GeneratePrContentConfig ─────────────────────────────────────────────────
 
-export type AiProvider = "local" | "github-models";
+export type AiProvider = "local" | "openrouter";
 
 /** Default OpenAI-compatible base URL (e.g. local llama.cpp `llama-server` `/v1`). */
 export const DEFAULT_OPENAI_COMPAT_URL = "http://127.0.0.1:8080/v1";
@@ -163,9 +218,13 @@ export type GeneratePrContentConfigLocal = GeneratePrContentConfigCommon & {
   readonly openaiCompatApiKey?: Redacted.Redacted<string>;
 };
 
-export type GeneratePrContentConfigGithubModels = GeneratePrContentConfigCommon & {
-  readonly provider: "github-models";
-  readonly ghToken: Redacted.Redacted<string>;
+export type GeneratePrContentConfigOpenRouter = GeneratePrContentConfigCommon & {
+  readonly provider: "openrouter";
+  readonly openRouterApiKey: Redacted.Redacted<string>;
+  /** Configured `AUTO_PR_OPENROUTER_MODEL`; routing decision `selectedModel` is the active model. */
+  readonly openRouterModel?: string;
+  readonly openRouterHttpReferer?: string;
+  readonly openRouterTitle: string;
   readonly requiresToolCalls?: boolean;
   readonly localFallback?: {
     readonly openaiCompatUrl: string;
@@ -176,7 +235,7 @@ export type GeneratePrContentConfigGithubModels = GeneratePrContentConfigCommon 
 
 export type GeneratePrContentConfig =
   | GeneratePrContentConfigLocal
-  | GeneratePrContentConfigGithubModels;
+  | GeneratePrContentConfigOpenRouter;
 
 export const GeneratePrContentConfig =
   Context.Service<GeneratePrContentConfig>("GeneratePrContentConfig");
@@ -192,6 +251,10 @@ const GeneratePrContentConfigDef = Config.all({
   aiOpenaiCompatUrl: Config.option(Config.String("AUTO_PR_AI_OPENAI_COMPAT_URL")),
   aiOpenaiCompatApiKey: Config.option(Config.Redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
   localModel: Config.option(Config.String("AUTO_PR_LOCAL_MODEL")),
+  openRouterApiKey: Config.option(Config.Redacted("OPENROUTER_API_KEY")),
+  openRouterModel: Config.option(Config.String("AUTO_PR_OPENROUTER_MODEL")),
+  openRouterHttpReferer: Config.option(Config.String("AUTO_PR_OPENROUTER_HTTP_REFERER")),
+  openRouterTitle: Config.option(Config.String("AUTO_PR_OPENROUTER_TITLE")),
   routingDecisionJson: Config.option(Config.String("AUTO_PR_ROUTING_DECISION_JSON")),
   githubApiUrl: Config.option(Config.String("GITHUB_API_URL")),
   ghHost: Config.option(Config.String("GH_HOST")),
@@ -203,11 +266,20 @@ function parseProvider(raw: string): Effect.Effect<AiProvider, AutoPrConfigError
   const trimmed = raw.trim().toLowerCase();
   return Match.value(trimmed).pipe(
     Match.when("local", () => Effect.succeed("local" as const)),
-    Match.when("github-models", () => Effect.succeed("github-models" as const)),
+    Match.when("openrouter", () => Effect.succeed("openrouter" as const)),
+    Match.when("github-models", () =>
+      Effect.fail(
+        new AutoPrConfigError({
+          missing: [
+            "Invalid AUTO_PR_AI_PROVIDER: github-models. GitHub Models was retired on 2026-07-30; use openrouter or local.",
+          ],
+        }),
+      ),
+    ),
     Match.orElse(() =>
       Effect.fail(
         new AutoPrConfigError({
-          missing: [`Invalid AUTO_PR_AI_PROVIDER: ${raw}. Must be local or github-models`],
+          missing: [`Invalid AUTO_PR_AI_PROVIDER: ${raw}. Must be local or openrouter`],
         }),
       ),
     ),
@@ -276,7 +348,7 @@ function parseRoutingDecisionJson(
       () =>
         new ModelRoutingOutputError({
           message:
-            "Missing routing output: AUTO_PR_ROUTING_DECISION_JSON is required for github-models.",
+            "Missing routing output: AUTO_PR_ROUTING_DECISION_JSON is required for openrouter.",
         }),
     );
     const parsed = yield* Effect.try({
@@ -410,24 +482,34 @@ export const GeneratePrContentConfigLayer = Layer.effect(
             return generatePrContentLocal;
           }),
         ),
-        Match.when("github-models", () =>
+        Match.when("openrouter", () =>
           Effect.gen(function* () {
-            const ghToken = yield* requireRedactedOption(
-              "GH_TOKEN",
-              base.ghToken,
-              "GH_TOKEN required for github-models",
+            const openRouterApiKey = yield* requireRedactedOption(
+              "OPENROUTER_API_KEY",
+              base.openRouterApiKey,
+              "OPENROUTER_API_KEY required for openrouter",
             );
             const routingDecision = yield* parseRoutingDecisionJson(base.routingDecisionJson);
+            const openRouterModel = yield* resolveConfiguredOpenRouterModel(base.openRouterModel);
+            const attribution = yield* resolveOpenRouterAttribution({
+              openRouterHttpReferer: base.openRouterHttpReferer,
+              openRouterTitle: base.openRouterTitle,
+            });
             const localFallback = yield* resolveOptionalLocalFallback({
               localModel: base.localModel,
               aiOpenaiCompatUrl: base.aiOpenaiCompatUrl,
               aiOpenaiCompatApiKey: base.aiOpenaiCompatApiKey,
             });
-            const generatePrContentGithub: GeneratePrContentConfigGithubModels = {
+            const generatePrContentOpenRouter: GeneratePrContentConfigOpenRouter = {
               ...shared,
-              provider: "github-models",
+              provider: "openrouter",
               model: routingDecision.selectedModel,
-              ghToken,
+              openRouterApiKey,
+              openRouterTitle: attribution.title,
+              ...(openRouterModel !== undefined ? { openRouterModel } : {}),
+              ...(attribution.httpReferer !== undefined
+                ? { openRouterHttpReferer: attribution.httpReferer }
+                : {}),
               requiresToolCalls: routingDecision.requiresToolCalls,
               ...(routingDecision.toolRoundLimit !== undefined
                 ? { aiToolRoundLimit: routingDecision.toolRoundLimit }
@@ -440,7 +522,7 @@ export const GeneratePrContentConfigLayer = Layer.effect(
                 : {}),
               ...(localFallback !== undefined ? { localFallback } : {}),
             };
-            return generatePrContentGithub;
+            return generatePrContentOpenRouter;
           }),
         ),
         Match.exhaustive,
@@ -515,7 +597,7 @@ export const CreateOrUpdatePrConfigLayer = Layer.effect(
 // ─── RunAutoPrConfig (local pipeline) ─────────────────────────────────────────
 
 /**
- * Shared fields for `run-auto-pr` config; discriminated by {@link RunAutoPrConfigLocal} vs {@link RunAutoPrConfigGithubModels}.
+ * Shared fields for `run-auto-pr` config; discriminated by {@link RunAutoPrConfigLocal} vs {@link RunAutoPrConfigOpenRouter}.
  *
  * Optional fields follow the same convention as {@link GeneratePrContentConfig}: `Config.option` + `Option` only inside
  * {@link RunAutoPrConfigLayer}; the service shape uses `?:` (omit when unset), not `Option` in the type.
@@ -544,8 +626,14 @@ export type RunAutoPrConfigLocal = RunAutoPrConfigCommon & {
   readonly openaiCompatApiKey?: Redacted.Redacted<string>;
 };
 
-export type RunAutoPrConfigGithubModels = RunAutoPrConfigCommon & {
-  readonly provider: "github-models";
+export type RunAutoPrConfigOpenRouter = RunAutoPrConfigCommon & {
+  readonly provider: "openrouter";
+  readonly openRouterApiKey: Redacted.Redacted<string>;
+  /** Configured `AUTO_PR_OPENROUTER_MODEL`; routing decision `selectedModel` is the active model. */
+  readonly openRouterModel?: string;
+  readonly openRouterHttpReferer?: string;
+  readonly openRouterTitle: string;
+  readonly requiresToolCalls?: boolean;
   readonly localFallback?: {
     readonly openaiCompatUrl: string;
     readonly model: string;
@@ -554,7 +642,7 @@ export type RunAutoPrConfigGithubModels = RunAutoPrConfigCommon & {
 };
 
 /** `run-auto-pr` config: OpenAI-compat fields exist only when `provider` is `local`. */
-export type RunAutoPrConfig = RunAutoPrConfigLocal | RunAutoPrConfigGithubModels;
+export type RunAutoPrConfig = RunAutoPrConfigLocal | RunAutoPrConfigOpenRouter;
 
 export const RunAutoPrConfig = Context.Service<RunAutoPrConfig>("RunAutoPrConfig");
 
@@ -566,6 +654,10 @@ const RunAutoPrConfigDef = Config.all({
   aiOpenaiCompatUrl: Config.option(Config.String("AUTO_PR_AI_OPENAI_COMPAT_URL")),
   aiOpenaiCompatApiKey: Config.option(Config.Redacted("AUTO_PR_AI_OPENAI_COMPAT_API_KEY")),
   localModel: Config.option(Config.String("AUTO_PR_LOCAL_MODEL")),
+  openRouterApiKey: Config.option(Config.Redacted("OPENROUTER_API_KEY")),
+  openRouterModel: Config.option(Config.String("AUTO_PR_OPENROUTER_MODEL")),
+  openRouterHttpReferer: Config.option(Config.String("AUTO_PR_OPENROUTER_HTTP_REFERER")),
+  openRouterTitle: Config.option(Config.String("AUTO_PR_OPENROUTER_TITLE")),
   routingDecisionJson: Config.option(Config.String("AUTO_PR_ROUTING_DECISION_JSON")),
   githubApiUrl: Config.option(Config.String("GITHUB_API_URL")),
   ghHost: Config.option(Config.String("GH_HOST")),
@@ -648,18 +740,35 @@ export const RunAutoPrConfigLayer = Layer.effect(
             return runAutoPrLocal;
           }),
         ),
-        Match.when("github-models", () =>
+        Match.when("openrouter", () =>
           Effect.gen(function* () {
+            const openRouterApiKey = yield* requireRedactedOption(
+              "OPENROUTER_API_KEY",
+              base.openRouterApiKey,
+              "OPENROUTER_API_KEY required for openrouter",
+            );
             const routingDecision = yield* parseRoutingDecisionJson(base.routingDecisionJson);
+            const openRouterModel = yield* resolveConfiguredOpenRouterModel(base.openRouterModel);
+            const attribution = yield* resolveOpenRouterAttribution({
+              openRouterHttpReferer: base.openRouterHttpReferer,
+              openRouterTitle: base.openRouterTitle,
+            });
             const localFallback = yield* resolveOptionalLocalFallback({
               localModel: base.localModel,
               aiOpenaiCompatUrl: base.aiOpenaiCompatUrl,
               aiOpenaiCompatApiKey: base.aiOpenaiCompatApiKey,
             });
-            const runAutoPrGithub: RunAutoPrConfigGithubModels = {
+            const runAutoPrOpenRouter: RunAutoPrConfigOpenRouter = {
               ...shared,
-              provider: "github-models",
+              provider: "openrouter",
               model: routingDecision.selectedModel,
+              openRouterApiKey,
+              openRouterTitle: attribution.title,
+              ...(openRouterModel !== undefined ? { openRouterModel } : {}),
+              ...(attribution.httpReferer !== undefined
+                ? { openRouterHttpReferer: attribution.httpReferer }
+                : {}),
+              requiresToolCalls: routingDecision.requiresToolCalls,
               ...(routingDecision.toolRoundLimit !== undefined
                 ? { aiToolRoundLimit: routingDecision.toolRoundLimit }
                 : {}),
@@ -671,7 +780,7 @@ export const RunAutoPrConfigLayer = Layer.effect(
                 : {}),
               ...(localFallback !== undefined ? { localFallback } : {}),
             };
-            return runAutoPrGithub;
+            return runAutoPrOpenRouter;
           }),
         ),
         Match.exhaustive,

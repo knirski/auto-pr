@@ -1,10 +1,10 @@
 /**
  * AI provider layer factory. Builds Layer<LanguageModel> from config.
- * Providers: `local` (any local LLM via OpenAI-compatible HTTP — e.g. llama.cpp), `github-models`.
+ * Providers: `local` (any local LLM via OpenAI-compatible HTTP — e.g. llama.cpp), `openrouter`.
  *
- * Both use `@effect/ai-openai-compat` (`OpenAiClient.layer` + `OpenAiLanguageModel.model`) + `FetchHttpClient`.
- * Outgoing HTTP matches the OpenAI Chat Completions API (`POST …/v1/chat/completions`); see
- * https://platform.openai.com/docs/api-reference/chat/create and `@effect/ai-openai-compat`.
+ * `local` uses `@effect/ai-openai-compat` (`OpenAiClient.layer` + `OpenAiLanguageModel.model`);
+ * `openrouter` uses `@effect/ai-openrouter` (`OpenRouterClient.layer` + `OpenRouterLanguageModel.model`),
+ * which sends OpenRouter attribution headers and the bearer key. Both use `FetchHttpClient`.
  * Generate-content uses `LanguageModel.generateText` + JSON parse (not `generateObject` / `json_schema`); see `auto-pr-generate-content.ts`.
  *
  * ADR: docs/adr/0007-ai-abstraction-layer.md, docs/adr/0009-ollama-to-openai-compat-migration.md
@@ -12,14 +12,14 @@
 
 import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
 import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
+import * as OpenRouterClient from "@effect/ai-openrouter/OpenRouterClient";
+import * as OpenRouterLanguageModel from "@effect/ai-openrouter/OpenRouterLanguageModel";
 import type { Redacted } from "effect";
 import { Effect, Layer, Match, Redacted as RedactedValue } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import { FetchHttpClient } from "effect/unstable/http";
 import { DEFAULT_OPENAI_COMPAT_URL } from "#auto-pr/config.js";
 import { AutoPrConfigError } from "#core/errors.js";
-
-const GITHUB_MODELS_INFERENCE_URL = "https://models.github.ai/inference";
 
 type OpenAiChatMessage = {
   readonly role?: unknown;
@@ -46,14 +46,16 @@ export type AiProviderConfigLocal = {
   readonly openaiCompatApiKey?: Redacted.Redacted<string>;
 };
 
-export type AiProviderConfigGithubModels = {
-  readonly provider: "github-models";
+export type AiProviderConfigOpenRouter = {
+  readonly provider: "openrouter";
   readonly model: string;
-  readonly ghToken: Redacted.Redacted<string>;
+  readonly apiKey: Redacted.Redacted<string>;
+  readonly httpReferer?: string;
+  readonly title?: string;
 };
 
 /** Config for AI provider layer (provider, model, and provider-specific fields). */
-export type AiProviderConfig = AiProviderConfigLocal | AiProviderConfigGithubModels;
+export type AiProviderConfig = AiProviderConfigLocal | AiProviderConfigOpenRouter;
 
 function openAiLanguageModelStack(
   clientOptions: OpenAiClient.Options,
@@ -108,7 +110,8 @@ function mergeAssistantContent(left: unknown, right: unknown): unknown {
  *   tool      { tool_call_id: call_a, ... }
  *   tool      { tool_call_id: call_b, ... }
  *
- * The failing GitHub Models requests showed the history being serialized as:
+ * The failing provider requests (observed on GitHub Models, now retired) showed
+ * the history being serialized as:
  *
  *   assistant { tool_calls: [call_a] }
  *   assistant { tool_calls: [call_b] }
@@ -116,8 +119,8 @@ function mergeAssistantContent(left: unknown, right: unknown): unknown {
  *   tool      { tool_call_id: call_b, ... }
  *
  * That second assistant message interrupts the required "assistant tool_calls
- * immediately followed by matching tool messages" contract, so GitHub Models
- * rejects the next request with:
+ * immediately followed by matching tool messages" contract, so OpenAI-compatible
+ * providers reject the next request with:
  *
  *   "An assistant message with 'tool_calls' must be followed by tool messages
  *    responding to each 'tool_call_id'."
@@ -243,7 +246,7 @@ function normalizeOpenAiChatCompletionsFetch(baseFetch: typeof fetch): typeof fe
 
 /**
  * Build Layer<LanguageModel> from provider config.
- * Supports `local` and `github-models`.
+ * Supports `local` and `openrouter`.
  *
  * Pass `options.fetch` in tests to mock `POST …/chat/completions` (OpenAI-compatible JSON).
  */
@@ -266,25 +269,24 @@ export function aiProviderLayerFromConfig(
       };
       return openAiLanguageModelStack(clientOptions, local.model, fetchOverrideLayer);
     }),
-    Match.when({ provider: "github-models" }, (githubModels) => {
-      if (!redactedHasText(githubModels.ghToken) || githubModels.model.trim() === "") {
+    Match.when({ provider: "openrouter" }, (openRouter) => {
+      if (!redactedHasText(openRouter.apiKey) || openRouter.model.trim() === "") {
         return Layer.effect(
           LanguageModel.LanguageModel,
           Effect.fail(
             new AutoPrConfigError({
-              missing: ["GH_TOKEN and resolved model are required for github-models"],
+              missing: ["OPENROUTER_API_KEY and resolved model are required for openrouter"],
             }),
           ),
         );
       }
-      return openAiLanguageModelStack(
-        {
-          apiUrl: GITHUB_MODELS_INFERENCE_URL,
-          apiKey: githubModels.ghToken,
-        },
-        githubModels.model,
-        fetchOverrideLayer,
-      );
+      const clientLayer = OpenRouterClient.layer({
+        apiKey: openRouter.apiKey,
+        ...(openRouter.httpReferer !== undefined ? { siteReferrer: openRouter.httpReferer } : {}),
+        ...(openRouter.title !== undefined ? { siteTitle: openRouter.title } : {}),
+      }).pipe(Layer.provide(FetchHttpClient.layer));
+      const modelLayer = OpenRouterLanguageModel.model(openRouter.model);
+      return Layer.mergeAll(fetchOverrideLayer, modelLayer.pipe(Layer.provide(clientLayer)));
     }),
     Match.exhaustive,
   );

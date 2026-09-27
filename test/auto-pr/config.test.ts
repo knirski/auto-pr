@@ -155,16 +155,36 @@ const generatePrContentBaseEnv = {
   BRANCH: "ai/feature",
 };
 
-describe("GeneratePrContentConfigLayer for github-models", () => {
-  test("uses AUTO_PR_ROUTING_DECISION_JSON and ignores AUTO_PR_LOCAL_MODEL", async () => {
+const openRouterRoutingDecisionJson =
+  '{"provider":"openrouter","selectedModel":"openai/gpt-oss-20b:free","requiresToolCalls":true,"tokenBudget":9000,"toolRoundLimit":4,"toolResponseCharBudget":1500}';
+
+async function readGeneratePrContentConfigFailure(
+  providerLayer: Layer.Layer<never>,
+): Promise<Exit.Exit<GeneratePrContentConfig, AutoPrConfigError | ModelRoutingOutputError>> {
+  const layer = Layer.mergeAll(
+    TestBaseLayer,
+    GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+  );
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* GeneratePrContentConfig;
+    })
+      .pipe(Effect.provide(layer))
+      .pipe(Effect.exit),
+  );
+}
+
+describe("GeneratePrContentConfigLayer for openrouter", () => {
+  test("uses routing decision, key, model, and attribution config", async () => {
     const providerLayer = ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         ...generatePrContentBaseEnv,
-        AUTO_PR_AI_PROVIDER: "github-models",
-        GH_TOKEN: "ghp_test_github_models",
-        AUTO_PR_LOCAL_MODEL: "openai/gpt-4.1",
-        AUTO_PR_ROUTING_DECISION_JSON:
-          '{"selectedModel":"anthropic/claude-sonnet-4","requiresToolCalls":true,"tokenBudget":9000,"toolRoundLimit":4,"toolResponseCharBudget":1500}',
+        AUTO_PR_AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "sk-or-test",
+        AUTO_PR_OPENROUTER_MODEL: " openai/gpt-oss-20b:free ",
+        AUTO_PR_OPENROUTER_HTTP_REFERER: " https://github.com/knirski/auto-pr ",
+        AUTO_PR_OPENROUTER_TITLE: " auto-pr tests ",
+        AUTO_PR_ROUTING_DECISION_JSON: openRouterRoutingDecisionJson,
       }),
     );
     const layer = Layer.mergeAll(
@@ -174,11 +194,14 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
     await runEffect(layer)(
       Effect.gen(function* () {
         const config = yield* GeneratePrContentConfig;
-        expect(config.provider).toBe("github-models");
-        expect(config.model).toBe("anthropic/claude-sonnet-4");
-        if (config.provider !== "github-models") return expect().fail("expected github-models");
-        expect(config.ghToken).toBeDefined();
-        expect(Redacted.isRedacted(config.ghToken)).toBe(true);
+        expect(config.provider).toBe("openrouter");
+        if (config.provider !== "openrouter") return expect().fail("expected openrouter");
+        expect(config.model).toBe("openai/gpt-oss-20b:free");
+        expect(config.openRouterModel).toBe("openai/gpt-oss-20b:free");
+        expect(config.openRouterHttpReferer).toBe("https://github.com/knirski/auto-pr");
+        expect(config.openRouterTitle).toBe("auto-pr tests");
+        expect(Redacted.isRedacted(config.openRouterApiKey)).toBe(true);
+        expect(config.requiresToolCalls).toBe(true);
         expect(config.aiTokenBudget).toBe(9000);
         expect(config.aiToolRoundLimit).toBe(4);
         expect(config.aiToolResponseCharBudget).toBe(1500);
@@ -186,24 +209,85 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
     );
   });
 
-  test("fails when AUTO_PR_ROUTING_DECISION_JSON is missing", async () => {
+  test("uses routing decision as model when AUTO_PR_OPENROUTER_MODEL is unset", async () => {
     const providerLayer = ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         ...generatePrContentBaseEnv,
-        AUTO_PR_AI_PROVIDER: "github-models",
-        GH_TOKEN: "ghp_test_github_models",
+        AUTO_PR_AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "sk-or-test",
+        AUTO_PR_ROUTING_DECISION_JSON: openRouterRoutingDecisionJson,
       }),
     );
     const layer = Layer.mergeAll(
       TestBaseLayer,
       GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
     );
-    const exit = await Effect.runPromise(
+    await runEffect(layer)(
       Effect.gen(function* () {
-        return yield* GeneratePrContentConfig;
-      })
-        .pipe(Effect.provide(layer))
-        .pipe(Effect.exit),
+        const config = yield* GeneratePrContentConfig;
+        if (config.provider !== "openrouter") return expect().fail("expected openrouter");
+        expect(config.model).toBe("openai/gpt-oss-20b:free");
+        expect(config.openRouterModel).toBeUndefined();
+        expect(config.openRouterHttpReferer).toBeUndefined();
+        expect(config.openRouterTitle).toBe("auto-pr");
+      }),
+    );
+  });
+
+  test("defaults blank attribution title to auto-pr", async () => {
+    const providerLayer = ConfigProvider.layer(
+      ConfigProvider.fromUnknown({
+        ...generatePrContentBaseEnv,
+        AUTO_PR_AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "sk-or-test",
+        AUTO_PR_OPENROUTER_TITLE: "   ",
+        AUTO_PR_ROUTING_DECISION_JSON: openRouterRoutingDecisionJson,
+      }),
+    );
+    const layer = Layer.mergeAll(
+      TestBaseLayer,
+      GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
+    );
+    await runEffect(layer)(
+      Effect.gen(function* () {
+        const config = yield* GeneratePrContentConfig;
+        if (config.provider !== "openrouter") return expect().fail("expected openrouter");
+        expect(config.openRouterTitle).toBe("auto-pr");
+      }),
+    );
+  });
+
+  test("fails when OPENROUTER_API_KEY is missing", async () => {
+    const exit = await readGeneratePrContentConfigFailure(
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({
+          ...generatePrContentBaseEnv,
+          AUTO_PR_AI_PROVIDER: "openrouter",
+          AUTO_PR_ROUTING_DECISION_JSON: openRouterRoutingDecisionJson,
+        }),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      Result.match(Cause.findError(exit.cause), {
+        onSuccess: (err) => {
+          expect(err).toBeInstanceOf(AutoPrConfigError);
+          expect((err as AutoPrConfigError).missing.join(" ")).toContain("OPENROUTER_API_KEY");
+        },
+        onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+      });
+    }
+  });
+
+  test("fails when AUTO_PR_ROUTING_DECISION_JSON is missing", async () => {
+    const exit = await readGeneratePrContentConfigFailure(
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({
+          ...generatePrContentBaseEnv,
+          AUTO_PR_AI_PROVIDER: "openrouter",
+          OPENROUTER_API_KEY: "sk-or-test",
+        }),
+      ),
     );
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
@@ -219,31 +303,91 @@ describe("GeneratePrContentConfigLayer for github-models", () => {
     }
   });
 
-  test("fails when GH_TOKEN missing", async () => {
-    const providerLayer = ConfigProvider.layer(
-      ConfigProvider.fromUnknown({
-        ...generatePrContentBaseEnv,
-        AUTO_PR_AI_PROVIDER: "github-models",
-      }),
-    );
-    const layer = Layer.mergeAll(
-      TestBaseLayer,
-      GeneratePrContentConfigLayer.pipe(Layer.provide(providerLayer)),
-    );
-    const exit = await Effect.runPromise(
-      Effect.gen(function* () {
-        return yield* GeneratePrContentConfig;
-      })
-        .pipe(Effect.provide(layer))
-        .pipe(Effect.exit),
+  test("fails when AUTO_PR_OPENROUTER_MODEL is not a free model", async () => {
+    const exit = await readGeneratePrContentConfigFailure(
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({
+          ...generatePrContentBaseEnv,
+          AUTO_PR_AI_PROVIDER: "openrouter",
+          OPENROUTER_API_KEY: "sk-or-test",
+          AUTO_PR_OPENROUTER_MODEL: "openai/gpt-5.2",
+          AUTO_PR_ROUTING_DECISION_JSON: openRouterRoutingDecisionJson,
+        }),
+      ),
     );
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
       Result.match(Cause.findError(exit.cause), {
         onSuccess: (err) => {
           expect(err).toBeInstanceOf(AutoPrConfigError);
-          expect((err as AutoPrConfigError).missing.join(" ")).toContain("GH_TOKEN");
+          expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+            "AUTO_PR_OPENROUTER_MODEL",
+          );
+          expect((err as AutoPrConfigError).missing.join(" ")).toContain(":free");
         },
+        onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+      });
+    }
+  });
+
+  test("fails when attribution header values contain CR or LF", async () => {
+    const cases = [
+      {
+        name: "AUTO_PR_OPENROUTER_HTTP_REFERER",
+        env: { AUTO_PR_OPENROUTER_HTTP_REFERER: "https://example.com/\r\nInjected: 1" },
+      },
+      {
+        name: "AUTO_PR_OPENROUTER_TITLE",
+        env: { AUTO_PR_OPENROUTER_TITLE: "auto-pr\nInjected: 1" },
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const exit = await readGeneratePrContentConfigFailure(
+        ConfigProvider.layer(
+          ConfigProvider.fromUnknown({
+            ...generatePrContentBaseEnv,
+            AUTO_PR_AI_PROVIDER: "openrouter",
+            OPENROUTER_API_KEY: "sk-or-test",
+            AUTO_PR_ROUTING_DECISION_JSON: openRouterRoutingDecisionJson,
+            ...testCase.env,
+          }),
+        ),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        Result.match(Cause.findError(exit.cause), {
+          onSuccess: (err) => {
+            expect(err).toBeInstanceOf(AutoPrConfigError);
+            const missing = (err as AutoPrConfigError).missing.join(" ");
+            expect(missing).toContain(testCase.name);
+            expect(missing).toContain("must not contain CR or LF");
+          },
+          onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+        });
+      }
+    }
+  });
+});
+
+describe("GeneratePrContentConfigLayer rejects the retired GitHub Models provider", () => {
+  test("rejects github-models with a migration message", async () => {
+    const providerLayer = ConfigProvider.layer(
+      ConfigProvider.fromUnknown({
+        ...generatePrContentBaseEnv,
+        AUTO_PR_AI_PROVIDER: "github-models",
+      }),
+    );
+
+    const exit = await readGeneratePrContentConfigFailure(providerLayer);
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      Result.match(Cause.findError(exit.cause), {
+        onSuccess: (err) =>
+          expect(String((err as AutoPrConfigError).missing.join(" "))).toContain(
+            "GitHub Models was retired on 2026-07-30; use openrouter or local",
+          ),
         onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
       });
     }
@@ -543,13 +687,17 @@ describe("RunAutoPrConfigLayer succeeds", () => {
     );
   });
 
-  test("with github-models provider and selected model", async () => {
+  test("with openrouter provider, key, attribution, and route-derived limits", async () => {
     const providerLayer = ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         ...runAutoPrBaseEnv,
-        AUTO_PR_AI_PROVIDER: "github-models",
+        AUTO_PR_AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "sk-or-test",
+        AUTO_PR_OPENROUTER_MODEL: "openai/gpt-oss-20b:free",
+        AUTO_PR_OPENROUTER_HTTP_REFERER: "https://github.com/knirski/auto-pr",
+        AUTO_PR_OPENROUTER_TITLE: "auto-pr",
         AUTO_PR_ROUTING_DECISION_JSON:
-          '{"selectedModel":"microsoft/phi-4-mini-instruct","requiresToolCalls":false}',
+          '{"provider":"openrouter","selectedModel":"openai/gpt-oss-20b:free","requiresToolCalls":true,"tokenBudget":9000,"toolRoundLimit":4,"toolResponseCharBudget":1500}',
       }),
     );
     const layer = Layer.mergeAll(
@@ -559,8 +707,16 @@ describe("RunAutoPrConfigLayer succeeds", () => {
     await runEffect(layer)(
       Effect.gen(function* () {
         const config = yield* RunAutoPrConfig;
-        expect(config.provider).toBe("github-models");
-        expect(config.model).toBe("microsoft/phi-4-mini-instruct");
+        expect(config.provider).toBe("openrouter");
+        if (config.provider !== "openrouter") return expect().fail("expected openrouter");
+        expect(config.model).toBe("openai/gpt-oss-20b:free");
+        expect(Redacted.isRedacted(config.openRouterApiKey)).toBe(true);
+        expect(config.openRouterTitle).toBe("auto-pr");
+        expect(config.openRouterHttpReferer).toBe("https://github.com/knirski/auto-pr");
+        expect(config.requiresToolCalls).toBe(true);
+        expect(config.aiTokenBudget).toBe(9000);
+        expect(config.aiToolRoundLimit).toBe(4);
+        expect(config.aiToolResponseCharBudget).toBe(1500);
         expect("openaiCompatUrl" in config).toBe(false);
       }),
     );
@@ -629,7 +785,7 @@ describe("GeneratePrContentConfig reads DEFAULT_BRANCH and BRANCH", () => {
 });
 
 describe("GeneratePrContentConfigLayer rejects invalid provider", () => {
-  test("fails when AUTO_PR_AI_PROVIDER is not local or github-models", async () => {
+  test("fails when AUTO_PR_AI_PROVIDER is not local or openrouter", async () => {
     const providerLayer = ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         GITHUB_WORKSPACE: "/workspace",
@@ -867,12 +1023,12 @@ describe("GeneratePrContentConfigLayer uses default values and logs warnings", (
     );
   });
 
-  test("fails when github-models and AUTO_PR_ROUTING_DECISION_JSON is not set", async () => {
+  test("fails when openrouter and AUTO_PR_ROUTING_DECISION_JSON is not set", async () => {
     const providerLayer = ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         ...generatePrContentBaseEnv,
-        AUTO_PR_AI_PROVIDER: "github-models",
-        GH_TOKEN: "ghp_test",
+        AUTO_PR_AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "sk-or-test",
         // No AUTO_PR_ROUTING_DECISION_JSON
       }),
     );

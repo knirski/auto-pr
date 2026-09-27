@@ -28,11 +28,15 @@ function aiProviderConfigFromConfig(config: ConfigWithAiProvider): AiProviderCon
       }),
     ),
     Match.when(
-      { provider: "github-models" },
-      (githubModels): AiProviderConfig => ({
-        provider: "github-models",
-        model: githubModels.model,
-        ghToken: githubModels.ghToken,
+      { provider: "openrouter" },
+      (openRouter): AiProviderConfig => ({
+        provider: "openrouter",
+        model: openRouter.model,
+        apiKey: openRouter.openRouterApiKey,
+        ...(openRouter.openRouterHttpReferer !== undefined
+          ? { httpReferer: openRouter.openRouterHttpReferer }
+          : {}),
+        title: openRouter.openRouterTitle,
       }),
     ),
     Match.exhaustive,

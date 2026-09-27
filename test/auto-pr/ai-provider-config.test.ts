@@ -27,22 +27,47 @@ describe("AI provider config adapters", () => {
     });
   });
 
-  test("maps github-models GeneratePrContentConfig to github-models AiProviderConfig", () => {
-    const ghToken = Redacted.make("ghp_test", { label: "GH_TOKEN" });
+  test("maps openrouter GeneratePrContentConfig to openrouter AiProviderConfig", () => {
+    const apiKey = Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" });
     const config = aiProviderConfigFromGeneratePrContentConfig({
-      provider: "github-models",
+      provider: "openrouter",
       workspace: "/workspace",
       templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
       defaultBranch: "main",
       branch: "ai/example",
-      model: "openai/gpt-4.1",
-      ghToken,
+      model: "openai/gpt-oss-20b:free",
+      openRouterApiKey: apiKey,
+      openRouterTitle: "auto-pr",
+      openRouterHttpReferer: "https://github.com/knirski/auto-pr",
     });
 
     expect(config).toEqual({
-      provider: "github-models",
-      model: "openai/gpt-4.1",
-      ghToken,
+      provider: "openrouter",
+      model: "openai/gpt-oss-20b:free",
+      apiKey,
+      httpReferer: "https://github.com/knirski/auto-pr",
+      title: "auto-pr",
+    });
+  });
+
+  test("maps openrouter GeneratePrContentConfig without optional referer", () => {
+    const apiKey = Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" });
+    const config = aiProviderConfigFromGeneratePrContentConfig({
+      provider: "openrouter",
+      workspace: "/workspace",
+      templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
+      defaultBranch: "main",
+      branch: "ai/example",
+      model: "openai/gpt-oss-20b:free",
+      openRouterApiKey: apiKey,
+      openRouterTitle: "auto-pr",
+    });
+
+    expect(config).toEqual({
+      provider: "openrouter",
+      model: "openai/gpt-oss-20b:free",
+      apiKey,
+      title: "auto-pr",
     });
   });
 
@@ -65,21 +90,25 @@ describe("AI provider config adapters", () => {
     });
   });
 
-  test("maps github-models RunAutoPrConfig", () => {
+  test("maps openrouter RunAutoPrConfig", () => {
     const ghToken = Redacted.make("ghp_test", { label: "GH_TOKEN" });
+    const openRouterApiKey = Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" });
     const config = aiProviderConfigFromRunAutoPrConfig({
-      provider: "github-models",
+      provider: "openrouter",
       defaultBranch: "main",
       workspace: "/workspace",
       templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
-      model: "openai/gpt-4.1",
+      model: "openai/gpt-oss-20b:free",
       ghToken,
+      openRouterApiKey,
+      openRouterTitle: "auto-pr",
     });
 
     expect(config).toEqual({
-      provider: "github-models",
-      model: "openai/gpt-4.1",
-      ghToken,
+      provider: "openrouter",
+      model: "openai/gpt-oss-20b:free",
+      apiKey: openRouterApiKey,
+      title: "auto-pr",
     });
   });
 });
