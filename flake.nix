@@ -34,32 +34,6 @@
           # references a Nix-provided Node interpreter. See `checks.launcher-references-node`.
           packageClosure = pkgs.closureInfo { rootPaths = [ package ]; };
 
-          # nixpkgs' `bun` is one release behind upstream (1.3.13 even on 2026-08-07
-          # nixpkgs-unstable). Override it with the official prebuilt 1.3.14 binaries (the same
-          # fetchurl mechanism nixpkgs itself uses) so the dev shell's bun matches
-          # `.bun-version`/`packageManager`. Drop this override once nixpkgs' bun reaches 1.3.14.
-          bun = let
-            sources = {
-              "aarch64-darwin" = pkgs.fetchurl {
-                url = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-aarch64.zip";
-                hash = "sha256-2LliIYKK1vl6x6wKt+lYcjQa92MAHogD6CZ2UsJlJiA=";
-              };
-              "aarch64-linux" = pkgs.fetchurl {
-                url = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-aarch64.zip";
-                hash = "sha256-on/7Y6gxA3WDbg1vZorhf6jY0YuIw3yCHGUzGXOhmjs=";
-              };
-              "x86_64-linux" = pkgs.fetchurl {
-                url = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip";
-                hash = "sha256-lR7iruhV8IWVruxiJSJqKY0/6oOj3NZGXAnLzN9+hI8=";
-              };
-            };
-          in
-          pkgs.bun.overrideAttrs (prev: {
-            version = "1.3.14";
-            src = sources.${pkgs.stdenvNoCC.hostPlatform.system};
-            passthru = prev.passthru // { inherit sources; };
-          });
-
           # Mirrors `devShells.default.packages` (see below) so RED checks can assert what a tool
           # invoked via `nix develop -c <tool>` would actually resolve to, without recursively
           # invoking `nix develop` from inside a sandboxed check build (which Nix does not support:
@@ -168,8 +142,8 @@
             '';
 
             # `.bun-version`/`packageManager` must stay in lockstep with the dev shell's `bun`
-            # (the `bun` override above tracks `.bun-version` until nixpkgs catches up). Kept as
-            # a regression guard.
+            # (the locked nixpkgs' `bun`, per `devShellPackages` below). Kept as a regression
+            # guard; bump the flake's `nixpkgs` input if it lags upstream.
             dev-shell-bun-version =
               pkgs.runCommand "dev-shell-bun-version"
                 {
@@ -257,7 +231,7 @@
             update-bun-nix = pkgs.writeShellApplication {
               name = "update-bun-nix";
               runtimeInputs = [
-                bun
+                pkgs.bun
                 bun2nix.packages.${system}.default
               ];
               text = ''
