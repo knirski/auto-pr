@@ -24,6 +24,8 @@ Chosen option: **config-driven provider abstraction** with **two** product provi
 
 **Implementation:** `github-models` uses the fixed GitHub Models inference URL and `GH_TOKEN` plus routing output (`AUTO_PR_ROUTING_DECISION_JSON`) for selected model/tool requirement. **`local`** uses `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_LOCAL_MODEL`.
 
+> **2026-09-27 update:** GitHub Models was retired on 2026-07-30. The active providers are now **`local`** and **`openrouter`**; `openrouter` uses `@effect/ai-openrouter` (`OpenRouterClient.layer` + `OpenRouterLanguageModel.model`), not `@effect/ai-openai-compat`. Historical `github-models` references in this ADR describe the original decision state. See the [2026-08-04 OpenRouter migration design](../superpowers/specs/2026-08-04-openrouter-migration-design.md).
+
 ## References
 
 * Migration (Ollama removal): [ADR 0009](0009-ollama-to-openai-compat-migration.md) — design-era stub: [2026-03-29-ollama-to-llamacpp-migration-design.md](../superpowers/specs/2026-03-29-ollama-to-llamacpp-migration-design.md)

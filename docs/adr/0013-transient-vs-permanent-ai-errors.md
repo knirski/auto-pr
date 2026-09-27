@@ -29,6 +29,8 @@ Chosen option: **classify by HTTP status or error reason**, via `isTransientAiEr
 
 `InvalidRequestError` (HTTP 400) is classified as transient even though it is technically a client error. Local llama.cpp servers can return 400 for model-limitation reasons (e.g. context overflow on a specific prompt) that may not reproduce on retry or that the fallback path handles fine. Treating it as permanent would break the fallback for local model users.
 
+> **2026-09-27 update:** OpenRouter cloud generation uses a provider-specific classifier (`classifyCloudModelFailure` in `src/core/openrouter-fallback-policy.ts`) on top of these rules: `401`/`402`/`403` are permanent (authentication / payment-required / authorization), `408`/`429`/5xx/network are retryable, and other 4xx (including `400`) are permanent invalid-request. A `429` (free-model/upstream rate limit) retries and then falls back; a `402` (credit or key-limit exhaustion) fails fast with an OpenRouter-specific hint. The table above still governs `isTransientAiError` for `local` and generic AI failures.
+
 ### Consequences
 
 * **Good:** Auth errors surface immediately as `AutoPrConfigError`, naming the problem. Users don't see a commit-derived description and wonder why AI generation silently failed.
