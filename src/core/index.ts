@@ -77,10 +77,10 @@ export {
   sanitizeForGhOutput,
   validateGetCommitsOutput,
 } from "#core/gh-output.js";
-export * from "#core/github-model-routing.js";
 export type { InitFileSpec } from "#core/init-core.js";
 export { getInitFileSpecs } from "#core/init-core.js";
 export * from "#core/model-routing.js";
+export * from "#core/openrouter-routing.js";
 export type { ParsedJson, ParsedJsonObject } from "#core/parse-model-json.js";
 export { parseFirstJsonObject } from "#core/parse-model-json.js";
 export { PR_TITLE_LINE_MAX_LENGTH } from "#core/pr-title-line-max-length.js";

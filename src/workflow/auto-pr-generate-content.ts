@@ -84,7 +84,7 @@ import {
   shouldRetryCloudModelAttempt,
 } from "#core/openrouter-fallback-policy.js";
 import type { RoutingContextArtifact } from "#core/routing-artifacts.js";
-import { resolveAiToolRoundtripDiffCharBudget } from "#core/sanitize-diff.js";
+import { MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS } from "#core/sanitize-diff.js";
 import { truncateForLog } from "#core/string.js";
 import {
   parseTitleDescriptionFromAssistantText,
@@ -946,14 +946,10 @@ export function runGeneratePrContent(
     | { readonly _tag: "Completed" };
 
   const resolveAttemptToolResponseCharBudget = (attempt: AttemptCandidate): number | undefined => {
-    const derivedBudget = resolveAiToolRoundtripDiffCharBudget(
-      attempt.provider === "openrouter" ? "openrouter" : "local",
-      attempt.model,
-    );
-    if (attempt.provider !== "openrouter") return derivedBudget;
-    if (config.aiToolResponseCharBudget === undefined) return derivedBudget;
+    if (attempt.provider !== "openrouter") return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+    if (config.aiToolResponseCharBudget === undefined) return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
     if (attempt.model === config.model) return config.aiToolResponseCharBudget;
-    return Math.min(config.aiToolResponseCharBudget, derivedBudget);
+    return Math.min(config.aiToolResponseCharBudget, MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS);
   };
 
   const runAttempt = Effect.fn("runAttempt")(function* (attempt: AttemptCandidate) {
@@ -1205,10 +1201,7 @@ export function runGeneratePrContent(
                 ),
                 gitLayer,
                 makeDiffToolkitLayer(baseRef, "HEAD", {
-                  toolResponseCharBudget: resolveAiToolRoundtripDiffCharBudget(
-                    config.provider,
-                    config.model,
-                  ),
+                  toolResponseCharBudget: MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
                 }).pipe(Layer.provide(gitLayer)),
                 prClientLayer,
               ),

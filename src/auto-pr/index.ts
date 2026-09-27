@@ -47,7 +47,6 @@ export {
 export { GitContext, GitContextLive } from "#auto-pr/git-context.js";
 export type { FillPrTemplateParams } from "#auto-pr/interfaces/fill-pr-template.js";
 export { FillPrTemplateParamsSchema } from "#auto-pr/interfaces/fill-pr-template.js";
-export type { GithubModelsCatalogRepositoryService } from "#auto-pr/interfaces/github-models-catalog-repository.js";
 export type { OpenRouterModelsRepositoryService } from "#auto-pr/interfaces/openrouter-models-repository.js";
 export type {
   PullRequestClientService,
@@ -58,10 +57,6 @@ export {
   aiProviderLayerFromConfig,
 } from "#auto-pr/live/ai-provider.js";
 export { FillPrTemplate, renderBody } from "#auto-pr/live/fill-pr-template.js";
-export {
-  GithubModelsCatalogRepository,
-  GithubModelsCatalogRepositoryLive,
-} from "#auto-pr/live/github-models-catalog-repository.js";
 export {
   makeOpenRouterModelsRepositoryLive,
   OpenRouterModelsRepository,
@@ -104,3 +99,13 @@ export {
   parseGhOutput,
   sanitizeForGhOutput,
 } from "#core/index.js";
+export {
+  buildOpenRouterRequestEnvelope,
+  DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_OPENROUTER_TITLE,
+  OPENROUTER_API_URL,
+  OPENROUTER_FREE_MODEL_PREFERENCES,
+  parseOpenRouterModelCatalog,
+  pickOpenRouterModelCatalogEntry,
+  validateOpenRouterModelId,
+} from "#core/openrouter-routing.js";
