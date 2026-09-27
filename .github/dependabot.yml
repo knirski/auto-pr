@@ -13,10 +13,6 @@ updates:
           - "@effect/platform-bun"
           - "@effect/platform-node-shared"
         update-types: ["minor", "patch"]
-      typescript-native-preview:
-        patterns:
-          - "@typescript/native-preview"
-        update-types: ["minor", "patch"]
       bun-toolchain:
         patterns:
           - "bun-types"

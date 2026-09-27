@@ -98,7 +98,7 @@ Codex rules live in `AGENTS.md`. Cursor rules live in `.cursor/rules/*.mdc`; kee
 
 ## Project layout
 
-**Setup:** `bun install` then `bun x lefthook install`. Local env for workflow CLIs: copy `.env.example` → `.env` (see `src/auto-pr/config.ts`). Optional Nix: `nix develop` or direnv + `.envrc` (see [CONTRIBUTING.md](CONTRIBUTING.md#nix-flake-optional)). Build: `scripts/build.ts` → `dist/`; typecheck: `tsgo --noEmit`.
+**Setup:** `bun install` then `bun x lefthook install`. Local env for workflow CLIs: copy `.env.example` → `.env` (see `src/auto-pr/config.ts`). Optional Nix: `nix develop` or direnv + `.envrc` (see [CONTRIBUTING.md](CONTRIBUTING.md#nix-flake-optional)). Build: `scripts/build.ts` → `dist/`; typecheck: `tsc --noEmit`.
 
 ```
 .github/actions/   — reusable shell actions. Workflows use full path (knirski/auto-pr/...)
