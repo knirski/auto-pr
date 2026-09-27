@@ -25,7 +25,6 @@ jobs:
   integration-local-fallback:
     permissions:
       contents: read
-      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -104,13 +103,16 @@ jobs:
         with:
           container_name: auto-pr-llama-stub
 
-  # Scenario: cloud AI provider (GitHub Models) → exercises real AI generation, tool calls, JSON parse.
-  # Uses phi-4-mini-instruct. No local model needed — lightweight job.
-  integration-github-models:
+  # Scenario: cloud AI provider (OpenRouter) → exercises real AI generation, tool calls, JSON parse.
+  # No local model needed — lightweight job. Skipped unless OPENROUTER_API_KEY is configured; the
+  # real cloud call stays out of required PR/push workflow_call CI (manual/scheduled runs only).
+  integration-openrouter:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     permissions:
       contents: read
-      models: read
+    env:
+      # Projected here so the step can test non-secret env instead of referencing secrets in if:.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -130,18 +132,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run integration tests (GitHub Models)
+      # GitHub does not support secrets.* in if:; skip when the projected env value is blank.
+      - name: Run integration tests (OpenRouter)
+        if: env.OPENROUTER_API_KEY != ''
         env:
-          INTEGRATION_GITHUB_MODEL: ${{ env.INTEGRATION_GITHUB_MODEL }}
-          GH_TOKEN: ${{ github.token }}
-        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.github-models.integration.test.ts
+          AUTO_PR_AI_PROVIDER: openrouter
+        run: bun --config=bunfig.integration.toml test test/integration/ai-providers.openrouter.integration.test.ts
 
   # Scenario: local full model with tool-call support → exercises real AI generation without fallback.
   # Asserts AI output is used (no "AI description unavailable"). `--jinja` for chat-template tooling.
   integration-local-happy:
     permissions:
       contents: read
-      models: read
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

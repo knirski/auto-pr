@@ -13,7 +13,8 @@ This guide walks through adding auto-pr to any repository so that `ai/**` branch
 3. **Generate** a private key in the app settings and save the `.pem` file
 4. **Install** the app on your repository
 5. **Create** a protected **environment** named `app-credentials` (deployment branch policy restricted to your default branch, admin-bypass disabled) and add `APP_ID` and `APP_PRIVATE_KEY` **to that environment** — not as plain repository secrets. See [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials).
-6. **Test** — trigger a run for one branch: `gh workflow run auto-pr.yml -f branch=ai/test` (or **Actions → Auto-PR → Run workflow**, set the `branch` input). Scheduled discovery then runs automatically about every 15 minutes.
+6. **Add** repository secret **`OPENROUTER_API_KEY`** for the default cloud provider (`openrouter`). Use a dedicated, low-limit key — see [AI providers](#ai-providers-openrouter-local). Skip this step if you self-host with `ai_provider: local`.
+7. **Test** — trigger a run for one branch: `gh workflow run auto-pr.yml -f branch=ai/test` (or **Actions → Auto-PR → Run workflow**, set the `branch` input). Scheduled discovery then runs automatically about every 15 minutes.
 
 No `package.json` required. Works with any project (Node, Python, Rust, etc.). No Nix required.
 
@@ -25,10 +26,11 @@ No `package.json` required. Works with any project (Node, Python, Rust, etc.). N
 | **GitHub App** | Create at [github.com/settings/apps/new](https://github.com/settings/apps/new). Permissions: Contents, Pull requests (Read and write). [Step 2](#step-2-create-the-github-app) |
 | **Private key** | Generate in the app settings → Private keys. Save the `.pem` file. [Step 3](#step-3-generate-and-save-the-private-key) |
 | **App installed** | Install the app on your repository (Install App → select repo). [Step 4](#step-4-install-the-app-on-your-repo) |
-| **Protected environment** | Create an environment `app-credentials` (branch policy = default branch only, admin-bypass disabled) and add `APP_ID` / `APP_PRIVATE_KEY` **to the environment**, not as repository secrets. (Optional: `GH_TOKEN` repo secret to override the default token for GitHub Models.) [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials) |
+| **Protected environment** | Create an environment `app-credentials` (branch policy = default branch only, admin-bypass disabled) and add `APP_ID` / `APP_PRIVATE_KEY` **to the environment**, not as repository secrets. [Step 5](#step-5-create-the-protected-environment-and-add-app-credentials) |
+| **OpenRouter key** | Add repository or organization secret `OPENROUTER_API_KEY` for stock cloud generation (default provider `openrouter`). Use a dedicated low-limit key. [AI providers](#ai-providers-openrouter-local) |
 | **Branch protection** | (Optional) Require `Auto-PR generate (reusable) / generate` and `Auto-PR create (reusable) / create` before merging. [Step 8](#step-8-configure-branch-protection-optional) |
 
-**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App + protected environment (Steps 2–5) → `gh workflow run auto-pr.yml -f branch=ai/…`.
+**Quick setup:** `npx -p github:knirski/auto-pr auto-pr-init` → GitHub App + protected environment (Steps 2–5) → `OPENROUTER_API_KEY` repository secret (Step 6) → `gh workflow run auto-pr.yml -f branch=ai/…`.
 
 ## Overview
 
@@ -104,7 +106,7 @@ It asserts (via `gh api`) that admin-bypass is disabled, a *custom* deployment-b
 
 **If environments are unavailable on your plan.** Deployment-branch-policy environments are free for **public** repositories on all plans, but for **private** repositories they require GitHub **Pro/Team/Enterprise** ([ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) research finding 7). If your repo is private on a plan without environments, the protected-environment control — the load-bearing gate of this whole design — **cannot be enforced**, and required reviewers are not a substitute (on a single-owner repo there is no independent reviewer anyway). Per [ADR 0016](../docs/adr/0016-immutable-privileged-workflow-executor.md) decision 9, do **not** enable the automatic privileged create path in that configuration: without the environment gate the App secret is reachable by any same-repo branch — the exact defect this design fixes. Your options are to (a) make the repo public, (b) upgrade to a plan that offers environments, or (c) accept and clearly document a narrower threat model (e.g. only fully-trusted collaborators can push branches at all, so "any same-repo pusher is untrusted" no longer applies). Building an external secret broker is an alternative but is out of scope for this project's stock setup.
 
-Optional: **`GH_TOKEN`** (repository secret) — only for local CLI use or advanced workflows that intentionally provide a separate GitHub Models token. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) passes the default **`github.token`** to the generate workflow and grants **`models: read`**. Avoid forwarding a long-lived PAT secret to the generate job: that job checks out branch code by design.
+Optional: **`OPENROUTER_API_KEY`** (repository secret) — required for the default cloud provider. The stock [auto-pr.yml](../.github/workflows/auto-pr.yml) forwards it to the generate workflow, which uses it only for cloud inference when `ai_provider` is `openrouter`. Secret-bearing OpenRouter steps run trusted pinned auto-pr code and never branch-controlled workspace scripts; use a **dedicated low-limit key**. **`GH_TOKEN`** is only for GitHub PR lookup/create (and for local CLI runs) — it is not used for inference, and no `models: read` scope is needed.
 
 `APP_*` are used by the create job (and release-please if you use it).
 
@@ -256,7 +258,7 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 | I want to… | Set |
 |------------|-----|
 | Use my project's check command in "How to test" | Edit the **How to test** section in `.github/PULL_REQUEST_TEMPLATE.md` |
-| Use a different GitHub Models id | Not a workflow input; `github-models` is selected by routing and catalog fallback. Use `local` for a fixed external gateway/model. |
+| Use a different OpenRouter model | `ai_openrouter_model` (free id `vendor/model:free`, or the explicit `openrouter/free` alias); for local CLI use `AUTO_PR_OPENROUTER_MODEL`. Catalog selection prefers currently listed free models; paid ids are rejected. Use `local` for a fixed external gateway/model. |
 | Point **local** at another host or gateway | `ai_openai_compat_url` and optionally `ai_openai_compat_api_key`. The reusable workflow uses the local default model id; custom scripts/env can set `AUTO_PR_LOCAL_MODEL`. |
 | Run **local** on GitHub-hosted runners with llama.cpp | `ai_provider: local`, leave `ai_openai_compat_url` empty, set **`ai_llamacpp_model_url`** (HTTPS link to a `.gguf` file). Optional: `ai_llamacpp_release_tag` (Docker image override), `ai_llamacpp_port`. The workflow uses `.github/llama-server/Dockerfile` for the image pin, caches the GGUF and Docker image tar, and runs `llama-server` in Docker. |
 | Run checks before PR creation | Add a `check` job; set `needs: check` on generate (see [Running checks before PR creation](#running-checks-before-pr-creation)) |
@@ -269,13 +271,13 @@ Replace `<SHA>` with the SHA from the `uses:` lines in [auto-pr.yml](../.github/
 - **Docker llama composite actions:** Start/stop are [`llama-server-docker-start`](../.github/actions/llama-server-docker-start) and [`llama-server-docker-stop`](../.github/actions/llama-server-docker-stop) (pinned in the reusable workflow). The start script uses **`docker cp`** to place the GGUF in the container (not a bind mount), so nested Docker (e.g. [act](https://github.com/nektos/act)) does not depend on host path alignment for `-v`. Default container name is **`auto-pr-llama`**; pass **`container_name`** when several jobs share one Docker host ([nektos/act](https://github.com/nektos/act) runs parallel jobs on a single machine). Assume **one** `llama-server` container per job unless you use distinct **`container_name`** and **host port** values. If you copy those composite actions into a custom workflow and need two local servers in the **same** job, use different **`container_name`** / **`llama_port`** inputs or run them in **separate** jobs.
 - **Runner cache layout:** The start action (`llama-server-docker-start`) takes **`llama_server_root`**. Under that directory it stores `model/model.gguf` and `docker/llama-server-image.tar` for `actions/cache`. This repo’s **integration** workflow uses **`${{ github.workspace }}/.cache/auto-pr-llama-stub`** / **`…-model`** so paths stay under the checkout (nested **`docker -v`** from [act](https://github.com/nektos/act) matches the host). Each integration job picks an **ephemeral TCP port** on the runner via an inline **`python3`** one-liner in [integration.yml](../.github/workflows/integration.yml) (`bind(127.0.0.1, 0)` — Python is preinstalled on GitHub-hosted Ubuntu; not inside nested containers). The **generate** reusable workflow still uses **`${{ runner.temp }}/auto-pr-llama`** for hosted runs.
 
-## AI providers (`local`, `github-models`)
+## AI providers (`openrouter`, `local`)
 
-For branches with **2+ commits**, auto-pr generates the PR description via an AI backend. Choose a provider with `ai_provider` on the generate reusable workflow (maps to `AUTO_PR_AI_PROVIDER`), or set env when running locally.
+For branches with **2+ commits**, auto-pr generates the PR description via an AI backend. Choose a provider with `ai_provider` on the generate reusable workflow (maps to `AUTO_PR_AI_PROVIDER`), or set env when running locally. **`openrouter`** is the default cloud provider in stock workflows; **`local`** remains for self-hosted OpenAI-compatible endpoints. GitHub Models was retired on 2026-07-30 and is no longer a valid provider.
 
-Before the model call, the reusable workflow builds a routing context from commit metadata, changed-file classes, diff churn, dependency/workflow/generated-file signals, runner resources, and local-model sizing risk. That context selects a model band, sets the local-model fallback when one is not provided, chooses whether the later prompt should rely on diff tools, and is injected into the prompt as structured reviewer context. The prompt still includes commit messages separately; the routing context summarizes signals that commit messages do not reliably encode.
+Before the model call, the reusable workflow builds a routing context from commit metadata, changed-file classes, diff churn, dependency/workflow/generated-file signals, runner resources, and local-model sizing risk. That context selects a model band, sets the local-model fallback when one is not provided, chooses whether the later prompt should rely on diff tools, and is injected into the prompt as structured reviewer context. The prompt still includes commit messages separately; the routing context summarizes signals that commit messages do not reliably encode. When the provider is `openrouter`, the routing step also calls the OpenRouter models catalog and emits routing decision JSON (`provider`, `selectedModel`, tool requirement, token/tool budgets) that the generate step consumes.
 
-**How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, because GitHub Models does not support that response format and other OpenAI-compatible servers are inconsistent with it. On repeated parse or transient HTTP failures (network, rate limit, 5xx), auto-pr falls back to commit-derived title and description. **Authentication errors (HTTP 401/403) surface directly as a configuration error** rather than silently falling back — check your `GH_TOKEN` or `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` if you see an auth error in the generate step.
+**How it calls the model:** The generate step uses **`LanguageModel.generateText`** with a prompt that asks for JSON (`title`, `motivation`, `benefits`, `risks`, `notesForReviewers`). It parses the assistant reply and validates with Effect Schema — not OpenAI **`generateObject`** / **`json_schema`**, whose support varies across OpenRouter free models and OpenAI-compatible servers. `openrouter` goes through [`@effect/ai-openrouter`](https://www.npmjs.com/package/@effect/ai-openrouter) to `https://openrouter.ai/api/v1/chat/completions`; `local` goes through `@effect/ai-openai-compat`. On repeated parse or transient failures (network, **`429`** rate limit, 5xx), auto-pr retries and then falls back to commit-derived title and description. **Authentication and quota errors (`401`/`402`/`403`) surface directly as a configuration error** rather than silently falling back — check **`OPENROUTER_API_KEY`** and your OpenRouter key limits for `openrouter`, or `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` for `local`. A **`402`** means credit or key-limit exhaustion (see `GET https://openrouter.ai/api/v1/key` or the OpenRouter dashboard); a **`429`** is a retryable free-model/upstream rate limit.
 
 ### Provider defaults
 
@@ -283,39 +285,39 @@ Defaults differ by entry point so local development can run against a local Open
 
 | Entry point | Provider default | Model default | Notes |
 |-------------|------------------|---------------|-------|
-| Stock [`auto-pr.yml`](../.github/workflows/auto-pr.yml) | `github-models` | selected by routing and catalog fallback | The workflow grants `models: read`, builds `AUTO_PR_ROUTING_DECISION_JSON`, and passes `github.token` to the generate reusable workflow. |
+| Stock [`auto-pr.yml`](../.github/workflows/auto-pr.yml) | `openrouter` | selected by routing + OpenRouter free catalog | The workflow forwards the optional `OPENROUTER_API_KEY` secret and builds `AUTO_PR_ROUTING_DECISION_JSON`; no `models: read` scope is needed. |
 | Generate reusable workflow with `ai_provider: local` and `ai_llamacpp_model_url` | `local` | llama-server `/v1/models` id after startup; before startup the router falls back to a GitHub-runner-sized local default (`qwen3-1.7b-q4_k_m` for private/internal `ubuntu-24.04`, `qwen3-4b-q4_k_m` for public `ubuntu-24.04`) | Starts `llama-server` in Docker and uses the local OpenAI-compatible endpoint. The routing context flags GGUF URLs that appear too large for the resolved runner resources. External `ai_openai_compat_url` endpoints use the local default model unless `AUTO_PR_LOCAL_MODEL` is set in a custom script/env. |
 | Local CLI / `bun run generate-content` with no AI env | `local` | `gpt-oss` | Targets `http://127.0.0.1:8080/v1`. |
-| Local CLI / custom workflow with `AUTO_PR_AI_PROVIDER=github-models` | `github-models` | from `AUTO_PR_ROUTING_DECISION_JSON.selectedModel` | Export `GH_TOKEN`; model is selected automatically from routing + catalog fallback. |
+| Local CLI / custom workflow with `AUTO_PR_AI_PROVIDER=openrouter` | `openrouter` | from `AUTO_PR_ROUTING_DECISION_JSON.selectedModel` | Export `OPENROUTER_API_KEY`; model is selected automatically from routing + the free OpenRouter catalog, falling back to the static `openai/gpt-oss-20b:free`. |
+
+The reusable workflow input default is **`openrouter`**; the library/config default stays **`local`** when `AUTO_PR_AI_PROVIDER` is unset, so local CLI runs keep targeting a local server.
 
 ### `local` (OpenAI-compatible HTTP)
 
 Any OpenAI-compatible endpoint (llama.cpp `llama-server`, remote gateways, etc.) using the same env names as in [`src/auto-pr/config.ts`](../src/auto-pr/config.ts): `AUTO_PR_AI_OPENAI_COMPAT_URL`, optional `AUTO_PR_AI_OPENAI_COMPAT_API_KEY`, and `AUTO_PR_LOCAL_MODEL`.
 
 - **Workflow:** `ai_provider: local` and set `ai_openai_compat_url`, and optionally `ai_openai_compat_api_key` if your server requires a key — **or** omit `ai_openai_compat_url` and set **`ai_llamacpp_model_url`** to an HTTPS `.gguf` URL so the reusable workflow uses `.github/llama-server/Dockerfile` for the image pin, caches the GGUF and image tar, and starts `llama-server` in Docker on `127.0.0.1` (port from `ai_llamacpp_port`, default `8080`).
-- **CI:** Prefer **`github-models`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + `Dockerfile` pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly. Standard GitHub-hosted runner RAM is limited, so use small Q4-class GGUFs for the bundled path unless you move to a larger/self-hosted runner.
+- **CI:** Prefer the default **`openrouter`** when you do not want to host a model on the runner. For **local** on GitHub-hosted runners, either use **`ai_llamacpp_model_url`** (Docker + `Dockerfile` pin + cache), run inference on a **self-hosted** runner, or expose your server via a tunnel and set `ai_openai_compat_url` accordingly. Standard GitHub-hosted runner RAM is limited, so use small Q4-class GGUFs for the bundled path unless you move to a larger/self-hosted runner.
 - **Local dev:** Defaults target `http://127.0.0.1:8080/v1` and model `gpt-oss` (override via env).
 
-### `github-models`
+### `openrouter`
 
-Uses the [GitHub Models](https://github.com/marketplace/models) inference API (`https://models.github.ai/inference`) with an OpenAI-compatible client.
+Uses the [OpenRouter](https://openrouter.ai/) chat completions API (`https://openrouter.ai/api/v1/chat/completions`) through [`@effect/ai-openrouter`](https://www.npmjs.com/package/@effect/ai-openrouter). OpenRouter replaced GitHub Models, which GitHub retired on 2026-07-30.
 
-- **Token:** The stock entry workflow passes the default Actions **`github.token`** and grants `models: read`. For local scripts, export `GH_TOKEN`. For custom workflows, pass a separate token only when you accept that the generate job checks out branch code.
-- **Workflow:** Default is `ai_provider: github-models`; model is derived automatically from routing and catalog capability/rate-limit fallback.
-- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=github-models`, `GH_TOKEN=...`, `AUTO_PR_ROUTING_DECISION_JSON=...`, and optional `AUTO_PR_ROUTING_CONTEXT_JSON=...`.
-- **Legal model ids:** The catalog is published as JSON — see [REST: List all models](https://docs.github.com/en/rest/models/catalog#list-all-models). Fetch and read each entry’s **`id`** (format `publisher/model`):
+- **Key:** Add repository or organization secret **`OPENROUTER_API_KEY`**; the stock [auto-pr.yml](../.github/workflows/auto-pr.yml) forwards it to the generate workflow, and custom callers must pass it explicitly (reusable workflows do not receive secrets automatically). Reusable inputs: `ai_openrouter_model` (free id), `ai_openrouter_http_referer`, `ai_openrouter_title`. Use a **dedicated low-limit key** for auto-pr and set a per-key limit in OpenRouter; the key can spend OpenRouter quota but has no GitHub repository access. Keyed steps run trusted pinned auto-pr code only — never branch-controlled scripts.
+- **Workflow:** Default is `ai_provider: openrouter`; the model comes from the routing decision, which prefers a currently listed free model. No GitHub Actions **`models: read`** scope is needed. **`GH_TOKEN`** remains only for GitHub PR lookup/create, not inference.
+- **Env (local / scripts):** `AUTO_PR_AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY=...`, `AUTO_PR_ROUTING_DECISION_JSON=...`, optional `AUTO_PR_OPENROUTER_MODEL`, `AUTO_PR_OPENROUTER_HTTP_REFERER`, `AUTO_PR_OPENROUTER_TITLE` (default `auto-pr`), and optional `AUTO_PR_ROUTING_CONTEXT_JSON=...`. A local fallback is attempted only when `AUTO_PR_AI_OPENAI_COMPAT_URL` and `AUTO_PR_LOCAL_MODEL` are both set.
+- **Quotas and errors:** OpenRouter documents free-model limits of 20 requests/minute and 50 requests/day without credits (1000/day with the documented credit threshold). A **`429`** is retried and then falls back to commit-derived content; a **`402`** is treated as credit/key-limit exhaustion and fails fast with an OpenRouter hint. Check `GET https://openrouter.ai/api/v1/key` or the OpenRouter dashboard for key limits.
 
-  ```bash
-  curl -sL https://models.github.ai/catalog/models
-  ```
+### Migrating from `github-models`
 
-  To list ids only:
+GitHub Models was retired on 2026-07-30, and `AUTO_PR_AI_PROVIDER=github-models` now fails early with an explicit error instead of silently switching providers.
 
-  ```bash
-  curl -sL https://models.github.ai/catalog/models | jq -r '.[].id' | sort
-  ```
-
-  The catalog includes embedding-only models; for PR text generation, pick an entry whose **`supported_output_modalities`** includes **`text`** (or use a known chat model id such as `openai/gpt-4.1`).
+1. Create an OpenRouter API key and add repository or organization secret `OPENROUTER_API_KEY`.
+2. Update custom workflows from `ai_provider: github-models` to `ai_provider: openrouter` (stock workflows already default to `openrouter`).
+3. Remove `models: read` permissions from custom generate jobs.
+4. Replace any GitHub model ids with OpenRouter free ids (`vendor/model:free`).
+5. Keep your `local` / llama configuration unchanged if you use `ai_provider: local`.
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#ai-provider--2-commits) for common failures.
 
@@ -377,7 +379,7 @@ Earlier auto-pr shipped a single `push`-triggered `.github/workflows/auto-pr.yml
 
 | Command | Required | Optional |
 |---------|----------|----------|
-| **auto-pr-generate-content** | `DEFAULT_BRANCH`, `BRANCH`, `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local`), `AUTO_PR_AI_OPENAI_COMPAT_URL` / `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` / `AUTO_PR_LOCAL_MODEL` (local), `GH_TOKEN` + `AUTO_PR_ROUTING_DECISION_JSON` (github-models), `AUTO_PR_ROUTING_CONTEXT_JSON` (trusted workflow-built signal summary for the AI prompt). Fetches commits, files, and diff stat directly from git via `GitContext`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
+| **auto-pr-generate-content** | `DEFAULT_BRANCH`, `BRANCH`, `GITHUB_WORKSPACE` | `AUTO_PR_AI_PROVIDER` (optional; default `local` when unset, stock workflow passes `openrouter`), `OPENROUTER_API_KEY` + `AUTO_PR_ROUTING_DECISION_JSON` + optional `AUTO_PR_OPENROUTER_MODEL` / `AUTO_PR_OPENROUTER_HTTP_REFERER` / `AUTO_PR_OPENROUTER_TITLE` (openrouter), `AUTO_PR_AI_OPENAI_COMPAT_URL` / `AUTO_PR_AI_OPENAI_COMPAT_API_KEY` / `AUTO_PR_LOCAL_MODEL` (local), `GH_TOKEN` (existing PR title lookup), `AUTO_PR_ROUTING_CONTEXT_JSON` (trusted workflow-built signal summary for the AI prompt). Fetches commits, files, and diff stat directly from git via `GitContext`. Writes `pr-title.txt` and `pr-body.md`. PR template: `{GITHUB_WORKSPACE}/.github/PULL_REQUEST_TEMPLATE.md` — edit **How to test** in that file for project-specific copy. |
 | **auto-pr-create-or-update-pr** | `GH_TOKEN`, `BRANCH`, `DEFAULT_BRANCH`, `GITHUB_WORKSPACE` | — (reads `{GITHUB_WORKSPACE}/pr-title.txt` and `pr-body.md`) |
 
 Override AI-related defaults via workflow `with:` inputs when needed.

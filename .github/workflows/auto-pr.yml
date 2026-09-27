@@ -1,8 +1,10 @@
 # Auto-PR — unprivileged GENERATE ingress (ADR 0016). Discovers ai/** branches and produces the
-# PR-content artifact. It holds NO secrets, NO pull-requests: write, and NO privileged job: the
-# privileged create phase lives in a separate default-branch workflow (auto-pr-create.yml) that
-# GitHub always evaluates from the default branch via workflow_run — a pushed branch can never
-# substitute that definition. This file is therefore safe to run from branch-resolved definitions.
+# PR-content artifact. It holds NO GitHub write credentials and NO App secrets (no
+# pull-requests: write) and NO privileged job: the privileged create phase lives in a separate
+# default-branch workflow (auto-pr-create.yml) that GitHub always evaluates from the default
+# branch via workflow_run — a pushed branch can never substitute that definition. This file is
+# therefore safe to run from branch-resolved definitions. The generate job receives only an
+# optional OpenRouter *inference* secret (quota spend, no repository write access).
 #
 # Ingress (ADR 0016 Open Question resolution):
 #   - workflow_dispatch: manual baseline — generate for one explicit ai/** branch (Option A).
@@ -104,25 +106,28 @@ jobs:
           echo "Discovered $count branch(es) to generate for."
 
   # Unprivileged generate, fanned out across the discovered matrix (ADR 0016 decision 3). Retains
-  # exactly today's minimal permissions: contents: read + models: read (+ pull-requests: read to
-  # cap the reusable's `gh pr view`). No pull-requests: write anywhere in this file.
+  # exactly today's minimal permissions: contents: read (+ pull-requests: read to cap the
+  # reusable's `gh pr view`). No pull-requests: write anywhere in this file. max-parallel caps
+  # concurrent cloud inference so a branch burst cannot exhaust OpenRouter free-model quotas.
   generate:
     needs: discover
     if: needs.discover.outputs.has_branches == 'true'
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     # timeout-minutes not settable on reusable-call jobs; auto-pr-generate-reusable caps generate at 25m
     permissions:
       contents: read
       pull-requests: read # caps reusable generate job (gh pr view for existing title)
-      models: read # required for reusable generate job (GitHub Models); caller caps nested permissions
     uses: knirski/auto-pr/.github/workflows/auto-pr-generate-reusable.yml@1e377e970233a6b80abe687d06d86d0eaf350644
     with:
       # Explicit immutable SHA + source branch resolved by the discover job (ADR 0016 decision 3).
       head_sha: ${{ matrix.head_sha }}
       source_branch: ${{ matrix.branch }}
     secrets:
-      # GitHub API token for the generate job. This workflow grants `models: read` so the default
-      # `github.token` works without exposing a long-lived PAT to branch code.
+      # GitHub API token for the generate job's read-only PR lookup. No models scope is needed.
       GH_TOKEN: ${{ github.token }}
+      # Optional OpenRouter inference key for the default cloud provider. Used only when
+      # ai_provider resolves to openrouter; the reusable gates it to trusted package-mode steps.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

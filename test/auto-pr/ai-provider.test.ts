@@ -12,6 +12,16 @@ import {
 
 const BaseLayer = Layer.mergeAll(TestBaseLayer, SilentLoggerLayer);
 
+/** Typed fetch mock: `typeof fetch` requires the Bun `preconnect` hook. */
+function makeFetchImpl(
+  impl: (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ) => Promise<Response>,
+): typeof fetch {
+  return Object.assign(impl, { preconnect: fetch.preconnect }) satisfies typeof fetch;
+}
+
 describe("aiProviderLayerFromConfig", () => {
   test("local: builds layer that provides LanguageModel", async () => {
     const layer = Layer.mergeAll(
@@ -29,13 +39,14 @@ describe("aiProviderLayerFromConfig", () => {
     );
   });
 
-  test("github-models: builds layer when ghToken and model provided", async () => {
+  test("openrouter: builds layer when apiKey and model provided", async () => {
     const layer = Layer.mergeAll(
       BaseLayer,
       aiProviderLayerFromConfig({
-        provider: "github-models",
-        model: "openai/gpt-4",
-        ghToken: Redacted.make("ghp_test", { label: "GH_TOKEN" }),
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
+        apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+        title: "auto-pr",
       }),
     );
     await runEffect(layer)(
@@ -46,13 +57,60 @@ describe("aiProviderLayerFromConfig", () => {
     );
   });
 
-  test("github-models: fails with AutoPrConfigError when ghToken empty", async () => {
+  test("openrouter: sends OpenRouter base URL, bearer key, and attribution headers", async () => {
+    const requests: Request[] = [];
+    const fetchImpl = makeFetchImpl(async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      requests.push(request);
+      return Response.json({
+        id: "chatcmpl-test",
+        object: "chat.completion",
+        created: 1,
+        model: "openai/gpt-oss-20b:free",
+        choices: [
+          { index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" },
+        ],
+        system_fingerprint: null,
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+    });
+
+    const layer = Layer.mergeAll(
+      BaseLayer,
+      aiProviderLayerFromConfig(
+        {
+          provider: "openrouter",
+          model: "openai/gpt-oss-20b:free",
+          apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+          httpReferer: "https://github.com/knirski/auto-pr",
+          title: "auto-pr",
+        },
+        { fetch: fetchImpl },
+      ),
+    );
+
+    await runEffect(layer)(
+      Effect.gen(function* () {
+        const model = yield* LanguageModel.LanguageModel;
+        yield* model.generateText({ prompt: "Say ok" });
+      }).pipe(Effect.scoped),
+    );
+
+    const request = requests[0];
+    expect(request?.url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(request?.headers.get("authorization")).toBe("Bearer sk-or-test");
+    expect(request?.headers.get("http-referer")).toBe("https://github.com/knirski/auto-pr");
+    expect(request?.headers.get("x-title")).toBe("auto-pr");
+    expect(request?.headers.get("x-openrouter-title")).toBeNull();
+  });
+
+  test("openrouter: fails with AutoPrConfigError when apiKey empty", async () => {
     const layer = Layer.mergeAll(
       BaseLayer,
       aiProviderLayerFromConfig({
-        provider: "github-models",
-        model: "openai/gpt-4",
-        ghToken: Redacted.make("", { label: "GH_TOKEN" }),
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
+        apiKey: Redacted.make("", { label: "OPENROUTER_API_KEY" }),
       }),
     );
     const exit = await Effect.runPromise(
@@ -69,13 +127,13 @@ describe("aiProviderLayerFromConfig", () => {
     }
   });
 
-  test("github-models: fails with AutoPrConfigError when model empty", async () => {
+  test("openrouter: fails with AutoPrConfigError when model empty", async () => {
     const layer = Layer.mergeAll(
       BaseLayer,
       aiProviderLayerFromConfig({
-        provider: "github-models",
+        provider: "openrouter",
         model: "",
-        ghToken: Redacted.make("ghp_test", { label: "GH_TOKEN" }),
+        apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
       }),
     );
     const exit = await Effect.runPromise(

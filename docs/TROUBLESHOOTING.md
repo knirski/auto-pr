@@ -93,7 +93,7 @@ Or wait for scheduled discovery. It runs about every 15 minutes, but GitHub's sc
 
 **Cause:** [`bun run test:integration`](../package.json) loads [`.env.ci`](../.env.ci) via `--env-file`. If those variables are missing, the file is absent, or you ran tests without the same entrypoint (for example `bun test test/integration` without the env files), `process.env` will not have the pins.
 
-**Fix:** Run **`bun run test:integration`** from the repo root (not raw `bun test …` on integration files unless you pass the same `--env-file` flags). Ensure [`.env.ci`](../.env.ci) exists. Optionally add a gitignored **`.env.local`** with overrides (same keys). For GitHub Models tests locally, set **`GH_TOKEN`**. See [CI.md](CI.md#integration-tests) and [CONTRIBUTING.md](../CONTRIBUTING.md#integration-test-env-this-repository).
+**Fix:** Run **`bun run test:integration`** from the repo root (not raw `bun test …` on integration files unless you pass the same `--env-file` flags). Ensure [`.env.ci`](../.env.ci) exists. Optionally add a gitignored **`.env.local`** with overrides (same keys). For the OpenRouter integration test locally, export **`OPENROUTER_API_KEY`** — the test skips when it is unset. See [CI.md](CI.md#integration-tests) and [CONTRIBUTING.md](../CONTRIBUTING.md#integration-test-env-this-repository).
 
 ## Generate content fails
 
@@ -141,25 +141,37 @@ Or wait for scheduled discovery. It runs about every 15 minutes, but GitHub's sc
 
 **Cause:** For 2+ commits with `AUTO_PR_AI_PROVIDER=local`, auto-pr calls the OpenAI-compatible URL from `AUTO_PR_AI_OPENAI_COMPAT_URL` (default `http://127.0.0.1:8080/v1`). Nothing starts a local server for you in CI.
 
-**Fix:** Ensure a compatible server is running and reachable from the environment (self-hosted runner, tunnel, or remote URL). On GitHub-hosted runners, prefer **`github-models`** unless you expose a reachable endpoint.
+**Fix:** Ensure a compatible server is running and reachable from the environment (self-hosted runner, tunnel, or remote URL). On GitHub-hosted runners, prefer the default **`openrouter`** unless you expose a reachable endpoint.
 
 ### Description is empty or "null"
 
 **Cause:** The AI provider returned invalid or empty response. Auto-pr retries up to **five** attempts (see `MAX_AI_ATTEMPTS` in `auto-pr-generate-content.ts`) and then falls back to commit-derived title and description.
 
-**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. For **local**, verify `AUTO_PR_LOCAL_MODEL` and `AUTO_PR_AI_OPENAI_COMPAT_URL`. For **github-models**, verify `GH_TOKEN` and that catalog fetch is successful in routing logs. `AUTO_PR_AI_PROVIDER` defaults to `local` when unset (see [config.ts](../src/auto-pr/config.ts)).
+**Fix:** Check the "Generate PR content" step logs. The PR may still be created with a fallback description. For **local**, verify `AUTO_PR_LOCAL_MODEL` and `AUTO_PR_AI_OPENAI_COMPAT_URL`. For **openrouter**, verify `OPENROUTER_API_KEY` and that the catalog fetch is successful in routing logs (catalog failures degrade to the static free fallback). `AUTO_PR_AI_PROVIDER` defaults to `local` when unset (see [config.ts](../src/auto-pr/config.ts)).
 
-### GitHub Models: 401 / invalid token (provider: github-models)
+### OpenRouter: 401 / 402 / 403 (provider: `openrouter`)
 
-**Cause:** `GH_TOKEN` is missing, expired, or lacks permission to call the GitHub Models API.
+**Cause:** `401`/`403` mean `OPENROUTER_API_KEY` is missing, invalid, or not authorized; `402` means the key has run out of credits or hit its configured limit. Both are permanent config/quota errors — auto-pr fails fast instead of falling back.
 
-**Fix:** In CI, the stock workflow passes `github.token` when `GH_TOKEN` is unset — ensure the entry workflow has **`models: read`**. Optionally set repository secret **`GH_TOKEN`** to override. For local runs, export `GH_TOKEN` before `run-auto-pr`. See [INTEGRATION.md](INTEGRATION.md#github-models).
+**Fix:** Verify the repository or organization secret **`OPENROUTER_API_KEY`** is set and passed by your workflow (reusable workflows do not receive secrets automatically). Check the key's limits and usage in the OpenRouter dashboard or via `GET https://openrouter.ai/api/v1/key`. Use a dedicated low-limit key. See [INTEGRATION.md — openrouter](INTEGRATION.md#openrouter). The stock workflows need no `models: read` GitHub scope.
 
-### GitHub Models: model not found / 404 (provider: github-models)
+### OpenRouter: 429 free-model rate limit (provider: `openrouter`)
 
-**Cause:** The selected model id from routing/catalog fallback is unavailable for the current token/tenant or temporarily unavailable in the catalog.
+**Cause:** OpenRouter free models have per-minute and per-day request limits; a burst of `ai/**` branches or retries can exhaust them. `429` is transient: auto-pr retries with backoff and then falls back to commit-derived content.
 
-**Fix:** Check routing logs for `selected_model`, `selection_mode`, and attempt-plan entries. The workflow already falls back across compatible/same-tier and lower-tier models; if failures persist, verify `GH_TOKEN` scope and catalog availability. See [INTEGRATION.md — github-models](INTEGRATION.md#github-models).
+**Fix:** Expect a fallback description in the PR if the limit persists; reduce concurrency (the stock workflow caps `strategy.max-parallel` at 2) or wait for the daily window to reset. Check routing and attempt-plan logs for `selected_model` and fallback entries. See [OpenRouter limits](https://openrouter.ai/docs/api-reference/limits).
+
+### OpenRouter: model unavailable / not free (provider: `openrouter`)
+
+**Cause:** The configured `AUTO_PR_OPENROUTER_MODEL` is paid, delisted, or not usable for the required route; or the catalog could not be fetched and the static fallback is temporarily unlisted.
+
+**Fix:** Paid model ids are rejected by design — use a `vendor/model:free` id or the explicit `openrouter/free` alias. The static fallback `openai/gpt-oss-20b:free` is currently unlisted upstream, so catalog-driven selection normally resolves a currently listed free model (for example `google/gemma-4-26b-a4b-it:free`, `cohere/north-mini-code:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`). Check routing logs for `selected_model` and `selection_mode`, and verify catalog reachability. See [INTEGRATION.md — openrouter](INTEGRATION.md#openrouter).
+
+### "GitHub Models was retired on 2026-07-30" (provider: `github-models`)
+
+**Cause:** `AUTO_PR_AI_PROVIDER=github-models` is no longer a valid provider; GitHub retired GitHub Models (playground, catalog, inference API) on 2026-07-30. Auto-pr fails early rather than silently switching providers.
+
+**Fix:** Use `AUTO_PR_AI_PROVIDER=openrouter` with an `OPENROUTER_API_KEY` secret, or `local` for a self-hosted OpenAI-compatible server. Remove `models: read` from custom generate jobs; `GH_TOKEN` is not used for inference. See [INTEGRATION.md — migrating from github-models](INTEGRATION.md#migrating-from-github-models).
 
 ### OpenAI-compatible: connection error / URL unreachable (provider: `local`)
 

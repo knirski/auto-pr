@@ -82,10 +82,10 @@ export function generateContentConfigFromRunAutoPrConfig(
   };
   return Match.value(config).pipe(
     Match.when(
-      { provider: "github-models" },
+      { provider: "openrouter" },
       (): RunGeneratePrContentWithServicesConfig => ({
         ...common,
-        provider: "github-models",
+        provider: "openrouter",
       }),
     ),
     Match.when(

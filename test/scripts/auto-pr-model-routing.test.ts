@@ -7,6 +7,7 @@ import {
   resolveModelBand,
   selectModel,
 } from "../../src/core/model-routing.js";
+import { DEFAULT_OPENROUTER_MODEL } from "../../src/core/openrouter-routing.js";
 
 describe("model band routing command policy", () => {
   test("routes tiny docs-only changes to band A", () => {
@@ -58,9 +59,9 @@ describe("model band routing command policy", () => {
     } as const;
 
     expect(resolveBand(signals)).toBe("C");
-    expect(selectModel("github-models", "C")).toBe("openai/gpt-4.1");
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
-      selectedModel: "openai/gpt-4.1",
+    expect(selectModel("openrouter", "C")).toBe(DEFAULT_OPENROUTER_MODEL);
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
+      selectedModel: DEFAULT_OPENROUTER_MODEL,
       toolStrategy: "full-diff",
       reasoningNeed: "high",
       requiresToolCalls: true,
@@ -87,7 +88,7 @@ describe("model band routing command policy", () => {
     } as const;
 
     expect(resolveBand(signals)).toBe("C");
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
       band: "C",
       toolStrategy: "full-diff",
       reasoningNeed: "high",
@@ -114,14 +115,14 @@ describe("model band routing command policy", () => {
     } as const;
 
     expect(resolveBand(signals)).toBe("C");
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
       band: "C",
       toolStrategy: "full-diff",
       reasoningNeed: "high",
     });
   });
 
-  test("github-models ignores explicit override and stays on policy route", () => {
+  test("openrouter ignores explicit override and stays on the static seed route", () => {
     const signals = {
       semanticCommitCount: 1,
       conventionalTypeCount: 1,
@@ -141,12 +142,12 @@ describe("model band routing command policy", () => {
     } as const;
 
     expect(
-      resolveModelBand({ provider: "github-models", explicitModel: "openai/gpt-4.1", signals })
+      resolveModelBand({ provider: "openrouter", explicitModel: "openai/gpt-4.1", signals })
         .selectedModel,
-    ).toBe("microsoft/phi-4-mini-instruct");
+    ).toBe(DEFAULT_OPENROUTER_MODEL);
   });
 
-  test("routes bounded source changes to a tool-capable GitHub model", () => {
+  test("routes bounded source changes to the static OpenRouter seed model", () => {
     const signals = {
       semanticCommitCount: 2,
       conventionalTypeCount: 1,
@@ -165,9 +166,9 @@ describe("model band routing command policy", () => {
       hasBinaryFiles: false,
     } as const;
 
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
       band: "B",
-      selectedModel: "openai/gpt-4.1",
+      selectedModel: DEFAULT_OPENROUTER_MODEL,
       toolStrategy: "hotspot",
       reasoningNeed: "medium",
       requiresToolCalls: true,
@@ -193,7 +194,7 @@ describe("model band routing command policy", () => {
       hasBinaryFiles: false,
     } as const;
 
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
       band: "B",
       toolStrategy: "commit-diff",
       reasoningNeed: "medium",
@@ -201,7 +202,7 @@ describe("model band routing command policy", () => {
     });
   });
 
-  test("uses no tools for small non-code changes even on github-models", () => {
+  test("uses no tools for small non-code changes even on openrouter", () => {
     const signals = {
       semanticCommitCount: 1,
       conventionalTypeCount: 1,
@@ -219,7 +220,7 @@ describe("model band routing command policy", () => {
       hasBreakingChange: false,
       hasBinaryFiles: false,
     } as const;
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
       band: "A",
       toolStrategy: "none",
       requiresToolCalls: false,
@@ -245,7 +246,7 @@ describe("model band routing command policy", () => {
       hasBinaryFiles: false,
     } as const;
 
-    expect(resolveModelBand({ provider: "github-models", signals })).toMatchObject({
+    expect(resolveModelBand({ provider: "openrouter", signals })).toMatchObject({
       band: "B",
       toolStrategy: "none",
       requiresToolCalls: false,
@@ -498,7 +499,7 @@ describe("model band routing command policy", () => {
   test("builds analysis-oriented context without repeating commit subjects", () => {
     const ctx = buildDetailedRoutingContext({
       band: "B",
-      selectedModel: "openai/gpt-4.1",
+      selectedModel: "openai/gpt-oss-20b:free",
       toolStrategy: "hotspot",
       reasoningNeed: "medium",
       requiresToolCalls: true,

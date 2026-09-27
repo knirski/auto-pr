@@ -31,6 +31,8 @@ Remote gateways (OpenRouter, Azure, etc.) use **`local`** with the appropriate U
 * **Good:** Tests mock `POST …/chat/completions` JSON; no Ollama daemon assumptions in unit tests.
 * **Bad (breaking for adopters):** Workflows lose Ollama-specific steps; reusable workflow inputs use `ai_provider`, `ai_openai_compat_*`; `AUTO_PR_AI_OLLAMA_MODEL` removed. Documented in CHANGELOG, [INTEGRATION.md](../INTEGRATION.md), [README.md](../../README.md).
 
+> **2026-09-27 update:** GitHub Models was retired on 2026-07-30. The active cloud provider is now **`openrouter`** (implemented with `@effect/ai-openrouter` rather than the OpenAI-compat stack); **`local`** still uses `@effect/ai-openai-compat`. Historical `github-models` references in this ADR describe the original decision state. See [ADR 0007](0007-ai-abstraction-layer.md) and the [2026-08-04 OpenRouter migration design](../superpowers/specs/2026-08-04-openrouter-migration-design.md).
+
 **CI:** GitHub-hosted runners: default **`github-models`** with the stock reusable workflow; **`local`** requires a reachable OpenAI-compatible endpoint (self-hosted runner, tunnel, or remote URL).
 
 **Related decisions:** PR title/body use `LanguageModel.generateText` + JSON parse + `TitleDescriptionSchema` (not `generateObject` / `json_schema` — GitHub Models and many compat servers do not support it). Historical toolkit notes: [auto-pr-effect-toolkit design](../superpowers/specs/2026-03-29-auto-pr-effect-toolkit-design.md#generateobject-vs-generatetext). Ongoing abstraction — [0007-ai-abstraction-layer.md](0007-ai-abstraction-layer.md).

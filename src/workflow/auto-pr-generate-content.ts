@@ -49,7 +49,9 @@ import {
   getPrDescriptionPromptPath,
   isTransientAiError,
   makeDiffToolkitLayer,
+  makeOpenRouterModelsRepositoryLive,
   NoSemanticCommitsError,
+  OpenRouterModelsRepository,
   ParseError,
   PR_BODY_FILE_NAME,
   PR_TITLE_FILE_NAME,
@@ -57,10 +59,6 @@ import {
   UnexpectedError,
   unknownToMessage,
 } from "#auto-pr";
-import {
-  GithubModelsCatalogRepository,
-  makeGithubModelsCatalogRepositoryLive,
-} from "#auto-pr/live/github-models-catalog-repository.js";
 import { PullRequestClient } from "#auto-pr/live/pull-request-client.js";
 import {
   filterMergeCommits,
@@ -76,14 +74,17 @@ import {
   getFallbackTitleAndDescription,
   validateGeneratedContent,
 } from "#core/generated-content.js";
+import type { ModelBand } from "#core/model-routing.js";
 import {
-  buildGithubModelAttemptPlan,
-  classifyGithubModelFailure,
-  decideGithubModelFallback,
-  type GithubModelFailureKind,
-} from "#core/github-model-fallback-policy.js";
+  buildOpenRouterModelAttemptPlan,
+  type CloudModelFailureClassification,
+  type CloudModelFallbackDecision,
+  classifyCloudModelFailure,
+  decideCloudModelFallback,
+  shouldRetryCloudModelAttempt,
+} from "#core/openrouter-fallback-policy.js";
 import type { RoutingContextArtifact } from "#core/routing-artifacts.js";
-import { resolveAiToolRoundtripDiffCharBudget } from "#core/sanitize-diff.js";
+import { MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS } from "#core/sanitize-diff.js";
 import { truncateForLog } from "#core/string.js";
 import {
   parseTitleDescriptionFromAssistantText,
@@ -178,24 +179,41 @@ type AiIterationLimits = {
 
 type AiLimitSource = "explicit_override" | "routing_decision";
 
-function fallbackDelayForFailure(failure: GithubModelFailureKind): Duration.Duration {
-  switch (failure._tag) {
-    case "RateLimited":
-      return Duration.seconds(2);
-    case "Transient":
-      return Duration.millis(500);
-    default:
-      return Duration.zero;
-  }
+const OPENROUTER_TROUBLESHOOTING_HINT =
+  "Check OPENROUTER_API_KEY, key credit limits, and OpenRouter free-model rate limits.";
+const LOCAL_TROUBLESHOOTING_HINT = "Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials.";
+
+/** Provider-specific troubleshooting hint for permanent AI config errors. */
+function aiTroubleshootingHint(provider: AiProvider): string {
+  return provider === "openrouter" ? OPENROUTER_TROUBLESHOOTING_HINT : LOCAL_TROUBLESHOOTING_HINT;
+}
+
+function unknownCloudFailure(): CloudModelFailureClassification {
+  return { kind: "unknown-retryable", reason: "unknown" };
+}
+
+function fallbackDelayForFailure(failure: CloudModelFailureClassification): Duration.Duration {
+  if (failure.kind === "permanent") return Duration.zero;
+  if (failure.reason === "rate-limit") return Duration.seconds(2);
+  return failure.kind === "retryable" ? Duration.millis(500) : Duration.zero;
 }
 
 function shouldRetryAttemptError(provider: AiProvider, error: unknown): boolean {
   if (error instanceof DescriptionParseError) return true;
-  if (provider === "github-models") {
-    const failure = classifyGithubModelFailure(error);
-    return failure._tag !== "AuthOrConfig" && failure._tag !== "CapabilityMismatch";
-  }
+  if (provider === "openrouter") return shouldRetryCloudModelAttempt(error);
   return isTransientAiError(error);
+}
+
+/** Build the AutoPrConfigError for a permanent AI failure with a provider hint. */
+function permanentAiFailureError(
+  error: { readonly reason: { readonly _tag: string }; readonly message: string },
+  provider: AiProvider,
+): AutoPrConfigError {
+  return new AutoPrConfigError({
+    missing: [
+      `AI provider authentication/config error [${error.reason._tag}]: ${error.message}. ${aiTroubleshootingHint(provider)}`,
+    ],
+  });
 }
 
 /** Configured title wins; else best-effort PR lookup (failures -> no title). */
@@ -704,20 +722,15 @@ export function generatePrContent(params: GeneratePrContentParams) {
         NoSemanticCommitsError: (e: NoSemanticCommitsError) => Effect.fail(e),
         ParseError: (e: ParseError) => Effect.fail(e),
         TemplateRenderError: (e: TemplateRenderError) => Effect.fail(e),
-        AiError: (e: AiError.AiError) =>
-          !isTransientAiError(e)
-            ? Effect.fail(
-                new AutoPrConfigError({
-                  missing: [
-                    `AI provider authentication/config error [${e.reason._tag}]: ${e.message}. ${
-                      params.provider === "github-models"
-                        ? "Check GH_TOKEN and GitHub Models access."
-                        : "Check AUTO_PR_AI_OPENAI_COMPAT_URL and credentials."
-                    }`,
-                  ],
-                }),
-              )
-            : Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
+        AiError: (e: AiError.AiError) => {
+          const permanent =
+            params.provider === "openrouter"
+              ? classifyCloudModelFailure(e).kind === "permanent"
+              : !isTransientAiError(e);
+          return permanent
+            ? Effect.fail(permanentAiFailureError(e, params.provider))
+            : Effect.fail(normalizeUnknownToGeneratePrContentError(e));
+        },
       },
       (e: unknown) => Effect.fail(normalizeUnknownToGeneratePrContentError(e)),
     ),
@@ -799,8 +812,12 @@ export type RunGeneratePrContentConfig =
       openaiCompatApiKey?: Redacted.Redacted<string>;
     })
   | (RunGeneratePrContentConfigCommon & {
-      provider: "github-models";
-      ghToken: Redacted.Redacted<string>;
+      provider: "openrouter";
+      openRouterApiKey: Redacted.Redacted<string>;
+      /** Configured `AUTO_PR_OPENROUTER_MODEL`; routing decision `selectedModel` is the active model. */
+      openRouterModel?: string;
+      openRouterHttpReferer?: string;
+      openRouterTitle: string;
       requiresToolCalls?: boolean;
       localFallback?: {
         readonly openaiCompatUrl: string;
@@ -846,25 +863,23 @@ export function runGeneratePrContentConfigFromGeneratePrContentConfig(
       }),
     ),
     Match.when(
-      { provider: "github-models" },
-      (githubModels): RunGeneratePrContentConfig => ({
+      { provider: "openrouter" },
+      (openRouter): RunGeneratePrContentConfig => ({
         ...common,
-        provider: "github-models",
-        ghToken: githubModels.ghToken,
-        ...(githubModels.requiresToolCalls !== undefined
-          ? { requiresToolCalls: githubModels.requiresToolCalls }
+        provider: "openrouter",
+        openRouterApiKey: openRouter.openRouterApiKey,
+        openRouterTitle: openRouter.openRouterTitle,
+        ...(openRouter.openRouterModel !== undefined
+          ? { openRouterModel: openRouter.openRouterModel }
           : {}),
-        ...(githubModels.aiToolRoundLimit !== undefined
-          ? { aiToolRoundLimit: githubModels.aiToolRoundLimit }
+        ...(openRouter.openRouterHttpReferer !== undefined
+          ? { openRouterHttpReferer: openRouter.openRouterHttpReferer }
           : {}),
-        ...(githubModels.aiTokenBudget !== undefined
-          ? { aiTokenBudget: githubModels.aiTokenBudget }
+        ...(openRouter.requiresToolCalls !== undefined
+          ? { requiresToolCalls: openRouter.requiresToolCalls }
           : {}),
-        ...(githubModels.aiToolResponseCharBudget !== undefined
-          ? { aiToolResponseCharBudget: githubModels.aiToolResponseCharBudget }
-          : {}),
-        ...(githubModels.localFallback !== undefined
-          ? { localFallback: githubModels.localFallback }
+        ...(openRouter.localFallback !== undefined
+          ? { localFallback: openRouter.localFallback }
           : {}),
       }),
     ),
@@ -886,11 +901,15 @@ function buildAiProviderConfig(config: RunGeneratePrContentConfig): AiProviderCo
       }),
     ),
     Match.when(
-      { provider: "github-models" },
-      (githubModels): AiProviderConfig => ({
-        provider: "github-models",
-        model: githubModels.model,
-        ghToken: githubModels.ghToken,
+      { provider: "openrouter" },
+      (openRouter): AiProviderConfig => ({
+        provider: "openrouter",
+        model: openRouter.model,
+        apiKey: openRouter.openRouterApiKey,
+        ...(openRouter.openRouterHttpReferer !== undefined
+          ? { httpReferer: openRouter.openRouterHttpReferer }
+          : {}),
+        title: openRouter.openRouterTitle,
       }),
     ),
     Match.exhaustive,
@@ -903,12 +922,11 @@ export function runGeneratePrContent(
   const baseRef = `origin/${config.defaultBranch}`;
   const gitLayer = GitContextLive(config.workspace).pipe(Layer.provide(ChildProcessSpawnerLayer));
   const prClientLayer = PullRequestClient.Live(config.workspace, {
-    ...(config.provider === "github-models" ? { ghToken: Redacted.value(config.ghToken) } : {}),
     ...(config.githubApiUrl !== undefined ? { githubApiUrl: config.githubApiUrl } : {}),
     ...(config.ghHost !== undefined ? { ghHost: config.ghHost } : {}),
   }).pipe(Layer.provide(ChildProcessSpawnerLayer));
 
-  type ProviderKind = "github-models" | "local-llm";
+  type ProviderKind = "openrouter" | "local-llm";
   type AttemptCandidate = {
     readonly provider: ProviderKind;
     readonly model: string;
@@ -928,14 +946,10 @@ export function runGeneratePrContent(
     | { readonly _tag: "Completed" };
 
   const resolveAttemptToolResponseCharBudget = (attempt: AttemptCandidate): number | undefined => {
-    const derivedBudget = resolveAiToolRoundtripDiffCharBudget(
-      attempt.provider === "github-models" ? "github-models" : "local",
-      attempt.model,
-    );
-    if (attempt.provider !== "github-models") return derivedBudget;
-    if (config.aiToolResponseCharBudget === undefined) return derivedBudget;
+    if (attempt.provider !== "openrouter") return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
+    if (config.aiToolResponseCharBudget === undefined) return MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS;
     if (attempt.model === config.model) return config.aiToolResponseCharBudget;
-    return Math.min(config.aiToolResponseCharBudget, derivedBudget);
+    return Math.min(config.aiToolResponseCharBudget, MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS);
   };
 
   const runAttempt = Effect.fn("runAttempt")(function* (attempt: AttemptCandidate) {
@@ -954,27 +968,35 @@ export function runGeneratePrContent(
       ...(config.fetch !== undefined ? { fetch: config.fetch } : {}),
     };
     const attemptConfig: RunGeneratePrContentConfig =
-      attempt.provider === "github-models"
+      attempt.provider === "openrouter"
         ? {
             ...sharedAttemptConfig,
-            provider: "github-models",
-            ghToken: config.provider === "github-models" ? config.ghToken : Redacted.make(""),
-            ...(config.provider === "github-models" && config.requiresToolCalls !== undefined
+            provider: "openrouter",
+            openRouterApiKey:
+              config.provider === "openrouter" ? config.openRouterApiKey : Redacted.make(""),
+            openRouterTitle: config.provider === "openrouter" ? config.openRouterTitle : "",
+            ...(config.provider === "openrouter" && config.openRouterModel !== undefined
+              ? { openRouterModel: config.openRouterModel }
+              : {}),
+            ...(config.provider === "openrouter" && config.openRouterHttpReferer !== undefined
+              ? { openRouterHttpReferer: config.openRouterHttpReferer }
+              : {}),
+            ...(config.provider === "openrouter" && config.requiresToolCalls !== undefined
               ? { requiresToolCalls: config.requiresToolCalls }
               : {}),
-            ...(config.provider === "github-models" && config.aiToolRoundLimit !== undefined
+            ...(config.provider === "openrouter" && config.aiToolRoundLimit !== undefined
               ? { aiToolRoundLimit: config.aiToolRoundLimit }
               : {}),
-            ...(config.provider === "github-models" && config.aiTokenBudget !== undefined
+            ...(config.provider === "openrouter" && config.aiTokenBudget !== undefined
               ? { aiTokenBudget: config.aiTokenBudget }
               : {}),
             ...(toolResponseCharBudget !== undefined
               ? { aiToolResponseCharBudget: toolResponseCharBudget }
               : {}),
-            ...(config.provider === "github-models" && config.aiLimitsSource !== undefined
+            ...(config.provider === "openrouter" && config.aiLimitsSource !== undefined
               ? { aiLimitsSource: config.aiLimitsSource }
               : {}),
-            ...(config.provider === "github-models" && config.localFallback !== undefined
+            ...(config.provider === "openrouter" && config.localFallback !== undefined
               ? { localFallback: config.localFallback }
               : {}),
           }
@@ -1053,7 +1075,7 @@ export function runGeneratePrContent(
           model: attempt.model,
           allows_tool_calls: attempt.allowToolCalls,
           selection_mode: attempt.selectionMode,
-          error_kind: classifyGithubModelFailure(error),
+          error_kind: classifyCloudModelFailure(error),
           reason: formatError(error),
         }),
       ),
@@ -1062,7 +1084,6 @@ export function runGeneratePrContent(
   });
 
   return Effect.gen(function* () {
-    const githubModelsCatalogRepository = yield* GithubModelsCatalogRepository;
     yield* Effect.log({
       event: "generate_pr_content",
       step: "routing",
@@ -1102,68 +1123,40 @@ export function runGeneratePrContent(
                 : {}),
             },
           ]
-        : (() => {
-            const requiresToolCalls = config.requiresToolCalls ?? true;
-            const baseAttempts = buildGithubModelAttemptPlan({
-              selectedModel: config.model,
-              requiresToolCalls,
-              entries: [],
-            });
-            return baseAttempts.map((attempt, index) => ({
-              provider: "github-models" as const,
-              model: attempt.model,
-              allowToolCalls: attempt.requiresToolCalls,
-              selectionMode: attempt.selectionMode,
-              attemptIndex: index + 1,
-            }));
-          })();
+        : [];
 
-    const queue =
-      config.provider === "github-models"
+    const queue: readonly AttemptCandidate[] =
+      config.provider === "openrouter"
         ? yield* Effect.gen(function* () {
-            const catalogEntries = yield* githubModelsCatalogRepository.fetchCatalog(
-              config.ghToken,
-            );
+            const repository = yield* OpenRouterModelsRepository;
+            const catalogEntries = yield* repository.fetchModels();
             const requiresToolCalls = config.requiresToolCalls ?? true;
-            const githubAttempts = buildGithubModelAttemptPlan({
+            const band: ModelBand = config.routingContext?.band ?? "B";
+            return buildOpenRouterModelAttemptPlan({
+              band,
               selectedModel: config.model,
               requiresToolCalls,
               entries: catalogEntries,
-            }).map((attempt, index) => ({
-              provider: "github-models" as const,
-              model: attempt.model,
-              allowToolCalls: attempt.requiresToolCalls,
-              selectionMode: attempt.selectionMode,
-              attemptIndex: index + 1,
-            }));
-            const localFallbackAttempts =
-              config.localFallback === undefined
-                ? []
-                : ([
-                    {
-                      provider: "local-llm" as const,
-                      model: config.localFallback.model,
-                      allowToolCalls: true,
-                      selectionMode: "local-fallback",
-                      attemptIndex: githubAttempts.length + 1,
+              ...(config.localFallback !== undefined
+                ? { localFallback: { model: config.localFallback.model } }
+                : {}),
+            }).map((attempt, index): AttemptCandidate => {
+              return {
+                provider: attempt.provider === "openrouter" ? "openrouter" : "local-llm",
+                model: attempt.model,
+                allowToolCalls: attempt.requiresToolCalls,
+                selectionMode: attempt.selectionMode,
+                attemptIndex: index + 1,
+                ...(attempt.provider === "local" && config.localFallback !== undefined
+                  ? {
                       openaiCompatUrl: config.localFallback.openaiCompatUrl,
                       ...(config.localFallback.openaiCompatApiKey !== undefined
                         ? { openaiCompatApiKey: config.localFallback.openaiCompatApiKey }
                         : {}),
-                    },
-                    {
-                      provider: "local-llm" as const,
-                      model: config.localFallback.model,
-                      allowToolCalls: false,
-                      selectionMode: "local-no-tool-fallback",
-                      attemptIndex: githubAttempts.length + 2,
-                      openaiCompatUrl: config.localFallback.openaiCompatUrl,
-                      ...(config.localFallback.openaiCompatApiKey !== undefined
-                        ? { openaiCompatApiKey: config.localFallback.openaiCompatApiKey }
-                        : {}),
-                    },
-                  ] as const);
-            return [...githubAttempts, ...localFallbackAttempts];
+                    }
+                  : {}),
+              };
+            });
           })
         : initialQueue;
 
@@ -1208,10 +1201,7 @@ export function runGeneratePrContent(
                 ),
                 gitLayer,
                 makeDiffToolkitLayer(baseRef, "HEAD", {
-                  toolResponseCharBudget: resolveAiToolRoundtripDiffCharBudget(
-                    config.provider,
-                    config.model,
-                  ),
+                  toolResponseCharBudget: MAX_AI_TOOL_ROUNDTRIP_DIFF_CHARS,
                 }).pipe(Layer.provide(gitLayer)),
                 prClientLayer,
               ),
@@ -1222,7 +1212,7 @@ export function runGeneratePrContent(
         }
         case "Running": {
           const attempt: AttemptCandidate | undefined = state.queue[0];
-          const rest = state.queue.slice(1);
+          const rest: readonly AttemptCandidate[] = state.queue.slice(1);
           if (attempt === undefined) {
             state = {
               _tag: "PrimitiveFallback",
@@ -1237,19 +1227,37 @@ export function runGeneratePrContent(
             state = { _tag: "Completed" };
             continue;
           }
-          const nextError: GeneratePrContentError = Result.match(Cause.findError(result.cause), {
-            onSuccess: (error) => normalizeUnknownToGeneratePrContentError(error),
+          const rawError: Result.Result<
+            GeneratePrContentError,
+            Cause.Cause<never>
+          > = Cause.findError(result.cause);
+          const failure: CloudModelFailureClassification =
+            config.provider === "openrouter"
+              ? Result.match(rawError, {
+                  onSuccess: (error) => classifyCloudModelFailure(error),
+                  onFailure: () => unknownCloudFailure(),
+                })
+              : unknownCloudFailure();
+          const nextError: GeneratePrContentError = Result.match(rawError, {
+            onSuccess: (error) =>
+              error instanceof AutoPrConfigError
+                ? error
+                : normalizeUnknownToGeneratePrContentError(error),
             onFailure: () =>
               new UnexpectedError({
                 cause: "attempt failed without a recoverable typed error",
               }),
           });
-          const failure = classifyGithubModelFailure(nextError);
-          const decision = decideGithubModelFallback({
-            failure,
-            hasRemainingAttempts: rest.length > 0,
-          });
-          if (failure._tag === "AuthOrConfig") {
+          const decision: CloudModelFallbackDecision =
+            config.provider === "openrouter"
+              ? decideCloudModelFallback({
+                  failure,
+                  hasRemainingAttempts: rest.length > 0,
+                })
+              : rest.length > 0
+                ? ("next_attempt" as const)
+                : ("final_fallback" as const);
+          if (decision === "fail") {
             return yield* Effect.fail(nextError);
           }
           yield* Effect.sleep(fallbackDelayForFailure(failure));
@@ -1262,9 +1270,18 @@ export function runGeneratePrContent(
     }
   }).pipe(
     Effect.provide(
-      makeGithubModelsCatalogRepositoryLive(
-        config.fetch === undefined ? {} : { fetchImpl: config.fetch },
-      ),
+      makeOpenRouterModelsRepositoryLive({
+        ...(config.fetch === undefined ? {} : { fetchImpl: config.fetch }),
+        ...(config.provider === "openrouter"
+          ? {
+              apiKey: config.openRouterApiKey,
+              ...(config.openRouterHttpReferer !== undefined
+                ? { siteReferrer: config.openRouterHttpReferer }
+                : {}),
+              siteTitle: config.openRouterTitle,
+            }
+          : {}),
+      }),
     ),
   );
 }
