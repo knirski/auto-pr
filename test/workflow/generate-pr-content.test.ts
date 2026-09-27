@@ -14,6 +14,7 @@ import {
 import { ChildProcess } from "effect/unstable/process";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import {
+  type AiProviderConfig,
   AutoPrConfigError,
   aiProviderLayerFromConfig,
   ChildProcessSpawnerLayer,
@@ -115,15 +116,16 @@ function layerForTest(p: {
   gitCtx: GitContext;
   fetch: typeof fetch | undefined;
 }) {
-  const aiConfig =
-    p.params.provider === "github-models"
+  const aiConfig: AiProviderConfig =
+    p.params.provider === "openrouter"
       ? {
-          provider: "github-models" as const,
+          provider: "openrouter",
           model: p.params.model,
-          ghToken: Redacted.make("mock-github-token"),
+          apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+          title: "auto-pr",
         }
       : {
-          provider: "local" as const,
+          provider: "local",
           model: p.params.model,
         };
   return Layer.mergeAll(
@@ -262,37 +264,53 @@ describe("runGeneratePrContentConfigFromGeneratePrContentConfig", () => {
     });
   });
 
-  test("maps github-models config to runner config", () => {
-    const ghToken = Redacted.make("ghp_test", { label: "GH_TOKEN" });
+  test("maps openrouter config to runner config", () => {
+    const openRouterApiKey = Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" });
     const config = runGeneratePrContentConfigFromGeneratePrContentConfig({
-      provider: "github-models",
+      provider: "openrouter",
       workspace: "/workspace",
       templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
       defaultBranch: "main",
       branch: "ai/example",
-      model: "openai/gpt-4.1",
-      ghToken,
+      model: "openai/gpt-oss-20b:free",
+      openRouterApiKey,
+      openRouterModel: "openai/gpt-oss-20b:free",
+      openRouterHttpReferer: "https://github.com/knirski/auto-pr",
+      openRouterTitle: "auto-pr",
+      requiresToolCalls: true,
       githubApiUrl: "https://api.github.com",
       ghHost: "github.com",
       aiTokenBudget: 9000,
       aiToolRoundLimit: 4,
       aiToolResponseCharBudget: 1500,
+      localFallback: {
+        openaiCompatUrl: "http://127.0.0.1:8080/v1",
+        model: "gpt-oss",
+      },
     });
 
     expect(config).toEqual({
-      provider: "github-models",
+      provider: "openrouter",
       workspace: "/workspace",
       templatePath: "/workspace/.github/PULL_REQUEST_TEMPLATE.md",
       defaultBranch: "main",
       branch: "ai/example",
-      model: "openai/gpt-4.1",
-      ghToken,
+      model: "openai/gpt-oss-20b:free",
+      openRouterApiKey,
+      openRouterModel: "openai/gpt-oss-20b:free",
+      openRouterHttpReferer: "https://github.com/knirski/auto-pr",
+      openRouterTitle: "auto-pr",
+      requiresToolCalls: true,
       githubApiUrl: "https://api.github.com",
       ghHost: "github.com",
       aiTokenBudget: 9000,
       aiToolRoundLimit: 4,
       aiToolResponseCharBudget: 1500,
       aiLimitsSource: "routing_decision",
+      localFallback: {
+        openaiCompatUrl: "http://127.0.0.1:8080/v1",
+        model: "gpt-oss",
+      },
     });
   });
 });
@@ -367,6 +385,7 @@ function createOpenAiToolCallsThenJsonMockFetch(
       object: "chat.completion",
       created: 0,
       model: "mock",
+      system_fingerprint: null,
       choices: [
         {
           index: 0,
@@ -429,6 +448,7 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
       object: "chat.completion",
       created: 0,
       model: "mock",
+      system_fingerprint: null,
       choices: [
         {
           index: 0,
@@ -452,7 +472,7 @@ function createOpenAiScriptedAssistantMockFetch(steps: readonly ScriptedAssistan
   };
 }
 
-function createGithubModelsRequestTooLargeMockFetch(): {
+function createOpenRouterRequestTooLargeMockFetch(): {
   readonly fetch: typeof fetch;
   readonly getCallCount: () => number;
 } {
@@ -460,14 +480,14 @@ function createGithubModelsRequestTooLargeMockFetch(): {
   const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
-      throw new Error("createGithubModelsRequestTooLargeMockFetch: unexpected request");
+      throw new Error("createOpenRouterRequestTooLargeMockFetch: unexpected request");
     }
     callCount += 1;
     return new Response(
       JSON.stringify({
         error: {
-          message: "Request body too large for gpt-4.1 model. Max size: 8000 tokens.",
-          type: "invalid_request_error",
+          code: 400,
+          message: "Request body too large for openai/gpt-oss-20b:free. Max size: 8000 tokens.",
         },
       }),
       { status: 400 },
@@ -478,6 +498,127 @@ function createGithubModelsRequestTooLargeMockFetch(): {
       preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
     }),
     getCallCount: () => callCount,
+  };
+}
+
+/** OpenRouter HTTP error response mock (`{ error: { code, message } }`). */
+function createOpenRouterErrorMockFetch(options: {
+  readonly status: number;
+  readonly message: string;
+}): { readonly fetch: typeof fetch; readonly getCallCount: () => number } {
+  let callCount = 0;
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!String(url).includes("/chat/completions") || init?.method?.toUpperCase() !== "POST") {
+      throw new Error("createOpenRouterErrorMockFetch: unexpected request");
+    }
+    callCount += 1;
+    return new Response(
+      JSON.stringify({ error: { code: options.status, message: options.message } }),
+      { status: options.status },
+    );
+  }) as typeof fetch;
+  return {
+    fetch: Object.assign(impl, {
+      preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+    }),
+    getCallCount: () => callCount,
+  };
+}
+
+/** Minimal schema-valid OpenRouter `/models` wire entry that the parser treats as free. */
+function openRouterWireModel(id: string): Record<string, unknown> {
+  return {
+    id,
+    canonical_slug: id,
+    hugging_face_id: null,
+    name: id,
+    created: 1790363560,
+    context_length: 131_072,
+    architecture: {
+      modality: "text->text",
+      input_modalities: ["text"],
+      output_modalities: ["text"],
+      tokenizer: "Other",
+      instruct_type: null,
+    },
+    pricing: { prompt: "0", completion: "0" },
+    top_provider: {
+      context_length: null,
+      max_completion_tokens: null,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    supported_parameters: ["tools", "tool_choice", "max_tokens"],
+    default_parameters: {},
+    supported_voices: null,
+    knowledge_cutoff: null,
+    expiration_date: null,
+    links: { details: `/api/v1/models/${id}/endpoints` },
+  };
+}
+
+function openRouterChatCompletionResponse(content: string): Response {
+  return Response.json({
+    id: "chatcmpl-openrouter",
+    object: "chat.completion",
+    created: 0,
+    model: "mock",
+    system_fingerprint: null,
+    choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content } }],
+    usage: { prompt_tokens: 11, completion_tokens: 120, total_tokens: 131 },
+  });
+}
+
+/** Routes `/models` GETs to the catalog and records chat-completion models. */
+function createOpenRouterFlowMockFetch(input: {
+  readonly catalog: readonly Record<string, unknown>[];
+  readonly respond: (model: string, callCount: number) => Response;
+}): {
+  readonly fetch: typeof fetch;
+  readonly getChatModels: () => ReadonlyArray<string>;
+} {
+  const chatModels: Array<string> = [];
+  const impl = (async (requestInput: RequestInfo | URL, init?: RequestInit) => {
+    const url =
+      typeof requestInput === "string"
+        ? requestInput
+        : requestInput instanceof URL
+          ? requestInput.href
+          : requestInput.url;
+    const method =
+      init?.method ?? (requestInput instanceof Request ? requestInput.method : undefined);
+    if (String(url).includes("/models") && method?.toUpperCase() === "GET") {
+      return Response.json({
+        data: input.catalog,
+        total_count: input.catalog.length,
+        links: { next: null },
+      });
+    }
+    if (!String(url).includes("/chat/completions") || method?.toUpperCase() !== "POST") {
+      throw new Error("createOpenRouterFlowMockFetch: unexpected request");
+    }
+    const bodyText =
+      typeof init?.body === "string"
+        ? init.body
+        : init?.body != null
+          ? await new Request("http://local.invalid", {
+              method: "POST",
+              body: init.body as BodyInit,
+            }).text()
+          : requestInput instanceof Request
+            ? await requestInput.clone().text()
+            : "";
+    const parsed = JSON.parse(bodyText) as { readonly model?: unknown };
+    const model = typeof parsed.model === "string" ? parsed.model : "";
+    chatModels.push(model);
+    return input.respond(model, chatModels.length);
+  }) as typeof fetch;
+  return {
+    fetch: Object.assign(impl, {
+      preconnect: globalThis.fetch.preconnect.bind(globalThis.fetch),
+    }),
+    getChatModels: () => chatModels,
   };
 }
 
@@ -737,10 +878,10 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
       );
     });
 
-    test("same generateText + JSON path for github-models provider (mocked)", async () => {
+    test("same generateText + JSON path for openrouter provider (mocked)", async () => {
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "microsoft/phi-mock",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         files: "src/a.ts\nsrc/b.ts\n",
         templateContent: TEMPLATE_WITH_CHANGES,
         fetch: createOpenAiChatCompletionsMockFetch(VALID_AI_RESPONSE),
@@ -757,8 +898,8 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
     test("runs a follow-up turn when first response is tool-only", async () => {
       const mock = createOpenAiToolCallsThenJsonMockFetch(1, VALID_AI_RESPONSE);
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         files: "src/a.ts\nsrc/b.ts\n",
         templateContent: TEMPLATE_WITH_CHANGES,
         fetch: mock.fetch,
@@ -776,8 +917,8 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
     test("allows multiple tool rounds before final JSON response", async () => {
       const mock = createOpenAiToolCallsThenJsonMockFetch(2, VALID_AI_RESPONSE);
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         files: "src/a.ts\nsrc/b.ts\n",
         templateContent: TEMPLATE_WITH_CHANGES,
         fetch: mock.fetch,
@@ -799,8 +940,8 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
         { type: "text", content: VALID_AI_RESPONSE },
       ]);
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         files: "src/a.ts\nsrc/b.ts\n",
         templateContent: TEMPLATE_WITH_CHANGES,
         fetch: mock.fetch,
@@ -821,8 +962,8 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
         { type: "text", content: VALID_AI_RESPONSE },
       ]);
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         files: "src/a.ts\nsrc/b.ts\n",
         templateContent: TEMPLATE_WITH_CHANGES,
         fetch: mock.fetch,
@@ -1025,8 +1166,8 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
         { type: "tool", completionTokens: 5_000 },
       ]);
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         retryDelay: Duration.zero,
         aiTokenBudget: 10,
         fetch: mock.fetch,
@@ -1041,15 +1182,15 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
   });
 
   describe("HTTP 401/403 from OpenAI-compat endpoint (auth failure)", () => {
-    test("propagates github-models auth failure instead of primitive fallback", async () => {
+    test("propagates openrouter auth failure instead of primitive fallback", async () => {
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         retryDelay: Duration.zero,
-        fetch: createOpenAiChatCompletionsMockFetch({
-          content: VALID_AI_RESPONSE,
+        fetch: createOpenRouterErrorMockFetch({
           status: 401,
-        }),
+          message: "invalid credentials",
+        }).fetch,
       });
       await runEffect(layerForTest(p))(
         Effect.gen(function* () {
@@ -1061,6 +1202,9 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
                 expect(err).toBeInstanceOf(AutoPrConfigError);
                 expect((err as AutoPrConfigError).missing.join(" ")).toContain(
                   "AuthenticationError",
+                );
+                expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+                  "Check OPENROUTER_API_KEY, key credit limits, and OpenRouter free-model rate limits.",
                 );
               },
               onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
@@ -1124,11 +1268,11 @@ describe("generatePrContent (2+ commits, mocked OpenAI-compat)", () => {
       );
     });
 
-    test("does not retry the same github-models request-size failure", async () => {
-      const mock = createGithubModelsRequestTooLargeMockFetch();
+    test("does not retry the same openrouter request-size failure", async () => {
+      const mock = createOpenRouterRequestTooLargeMockFetch();
       const p = makeParams(twoCommits, {
-        provider: "github-models",
-        model: "openai/gpt-4.1",
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b:free",
         retryDelay: Duration.zero,
         fetch: mock.fetch,
       });
@@ -1281,7 +1425,7 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
     );
   });
 
-  test("runGeneratePrContentWithServices propagates github-models auth failure", async () => {
+  test("runGeneratePrContentWithServices propagates openrouter auth failure", async () => {
     const gitCtx = mockGitContext([
       { subject: "feat: add module A", body: "" },
       { subject: "fix: fix bug in B", body: "" },
@@ -1300,21 +1444,22 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
         MockDiffToolkitLayer,
         aiProviderLayerFromConfig(
           {
-            provider: "github-models",
-            model: "openai/gpt-4.1",
-            ghToken: Redacted.make("mock-github-token"),
+            provider: "openrouter",
+            model: "openai/gpt-oss-20b:free",
+            apiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+            title: "auto-pr",
           },
           {
-            fetch: createOpenAiChatCompletionsMockFetch({
-              content: VALID_AI_RESPONSE,
+            fetch: createOpenRouterErrorMockFetch({
               status: 401,
-            }),
+              message: "invalid credentials",
+            }).fetch,
           },
         ),
       ),
     )(
       Effect.gen(function* () {
-        const tmp = yield* createTestTempDirEffect("run-generate-github-auth-");
+        const tmp = yield* createTestTempDirEffect("run-generate-openrouter-auth-");
         try {
           const fs = yield* FileSystem.FileSystem;
           yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
@@ -1325,8 +1470,8 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
             branch: "ai/test",
             workspace: tmp.path,
             templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
-            provider: "github-models",
-            model: "openai/gpt-4.1",
+            provider: "openrouter",
+            model: "openai/gpt-oss-20b:free",
             allowToolCalls: true,
             retryDelay: Duration.zero,
           }).pipe(Effect.exit);
@@ -1339,10 +1484,128 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
                 expect((err as AutoPrConfigError).missing.join(" ")).toContain(
                   "AuthenticationError",
                 );
+                expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+                  "Check OPENROUTER_API_KEY, key credit limits, and OpenRouter free-model rate limits.",
+                );
               },
               onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
             });
           }
+        } finally {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+        }
+      }).pipe(Effect.scoped),
+    );
+  });
+
+  test("retries a different catalog fallback model when the selected model is unavailable", async () => {
+    const mock = createOpenRouterFlowMockFetch({
+      catalog: [
+        openRouterWireModel("openai/gpt-oss-20b:free"),
+        openRouterWireModel("google/gemma-4-26b-a4b-it:free"),
+      ],
+      respond: (model) =>
+        model === "openai/gpt-oss-20b:free"
+          ? new Response(
+              JSON.stringify({ error: { code: 503, message: "No provider available" } }),
+              { status: 503 },
+            )
+          : openRouterChatCompletionResponse(VALID_AI_RESPONSE),
+    });
+
+    await runEffect(IntegrationTestLayer)(
+      Effect.gen(function* () {
+        const tmp = yield* createTestTempDirEffect("run-generate-openrouter-fallback-");
+        try {
+          yield* setupGitRepoForRunGeneratePrContent(
+            tmp.path,
+            [{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+            "ai/test",
+          );
+
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+          yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+          yield* runGeneratePrContent({
+            defaultBranch: "main",
+            branch: "ai/test",
+            workspace: tmp.path,
+            templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+            provider: "openrouter",
+            model: "openai/gpt-oss-20b:free",
+            openRouterApiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+            openRouterTitle: "auto-pr",
+            requiresToolCalls: false,
+            retryDelay: Duration.zero,
+            fetch: mock.fetch,
+          });
+
+          const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
+          expect(title.trim()).toBe("feat: add X and fix B");
+          expect(mock.getChatModels()).toContain("google/gemma-4-26b-a4b-it:free");
+        } finally {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
+        }
+      }).pipe(Effect.scoped),
+    );
+  });
+
+  test("fails fast on OpenRouter 402 without trying the fallback model", async () => {
+    const mock = createOpenRouterFlowMockFetch({
+      catalog: [
+        openRouterWireModel("openai/gpt-oss-20b:free"),
+        openRouterWireModel("google/gemma-4-26b-a4b-it:free"),
+      ],
+      respond: () =>
+        new Response(JSON.stringify({ error: { code: 402, message: "Insufficient credits" } }), {
+          status: 402,
+        }),
+    });
+
+    await runEffect(IntegrationTestLayer)(
+      Effect.gen(function* () {
+        const tmp = yield* createTestTempDirEffect("run-generate-openrouter-402-");
+        try {
+          yield* setupGitRepoForRunGeneratePrContent(
+            tmp.path,
+            [{ message: "feat: add module A" }, { message: "fix: fix bug in B" }],
+            "ai/test",
+          );
+
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.makeDirectory(tmp.join(".github"), { recursive: true });
+          yield* fs.writeFileString(tmp.join(".github/PULL_REQUEST_TEMPLATE.md"), DEFAULT_TEMPLATE);
+
+          const exit = yield* runGeneratePrContent({
+            defaultBranch: "main",
+            branch: "ai/test",
+            workspace: tmp.path,
+            templatePath: tmp.join(".github/PULL_REQUEST_TEMPLATE.md"),
+            provider: "openrouter",
+            model: "openai/gpt-oss-20b:free",
+            openRouterApiKey: Redacted.make("sk-or-test", { label: "OPENROUTER_API_KEY" }),
+            openRouterTitle: "auto-pr",
+            requiresToolCalls: false,
+            retryDelay: Duration.zero,
+            fetch: mock.fetch,
+          }).pipe(Effect.exit);
+
+          expect(Exit.isFailure(exit)).toBe(true);
+          if (Exit.isFailure(exit)) {
+            Result.match(Cause.findError(exit.cause), {
+              onSuccess: (err) => {
+                expect(err).toBeInstanceOf(AutoPrConfigError);
+                expect((err as AutoPrConfigError).missing.join(" ")).toContain(
+                  "Check OPENROUTER_API_KEY, key credit limits, and OpenRouter free-model rate limits.",
+                );
+              },
+              onFailure: () => expect().fail("expected AutoPrConfigError in cause"),
+            });
+          }
+          expect(mock.getChatModels()).toEqual(["openai/gpt-oss-20b:free"]);
         } finally {
           const fs = yield* FileSystem.FileSystem;
           yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));
@@ -1390,14 +1653,14 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
     );
   });
 
-  test("program builds github-models run config for single-commit path", async () => {
+  test("program builds openrouter run config for single-commit path", async () => {
     await runEffect(IntegrationTestLayer)(
       Effect.gen(function* () {
-        const tmp = yield* createTestTempDirEffect("generate-program-github-models-");
+        const tmp = yield* createTestTempDirEffect("generate-program-openrouter-");
         try {
           yield* setupGitRepoForRunGeneratePrContent(
             tmp.path,
-            [{ message: "feat: add github models config" }],
+            [{ message: "feat: add openrouter config" }],
             "ai/test",
           );
 
@@ -1410,10 +1673,10 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
               GITHUB_WORKSPACE: tmp.path,
               DEFAULT_BRANCH: "main",
               BRANCH: "ai/test",
-              AUTO_PR_AI_PROVIDER: "github-models",
-              GH_TOKEN: "ghp_test_github_models",
+              AUTO_PR_AI_PROVIDER: "openrouter",
+              OPENROUTER_API_KEY: "sk-or-test",
               AUTO_PR_ROUTING_DECISION_JSON:
-                '{"selectedModel":"microsoft/phi-4-mini-instruct","requiresToolCalls":false}',
+                '{"provider":"openrouter","selectedModel":"openai/gpt-oss-20b:free","requiresToolCalls":false}',
             }),
           );
 
@@ -1421,8 +1684,8 @@ describe("runGeneratePrContent (integration, real git repo)", () => {
 
           const title = yield* fs.readFileString(tmp.join("pr-title.txt"));
           const body = yield* fs.readFileString(tmp.join("pr-body.md"));
-          expect(title.trim()).toBe("feat: add github models config");
-          expect(body).toContain("github models config");
+          expect(title.trim()).toBe("feat: add openrouter config");
+          expect(body).toContain("openrouter config");
         } finally {
           const fs = yield* FileSystem.FileSystem;
           yield* fs.remove(tmp.path, { recursive: true }).pipe(Effect.catch(() => Effect.void));

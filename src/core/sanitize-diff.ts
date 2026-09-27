@@ -135,7 +135,7 @@ export function sanitizeDiffForAi(raw: string): string {
  * model request, especially for providers with small request-size limits.
  */
 export function resolveAiToolRoundtripDiffCharBudget(
-  provider: "local" | "github-models",
+  provider: "local" | "openrouter" | "github-models",
   model: string,
 ): number {
   if (provider === "github-models" && isGithubModelsGpt41Family(model)) {
