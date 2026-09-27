@@ -42,6 +42,8 @@ export const OpenRouterModelsRepositoryLive: Layer.Layer<
 
 export type OpenRouterModelsRepositoryLiveOptions = {
   readonly apiKey?: Redacted.Redacted<string>;
+  readonly siteReferrer?: string;
+  readonly siteTitle?: string;
   readonly fetchImpl?: typeof fetch;
 };
 
@@ -58,8 +60,10 @@ export const makeOpenRouterModelsRepositoryLive = (
       : FetchHttpClient.layer.pipe(
           Layer.provide(Layer.succeed(FetchHttpClient.Fetch, options.fetchImpl)),
         );
-  const clientLayer = OpenRouterClient.layer(
-    options.apiKey === undefined ? {} : { apiKey: options.apiKey },
-  ).pipe(Layer.provide(httpLayer));
+  const clientLayer = OpenRouterClient.layer({
+    ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
+    ...(options.siteReferrer === undefined ? {} : { siteReferrer: options.siteReferrer }),
+    ...(options.siteTitle === undefined ? {} : { siteTitle: options.siteTitle }),
+  }).pipe(Layer.provide(httpLayer));
   return OpenRouterModelsRepositoryLive.pipe(Layer.provide(clientLayer));
 };
